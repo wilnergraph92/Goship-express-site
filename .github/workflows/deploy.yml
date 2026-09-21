@@ -1,0 +1,69 @@
+# ==========================================================================
+#  Mise en ligne automatique du site sur GitHub Pages
+# ==========================================================================
+#  À chaque « push » sur la branche main, GitHub reconstruit le site et le
+#  publie. Les fichiers de travail (SQL, application mobile, README, outils)
+#  sont retirés avant publication : ils restent dans le dépôt, mais ne sont
+#  jamais servis aux visiteurs — c'est ce que faisaient _redirects et
+#  .htaccess, que GitHub Pages ne sait pas lire.
+# ==========================================================================
+
+name: Mettre le site en ligne
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # permet aussi de lancer la mise en ligne à la main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Préparer le site (sans les fichiers de travail)
+        run: |
+          mkdir -p _site
+          rsync -a ./ _site/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '.claude' \
+            --exclude '_site' \
+            --exclude 'outils' \
+            --exclude 'application-mobile' \
+            --exclude 'README.md' \
+            --exclude '.DS_Store' \
+            --exclude '*.command' \
+            --exclude '*.py' \
+            --exclude '*.sql'
+          # Empêche GitHub de passer le site à Jekyll (qui masquerait les
+          # dossiers commençant par « _ »).
+          touch _site/.nojekyll
+          echo "--- Fichiers publiés ---"
+          ls _site
+
+      - name: Envoyer le site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - name: Publier sur GitHub Pages
+        id: deploiement
+        uses: actions/deploy-pages@v4

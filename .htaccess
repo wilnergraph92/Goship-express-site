@@ -1,0 +1,18 @@
+# En-têtes de sécurité (hébergement Apache). Voir README.md, « Sécurité ».
+<IfModule mod_headers.c>
+  Header always set Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com https://gpfdyslysqjmojgzggib.supabase.co; connect-src 'self' https://gpfdyslysqjmojgzggib.supabase.co wss://gpfdyslysqjmojgzggib.supabase.co; frame-ancestors 'none'; upgrade-insecure-requests"
+  Header always set X-Frame-Options "DENY"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Les fichiers de travail ne sont jamais servis aux visiteurs
+<FilesMatch "(^\.|\.(sql|py|md|command|json|lock)$)">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 ^/(outils|application-mobile|\.claude)/
+
+ErrorDocument 404 /404.html

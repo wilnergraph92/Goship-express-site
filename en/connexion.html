@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com https://gpfdyslysqjmojgzggib.supabase.co; connect-src 'self' https://gpfdyslysqjmojgzggib.supabase.co wss://gpfdyslysqjmojgzggib.supabase.co">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Goship Express</title>
+<meta name="description" content="Sign in to your Goship Express customer area to track your packages in real time.">
+<meta name="theme-color" content="#061a3f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Goship Express">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Sign in — Goship Express">
+<meta property="og:description" content="Sign in to your Goship Express customer area to track your packages in real time.">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="../assets/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="../assets/img/favicon-64.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://images.unsplash.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script src="../assets/js/config.js" defer></script>
+<script src="../assets/js/site.js" defer></script>
+<script src="../assets/js/api.js" defer></script>
+<script src="../assets/js/compte.js" defer></script>
+</head>
+<body>
+<div class="gs-page">
+<a class="gs-skip" href="#contenu-principal">Skip to content</a>
+
+<div style="background:#030f2b;color:#94a7cc;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase">
+  <div class="gs-bandeau__ligne" style="max-width:1320px;margin:0 auto;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;justify-content:space-between">
+    <span class="gs-bandeau-info" style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;background:var(--accent);display:block"></span>8140 NW 74th Ave, Unit 3, Apt 46780, Medley, Florida 33166</span>
+    <div class="gs-bandeau__actions" style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:center">
+      <span class="gs-bandeau-info" style="color:#dde5f8">goshipexpressllc@gmail.com</span>
+      <span class="gs-bandeau-info">Mon–Sat · 8am–6pm</span>
+      <span style="color:var(--accent)">Quote within 2 hrs</span>
+      <a class="gs-bandeau-compte" href="connexion.html" data-session="non"><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Sign in</a>
+      <a class="gs-bandeau-compte" href="mon-compte.html" data-session="oui" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My account</a>
+      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Create account</a>
+    </div>
+  </div>
+</div>
+
+<header class="gs-header" data-header style="position:sticky;top:0;z-index:60;background:rgba(6,26,63,.95);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.1)">
+  <div class="gs-header__bar" style="max-width:1320px;margin:0 auto;padding:14px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;justify-content:space-between">
+    <a class="gs-logo" aria-label="Goship Express — Home" href="index.html" style="display:flex;align-items:center;flex:none">
+      <span style="display:flex;align-items:center;background:#fff;border-radius:13px;padding:8px 14px;box-shadow:0 10px 26px -14px rgba(0,0,0,.7)">
+        <img src="../assets/img/logo-goship.png" alt="GOShip Express — Freight &amp; Cargo" width="360" height="120" style="display:block;height:40px;width:auto">
+      </span>
+    </a>
+    <div class="gs-mobile-actions">
+      <!--langues:mobile--><details class="gs-lang gs-lang--compact" data-lang-menu>
+        <summary class="gs-lang__btn" aria-label="Language: English"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span class="gs-lang__label">Language</span><span class="gs-lang__chev" aria-hidden="true"></span></summary>
+        <ul class="gs-lang__list">
+          <li><a href="connexion.html" hreflang="en" lang="en" aria-current="true"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span>English</span></a></li>
+          <li><a href="../es/connexion.html" hreflang="es" lang="es"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span>Español</span></a></li>
+          <li><a href="../connexion.html" hreflang="fr" lang="fr"><img class="gs-flag" src="../assets/img/drapeaux/fr.svg" alt="" width="30" height="20"><span>Français</span></a></li>
+          <li><a href="../ht/connexion.html" hreflang="ht" lang="ht"><img class="gs-flag" src="../assets/img/drapeaux/ht.svg" alt="" width="30" height="20"><span>Kreyòl</span></a></li>
+        </ul>
+      </details><!--/langues-->
+      <a class="gs-call" href="tel:+18495386262" aria-label="Call Goship Express at +1 849 538-6262">☎</a>
+      <button class="gs-burger" type="button" data-menu-toggle aria-expanded="false" aria-controls="menu-principal" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+    <nav class="gs-nav" id="menu-principal" aria-label="Main navigation" style="display:flex;align-items:center;gap:30px;flex-wrap:wrap;font-size:15px;font-weight:600">
+      <a href="index.html" class="hv-accent" style="color:#dde5f8">Home</a>
+      <a href="a-propos.html" class="hv-accent" style="color:#dde5f8">About</a>
+      <a href="nos-services.html" class="hv-accent" style="color:#dde5f8">Our Services</a>
+      <a href="blog.html" class="hv-accent" style="color:#dde5f8">Blog</a>
+      <a href="contacts.html" class="hv-accent" style="color:#dde5f8">Contact</a>
+    </nav>
+    <div class="gs-actions" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">
+      <!--langues:desktop--><details class="gs-lang" data-lang-menu>
+        <summary class="gs-lang__btn" aria-label="Language: English"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span class="gs-lang__label">Language</span><span class="gs-lang__chev" aria-hidden="true"></span></summary>
+        <ul class="gs-lang__list">
+          <li><a href="connexion.html" hreflang="en" lang="en" aria-current="true"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span>English</span></a></li>
+          <li><a href="../es/connexion.html" hreflang="es" lang="es"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span>Español</span></a></li>
+          <li><a href="../connexion.html" hreflang="fr" lang="fr"><img class="gs-flag" src="../assets/img/drapeaux/fr.svg" alt="" width="30" height="20"><span>Français</span></a></li>
+          <li><a href="../ht/connexion.html" hreflang="ht" lang="ht"><img class="gs-flag" src="../assets/img/drapeaux/ht.svg" alt="" width="30" height="20"><span>Kreyòl</span></a></li>
+        </ul>
+      </details><!--/langues-->
+      <a class="gs-header-phone" href="tel:+18495386262" style="display:flex;align-items:center;gap:11px;color:#fff;white-space:nowrap">
+        <span style="display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:rgba(244,96,13,.18);border:1px solid rgba(244,96,13,.5);color:var(--accent);font-size:16px">☎</span>
+        <span style="display:flex;flex-direction:column;line-height:1.25">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#95a5ca">CALL US</span>
+          <span style="font-weight:700;font-size:15px">+1 849 538-6262</span>
+        </span>
+      </a>
+      <a class="gs-connexion-mobile" href="connexion.html" data-session="non">Sign in</a>
+      <a href="inscription.html" class="gs-cta hv-fill-cta" data-session="non" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Create account</a>
+      <a href="mon-compte.html" class="gs-cta hv-fill-cta" data-session="oui" hidden style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">My account</a>
+    </div>
+  </div>
+</header>
+
+<main id="contenu-principal" tabindex="-1">
+
+<section class="gs-compte" data-no-reveal>
+  <div class="gs-compte__wrap gs-compte__wrap--etroit">
+    <div class="gs-carte-auth">
+      <div class="gs-carte-auth__tete">
+        <div class="gs-carte-auth__marque">
+          <span class="gs-carte-auth__icone"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="gs-carte-auth__surtitre">Customer area</span>
+        </div>
+        <h1>Sign in</h1>
+        <p>Find your customer code and track your packages in real time.</p>
+      </div>
+
+      <div class="gs-carte-auth__corps">
+        <div class="gs-alerte gs-alerte--info" data-espace-ferme hidden>
+          <strong>The customer area opens very soon.</strong> In the meantime, track your packages with our team on WhatsApp: <a data-lien-wa="wa-aide" href="https://wa.me/18495386262" target="_blank" rel="noopener">message us on WhatsApp</a>.
+        </div>
+
+        <form class="gs-form" data-form="connexion" novalidate>
+          <div class="gs-champ">
+            <label for="cnx-email">Email</label>
+            <input id="cnx-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="Enter your email" spellcheck="false">
+          </div>
+          <div class="gs-champ">
+            <div class="gs-champ__entete">
+              <label for="cnx-mdp">Password</label>
+              <a class="gs-champ__lien" href="#oubli" data-action="oubli">Forgot your password?</a>
+            </div>
+            <div class="gs-mdp">
+              <input id="cnx-mdp" name="mot_de_passe" type="password" autocomplete="current-password" required maxlength="72" placeholder="Enter your password">
+              <button type="button" class="gs-mdp__oeil" data-action="voir-mdp" aria-label="Show password" aria-pressed="false"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            </div>
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Sign in</button>
+        </form>
+
+        <form class="gs-form" id="oubli" data-form="oubli" novalidate hidden>
+          <div class="gs-form__intro">
+            <strong>Forgot your password?</strong>
+            <p>Enter your account's email address: we'll send you a link to choose a new password.</p>
+          </div>
+          <div class="gs-champ">
+            <label for="oubli-email">Email</label>
+            <input id="oubli-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="Enter your email" spellcheck="false">
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <div class="gs-alerte gs-alerte--succes" data-oubli-ok hidden role="status">
+            <strong>Email sent.</strong>
+            <p>If an account exists with this address, you will receive a link valid for one hour. Remember to check your spam folder.</p>
+            <p data-oubli-demo hidden></p>
+          </div>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Send the link</button>
+          <button class="gs-lien-bouton gs-form__retour" type="button" data-action="retour-connexion">Back to sign in</button>
+        </form>
+
+        <p class="gs-carte-auth__pied">Don't have an account yet? <a href="inscription.html">Create an account</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<template data-textes>
+  <p data-t="statut-recu">Received</p>
+  <p data-t="statut-emballe">Packed</p>
+  <p data-t="statut-embarque">Shipped</p>
+  <p data-t="statut-distribution">Distribution centre</p>
+  <p data-t="statut-succursale">Transferred to the branch</p>
+  <p data-t="statut-disponible">Ready for pickup</p>
+  <p data-t="statut-livre">Delivered</p>
+  <p data-t="statut-incident">Action required</p>
+  <p data-t="etape-1">Received</p>
+  <p data-t="etape-2">Packed</p>
+  <p data-t="etape-3">Shipped</p>
+  <p data-t="etape-4">Distribution</p>
+  <p data-t="etape-5">Branch</p>
+  <p data-t="etape-6">Ready for pickup</p>
+  <p data-t="etape-7">Delivered</p>
+  <p data-t="service-aerien">Air</p>
+  <p data-t="service-maritime">Sea</p>
+  <p data-t="service-terrestre">Land</p>
+  <p data-t="pays-HT">Haiti</p>
+  <p data-t="pays-DO">Dominican Republic</p>
+  <p data-t="pays-US">United States</p>
+  <p data-t="maj">Updated {date}</p>
+  <p data-t="etape-sur">Step {n} of {total}</p>
+  <p data-t="etape-une">1 step</p>
+  <p data-t="etapes">{n} steps</p>
+  <p data-t="suivi-vendeur">Seller tracking: {numero}</p>
+  <p data-t="recu-le">Received in Miami on {date}</p>
+  <p data-t="expediteur">Sender: {nom}</p>
+  <p data-t="erreur-identifiants">Incorrect email or password.</p>
+  <p data-t="erreur-email-existe">An account already exists with this email address. Sign in or choose “Forgot your password?”.</p>
+  <p data-t="erreur-mot-de-passe-faible">Password too weak: use at least 6 characters, with letters and numbers.</p>
+  <p data-t="erreur-meme-mot-de-passe">Choose a password different from your old one.</p>
+  <p data-t="erreur-email-invalide">This email address is not valid.</p>
+  <p data-t="erreur-non-confirme">Please confirm your email address first, using the link we sent you.</p>
+  <p data-t="erreur-inscriptions-fermees">Online sign-up is temporarily closed. Message us on WhatsApp to open your account.</p>
+  <p data-t="erreur-trop-de-tentatives">Too many attempts. Wait a few minutes, then try again.</p>
+  <p data-t="erreur-lien-invalide">This link is no longer valid. Please request a new one.</p>
+  <p data-t="erreur-non-autorise">Your session has expired. Please sign in again.</p>
+  <p data-t="erreur-reseau">Unable to connect. Check your internet connection, then try again.</p>
+  <p data-t="erreur-inconnu">Something went wrong. Please try again in a moment.</p>
+  <p data-t="champ-requis">This field is required.</p>
+  <p data-t="champ-email">Enter a valid email address.</p>
+  <p data-t="champ-mdp">At least 6 characters.</p>
+  <p data-t="champ-tel">Enter a valid phone number.</p>
+  <p data-t="champ-nom">Enter your first and last name.</p>
+  <p data-t="champ-confirmation">The two passwords do not match.</p>
+  <p data-t="attente-inscription">Creating your account…</p>
+  <p data-t="attente-connexion">Signing in…</p>
+  <p data-t="attente-envoi">Sending…</p>
+  <p data-t="attente-enregistrement">Saving…</p>
+  <p data-t="mdp-afficher">Show password</p>
+  <p data-t="mdp-masquer">Hide password</p>
+  <p data-t="region-choisir">Select a region</p>
+  <p data-t="region-pays">Choose a country first</p>
+  <p data-t="ville-choisir">Select a city</p>
+  <p data-t="ville-autre">Other city…</p>
+  <p data-t="ville-saisir">Enter your city</p>
+  <p data-t="wa-inscription">Hello Goship Express, I would like to open my customer account.</p>
+  <p data-t="wa-aide">Hello Goship Express, I have a question about my customer account {code}.</p>
+  <p data-t="copie-ok">Copied ✓</p>
+  <p data-t="copie-echec">Copy failed</p>
+  <p data-t="confirmation-email">Almost done! We've sent an email to {email}. Click the link inside to activate your account and receive your customer code.</p>
+  <p data-t="demo-lien">Demo mode: no email is sent. Open the reset link directly:</p>
+  <p data-t="profil-ok">Details saved ✓</p>
+  <p data-t="demo-bandeau">Demo mode: until Supabase is set up, accounts and packages are saved in this browser only.</p>
+  <p data-t="admin-avis">This is an administrator account.</p>
+  <p data-t="admin-lien">Open the dashboard</p>
+</template>
+</main>
+
+<footer style="color: #a4b3d6; padding: clamp(56px,7vw,92px) 28px 0; background-color: #101114">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(215px,100%),1fr));gap:40px">
+    <div style="min-width:0;max-width:340px">
+      <span style="display: inline-flex; align-items: center; border-radius: 14px; padding: 12px 16px; background-color: #F4600C">
+        <img src="../assets/img/logo-goship-blanc.png" alt="GOShip Express — Freight &amp; Cargo" width="420" height="147" style="display:block;height:46px;width:auto">
+      </span>
+      <p style="margin-top:20px;font-size:14.5px;line-height:1.7">Shipping, receiving and delivery of packages between the United States, Santo Domingo and Haiti. Simple, fast solutions tailored to your needs.</p>
+      <div style="margin-top:22px;display:flex;gap:10px">
+        <a href="https://www.facebook.com/share/1EnDJ5wgFG/" aria-label="Facebook" class="hv-fill-accent" target="_blank" rel="noopener" style="display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.07); color: #FFFFFF; font-size: 13px; font-weight: 700">f</a>
+        
+        <a href="#top" aria-label="Instagram" class="hv-fill-accent" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700">IG</a><a href="#top" aria-label="TikTok" class="hv-fill-accent" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700">Tok</a>
+        <a href="https://wa.me/18495386262" aria-label="WhatsApp" class="hv-fill-accent" target="_blank" rel="noopener" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700">wa</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Services</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="index.html#adresse" class="hv-accent" style="color:#a4b3d6">US receiving address</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Package consolidation</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Ocean freight</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Express air freight</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Customs clearance</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navigation</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="index.html" class="hv-accent" style="color:#a4b3d6">Home</a>
+        <a href="a-propos.html" class="hv-accent" style="color:#a4b3d6">About</a>
+        <a href="nos-services.html" class="hv-accent" style="color:#a4b3d6">Our Services</a>
+        <a href="blog.html" class="hv-accent" style="color:#a4b3d6">Blog</a>
+        <a href="contacts.html" class="hv-accent" style="color:#a4b3d6">Contact</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Contact us</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <span style="color:#dde5f8;font-weight:700">+1 849 538-6262</span>
+        <span style="word-break:break-word">goshipexpressllc@gmail.com</span>
+        <span>Mon–Sat · 8:00 am–6:00 pm</span>
+        <span>8140 NW 74th Ave, Unit 3, Apt 46780<br>Medley, Florida 33166</span>
+        <a href="contacts.html#contact" class="hv-fill-cta" style="margin-top:6px;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;font-weight:700;padding:14px 20px;border-radius:11px;justify-self:start">Get a quote<span style="width:8px;height:8px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+      </div>
+    </div>
+  </div>
+  <div style="max-width:1320px;margin:clamp(40px,5vw,64px) auto 0;padding:24px 0 28px;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase">
+    <span>© 2026 Goship Express LLC · All rights reserved</span>
+    <span style="display:flex;flex-wrap:wrap;gap:12px 22px">
+      <a href="termes-et-conditions.html" class="hv-accent" style="color:#a4b3d6">Terms &amp; conditions</a>
+      <a href="marchandises-dangereuses.html" class="hv-accent" style="color:#a4b3d6">Dangerous goods</a>
+      <a href="support.html" class="hv-accent" style="color:#a4b3d6">Support</a>
+      <a href="fermer-un-compte.html" class="hv-accent" style="color:#a4b3d6">Close an account</a>
+      <a href="confidentialite.html" class="hv-accent" style="color:#a4b3d6">Privacy</a>
+    </span>
+  </div>
+  
+</footer>
+
+</div>
+</body>
+</html>

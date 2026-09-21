@@ -1,0 +1,38 @@
+# ==========================================================================
+#  Goship Express — fichiers que Git doit ignorer
+# ==========================================================================
+#  Tout ce qui est listé ici reste sur votre ordinateur et ne part jamais
+#  sur GitHub : soit parce que c'est reconstructible, soit parce que c'est
+#  personnel à votre machine.
+# ==========================================================================
+
+# --- macOS ---------------------------------------------------------------
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# --- Application mobile : dépendances (461 Mo !) -------------------------
+#  Réinstallables à tout moment avec « npm install » dans application-mobile.
+application-mobile/node_modules/
+application-mobile/.expo/
+application-mobile/dist/
+application-mobile/web-build/
+
+# --- Journaux et fichiers temporaires ------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+*.tmp
+*~
+
+# --- Réglages locaux d'éditeur -------------------------------------------
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# --- Secrets (par précaution : rien de tel aujourd'hui) ------------------
+.env
+.env.*
+*.key
+*.pem

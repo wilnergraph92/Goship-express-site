@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "app-goship-web",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": [
+        "/Users/ing.wilner/Desktop/Website_GSE/application-mobile/demarrer-web.sh"
+      ],
+      "cwd": "/Users/ing.wilner/Desktop/Website_GSE/application-mobile",
+      "port": 8081
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com https://gpfdyslysqjmojgzggib.supabase.co; connect-src 'self' https://gpfdyslysqjmojgzggib.supabase.co wss://gpfdyslysqjmojgzggib.supabase.co">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>¿Qué es un servicio de mensajería y cómo funciona? — Blog de Goship Express</title>
+<meta name="description" content="Si alguna vez ha comprado en el extranjero o necesita enviar un paquete fuera del país, seguramente se ha preguntado qué es un…">
+<meta name="theme-color" content="#061a3f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Goship Express">
+<meta property="og:locale" content="es_DO">
+<meta property="og:title" content="¿Qué es un servicio de mensajería y cómo funciona? — Blog de Goship Express">
+<meta property="og:description" content="Si alguna vez ha comprado en el extranjero o necesita enviar un paquete fuera del país, seguramente se ha preguntado qué es un…">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="../assets/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="../assets/img/favicon-64.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://images.unsplash.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script src="../assets/js/config.js" defer></script>
+<script src="../assets/js/site.js" defer></script>
+</head>
+<body>
+<div class="gs-page">
+<a class="gs-skip" href="#contenu-principal">Ir al contenido</a>
+
+<div style="background:#030f2b;color:#94a7cc;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase">
+  <div class="gs-bandeau__ligne" style="max-width:1320px;margin:0 auto;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;justify-content:space-between">
+    <span class="gs-bandeau-info" style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;background:var(--accent);display:block"></span>8140 NW 74th Ave, Unit 3, Apt 46780, Medley, Florida 33166</span>
+    <div class="gs-bandeau__actions" style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:center">
+      <span class="gs-bandeau-info" style="color:#dde5f8">goshipexpressllc@gmail.com</span>
+      <span class="gs-bandeau-info">Lun–Sáb · 8:00–18:00</span>
+      <span style="color:var(--accent)">Cotización en 2 h</span>
+      <a class="gs-bandeau-compte" href="connexion.html" data-session="non"><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Iniciar sesión</a>
+      <a class="gs-bandeau-compte" href="mon-compte.html" data-session="oui" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Mi cuenta</a>
+      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Crear cuenta</a>
+    </div>
+  </div>
+</div>
+
+<header class="gs-header" data-header style="position:sticky;top:0;z-index:60;background:rgba(6,26,63,.95);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.1)">
+  <div class="gs-header__bar" style="max-width:1320px;margin:0 auto;padding:14px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;justify-content:space-between">
+    <a class="gs-logo" aria-label="Goship Express — Inicio" href="index.html" style="display:flex;align-items:center;flex:none">
+      <span style="display:flex;align-items:center;background:#fff;border-radius:13px;padding:8px 14px;box-shadow:0 10px 26px -14px rgba(0,0,0,.7)">
+        <img src="../assets/img/logo-goship.png" alt="GOShip Express — Freight &amp; Cargo" width="360" height="120" style="display:block;height:40px;width:auto">
+      </span>
+    </a>
+    <div class="gs-mobile-actions">
+      <!--langues:mobile--><details class="gs-lang gs-lang--compact" data-lang-menu>
+        <summary class="gs-lang__btn" aria-label="Idioma: Español"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span class="gs-lang__label">Idioma</span><span class="gs-lang__chev" aria-hidden="true"></span></summary>
+        <ul class="gs-lang__list">
+          <li><a href="../en/article-service-de-messagerie.html" hreflang="en" lang="en"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span>English</span></a></li>
+          <li><a href="article-service-de-messagerie.html" hreflang="es" lang="es" aria-current="true"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span>Español</span></a></li>
+          <li><a href="../article-service-de-messagerie.html" hreflang="fr" lang="fr"><img class="gs-flag" src="../assets/img/drapeaux/fr.svg" alt="" width="30" height="20"><span>Français</span></a></li>
+          <li><a href="../ht/article-service-de-messagerie.html" hreflang="ht" lang="ht"><img class="gs-flag" src="../assets/img/drapeaux/ht.svg" alt="" width="30" height="20"><span>Kreyòl</span></a></li>
+        </ul>
+      </details><!--/langues-->
+      <a class="gs-call" href="tel:+18495386262" aria-label="Llamar a Goship Express al +1 849 538-6262">☎</a>
+      <button class="gs-burger" type="button" data-menu-toggle aria-expanded="false" aria-controls="menu-principal" aria-label="Abrir el menú"><span></span><span></span><span></span></button>
+    </div>
+    <nav class="gs-nav" id="menu-principal" aria-label="Navegación principal" style="display:flex;align-items:center;gap:30px;flex-wrap:wrap;font-size:15px;font-weight:600">
+      <a href="index.html" class="hv-accent" style="color:#dde5f8">Inicio</a>
+      <a href="a-propos.html" class="hv-accent" style="color:#dde5f8">Nosotros</a>
+      <a href="nos-services.html" class="hv-accent" style="color:#dde5f8">Servicios</a>
+      <a href="blog.html" aria-current="page" class="hv-accent" style="color:var(--accent)">Blog</a>
+      <a href="contacts.html" class="hv-accent" style="color:#dde5f8">Contacto</a>
+    </nav>
+    <div class="gs-actions" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">
+      <!--langues:desktop--><details class="gs-lang" data-lang-menu>
+        <summary class="gs-lang__btn" aria-label="Idioma: Español"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span class="gs-lang__label">Idioma</span><span class="gs-lang__chev" aria-hidden="true"></span></summary>
+        <ul class="gs-lang__list">
+          <li><a href="../en/article-service-de-messagerie.html" hreflang="en" lang="en"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span>English</span></a></li>
+          <li><a href="article-service-de-messagerie.html" hreflang="es" lang="es" aria-current="true"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span>Español</span></a></li>
+          <li><a href="../article-service-de-messagerie.html" hreflang="fr" lang="fr"><img class="gs-flag" src="../assets/img/drapeaux/fr.svg" alt="" width="30" height="20"><span>Français</span></a></li>
+          <li><a href="../ht/article-service-de-messagerie.html" hreflang="ht" lang="ht"><img class="gs-flag" src="../assets/img/drapeaux/ht.svg" alt="" width="30" height="20"><span>Kreyòl</span></a></li>
+        </ul>
+      </details><!--/langues-->
+      <a class="gs-header-phone" href="tel:+18495386262" style="display:flex;align-items:center;gap:11px;color:#fff;white-space:nowrap">
+        <span style="display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:rgba(244,96,13,.18);border:1px solid rgba(244,96,13,.5);color:var(--accent);font-size:16px">☎</span>
+        <span style="display:flex;flex-direction:column;line-height:1.25">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#95a5ca">LLÁMENOS</span>
+          <span style="font-weight:700;font-size:15px">+1 849 538-6262</span>
+        </span>
+      </a>
+      <a class="gs-connexion-mobile" href="connexion.html" data-session="non">Iniciar sesión</a>
+      <a href="inscription.html" class="gs-cta hv-fill-cta" data-session="non" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Crear cuenta</a>
+      <a href="mon-compte.html" class="gs-cta hv-fill-cta" data-session="oui" hidden style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Mi cuenta</a>
+    </div>
+  </div>
+</header>
+
+<main id="contenu-principal" tabindex="-1">
+
+<section id="top" style="position:relative;background:var(--ink);overflow:hidden">
+  <img fetchpriority="high" src="https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=2000&amp;q=72" srcset="https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=640&amp;q=72 640w, https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=960&amp;q=72 960w, https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=1280&amp;q=72 1280w, https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=1600&amp;q=72 1600w, https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=2000&amp;q=72 2000w" sizes="100vw" alt="Camión en la carretera" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,26,63,.86),rgba(6,26,63,.68))"></div>
+  <div style="position:relative;max-width:900px;margin:0 auto;padding:clamp(56px,7vw,110px) 24px;text-align:center;color:#fff">
+    <span style="display:inline-flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)">Guía · 31 jul. 2026</span>
+    <h1 style="margin-top:18px;font-size:clamp(28px,4.2vw,54px);line-height:1.08;font-weight:800">¿Qué es un servicio de mensajería y cómo funciona?</h1>
+    <div style="margin-top:20px;display:flex;justify-content:center;align-items:center;gap:12px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase">
+      <a href="index.html" class="hv-white" style="color:var(--accent)">Inicio</a>
+      <span style="width:7px;height:7px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <a href="blog.html" class="hv-white" style="color:var(--accent)">Blog</a>
+    </div>
+  </div>
+</section>
+
+<section class="gs-trace--sombre" style="background:#f7f9fc;padding:clamp(44px,5.5vw,84px) 20px clamp(56px,6.5vw,96px)">
+  <div style="max-width:900px;margin:0 auto;background:#fff;border:1px solid #e7edf9;border-radius:24px;box-shadow:0 40px 80px -56px rgba(6,26,63,.45);padding:clamp(26px,3.8vw,56px)">
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Si alguna vez ha comprado en el extranjero o necesita enviar un paquete fuera del país, seguramente se ha preguntado qué es un servicio de mensajería y cómo funciona. Hoy en día, cuando el comercio electrónico no deja de crecer, los servicios de mensajería se han convertido en una solución imprescindible para realizar envíos rápidos, seguros y eficientes.</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">En esta guía completa le explicamos qué es un servicio de mensajería y cómo funciona, cuáles son sus ventajas y por qué es esencial para las compras y los envíos internacionales.</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">¿Qué es un servicio de mensajería?</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Un servicio de mensajería es una empresa especializada en el transporte y la entrega rápida de paquetes, documentos y mercancías a nivel nacional e internacional. A diferencia del correo tradicional, el servicio de mensajería ofrece mayor rapidez, seguimiento en tiempo real y una gestión logística más eficiente.</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Al abordar qué es un servicio de mensajería y cómo funciona, es importante entender que su objetivo principal es garantizar entregas seguras en el menor tiempo posible, optimizando cada etapa del proceso logístico.</p>
+      <h2 style="margin-top:34px;font-size:clamp(21px,2.4vw,29px);line-height:1.2;font-weight:800">Principales características de un servicio de mensajería:</h2>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">01</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Seguimiento del paquete en línea.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">02</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Entregas exprés.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">03</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Gestión de los trámites aduaneros.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">04</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Mayor seguridad durante el transporte</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">05</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Servicio personalizado.</h3>
+      </div>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">¿Cómo funciona un servicio de mensajería?</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Para entender bien qué es un servicio de mensajería y cómo funciona, hay que analizar el proceso paso a paso:</p>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">06</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">El cliente realiza una compra en línea o hace un pedido.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">07</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">El paquete llega al almacén del transportista en el país de origen.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">08</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">La mercancía se registra y se clasifica.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">09</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Se transporta por vía aérea o marítima.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">10</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Pasa por los trámites aduaneros.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">11</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Se entrega al destinatario final.</h3>
+      </div>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">La clave del éxito de un transportista está en la coordinación logística y el seguimiento constante durante todo el trayecto.</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">¿Por qué es importante entender qué es un transportista y cómo funciona?</p>
+      <h2 style="margin-top:34px;font-size:clamp(21px,2.4vw,29px);line-height:1.2;font-weight:800">Saber qué es un transportista y cómo funciona le permite:</h2>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">12</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Elegir el tipo de envío adecuado.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">13</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Reducir costos innecesarios.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">14</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Evitar retrasos en la aduana.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">15</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Optimizar los plazos de entrega.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">16</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Mejorar la experiencia de compra internacional.</h3>
+      </div>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Para las empresas de comercio electrónico, entender este proceso es esencial para mejorar la logística y aumentar la satisfacción del cliente.</p>
+      <h2 style="margin-top:34px;font-size:clamp(21px,2.4vw,29px);line-height:1.2;font-weight:800">Ventajas de recurrir a un servicio de mensajería</h2>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Ahora que sabe qué es un servicio de mensajería y cómo funciona, estas son algunas de sus principales ventajas:</p>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">17</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Mayor rapidez en los envíos internacionales.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">18</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Seguimiento en tiempo real.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">19</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Seguridad en la manipulación de los paquetes.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">20</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Asesoría sobre los procedimientos aduaneros.</h3>
+      </div>
+      <div style="margin-top:22px;display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:#f4f6fa;border-radius:14px">
+        <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:var(--accent);margin-top:2px">21</span>
+        <h3 style="font-size:clamp(17px,1.9vw,21px);line-height:1.3;font-weight:800">Opciones de transporte adaptadas al presupuesto y a la urgencia.</h3>
+      </div>
+      <h2 style="margin-top:34px;font-size:clamp(21px,2.4vw,29px);line-height:1.2;font-weight:800">Conclusión</h2>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Entender qué es un transportista y cómo funciona es esencial para cualquier persona o empresa que realice envíos internacionales. Este servicio facilita el comercio mundial, agiliza las entregas y ofrece un mejor control sobre cada envío.</p>
+      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">Si busca rapidez, seguridad y eficiencia para sus compras o envíos al extranjero, elegir un transportista confiable marcará toda la diferencia en su experiencia logística.</p>
+    <div style="margin-top:clamp(34px,4vw,50px);padding-top:clamp(24px,3vw,34px);border-top:1px solid #e7edf9;display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between">
+      <a href="blog.html" class="hv-accent" style="display:inline-flex;align-items:center;gap:10px;font-weight:700;color:var(--ink)"><span style="width:8px;height:8px;border-top:2px solid currentColor;border-left:2px solid currentColor;transform:rotate(-45deg);display:block"></span>Todos los artículos</a>
+      <a href="contacts.html#contact" class="hv-fill-cta" style="display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;font-weight:700;padding:15px 22px;border-radius:11px">Solicitar cotización<span style="width:8px;height:8px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer style="color: #a4b3d6; padding: clamp(56px,7vw,92px) 28px 0; background-color: #101114">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(215px,100%),1fr));gap:40px">
+    <div style="min-width:0;max-width:340px">
+      <span style="display: inline-flex; align-items: center; border-radius: 14px; padding: 12px 16px; background-color: #F4600C">
+        <img src="../assets/img/logo-goship-blanc.png" alt="GOShip Express — Freight &amp; Cargo" width="420" height="147" style="display:block;height:46px;width:auto">
+      </span>
+      <p style="margin-top:20px;font-size:14.5px;line-height:1.7">Transporte, recepción y entrega de paquetes entre Estados Unidos, Santo Domingo y Haití. Soluciones simples, rápidas y adaptadas a sus necesidades.</p>
+      <div style="margin-top:22px;display:flex;gap:10px">
+        <a href="https://www.facebook.com/share/1EnDJ5wgFG/" aria-label="Facebook" class="hv-fill-accent" target="_blank" rel="noopener" style="display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.07); color: #FFFFFF; font-size: 13px; font-weight: 700">f</a>
+        
+        <a href="#top" aria-label="Instagram" class="hv-fill-accent" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700">IG</a><a href="#top" aria-label="TikTok" class="hv-fill-accent" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700">Tok</a>
+        <a href="https://wa.me/18495386262" aria-label="WhatsApp" class="hv-fill-accent" target="_blank" rel="noopener" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700">wa</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Servicios</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="index.html#adresse" class="hv-accent" style="color:#a4b3d6">Dirección de recepción EE. UU.</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Consolidación de paquetes</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Flete marítimo</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Flete aéreo exprés</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Despacho de aduanas</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navegación</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="index.html" class="hv-accent" style="color:#a4b3d6">Inicio</a>
+        <a href="a-propos.html" class="hv-accent" style="color:#a4b3d6">Nosotros</a>
+        <a href="nos-services.html" class="hv-accent" style="color:#a4b3d6">Servicios</a>
+        <a href="blog.html" class="hv-accent" style="color:#a4b3d6">Blog</a>
+        <a href="contacts.html" class="hv-accent" style="color:#a4b3d6">Contacto</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Contáctenos</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <span style="color:#dde5f8;font-weight:700">+1 849 538-6262</span>
+        <span style="word-break:break-word">goshipexpressllc@gmail.com</span>
+        <span>Lun–Sáb · 8:00–18:00</span>
+        <span>8140 NW 74th Ave, Unit 3, Apt 46780<br>Medley, Florida 33166</span>
+        <a href="contacts.html#contact" class="hv-fill-cta" style="margin-top:6px;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;font-weight:700;padding:14px 20px;border-radius:11px;justify-self:start">Solicitar cotización<span style="width:8px;height:8px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+      </div>
+    </div>
+  </div>
+  <div style="max-width:1320px;margin:clamp(40px,5vw,64px) auto 0;padding:24px 0 28px;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase">
+    <span>© 2026 Goship Express LLC · Todos los derechos reservados</span>
+    <span style="display:flex;flex-wrap:wrap;gap:12px 22px">
+      <a href="termes-et-conditions.html" class="hv-accent" style="color:#a4b3d6">Términos y condiciones</a>
+      <a href="marchandises-dangereuses.html" class="hv-accent" style="color:#a4b3d6">Mercancías peligrosas</a>
+      <a href="support.html" class="hv-accent" style="color:#a4b3d6">Soporte</a>
+      <a href="fermer-un-compte.html" class="hv-accent" style="color:#a4b3d6">Cerrar una cuenta</a>
+      <a href="confidentialite.html" class="hv-accent" style="color:#a4b3d6">Privacidad</a>
+    </span>
+  </div>
+  
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,844 @@
+/* ==========================================================================
+   Goship Express — feuille de style globale
+   La mise en page de chaque section est écrite en styles en ligne dans les
+   pages HTML (fidèle à la maquette Claude Design). Ce fichier regroupe :
+   1. les variables et styles de base
+   2. les animations
+   3. les états de survol
+   4. l'en-tête (menu mobile, accès à l'espace client)
+   5. les ajustements responsives et d'accessibilité
+   6. les animations au défilement, au survol et au curseur
+   7. l'espace client (inscription, connexion, mon compte, suivi)
+   8. le tableau de bord
+   ========================================================================== */
+
+/* 1. Variables et base ---------------------------------------------------- */
+:root{--ink:#061a3f;--ink2:#0d2b6b;--ink3:#1746a8;--accent:#f4600d;--accent2:#1f5fe0;--cream:#f5f7fb;--mist:#e7edf9;--r:18px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
+body{margin:0;background:#fff;color:#061a3f;font-family:'Manrope',system-ui,sans-serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;text-wrap:pretty}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--ink2)}
+h1,h2,h3,h4{margin:0;font-family:'Archivo','Manrope',sans-serif;font-stretch:110%;letter-spacing:-0.022em}
+p{margin:0}
+img{max-width:100%}
+input,textarea,select,button{font-family:inherit;font-size:16px}
+form input,form textarea,form select{width:100%;min-width:0}
+form label{min-width:0}
+input::placeholder,textarea::placeholder{color:#8a93ac}
+#contact input::placeholder,#contact textarea::placeholder{color:rgba(255,255,255,.45)}
+summary{list-style:none;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+details[open] .om-plus{transform:rotate(45deg);background:var(--accent) !important;color:#fff;border-color:var(--accent) !important}
+[hidden]{display:none !important}
+
+/* Conteneur de page : coupe les débordements horizontaux sans casser
+   l'en-tête collant (overflow:clip ne crée pas de zone de défilement). */
+.gs-page{overflow-x:hidden}
+@supports (overflow:clip){.gs-page{overflow-x:clip}}
+
+/* 2. Animations ------------------------------------------------------------ */
+@keyframes om-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes om-rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
+/* 3. États de survol --------------------------------------------------------
+   Générés depuis les attributs style-hover de la maquette. Le !important est
+   nécessaire pour passer devant les styles en ligne. */
+/*<hover>*/
+@media (hover:hover){
+  .hv-accent:hover{color:var(--accent) !important}
+  .hv-fill-accent:hover{background:var(--accent) !important;color:#fff !important}
+  .hv-fill-cta:hover{background:#d4500a !important;color:#fff !important}
+  .hv-white:hover{color:#fff !important}
+  .hv-rise:hover{transform:translateY(-10px) !important}
+  .hv-why-icon:hover{transform:scale(1.09) !important;box-shadow:0 26px 44px -18px rgba(244,96,13,.9) !important;border-color:var(--ink) !important}
+  .hv-card-soft:hover{transform:translateY(-8px) !important;box-shadow:0 36px 60px -40px rgba(6,26,63,.45) !important}
+  .hv-ink:hover{color:var(--ink) !important}
+  .hv-card:hover{transform:translateY(-8px) !important;box-shadow:0 36px 60px -34px rgba(6,26,63,.4) !important}
+  .hv-fill-cta-lift:hover{background:#d4500a !important;color:#fff !important;transform:translateY(-2px) !important}
+  .hv-card-accent:hover{transform:translateY(-8px) !important;border-color:var(--accent) !important;box-shadow:0 34px 60px -40px rgba(6,26,63,.5) !important}
+  .hv-lift:hover{transform:translateY(-8px) !important}
+  .hv-bg-accent:hover{background:var(--accent) !important}
+  .hv-fill-cream:hover{background:var(--cream) !important;color:var(--ink) !important}
+  .hv-glass:hover{background:rgba(255,255,255,.12) !important;color:#fff !important}
+  .hv-glass-bg:hover{background:rgba(255,255,255,.12) !important}
+  .hv-glass-soft:hover{background:rgba(255,255,255,.1) !important;color:#fff !important}
+  .hv-bg-cta-lift:hover{background:#d4500a !important;transform:translateY(-2px) !important}
+  .hv-bg-cta:hover{background:#d4500a !important}
+  .hv-fill-night:hover{background:#020c22 !important;color:#fff !important}
+}
+.hv-accent:focus-visible{color:var(--accent) !important}
+.hv-fill-accent:focus-visible{background:var(--accent) !important;color:#fff !important}
+.hv-fill-cta:focus-visible{background:#d4500a !important;color:#fff !important}
+.hv-white:focus-visible{color:#fff !important}
+.hv-rise:focus-visible{transform:translateY(-10px) !important}
+.hv-why-icon:focus-visible{transform:scale(1.09) !important;box-shadow:0 26px 44px -18px rgba(244,96,13,.9) !important;border-color:var(--ink) !important}
+.hv-card-soft:focus-visible{transform:translateY(-8px) !important;box-shadow:0 36px 60px -40px rgba(6,26,63,.45) !important}
+.hv-ink:focus-visible{color:var(--ink) !important}
+.hv-card:focus-visible{transform:translateY(-8px) !important;box-shadow:0 36px 60px -34px rgba(6,26,63,.4) !important}
+.hv-fill-cta-lift:focus-visible{background:#d4500a !important;color:#fff !important;transform:translateY(-2px) !important}
+.hv-card-accent:focus-visible{transform:translateY(-8px) !important;border-color:var(--accent) !important;box-shadow:0 34px 60px -40px rgba(6,26,63,.5) !important}
+.hv-lift:focus-visible{transform:translateY(-8px) !important}
+.hv-bg-accent:focus-visible{background:var(--accent) !important}
+.hv-fill-cream:focus-visible{background:var(--cream) !important;color:var(--ink) !important}
+.hv-glass:focus-visible{background:rgba(255,255,255,.12) !important;color:#fff !important}
+.hv-glass-bg:focus-visible{background:rgba(255,255,255,.12) !important}
+.hv-glass-soft:focus-visible{background:rgba(255,255,255,.1) !important;color:#fff !important}
+.hv-bg-cta-lift:focus-visible{background:#d4500a !important;transform:translateY(-2px) !important}
+.hv-bg-cta:focus-visible{background:#d4500a !important}
+.hv-fill-night:focus-visible{background:#020c22 !important;color:#fff !important}
+/*</hover>*/
+
+/* 4. En-tête ---------------------------------------------------------------- */
+.gs-header{-webkit-backdrop-filter:blur(16px)}
+.gs-mobile-actions{display:none;align-items:center;gap:10px}
+.gs-call,.gs-burger{display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:12px;cursor:pointer}
+.gs-call{border-radius:50%;background:rgba(244,96,13,.18);border:1px solid rgba(244,96,13,.5);color:var(--accent);font-size:17px}
+.gs-call:hover{color:#fff;background:var(--accent)}
+.gs-burger{padding:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);color:#fff;align-content:center;gap:5px}
+.gs-burger span{display:block;width:20px;height:2px;border-radius:2px;background:currentColor;transition:transform .25s,opacity .2s}
+.gs-header.is-open .gs-burger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.gs-header.is-open .gs-burger span:nth-child(2){opacity:0}
+.gs-header.is-open .gs-burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* Sélecteur de langue (drapeau + « Langue », liste déroulante) */
+.gs-lang{position:relative;flex:none}
+.gs-lang__btn{display:flex;align-items:center;gap:9px;padding:9px 4px;border-radius:10px;color:#dde5f8;font-size:15px;font-weight:600;line-height:1;white-space:nowrap;cursor:pointer;list-style:none;user-select:none;-webkit-user-select:none}
+.gs-lang__btn::-webkit-details-marker{display:none}
+.gs-lang__btn:hover,.gs-lang[open]>.gs-lang__btn{color:var(--accent)}
+.gs-flag{display:block;flex:none;width:24px;height:16px;border-radius:3px;box-shadow:0 0 0 1px rgba(6,26,63,.16);object-fit:cover}
+.gs-lang__chev{width:7px;height:7px;margin:-4px 2px 0 1px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .2s,margin .2s}
+.gs-lang[open] .gs-lang__chev{margin-top:3px;transform:rotate(-135deg)}
+.gs-lang__list{position:absolute;top:calc(100% + 14px);right:0;z-index:70;min-width:236px;margin:0;padding:12px;list-style:none;background:#fff;border:1px solid #e3e8f2;border-radius:20px;box-shadow:0 40px 70px -32px rgba(6,26,63,.6);animation:gs-drop .18s ease-out both}
+.gs-lang__list a{display:flex;align-items:center;gap:16px;padding:12px 14px;border-radius:12px;color:var(--ink);font-size:16px;font-weight:700;line-height:1.2}
+.gs-lang__list a:hover{background:var(--cream);color:var(--accent)}
+.gs-lang__list a[aria-current]{background:rgba(244,96,13,.09);color:var(--accent)}
+.gs-lang__list .gs-flag{width:30px;height:20px}
+.gs-lang--compact .gs-lang__label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.gs-lang--compact .gs-lang__btn{height:44px;padding:0 11px;gap:8px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22)}
+@keyframes gs-drop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* Espace client : lien du bandeau du haut et du menu mobile */
+.gs-bandeau-compte{display:inline-flex;align-items:center;gap:7px;color:#dde5f8;font-weight:600}
+.gs-bandeau-compte:hover{color:var(--accent)}
+.gs-connexion-mobile{display:none}
+/* Bouton « Créer un compte » du bandeau : réservé au mobile (voir plus bas) */
+.gs-bandeau-inscription{display:none}
+
+/* Grand titre de l'accueil : en capitales, légèrement condensé pour que le mot
+   le plus long (« internationale ») tienne dans sa colonne à toutes les largeurs */
+.gs-hero-titre{font-size:min(calc(11.6vw - 6px),62px);font-stretch:85%;line-height:.94;text-transform:uppercase;letter-spacing:-.012em}
+@media (min-width:768px){.gs-hero-titre{font-size:min(calc(5.6vw - 4px),72px)}}
+@supports (container-type:inline-size){
+  .gs-hero-col{container-type:inline-size}
+  .gs-hero-titre{font-size:min(11.8cqi,72px)}
+}
+
+/* En-tête : ombre plus marquée une fois la page défilée */
+.gs-header{transition:box-shadow .35s ease}
+.gs-header.is-scrolled{box-shadow:0 16px 36px -24px rgba(0,0,0,.85)}
+
+/* Écran moyen : on retire le bloc téléphone pour garder l'en-tête sur une ligne */
+@media (max-width:1219px){
+  .gs-header-phone{display:none !important}
+}
+
+/* Mobile et tablette : logo + langue + appel + menu déroulant */
+@media (max-width:1023px){
+  html{scroll-padding-top:84px}
+  /* Bandeau du haut : ni adresse, ni e-mail, ni horaires (ils restent dans le pied de
+     page et sur la page Contacts) — seulement « Se connecter » et le bouton « Créer un
+     compte », remplacés par « Mon compte » une fois le client connecté */
+  .gs-bandeau__ligne{justify-content:flex-end !important;padding:9px 20px !important}
+  .gs-bandeau__actions{gap:8px 16px !important}
+  .gs-bandeau-info{display:none !important}
+  .gs-bandeau-inscription{display:inline-flex;align-items:center;background:var(--accent);color:#fff;font-weight:700;padding:9px 15px;border-radius:9px}
+  .gs-bandeau-inscription:hover,.gs-bandeau-inscription:focus-visible{background:#d4500a;color:#fff}
+  .gs-header__bar{padding:12px 20px !important;gap:0 16px !important}
+  .gs-logo img{height:34px !important}
+  .gs-mobile-actions{display:flex}
+  .gs-nav,.gs-actions{display:none !important}
+  .gs-actions .gs-lang{display:none !important}
+  .gs-lang--compact{position:static}
+  .gs-lang--compact .gs-lang__list{top:calc(100% + 8px);right:20px}
+  .gs-header.is-open{max-height:100vh;max-height:100dvh;overflow-y:auto}
+  .gs-header.is-open .gs-nav{display:flex !important;flex:1 0 100%;flex-direction:column;align-items:stretch !important;gap:0 !important;margin-top:14px;border-top:1px solid rgba(255,255,255,.12)}
+  .gs-header.is-open .gs-nav a{padding:15px 2px;border-bottom:1px solid rgba(255,255,255,.1);font-size:17px}
+  .gs-header.is-open .gs-actions{display:flex !important;flex:1 0 100%;flex-direction:column;align-items:stretch !important;gap:14px !important;padding:18px 0 8px}
+  .gs-header.is-open .gs-header-phone{display:flex !important}
+  .gs-header.is-open .gs-cta{text-align:center}
+  .gs-header.is-open .gs-connexion-mobile{display:block;padding:14px 24px;border:1px solid rgba(255,255,255,.3);border-radius:12px;color:#fff;font-size:14.5px;font-weight:700;text-align:center}
+}
+
+/* Très petits écrans : on resserre l'en-tête */
+@media (max-width:374px){
+  .gs-bandeau__ligne{padding:9px 14px !important}
+  .gs-bandeau__actions{gap:8px 12px !important}
+  .gs-bandeau-inscription{padding:8px 12px}
+  .gs-header__bar{padding:12px 14px !important;gap:0 10px !important}
+  .gs-logo img{height:28px !important}
+  .gs-mobile-actions{gap:8px}
+  .gs-lang--compact .gs-lang__list{right:14px}
+}
+
+/* 5. Ajustements --------------------------------------------------------------- */
+
+/* Lien d'évitement (clavier / lecteur d'écran) */
+.gs-skip{position:absolute;left:12px;top:-80px;z-index:100;background:var(--accent);color:#fff;font-weight:700;padding:12px 18px;border-radius:10px}
+.gs-skip:focus{top:12px;color:#fff}
+
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+
+/* Avatars des témoignages (initiales) */
+.gs-avatar{display:grid;place-items:center;border-radius:50%;background:var(--ink);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;letter-spacing:.04em}
+
+/* Champ anti-spam invisible des formulaires */
+.gs-hp{position:absolute !important;left:-9999px !important;width:1px !important;height:1px !important;opacity:0}
+
+/* Section « Pourquoi choisir Goship Express » : le schéma circulaire
+   devient une liste empilée sur petit écran. */
+@media (max-width:759px){
+  .gs-why-scroll{overflow:visible !important}
+  .gs-why{min-width:0 !important;aspect-ratio:auto !important;display:flex;flex-direction:column;gap:26px;padding-top:6px}
+  .gs-why-deco{display:none}
+  .gs-why-photo{position:relative !important;left:auto !important;top:auto !important;width:min(74vw,300px) !important;margin:0 auto 10px}
+  .gs-why-item{position:static !important;width:auto !important;height:auto !important;flex-direction:row-reverse !important;justify-content:flex-end !important;align-items:center !important;gap:18px !important;text-align:left !important}
+  .gs-why-item>div:first-child{flex:1 !important;text-align:left !important}
+  .gs-why-item h3{font-size:17.5px !important}
+  .gs-why-item p{margin-top:4px !important;font-size:14.5px !important}
+  .gs-why-icon span{font-size:28px !important}
+}
+
+/* 6. Animations ---------------------------------------------------------------
+   Discrètes et utiles : apparition des sections au défilement, parallaxe légère
+   des éléments flottants, retours visuels au survol, halo et boutons
+   « aimantés » qui suivent le curseur (souris uniquement). Toutes sont
+   désactivées si le visiteur a demandé à réduire les animations. */
+
+/* Apparition au défilement (classes posées par site.js) */
+@keyframes gs-apparition{from{opacity:0;translate:0 28px}}
+.gs-reveal:not(.gs-reveal--in){opacity:0 !important}
+.gs-reveal--in{animation:gs-apparition .9s cubic-bezier(.2,.7,.3,1) var(--gs-delai,0s) backwards}
+
+/* Transitions douces des survols existants */
+.hv-accent,.hv-ink,.hv-white{transition:color .2s ease}
+.hv-fill-accent,.hv-fill-cta,.hv-fill-cream,.hv-fill-night,.hv-glass,.hv-glass-soft,.hv-glass-bg,.hv-bg-accent,.hv-bg-cta{transition:background-color .25s ease,color .25s ease,border-color .25s ease,translate .45s cubic-bezier(.2,.7,.3,1),scale .15s ease}
+.hv-fill-cta-lift,.hv-bg-cta-lift{transition:background-color .25s ease,color .25s ease,transform .3s cubic-bezier(.2,.7,.3,1),box-shadow .3s ease,translate .45s cubic-bezier(.2,.7,.3,1),scale .15s ease}
+
+/* Petite pression au clic */
+.hv-fill-cta:active,.hv-fill-cta-lift:active,.hv-bg-accent:active,.hv-bg-cta:active,.hv-bg-cta-lift:active,.hv-glass-soft:active,.hv-fill-cream:active,.gs-bouton:active{scale:.97}
+
+/* Flèches des boutons et liens : léger élan vers la droite */
+a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45deg)"][style*="border-right:2px"]{transition:translate .35s cubic-bezier(.2,.7,.3,1)}
+@media (hover:hover){
+  a:hover [style*="rotate(45deg)"][style*="border-right:2px"],button:hover [style*="rotate(45deg)"][style*="border-right:2px"]{translate:3px 0}
+  /* Images des articles du blog : zoom lent au survol de la carte */
+  .hv-card-soft>a:first-child{overflow:hidden}
+  .hv-card-soft>a:first-child img{transition:scale .8s cubic-bezier(.2,.7,.3,1)}
+  .hv-card-soft:hover>a:first-child img{scale:1.05}
+}
+
+/* Menu principal : trait orange qui se dessine sous le lien survolé */
+@media (min-width:1024px){
+  .gs-nav a{position:relative}
+  .gs-nav a::after{content:"";position:absolute;left:0;right:0;bottom:-7px;height:2px;border-radius:2px;background:var(--accent);transform:scaleX(0);transform-origin:left center;transition:transform .35s cubic-bezier(.2,.7,.3,1)}
+  .gs-nav a:hover::after,.gs-nav a:focus-visible::after{transform:scaleX(1)}
+}
+
+/* Halo orange qui suit le curseur sur les bandeaux sombres */
+.gs-halo::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(520px circle at var(--gs-x,50%) var(--gs-y,50%),rgba(244,96,13,.17),rgba(244,96,13,.05) 45%,transparent 70%);mix-blend-mode:screen;opacity:0;transition:opacity .6s ease}
+.gs-halo.gs-halo--actif::after{opacity:1}
+
+/* Éléments en parallaxe : déplacement fluide */
+[data-parallax]{will-change:translate}
+
+/* 7. Espace client ---------------------------------------------------------------- */
+.gs-ico{display:block;flex:none}
+.gs-invisible{position:absolute !important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@keyframes gs-tourne{to{transform:rotate(360deg)}}
+@keyframes gs-pulsation{from{transform:scale(1);opacity:.65}to{transform:scale(2.8);opacity:0}}
+@keyframes gs-eclat{0%{box-shadow:0 0 0 0 rgba(244,96,13,.5)}35%{box-shadow:0 0 0 7px rgba(244,96,13,.16)}100%{box-shadow:0 0 0 0 rgba(244,96,13,0)}}
+@keyframes gs-reflet{to{background-position:-200% 0}}
+.gs-roue{display:inline-block;width:18px;height:18px;flex:none;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;animation:gs-tourne .7s linear infinite}
+.gs-attente{display:flex;align-items:center;gap:12px;font-weight:600;color:#55627e}
+
+/* Page (fond, carte centrale) */
+.gs-compte{position:relative;background:var(--cream);padding:clamp(28px,5vw,72px) 20px clamp(64px,8vw,110px);overflow:hidden}
+.gs-compte::before{content:"";position:absolute;inset:0 0 auto;height:420px;background:radial-gradient(rgba(6,26,63,.07) 1px,transparent 1px) 0 0/24px 24px;-webkit-mask-image:linear-gradient(#000,transparent);mask-image:linear-gradient(#000,transparent);pointer-events:none}
+.gs-compte__wrap{position:relative;max-width:860px;margin:0 auto}
+.gs-compte__wrap--etroit{max-width:580px}
+.gs-carte-auth{background:#fff;border-radius:28px;overflow:hidden;box-shadow:0 0 0 1px rgba(6,26,63,.06),0 50px 90px -50px rgba(6,26,63,.5);animation:om-rise .7s cubic-bezier(.2,.7,.3,1) both}
+.gs-carte-auth__tete{position:relative;padding:clamp(26px,4vw,40px) clamp(22px,4.6vw,48px) clamp(28px,3.6vw,38px);color:#fff;overflow:hidden;background:radial-gradient(420px 280px at 100% 0,rgba(96,165,250,.34),transparent 70%),radial-gradient(360px 260px at 0 100%,rgba(59,130,246,.26),transparent 70%),linear-gradient(135deg,#10308f 0%,#0a2272 45%,#061a3f 100%)}
+.gs-carte-auth__marque{display:flex;align-items:center;gap:18px}
+.gs-carte-auth__icone{display:grid;place-items:center;width:60px;height:60px;flex:none;border-radius:17px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.14)}
+.gs-carte-auth__icone .gs-ico{width:27px;height:27px}
+.gs-carte-auth__surtitre{font-family:'Archivo','Manrope',sans-serif;font-size:15px;font-weight:800;letter-spacing:.24em;text-transform:uppercase;color:#cfe0ff}
+.gs-carte-auth__tete h1{margin-top:22px;font-size:clamp(30px,4.4vw,46px);line-height:1.05;font-weight:800;color:#fff}
+.gs-carte-auth__tete p{margin-top:12px;max-width:640px;font-size:clamp(16px,1.6vw,18px);line-height:1.55;color:#dbe6ff}
+.gs-atouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px 28px;margin:0;padding:19px clamp(22px,4.6vw,48px);list-style:none;background:#f5f7fb;border-bottom:1px solid #e6ebf3}
+.gs-atouts li{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:700;color:#3a4660}
+.gs-atouts__ico{display:block;flex:none}
+.gs-atouts__ico--vert{color:#1f9d55}
+.gs-atouts__ico--bleu{color:#10308f}
+.gs-atouts__ico--ciel{color:#1f8ac0}
+.gs-carte-auth__corps{padding:clamp(24px,4vw,44px) clamp(20px,4.6vw,48px) clamp(28px,4vw,40px)}
+.gs-carte-auth__corps>.gs-alerte{margin-bottom:24px}
+.gs-carte-auth__pied{margin-top:28px;font-size:17px;text-align:center;color:#2d3850}
+.gs-carte-auth__pied a,.gs-champ__lien{font-weight:800;color:#10308f}
+.gs-carte-auth__pied a:hover,.gs-champ__lien:hover{color:var(--accent)}
+
+/* Choix de la méthode d'inscription */
+.gs-methode{margin-bottom:34px;padding:clamp(20px,3vw,30px);border:1px solid #d9e4f5;border-radius:22px;background:#f4f8ff;text-align:center}
+.gs-methode__titre{font-family:'Archivo','Manrope',sans-serif;font-stretch:105%;font-size:clamp(18px,2vw,21px);font-weight:800;line-height:1.25;color:var(--ink)}
+.gs-methode__texte{margin-top:6px;font-size:15.5px;color:#55627e}
+.gs-methode__choisie{margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;border-radius:16px;background:#fff;text-align:left}
+.gs-methode__choisie strong{display:block;font-family:'Archivo','Manrope',sans-serif;font-size:18px;font-weight:800;line-height:1.3;color:var(--ink)}
+.gs-methode__choisie span{display:block;margin-top:2px;font-size:15px;color:#5b6782}
+.gs-methode__liste{margin-top:20px;display:grid;gap:12px}
+.gs-methode__option{display:flex;align-items:center;gap:16px;width:100%;padding:16px 18px;border:1px solid #dfe6f2;border-radius:16px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:border-color .2s ease,box-shadow .25s ease,transform .25s cubic-bezier(.2,.7,.3,1)}
+.gs-methode__option:hover{color:var(--ink);border-color:var(--accent);box-shadow:0 18px 30px -24px rgba(6,26,63,.55);transform:translateY(-2px)}
+.gs-methode__pictogramme{display:grid;place-items:center;width:46px;height:46px;flex:none;border-radius:13px;background:rgba(16,48,143,.08);color:#10308f}
+.gs-methode__pictogramme--wa{background:rgba(37,211,102,.14);color:#15803d}
+.gs-methode__libelle{flex:1;min-width:0}
+.gs-methode__libelle strong{display:block;font-size:16.5px;font-weight:800;line-height:1.3}
+.gs-methode__libelle span{display:block;font-size:14.5px;color:#5b6782}
+.gs-chevron{display:block;width:9px;height:9px;flex:none;margin-right:4px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);color:#8a93ac;transition:translate .3s cubic-bezier(.2,.7,.3,1)}
+.gs-methode__option:hover .gs-chevron{translate:3px 0;color:var(--accent)}
+.gs-lien-bouton{display:inline-flex;align-items:center;gap:8px;padding:6px 2px;border:0;background:none;font:inherit;font-size:16px;font-weight:800;color:#10308f;cursor:pointer;white-space:nowrap}
+.gs-lien-bouton:hover{color:var(--accent)}
+.gs-lien-bouton--danger{color:#b91c1c}
+.gs-lien-bouton--danger:hover{color:#7f1d1d}
+
+/* Formulaires */
+.gs-form__grille{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 28px}
+.gs-champ{display:flex;flex-direction:column;gap:9px;min-width:0}
+.gs-form>.gs-champ+.gs-champ{margin-top:20px}
+.gs-champ label{font-size:16px;font-weight:600;line-height:1.3;color:#2d3850}
+.gs-champ__entete{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.gs-champ__lien{font-size:14.5px}
+.gs-requis{margin-left:2px;color:#e5484d}
+.gs-facultatif{font-size:13.5px;font-weight:500;color:#8a93ac}
+.gs-champ input,.gs-champ select,.gs-champ textarea{width:100%;height:56px;padding:0 18px;border:1px solid #cfd7e6;border-radius:13px;background:#fff;color:var(--ink);font-size:16.5px;line-height:1.3;-webkit-appearance:none;appearance:none;transition:border-color .2s ease,box-shadow .2s ease,background-color .2s ease}
+.gs-champ textarea{height:auto;min-height:84px;padding:13px 18px;line-height:1.5;resize:vertical}
+.gs-champ select{padding-right:46px;cursor:pointer;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%235b6782' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 18px center}
+.gs-champ select:invalid{color:#8a93ac}
+.gs-champ select option{color:var(--ink)}
+.gs-champ select:disabled{background-color:#f5f7fb;cursor:not-allowed}
+.gs-champ input:hover,.gs-champ select:hover,.gs-champ textarea:hover{border-color:#aab6cc}
+.gs-champ input:focus,.gs-champ select:focus,.gs-champ textarea:focus{outline:none;border-color:#10308f;box-shadow:0 0 0 4px rgba(16,48,143,.12)}
+.gs-champ.is-invalide input,.gs-champ.is-invalide select{border-color:#e5484d;box-shadow:0 0 0 4px rgba(229,72,77,.1)}
+.gs-champ__message{font-size:13.5px;font-weight:600;color:#c62f34}
+.gs-champ__aide{font-size:13.5px;color:#6b7690}
+.gs-champ__autre{margin-top:2px}
+.gs-mdp{position:relative}
+.gs-mdp input{padding-right:58px}
+.gs-mdp__oeil{position:absolute;top:50%;right:7px;translate:0 -50%;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:10px;background:none;color:#6b7690;cursor:pointer}
+.gs-mdp__oeil:hover{background:#f1f4fa;color:var(--ink)}
+.gs-mdp__oeil[aria-pressed="true"]{color:var(--accent)}
+.gs-mdp__oeil[aria-pressed="true"]::after{content:"";position:absolute;width:24px;height:2px;border-radius:2px;background:currentColor;transform:rotate(-40deg)}
+.gs-form__erreur{margin-top:22px;padding:13px 16px;border:1px solid #ffd2d2;border-radius:12px;background:#fff1f1;color:#b42318;font-size:15px;font-weight:600;line-height:1.5}
+.gs-form__intro{margin-bottom:20px}
+.gs-form__intro strong{display:block;font-family:'Archivo','Manrope',sans-serif;font-size:20px;font-weight:800;color:var(--ink)}
+.gs-form__intro p{margin-top:6px;font-size:15.5px;color:#55627e}
+.gs-form__mention{margin-top:16px;font-size:13.5px;line-height:1.55;text-align:center;color:#6b7690}
+.gs-form__mention a{font-weight:700;color:#10308f}
+.gs-form__retour{display:flex;margin:14px auto 0}
+.gs-form__boutons{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+
+/* Boutons */
+.gs-bouton{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 24px;border:1px solid transparent;border-radius:13px;font:inherit;font-size:16px;font-weight:700;line-height:1.2;text-align:center;cursor:pointer;transition:background-color .2s ease,color .2s ease,border-color .2s ease,box-shadow .25s ease,transform .25s cubic-bezier(.2,.7,.3,1),translate .45s cubic-bezier(.2,.7,.3,1),scale .15s ease}
+.gs-bouton--plein{background:var(--accent);color:#fff;box-shadow:0 16px 30px -18px rgba(244,96,13,.9)}
+.gs-bouton--plein:hover{background:#d4500a;color:#fff;transform:translateY(-2px)}
+.gs-bouton--sombre{background:var(--ink);color:#fff}
+.gs-bouton--sombre:hover{background:var(--accent);color:#fff}
+.gs-bouton--contour{background:#fff;color:var(--ink);border-color:#d6ddec}
+.gs-bouton--contour:hover{border-color:var(--ink);color:var(--ink)}
+.gs-bouton--wa{background:#15803d;color:#fff}
+.gs-bouton--wa:hover{background:#166534;color:#fff}
+.gs-bouton--petit{min-height:40px;padding:0 15px;border-radius:10px;font-size:14px}
+.gs-bouton[disabled],.gs-bouton[aria-busy="true"]{opacity:.78;cursor:progress;transform:none}
+.gs-form>.gs-bouton--plein{width:100%;min-height:60px;margin-top:30px;border-radius:15px;font-size:17px}
+
+/* Messages */
+.gs-alerte{padding:16px 18px;border:1px solid;border-radius:14px;font-size:15px;line-height:1.55}
+.gs-alerte strong{display:block;font-size:16px}
+.gs-alerte p{margin-top:4px}
+.gs-alerte a{font-weight:700;color:inherit;text-decoration:underline;text-underline-offset:2px}
+.gs-alerte--info{background:#eef4ff;border-color:#cfdcf7;color:#1c3a7a}
+.gs-alerte--succes{background:#ecfbf3;border-color:#bfe9d1;color:#14532d}
+.gs-alerte--erreur{background:#fff1f1;border-color:#ffd2d2;color:#8a1c16}
+.gs-copie-ok{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#15803d}
+
+/* Mon compte */
+.gs-espace-tete{position:relative;padding:clamp(34px,5vw,64px) 20px clamp(92px,10vw,124px);overflow:hidden;color:#fff;background:radial-gradient(560px 320px at 88% 0,rgba(31,95,224,.35),transparent 70%),radial-gradient(420px 300px at 0 100%,rgba(244,96,13,.16),transparent 70%),var(--ink)}
+.gs-espace-tete::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:26px 26px;opacity:.5;pointer-events:none}
+.gs-espace-tete__wrap{position:relative;max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:28px}
+.gs-espace-tete__texte{min-width:0;animation:om-rise .7s cubic-bezier(.2,.7,.3,1) both}
+.gs-surtitre{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.gs-espace-tete h1{margin-top:14px;font-size:clamp(32px,4.6vw,54px);line-height:1.02;font-weight:800;overflow-wrap:anywhere}
+.gs-espace-tete p{margin-top:12px;max-width:560px;font-size:17px;color:#c4d0ec}
+.gs-code-carte{display:flex;flex-direction:column;gap:6px;min-width:260px;padding:22px 26px;border:1px solid rgba(255,255,255,.18);border-radius:20px;background:rgba(255,255,255,.07);box-shadow:0 30px 60px -40px rgba(0,0,0,.8);animation:om-rise .9s cubic-bezier(.2,.7,.3,1) both}
+.gs-code-carte__libelle{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#a8b6d8}
+.gs-code-carte__code{font-family:'IBM Plex Mono',monospace;font-size:clamp(26px,3vw,34px);font-weight:600;letter-spacing:.04em;line-height:1.2;color:#fff}
+.gs-code-carte__copier{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;margin-top:6px;padding:8px 14px;border:1px solid rgba(255,255,255,.25);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background-color .2s ease,border-color .2s ease}
+.gs-code-carte__copier:hover{background:var(--accent);border-color:var(--accent)}
+.gs-code-carte__copier .gs-ico{width:16px;height:16px}
+.gs-espace{background:var(--cream);padding:0 20px clamp(64px,8vw,110px)}
+.gs-espace__wrap{position:relative;max-width:1200px;margin:-58px auto 0}
+.gs-espace__bienvenue{margin-bottom:20px;box-shadow:0 30px 60px -44px rgba(6,26,63,.5)}
+.gs-espace__wrap>.gs-demo{margin-bottom:14px}
+.gs-espace__grille{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start}
+.gs-espace__cote{display:grid;gap:20px;min-width:0}
+.gs-panneau{min-width:0;padding:clamp(20px,2.6vw,30px);border:1px solid #e3e8f2;border-radius:22px;background:#fff;box-shadow:0 40px 70px -56px rgba(6,26,63,.5)}
+.gs-panneau__tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 12px}
+.gs-panneau__tete h2{font-size:21px;font-weight:800;line-height:1.2}
+.gs-panneau__intro{margin-top:8px;font-size:14.5px;color:#5b6782}
+.gs-panneau__note{margin-top:12px;font-size:13.5px;line-height:1.5;color:#5b6782}
+.gs-panneau__actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:16px}
+.gs-panneau__actions .gs-bouton{min-height:46px;font-size:15px}
+.gs-panneau__actions .gs-ico{width:17px;height:17px}
+.gs-panneau--aide{border:0;color:#fff;background:radial-gradient(300px 200px at 100% 0,rgba(244,96,13,.3),transparent 70%),linear-gradient(135deg,#0d2b6b,#061a3f)}
+.gs-panneau--aide strong{display:block;font-family:'Archivo','Manrope',sans-serif;font-size:19px;font-weight:800}
+.gs-panneau--aide p{margin-top:6px;font-size:15px;color:#c4d0ec}
+.gs-panneau--aide .gs-bouton{margin-top:16px;min-height:46px;font-size:15px}
+.gs-panneau--aide .gs-ico{width:18px;height:18px}
+.gs-adresse{margin-top:16px;border:1px solid var(--accent);border-radius:10px;overflow:hidden}
+.gs-adresse>div{display:grid;grid-template-columns:104px minmax(0,1fr);border-bottom:1px solid #eef2f9}
+.gs-adresse>div:last-child{border-bottom:0}
+.gs-adresse span{padding:10px 14px;font-size:14.5px;line-height:1.45;color:#3a4660;overflow-wrap:anywhere}
+.gs-adresse span:first-child{border-right:1px solid #eef2f9;font-weight:800;color:var(--accent)}
+.gs-adresse [data-nom-adresse]{font-weight:700;color:var(--ink)}
+.gs-infos{display:grid;gap:12px;margin:16px 0 0}
+.gs-infos div{display:grid;gap:1px}
+.gs-infos dt{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8a93ac}
+.gs-infos dd{margin:0;font-size:15.5px;color:var(--ink);overflow-wrap:anywhere}
+.gs-form--compact{margin-top:16px}
+.gs-form--compact>.gs-champ+.gs-champ{margin-top:14px}
+.gs-form--compact .gs-champ label{font-size:14.5px}
+.gs-form--compact .gs-champ input,.gs-form--compact .gs-champ select{height:48px;padding-left:14px;font-size:15.5px}
+.gs-form--compact .gs-champ select{padding-right:40px;background-position:right 14px center}
+.gs-form--compact .gs-bouton{min-height:46px;font-size:15px}
+.gs-deconnexion{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border:1px solid #d6ddec;border-radius:14px;background:#fff;color:#5b6782;font:inherit;font-size:15.5px;font-weight:700;cursor:pointer;transition:color .2s ease,border-color .2s ease}
+.gs-deconnexion:hover{border-color:#f3b4b4;color:#b91c1c}
+.gs-deconnexion .gs-ico{width:18px;height:18px}
+
+/* En direct */
+.gs-direct{display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:999px;background:#ecfbf3;color:#15803d;font-size:12.5px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+.gs-direct__point{position:relative;width:8px;height:8px;border-radius:50%;background:#22c55e}
+.gs-direct__point::after{content:"";position:absolute;inset:0;border-radius:50%;background:#22c55e;animation:gs-pulsation 1.8s ease-out infinite}
+.gs-direct--clair{background:rgba(34,197,94,.14);color:#86efac}
+
+/* Onglets « En cours / Livrés » */
+.gs-onglets{display:flex;gap:6px;width:max-content;max-width:100%;margin-top:18px;padding:5px;border-radius:14px;background:#f1f4fa}
+.gs-onglets button{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border:0;border-radius:10px;background:none;font:inherit;font-size:15px;font-weight:700;color:#5b6782;cursor:pointer;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.gs-onglets button[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 6px 16px -10px rgba(6,26,63,.55)}
+.gs-onglets__nombre{min-width:22px;padding:1px 7px;border-radius:999px;background:rgba(6,26,63,.08);font-size:12.5px;text-align:center}
+
+/* Cartes de colis */
+.gs-colis-liste{display:grid;gap:14px;margin-top:18px}
+.gs-squelette{height:168px;border-radius:18px;background:linear-gradient(90deg,#f1f4fa 0%,#e7ecf5 50%,#f1f4fa 100%) 0 0/200% 100%;animation:gs-reflet 1.4s linear infinite}
+.gs-colis{padding:20px 22px;border:1px solid #e3e8f2;border-radius:18px;background:#fff;transition:border-color .25s ease,box-shadow .3s ease,transform .3s cubic-bezier(.2,.7,.3,1)}
+.gs-colis:hover{border-color:#cfd8e8;box-shadow:0 26px 44px -34px rgba(6,26,63,.5)}
+.gs-colis.is-maj{animation:gs-eclat 1.8s ease}
+.gs-colis__tete{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.gs-colis__id{min-width:0}
+.gs-colis__numero{font-family:'IBM Plex Mono',monospace;font-size:14.5px;font-weight:600;letter-spacing:.04em;color:var(--ink)}
+.gs-colis__desc{margin-top:3px;font-size:16.5px;font-weight:700;line-height:1.35;color:#2d3850;overflow-wrap:anywhere}
+.gs-colis__infos{display:flex;flex-wrap:wrap;gap:4px 18px;margin:10px 0 0;padding:0;list-style:none;font-size:14px;color:#5b6782}
+.gs-colis__infos li:empty{display:none}
+.gs-colis__note{margin-top:16px;padding:11px 14px;border:1px solid #fde2c8;border-radius:12px;background:#fff7ed;color:#7c3a0b;font-size:14.5px;line-height:1.5}
+.gs-colis__pied{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 16px;margin-top:16px;font-size:13.5px;color:#6b7690}
+.gs-colis__historique summary{display:inline-flex;align-items:center;gap:9px;font-weight:700;color:#10308f}
+.gs-colis__historique summary::after{content:"";width:7px;height:7px;margin-top:-4px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .2s ease,margin .2s ease}
+.gs-colis__historique[open]{flex-basis:100%}
+.gs-colis__historique[open] summary::after{margin-top:3px;transform:rotate(-135deg)}
+.gs-colis__historique summary:hover{color:var(--accent)}
+
+/* Statuts */
+.gs-badge{display:inline-flex;align-items:center;gap:7px;flex:none;padding:6px 12px;border-radius:999px;background:#e7edf9;color:#0d2b6b;font-size:13px;font-weight:700;line-height:1.2;white-space:nowrap}
+.gs-badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.gs-badge--emballe{background:#ede9fe;color:#6d28d9}
+.gs-badge--embarque{background:#e3ecff;color:#1f5fe0}
+.gs-badge--distribution{background:#fef3c7;color:#92400e}
+.gs-badge--succursale{background:#ffedd5;color:#c2410c}
+.gs-badge--disponible{background:#d9f7ef;color:#0f766e}
+.gs-badge--livre{background:#dcfce7;color:#15803d}
+.gs-badge--incident{background:#fee2e2;color:#b91c1c}
+
+/* Étapes du parcours */
+.gs-etapes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin:18px 0 0;padding:0;list-style:none}
+.gs-etapes li{position:relative;padding:22px 2px 0;font-size:12.5px;font-weight:700;line-height:1.25;text-align:center;color:#8a93ac;overflow-wrap:anywhere}
+.gs-etapes li::before{content:"";position:absolute;z-index:1;top:3px;left:50%;width:14px;height:14px;margin-left:-7px;border:2px solid #cfd7e6;border-radius:50%;background:#fff;box-sizing:border-box;transition:background-color .4s ease,border-color .4s ease}
+.gs-etapes li::after{content:"";position:absolute;top:9px;left:calc(-50% + 9px);right:calc(50% + 9px);height:2px;border-radius:2px;background:#dfe5f0;transition:background-color .4s ease}
+.gs-etapes li:first-child::after{display:none}
+.gs-etapes li.is-fait{color:var(--ink)}
+.gs-etapes li.is-fait::before{border-color:var(--accent);background:var(--accent)}
+.gs-etapes li.is-fait::after{background:var(--accent)}
+.gs-etapes li.is-actuel::before{box-shadow:0 0 0 5px rgba(244,96,13,.18)}
+.gs-etapes.is-incident li.is-actuel::before{border-color:#dc2626;background:#dc2626;box-shadow:0 0 0 5px rgba(220,38,38,.16)}
+.gs-etapes--large li{font-size:12.5px}
+/* Téléphone et petite tablette : les points restent, l'étape en cours s'écrit dessous */
+@media (max-width:719px){
+  .gs-etapes{position:relative;padding-bottom:28px}
+  .gs-etapes li,.gs-etapes--large li{font-size:0;padding-top:20px}
+  .gs-etapes::after{content:attr(data-etape);position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:12.5px;font-weight:700;line-height:1.3;color:var(--ink)}
+  .gs-etapes.is-incident::after{color:#b91c1c}
+}
+
+/* Historique */
+.gs-chrono{display:grid;margin:14px 0 0;padding:0;list-style:none}
+.gs-chrono li{position:relative;padding:0 0 16px 26px}
+.gs-chrono li::before{content:"";position:absolute;top:6px;left:3px;width:10px;height:10px;border-radius:50%;background:#cfd7e6}
+.gs-chrono li::after{content:"";position:absolute;top:19px;bottom:-3px;left:7.5px;width:1px;background:#e3e8f2}
+.gs-chrono li:last-child{padding-bottom:0}
+.gs-chrono li:last-child::after{display:none}
+.gs-chrono li:first-child::before{background:var(--accent);box-shadow:0 0 0 4px rgba(244,96,13,.16)}
+.gs-chrono__statut{display:block;font-size:14.5px;font-weight:700;color:var(--ink)}
+.gs-chrono__meta{display:block;font-size:13px;color:#6b7690}
+.gs-chrono__note{margin-top:3px;font-size:13.5px;line-height:1.5;color:#55627e}
+
+/* États vides */
+.gs-vide{margin-top:18px;padding:34px 24px;border:1.5px dashed #d6ddec;border-radius:18px;text-align:center;color:#5b6782}
+.gs-vide__ico{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 14px;border-radius:16px;background:rgba(244,96,13,.1);color:var(--accent)}
+.gs-vide strong{display:block;font-size:17px;color:var(--ink)}
+.gs-vide p{max-width:470px;margin:6px auto 0;font-size:15px}
+
+/* Suivi de colis de l'accueil */
+.gs-suivi__tete{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.gs-suivi__ref{padding:8px 13px;border-radius:8px;background:var(--ink);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600}
+.gs-suivi__maj{font-size:13.5px;color:#6b7690}
+.gs-suivi p{font-size:14.5px;color:#55627e}
+.gs-suivi p+p{margin-top:6px}
+.gs-suivi a{font-weight:700}
+.gs-suivi .gs-suivi__titre{font-size:17px;font-weight:800;color:var(--ink)}
+.gs-chrono--suivi{max-width:640px;margin-top:24px}
+.gs-suivi .gs-suivi__plus{margin-top:20px}
+
+@media (max-width:980px){
+  .gs-espace__grille{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:639px){
+  .gs-form__grille{grid-template-columns:minmax(0,1fr)}
+  .gs-methode__choisie{flex-wrap:wrap}
+  .gs-carte-auth__marque{gap:14px}
+  .gs-carte-auth__icone{width:52px;height:52px;border-radius:15px}
+  .gs-carte-auth__surtitre{font-size:13px;letter-spacing:.2em}
+  .gs-code-carte{width:100%;min-width:0}
+  .gs-colis{padding:18px 16px}
+  .gs-colis__tete{flex-direction:column-reverse;align-items:flex-start;gap:10px}
+}
+
+/* 8. Tableau de bord ---------------------------------------------------------------- */
+.gs-admin-body{background:#f3f6fb}
+.gs-admin-barre{position:sticky;top:0;z-index:40;background:var(--ink);color:#fff;box-shadow:0 10px 30px -20px rgba(0,0,0,.6)}
+.gs-admin-barre__wrap{max-width:1400px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 22px}
+.gs-admin-barre__logo span{display:flex;align-items:center;padding:6px 11px;border-radius:11px;background:#fff}
+.gs-admin-barre__logo img{display:block;width:auto;height:30px}
+.gs-admin-barre__titre{display:flex;align-items:center;gap:10px;font-family:'Archivo','Manrope',sans-serif;font-size:17px;font-weight:800}
+.gs-admin-barre__demo{padding:3px 9px;border-radius:999px;background:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
+.gs-admin-barre__actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-left:auto}
+.gs-admin-barre__email{font-size:14px;color:#c4d0ec}
+.gs-admin-barre__bouton{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background-color .2s ease,border-color .2s ease}
+.gs-admin-barre__bouton:hover{border-color:var(--accent);background:var(--accent)}
+.gs-admin-barre__bouton .gs-ico{width:17px;height:17px}
+.gs-admin{max-width:1400px;margin:0 auto;padding:26px 24px 90px}
+.gs-admin h1,.gs-admin h2,.gs-admin h3{letter-spacing:-.015em}
+.gs-admin-attente{justify-content:center;padding:60px 0}
+.gs-admin-demo{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;margin-bottom:22px;padding:14px 18px;border:1px solid #fed7aa;border-radius:14px;background:#fff7ed;color:#7c2d12;font-size:14.5px;line-height:1.5}
+.gs-admin-demo p{flex:1 1 420px}
+.gs-admin-demo__actions{display:flex;flex-wrap:wrap;gap:8px}
+.gs-admin-carte{max-width:460px;margin:30px auto;padding:34px clamp(22px,5vw,36px);border:1px solid #e3e8f2;border-radius:22px;background:#fff;box-shadow:0 40px 80px -50px rgba(6,26,63,.5);text-align:center;animation:om-rise .6s cubic-bezier(.2,.7,.3,1) both}
+.gs-admin-carte__ico{display:grid;place-items:center;width:56px;height:56px;margin:0 auto;border-radius:16px;background:var(--ink);color:#fff}
+.gs-admin-carte h1{margin-top:16px;font-size:26px;line-height:1.15}
+.gs-admin-carte p{margin-top:8px;font-size:15.5px;color:#55627e}
+.gs-admin-carte__demo{padding:10px 12px;border-radius:10px;background:#f5f7fb;font-size:14px}
+.gs-admin-carte .gs-form{margin-top:22px;text-align:left}
+.gs-admin-carte .gs-bouton{margin-top:18px}
+.gs-admin-carte code{padding:2px 6px;border-radius:6px;background:#f1f4fa;font-size:14px}
+.gs-admin-entete{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px}
+.gs-admin-entete h1{font-size:clamp(26px,3vw,34px);line-height:1.1}
+.gs-admin-entete__date{margin-top:4px;font-size:14.5px;color:#6b7690}
+.gs-admin-entete .gs-ico,.gs-admin-outils .gs-ico{width:18px;height:18px}
+.gs-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:26px}
+.gs-stat{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px 18px;border:1px solid #e3e8f2;border-radius:16px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .25s ease,border-color .25s ease}
+.gs-stat:hover{transform:translateY(-3px);border-color:#cfd8e8;box-shadow:0 22px 40px -30px rgba(6,26,63,.55)}
+.gs-stat.is-actif{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.gs-stat__nombre{font-family:'Archivo','Manrope',sans-serif;font-size:30px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.gs-stat__libelle{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;line-height:1.3;color:#5b6782}
+.gs-pastille{display:inline-block;flex:none;width:8px;height:8px;border-radius:50%;background:#8a93ac}
+.gs-pastille--recu{background:#0d2b6b}
+.gs-pastille--emballe{background:#6d28d9}
+.gs-pastille--embarque{background:#1f5fe0}
+.gs-pastille--distribution{background:#d97706}
+.gs-pastille--succursale{background:#ea580c}
+.gs-pastille--disponible{background:#0f766e}
+.gs-pastille--livre{background:#16a34a}
+.gs-pastille--incident{background:#dc2626}
+.gs-admin-onglets{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid #dfe5f0}
+.gs-admin-onglets button{display:inline-flex;align-items:center;gap:8px;margin-bottom:-1px;padding:12px 16px;border:0;border-bottom:2px solid transparent;background:none;font:inherit;font-size:16px;font-weight:700;color:#6b7690;cursor:pointer}
+.gs-admin-onglets button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--ink)}
+.gs-admin-onglets__total{padding:1px 8px;border-radius:999px;background:#e7edf9;font-size:12.5px;color:#0d2b6b}
+.gs-admin-onglets__total:empty{display:none}
+.gs-admin-outils{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.gs-recherche{display:flex;flex:1 1 320px;align-items:center;gap:10px;height:48px;padding:0 14px;border:1px solid #d6ddec;border-radius:12px;background:#fff;color:#8a93ac;transition:border-color .2s ease,box-shadow .2s ease}
+.gs-recherche:focus-within{border-color:#10308f;box-shadow:0 0 0 4px rgba(16,48,143,.1)}
+.gs-recherche input{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;color:var(--ink);font-size:15.5px}
+.gs-admin-filtre{height:48px;padding:0 42px 0 14px;border:1px solid #d6ddec;border-radius:12px;color:var(--ink);font-size:15px;font-weight:600;-webkit-appearance:none;appearance:none;cursor:pointer;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%235b6782' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 15px center}
+.gs-admin-filtre-client,.gs-admin-selection{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-bottom:12px;padding:10px 14px;border-radius:12px;font-size:14.5px;font-weight:600}
+.gs-admin-filtre-client{background:#e7edf9;color:#0d2b6b}
+.gs-admin-filtre-client .gs-lien-bouton{font-size:14.5px}
+.gs-admin-selection{background:var(--ink);color:#fff}
+.gs-admin-selection .gs-lien-bouton{font-size:14.5px;color:#c4d0ec}
+.gs-admin-selection .gs-lien-bouton:hover{color:#fff}
+.gs-tableau-cadre{overflow:auto;border:1px solid #e3e8f2;border-radius:16px;background:#fff}
+.gs-tableau{width:100%;border-collapse:collapse;font-size:14.5px}
+.gs-tableau th{padding:12px 14px;border-bottom:1px solid #e3e8f2;background:#f8fafd;font-size:12px;font-weight:700;letter-spacing:.06em;text-align:left;text-transform:uppercase;white-space:nowrap;color:#6b7690}
+.gs-tableau td{padding:13px 14px;border-bottom:1px solid #eef2f8;vertical-align:middle;color:#2d3850}
+.gs-tableau tbody tr:last-child td{border-bottom:0}
+.gs-tableau tbody tr{transition:background-color .15s ease}
+.gs-tableau tbody tr:hover{background:#fafbfe}
+.gs-tableau tbody tr.is-choisi{background:#fff7ed}
+.gs-tableau tbody tr.is-nouveau{animation:gs-ligne 2.4s ease}
+@keyframes gs-ligne{from{background:#ffe8d6}}
+.gs-tableau__case{width:46px}
+.gs-tableau input[type="checkbox"]{display:block;width:18px;height:18px;margin:0;accent-color:var(--accent);cursor:pointer}
+.gs-cellule-principale{display:block;font-weight:700;color:var(--ink)}
+.gs-cellule-num{display:block;font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;white-space:nowrap;color:var(--ink)}
+.gs-cellule-sous{display:block;margin-top:1px;font-size:12.5px;color:#8a93ac;overflow-wrap:anywhere}
+.gs-cellule-actions{text-align:right;white-space:nowrap}
+.gs-cellule-actions .gs-bouton+.gs-bouton{margin-left:6px}
+.gs-admin-vide{padding:42px 20px;border:1px dashed #d6ddec;border-radius:16px;background:#fff;text-align:center;color:#6b7690}
+.gs-tableau-cadre+.gs-admin-vide{margin-top:12px}
+.gs-admin-plus{display:flex;margin:18px auto 0}
+.gs-dialogue{width:min(700px,calc(100vw - 24px));max-width:none;max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);padding:0;border:0;border-radius:22px;background:#fff;color:var(--ink);box-shadow:0 50px 100px -30px rgba(6,26,63,.65);overflow:hidden}
+.gs-dialogue[open]{animation:gs-dialogue .3s cubic-bezier(.2,.7,.3,1)}
+@keyframes gs-dialogue{from{opacity:0;transform:translateY(14px) scale(.98)}}
+.gs-dialogue::backdrop{background:rgba(6,26,63,.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.gs-dialogue>form,.gs-dialogue>.gs-form{display:flex;flex-direction:column;max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px)}
+.gs-dialogue__tete{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 16px;border-bottom:1px solid #eef2f8}
+.gs-dialogue__tete h2{font-size:22px;line-height:1.2}
+.gs-dialogue__sous-titre{margin-top:4px;font-size:14px;color:#6b7690}
+.gs-dialogue__fermer{display:grid;place-items:center;flex:none;width:40px;height:40px;border:0;border-radius:10px;background:#f1f4fa;color:#5b6782;cursor:pointer}
+.gs-dialogue__fermer:hover{background:#e3e8f2;color:var(--ink)}
+.gs-dialogue__corps{display:grid;gap:18px;padding:20px 26px;overflow:auto}
+.gs-dialogue__pied{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px;padding:16px 26px;border-top:1px solid #eef2f8;background:#fafbfe}
+.gs-dialogue .gs-form__grille{gap:16px 18px}
+.gs-dialogue .gs-champ label{font-size:15px}
+.gs-dialogue .gs-champ input,.gs-dialogue .gs-champ select{height:48px;padding-left:14px;font-size:15.5px}
+.gs-dialogue .gs-champ select{padding-right:40px;background-position:right 14px center}
+.gs-dialogue .gs-champ textarea{padding:11px 14px;font-size:15.5px}
+.gs-dialogue .gs-form__erreur{margin-top:0}
+.gs-champ--large{grid-column:1/-1}
+.gs-client-trouve{min-height:1.5em}
+.gs-client-trouve.is-ok{font-weight:600;color:#15803d}
+.gs-client-trouve.is-erreur{font-weight:600;color:#b91c1c}
+.gs-choix-statut{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:8px;margin:0;padding:0;border:0}
+.gs-choix-colis{margin:0;padding:0;border:0}
+.gs-choix-colis legend{margin-bottom:10px;padding:0;font-size:15px;font-weight:700;color:#2d3850}
+.gs-choix-colis [data-liste-colis-facture]{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;max-height:210px;overflow-y:auto}
+.gs-choix-colis label{position:relative;cursor:pointer}
+.gs-choix-colis input{position:absolute;opacity:0;pointer-events:none}
+.gs-choix-colis span{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid #d6ddec;border-radius:12px;font-size:14px;font-weight:600}
+.gs-choix-colis label:hover span{border-color:#aab6cc}
+.gs-choix-colis input:checked+span{border-color:var(--ink);background:#f3f6fd;box-shadow:inset 0 0 0 1px var(--ink)}
+.gs-badge--facture-a_payer{background:rgba(244,96,13,.13);color:#c4500b}
+.gs-badge--facture-payee{background:#dcfce7;color:#15803d}
+.gs-badge--facture-annulee{background:#eef2f9;color:#5b6782}
+.gs-choix-statut legend{margin-bottom:10px;padding:0;font-size:15px;font-weight:700;color:#2d3850}
+.gs-choix-statut label{position:relative;cursor:pointer}
+.gs-choix-statut input{position:absolute;opacity:0;pointer-events:none}
+.gs-choix-statut span{display:flex;align-items:center;gap:9px;padding:11px 13px;border:1px solid #d6ddec;border-radius:12px;font-size:14.5px;font-weight:600;transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease}
+.gs-choix-statut label:hover span{border-color:#aab6cc}
+.gs-choix-statut input:checked+span{border-color:var(--ink);background:#f3f6fd;box-shadow:inset 0 0 0 1px var(--ink)}
+.gs-choix-statut input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.gs-dialogue__historique h3{font-size:15px;font-weight:700;color:#2d3850}
+.gs-dialogue__actions-colis{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;padding-top:14px;border-top:1px dashed #e3e8f2}
+.gs-dialogue__actions-colis .gs-lien-bouton{font-size:14.5px}
+.gs-dialogue__actions-colis .gs-ico{width:16px;height:16px}
+/* Notifications aux clients : case « prévenir », résultats des envois, aperçu */
+.gs-case{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid #d9e4f5;border-radius:12px;background:#f4f8ff;font-size:14.5px;line-height:1.45;color:#2d3850;cursor:pointer}
+.gs-case input{flex:none;width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent);cursor:pointer}
+.gs-case strong{color:var(--ink)}
+.gs-envois{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.gs-envoi{padding:14px 16px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
+.gs-envoi__tete{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px}
+.gs-envoi__tete strong{font-size:16px;color:var(--ink)}
+.gs-envoi__num{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#5b6782}
+.gs-envoi__ligne{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:8px;font-size:14px;line-height:1.45;color:#3a4660}
+.gs-envoi__ligne--ok{font-weight:600;color:#15803d}
+.gs-envoi__ligne--alerte{font-weight:600;color:#b45309}
+.gs-envoi__ligne--attente{color:#8a93ac}
+.gs-envoi__detail{font-size:13px;color:#8a93ac}
+.gs-envoi__actions{margin-top:6px}
+.gs-envoi__actions .gs-lien-bouton{padding:2px 0;font-size:14px}
+.gs-bouton--wa.is-fait{background:#e7f6ec;color:#15803d}
+.gs-dialogue__aide{font-size:13.5px;line-height:1.5;color:#5b6782}
+.gs-notifs{display:grid;gap:8px;margin:10px 0 0;padding:0;list-style:none}
+.gs-notifs li{display:grid;gap:1px;padding:9px 12px;border-radius:10px;background:#f5f7fb;font-size:13.5px}
+.gs-notifs li span{color:#6b7690}
+.gs-notifs li.is-echec{background:#fff1f1}
+.gs-dialogue--large{width:min(760px,calc(100vw - 24px))}
+.gs-dialogue__corps--apercu{padding:0;background:#f5f7fb}
+.gs-apercu{display:block;width:100%;height:min(72vh,780px);border:0;background:#f5f7fb}
+
+.gs-toast{position:fixed;z-index:100;bottom:24px;left:50%;max-width:calc(100vw - 32px);padding:13px 18px;border-radius:12px;background:var(--ink);color:#fff;font-size:15px;font-weight:600;box-shadow:0 20px 40px -20px rgba(0,0,0,.6);translate:-50% 0;animation:gs-toast .35s cubic-bezier(.2,.7,.3,1)}
+@keyframes gs-toast{from{opacity:0;translate:-50% 14px}}
+.gs-toast--erreur{background:#b91c1c}
+
+@media (max-width:859px){
+  .gs-tableau thead{display:none}
+  .gs-tableau,.gs-tableau tbody,.gs-tableau tr{display:block;width:100%}
+  .gs-tableau tbody tr{position:relative;padding:14px 16px;border-bottom:1px solid #eef2f8}
+  .gs-tableau tbody tr:last-child{border-bottom:0}
+  .gs-tableau--colis tbody tr{padding-left:50px}
+  .gs-tableau td{display:grid;grid-template-columns:86px minmax(0,1fr);column-gap:10px;align-items:baseline;padding:3px 0;border:0}
+  .gs-tableau td[data-libelle]::before{content:attr(data-libelle);grid-column:1;grid-row:1/span 3;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8a93ac}
+  .gs-tableau td[data-libelle]>*{grid-column:2;justify-self:start}
+  .gs-tableau td.gs-tableau__case{position:absolute;top:16px;left:16px;display:block;width:auto;padding:0}
+  .gs-cellule-actions{display:flex !important;flex-wrap:wrap;gap:8px;margin-top:10px;text-align:left}
+  .gs-cellule-actions .gs-bouton+.gs-bouton{margin-left:0}
+}
+@media (max-width:640px){
+  .gs-admin{padding:18px 14px 80px}
+  .gs-admin-barre__wrap{padding:10px 14px}
+  .gs-admin-barre__email{display:none}
+  .gs-admin-entete .gs-bouton{width:100%}
+  .gs-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gs-stat{padding:14px}
+  .gs-stat__nombre{font-size:26px}
+  .gs-dialogue__tete,.gs-dialogue__corps,.gs-dialogue__pied{padding-left:18px;padding-right:18px}
+  .gs-dialogue__pied .gs-bouton{flex:1}
+}
+
+/* Impression : tout le contenu reste visible */
+@media print{
+  .gs-reveal:not(.gs-reveal--in){opacity:1 !important}
+  .gs-header,.gs-mobile-actions{position:static !important}
+}
+
+/* Préférence « réduire les animations » */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+
+/* Comptes entreprises (accueil) : visuel affiché en entier, centré quand la section
+   passe sur une colonne ; sur téléphone, la carte « Engagement » se place sous
+   l'image pour ne pas en cacher le bas */
+@media (max-width:760px){
+  .gs-entreprise-visuel{margin-inline:auto!important}
+}
+@media (max-width:560px){
+  .gs-engagement{position:static!important;max-width:none!important;margin-top:18px}
+}
+
+/* « Un colis suivi, un client rassuré » (accueil) : sur téléphone, la petite photo
+   s'élargit et la carte orange passe en haut à gauche pour ne pas la chevaucher */
+@media (max-width:560px){
+  .gs-suivi-encart{width:70%!important}
+  .gs-suivi-corridor{top:-30px;bottom:auto!important;left:-10px!important;padding:14px 18px!important}
+}
+
+/* Application mobile (page d'accueil) ---------------------------------------------
+   Le titre, le texte et les boutons des boutiques au centre, puis les trois
+   écrans de l'application dans leurs téléphones, celui du milieu un peu plus
+   grand et un peu plus haut. Les images sont dessinées aux mesures de
+   l'application par outils/ecrans-app/ecrans.py.
+   Sur mobile les trois téléphones restent côte à côte, simplement plus petits :
+   leur largeur est une part de la rangée, jamais une part de la fenêtre, donc
+   la rangée ne peut pas déborder quelle que soit la largeur de l'écran. */
+.gs-app{position:relative;overflow:hidden;color:#fff;text-align:center;
+  /* un ton plus sombre que le bleu de l'application : les écrans s'en détachent */
+  background:linear-gradient(168deg,#051530 0%,#03102a 58%,#020b1f 100%);
+  padding:clamp(64px,7.5vw,106px) 20px clamp(96px,10vw,142px)}
+.gs-app__halo{position:absolute;top:-170px;right:-120px;width:520px;height:520px;border-radius:50%;
+  background:radial-gradient(circle,rgba(244,96,13,.3),transparent 66%);pointer-events:none}
+.gs-app__dedans{position:relative;z-index:1;max-width:1080px;margin:0 auto}
+
+.gs-app__oeil{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--accent)}
+.gs-app__titre{margin-top:16px;font-size:clamp(32px,5vw,58px);line-height:1.04;font-weight:800}
+.gs-app__texte{margin:20px auto 0;max-width:660px;font-size:clamp(15.5px,1.7vw,18px);
+  line-height:1.62;color:#c4d0ec}
+.gs-app__attente{margin:18px auto 0;max-width:520px;font-size:13.5px;line-height:1.55;color:#8fa2ca}
+
+.gs-stores{margin-top:30px;display:flex;flex-wrap:wrap;gap:14px;justify-content:center}
+.gs-store{display:inline-flex;align-items:center;gap:12px;padding:14px 26px;border-radius:14px;
+  background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.28)}
+.gs-store[href]{background:#fff;color:var(--ink);border-color:transparent}
+.gs-store__logo{flex:none}
+.gs-store__texte{display:flex;flex-direction:column;line-height:1.2;text-align:left}
+.gs-store__texte small{font-size:11px;opacity:.8}
+.gs-store__texte strong{font-size:16.5px;font-weight:700}
+
+/* Les deux mêmes boutons, en petit, dans la bannière d'accueil */
+.gs-hero-app{margin-top:30px;display:flex;flex-wrap:wrap;align-items:center;gap:11px 16px}
+.gs-hero-app__mot{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;
+  text-transform:uppercase;color:#8fa2ca}
+.gs-stores--mini{margin-top:0;justify-content:flex-start;gap:10px}
+.gs-store--mini{padding:9px 15px;gap:9px;border-radius:11px;background:rgba(255,255,255,.08)}
+.gs-store--mini[href]{background:rgba(255,255,255,.17);color:#fff;border-color:rgba(255,255,255,.36)}
+.gs-store--mini .gs-store__logo{width:18px;height:18px}
+.gs-store--mini .gs-store__texte small{font-size:9.5px}
+.gs-store--mini .gs-store__texte strong{font-size:13.5px}
+
+/* Les trois téléphones */
+.gs-app__telephones{margin-top:clamp(42px,5.5vw,74px);display:flex;align-items:flex-end;
+  justify-content:center;gap:clamp(8px,1.7vw,26px)}
+.gs-tel{flex:1 1 0;min-width:0;max-width:252px;margin:0}
+.gs-tel--centre{flex-grow:1.14;max-width:288px;margin-bottom:clamp(14px,3.4vw,52px)}
+.gs-tel img{display:block;width:100%;height:auto;filter:drop-shadow(0 26px 42px rgba(0,0,0,.55))}
+
+/* Pastilles, avion, boucle et points : purement décoratifs. Ils ne paraissent
+   que sur les grands écrans, là où il reste de la place à côté des téléphones. */
+.gs-decor{position:absolute;z-index:1;pointer-events:none}
+.gs-decor--pastille{display:grid;place-items:center;padding:7px 13px;border-radius:999px;
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;letter-spacing:.06em;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff}
+.gs-decor--a{top:49%;left:1%;transform:rotate(-11deg)}
+.gs-decor--b{top:59%;right:1.5%;transform:rotate(9deg)}
+.gs-decor--c{bottom:13%;left:5%;transform:rotate(-13deg)}
+.gs-decor--avion{top:43%;right:6%;color:var(--accent);transform:rotate(-16deg)}
+.gs-decor--boucle{bottom:25%;left:0;color:rgba(244,96,13,.75);transform:rotate(8deg)}
+.gs-decor--point{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)}
+.gs-decor--p1{top:68%;right:9%}
+.gs-decor--p2{bottom:38%;left:8%;background:rgba(244,96,13,.6)}
+@media (max-width:1099px){.gs-decor{display:none}}
+
+/* Sur un téléphone, l'en-tête se resserre pour qu'on arrive vite aux écrans.
+   Les deux boutons se placent alors côte à côte, et reviennent l'un sous
+   l'autre tout seuls s'ils ne tiennent pas (écran très étroit, langue plus
+   longue) : c'est flex-wrap qui décide, donc rien ne peut déborder. */
+@media (max-width:560px){
+  .gs-app__titre{margin-top:13px;font-size:clamp(30px,8.4vw,42px)}
+  .gs-app__texte{margin-top:16px}
+  .gs-app__attente{margin-top:16px}
+  .gs-stores{margin-top:24px;gap:10px}
+  .gs-store{padding:12px 16px;gap:9px}
+  .gs-store__texte strong{font-size:15px}
+  .gs-app__telephones{margin-top:34px}
+}
+
+/* Trajet en pointillés au bas de la section */
+.gs-app__trace{position:absolute;left:0;right:0;bottom:0;width:100%;height:clamp(70px,8vw,118px);
+  pointer-events:none}
+.gs-app__avions{position:absolute;left:0;right:0;bottom:0;height:clamp(70px,8vw,118px);
+  pointer-events:none;color:var(--accent)}
+.gs-app__avions svg{position:absolute}
+.gs-app__avions svg:nth-child(1){left:6%;bottom:52%;transform:rotate(-20deg)}
+.gs-app__avions svg:nth-child(2){left:48%;bottom:64%;transform:rotate(-13deg)}
+.gs-app__avions svg:nth-child(3){right:7%;bottom:44%;transform:rotate(12deg)}
+
+/* Trajet en pointillés au bas de chaque section ------------------------------------
+   Le même fil que dans la section de l'application, repris sur tout le site : posé
+   en image de fond, il ne touche donc à aucune mise en page. Posé par build.py
+   (poser_traces) : clair sur les sections bleues, gris sur les sections claires. */
+.gs-trace--sombre,.gs-trace--clair{
+  background-repeat:no-repeat!important;
+  background-position:center bottom!important;
+  background-size:100% clamp(56px,7vw,92px)!important}
+.gs-trace--sombre{background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%201440%2092'%20preserveAspectRatio='none'%3E%3Cpath%20d='M-20%2058C180%208%20330%2082%20560%2060S900%204%201080%2040s260%2036%20380%206'%20fill='none'%20stroke='%2523c9d3e6'%20stroke-width='2.6'%20stroke-linecap='round'%20stroke-dasharray='11%2013'/%3E%3C/svg%3E")!important}
+.gs-trace--clair{background-image:url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%201440%2092'%20preserveAspectRatio='none'%3E%3Cpath%20d='M-20%2058C180%208%20330%2082%20560%2060S900%204%201080%2040s260%2036%20380%206'%20fill='none'%20stroke='rgba%28255%2C255%2C255%2C.3%29'%20stroke-width='2.6'%20stroke-linecap='round'%20stroke-dasharray='11%2013'/%3E%3C/svg%3E")!important}
+@media print{
+  .gs-trace--sombre,.gs-trace--clair{background-image:none!important}
+}

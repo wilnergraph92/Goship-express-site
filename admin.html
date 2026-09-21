@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord — Goship Express</title>
+<meta name="description" content="Tableau de bord Goship Express : enregistrement des colis et mise à jour de leur statut.">
+<meta name="theme-color" content="#061a3f">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="assets/img/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="assets/img/favicon-64.png" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
+<link rel="stylesheet" href="assets/css/site.css">
+<script src="assets/js/config.js" defer></script>
+<script src="assets/js/api.js" defer></script>
+<script src="assets/js/notifications.js" defer></script>
+<script src="assets/js/admin.js" defer></script>
+</head>
+<body class="gs-admin-body">
+<a class="gs-skip" href="#contenu-principal">Aller au contenu</a>
+
+<header class="gs-admin-barre">
+  <div class="gs-admin-barre__wrap">
+    <a class="gs-admin-barre__logo" href="index.html" aria-label="Goship Express — voir le site"><span><img src="assets/img/logo-goship.png" alt="" width="360" height="120"></span></a>
+    <p class="gs-admin-barre__titre">Tableau de bord<span class="gs-admin-barre__demo" data-demo-badge hidden>Démo</span></p>
+    <div class="gs-admin-barre__actions" data-barre-connecte hidden>
+      <span class="gs-direct gs-direct--clair" data-direct hidden><span class="gs-direct__point" aria-hidden="true"></span>En direct</span>
+      <span class="gs-admin-barre__email" data-email></span>
+      <button type="button" class="gs-admin-barre__bouton" data-action="deconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Déconnexion</span></button>
+    </div>
+  </div>
+</header>
+
+<main id="contenu-principal" tabindex="-1" class="gs-admin">
+  <div class="gs-admin-demo" data-demo hidden>
+    <p><strong>Mode démonstration.</strong> Comptes et colis sont enregistrés uniquement dans ce navigateur. Une fois Supabase configuré (voir le fichier README.md), ce tableau de bord utilise la vraie base de données.</p>
+    <div class="gs-admin-demo__actions" data-demo-actions hidden>
+      <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="exemples">Ajouter des exemples</button>
+      <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="effacer-demo">Effacer la démo</button>
+    </div>
+  </div>
+
+  <p class="gs-attente gs-admin-attente" data-ecran="chargement"><span class="gs-roue" aria-hidden="true"></span>Chargement…</p>
+
+  <section class="gs-admin-ecran" data-ecran="off" hidden>
+    <div class="gs-admin-carte">
+      <span class="gs-admin-carte__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+      <h1>Tableau de bord à activer</h1>
+      <p>Renseignez l'adresse et la clé de votre projet Supabase dans <code>assets/js/config.js</code>, puis rechargez cette page. Toutes les étapes sont décrites dans le fichier README.md, section « Espace client ».</p>
+    </div>
+  </section>
+
+  <section class="gs-admin-ecran" data-ecran="connexion" hidden>
+    <div class="gs-admin-carte">
+      <span class="gs-admin-carte__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+      <h1>Connexion administrateur</h1>
+      <p>Réservé à l'équipe Goship Express.</p>
+      <p class="gs-admin-carte__demo" data-demo-identifiants hidden>Démonstration : <b>admin@goship.demo</b> · mot de passe <b>demo1234</b></p>
+      <form class="gs-form" data-form="admin-connexion" novalidate>
+        <div class="gs-champ">
+          <label for="adm-email">E-mail</label>
+          <input id="adm-email" name="email" type="email" autocomplete="username" required spellcheck="false">
+        </div>
+        <div class="gs-champ">
+          <label for="adm-mdp">Mot de passe</label>
+          <input id="adm-mdp" name="mot_de_passe" type="password" autocomplete="current-password" required>
+        </div>
+        <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+        <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Se connecter</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="gs-admin-ecran" data-ecran="refuse" hidden>
+    <div class="gs-admin-carte">
+      <span class="gs-admin-carte__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <h1>Accès réservé</h1>
+      <p>Le compte <b data-email></b> n'est pas administrateur. Pour donner l'accès à un membre de l'équipe, suivez la section « Espace client » du fichier README.md.</p>
+      <p class="gs-admin-carte__demo" data-demo-identifiants hidden>Démonstration : déconnectez-vous, puis connectez-vous avec <b>admin@goship.demo</b> · mot de passe <b>demo1234</b></p>
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="deconnexion">Se déconnecter</button>
+    </div>
+  </section>
+
+  <section class="gs-admin-ecran gs-admin-tableau" data-ecran="tableau" hidden>
+    <div class="gs-admin-entete">
+      <div>
+        <h1>Colis et clients</h1>
+        <p class="gs-admin-entete__date" data-date-jour></p>
+      </div>
+      <button type="button" class="gs-bouton gs-bouton--plein" data-action="nouveau-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un colis</button>
+    </div>
+
+    <div class="gs-stats">
+      <button type="button" class="gs-stat" data-filtre-statut="recu"><span class="gs-stat__nombre" data-stat="recu">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--recu"></i>Reçus</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="emballe"><span class="gs-stat__nombre" data-stat="emballe">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--emballe"></i>Emballés</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="embarque"><span class="gs-stat__nombre" data-stat="embarque">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--embarque"></i>Embarqués</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="distribution"><span class="gs-stat__nombre" data-stat="distribution">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--distribution"></i>Centre de distribution</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="succursale"><span class="gs-stat__nombre" data-stat="succursale">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--succursale"></i>Transférés à la succursale</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="disponible"><span class="gs-stat__nombre" data-stat="disponible">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--disponible"></i>Disponibles</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="incident"><span class="gs-stat__nombre" data-stat="incident">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--incident"></i>Action requise</span></button>
+      <button type="button" class="gs-stat" data-filtre-statut="livre"><span class="gs-stat__nombre" data-stat="livres_30j">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--livre"></i>Livrés (30 jours)</span></button>
+      <button type="button" class="gs-stat" data-vue-cible="clients"><span class="gs-stat__nombre" data-stat="clients">–</span><span class="gs-stat__libelle"><i class="gs-pastille"></i>Clients inscrits</span></button>
+    </div>
+
+    <div class="gs-admin-onglets" role="tablist" aria-label="Affichage">
+      <button type="button" role="tab" aria-selected="true" data-onglet-vue="colis">Colis<span class="gs-admin-onglets__total" data-total="colis"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" tabindex="-1">Clients<span class="gs-admin-onglets__total" data-total="clients"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" tabindex="-1">Factures<span class="gs-admin-onglets__total" data-total="factures"></span></button>
+    </div>
+
+    <div class="gs-admin-vue" data-vue="colis" role="tabpanel">
+      <div class="gs-admin-outils">
+        <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche="colis" placeholder="N° de colis, code client, nom, suivi vendeur…" aria-label="Rechercher un colis" autocomplete="off" spellcheck="false"></label>
+        <select class="gs-admin-filtre" data-filtre-colis aria-label="Filtrer par statut">
+          <option value="actifs">Colis en cours</option>
+          <option value="">Tous les colis</option>
+          <option value="recu">Reçus</option>
+          <option value="emballe">Emballés</option>
+          <option value="embarque">Embarqués</option>
+          <option value="distribution">Centre de distribution</option>
+          <option value="succursale">Transférés à la succursale</option>
+          <option value="disponible">Disponibles</option>
+          <option value="incident">Action requise</option>
+          <option value="livre">Livrés</option>
+        </select>
+      </div>
+      <div class="gs-admin-filtre-client" data-filtre-client hidden>
+        <span>Colis du client <b data-filtre-client-nom></b></span>
+        <button type="button" class="gs-lien-bouton" data-action="retirer-filtre-client">Voir tous les colis</button>
+      </div>
+      <div class="gs-admin-selection" data-selection hidden>
+        <span data-selection-nombre></span>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="statut-groupe">Changer le statut</button>
+        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-groupe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer</button>
+        <button type="button" class="gs-lien-bouton" data-action="deselectionner">Annuler la sélection</button>
+      </div>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--colis">
+          <thead>
+            <tr>
+              <th class="gs-tableau__case"><input type="checkbox" data-tout-selectionner aria-label="Sélectionner tous les colis affichés"></th>
+              <th scope="col">Colis</th>
+              <th scope="col">Client</th>
+              <th scope="col">Contenu</th>
+              <th scope="col">Service</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Reçu le</th>
+              <th scope="col">Mis à jour</th>
+              <th scope="col"><span class="gs-invisible">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody data-lignes="colis"></tbody>
+        </table>
+      </div>
+      <p class="gs-admin-vide" data-vide="colis" hidden></p>
+      <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="colis" hidden>Afficher plus de colis</button>
+    </div>
+
+    <div class="gs-admin-vue" data-vue="clients" role="tabpanel" hidden>
+      <div class="gs-admin-outils">
+        <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche="clients" placeholder="Code client, nom, téléphone, e-mail, ville…" aria-label="Rechercher un client" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--clients">
+          <thead>
+            <tr>
+              <th scope="col">Code</th>
+              <th scope="col">Client</th>
+              <th scope="col">Ville et région</th>
+              <th scope="col">Téléphone</th>
+              <th scope="col">Inscrit le</th>
+              <th scope="col"><span class="gs-invisible">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody data-lignes="clients"></tbody>
+        </table>
+      </div>
+      <p class="gs-admin-vide" data-vide="clients" hidden></p>
+      <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="clients" hidden>Afficher plus de clients</button>
+    </div>
+
+    <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>
+      <div class="gs-admin-outils">
+        <select class="gs-admin-filtre" data-filtre-factures aria-label="Filtrer les factures">
+          <option value="a_payer">À payer</option>
+          <option value="">Toutes les factures</option>
+          <option value="payee">Payées</option>
+          <option value="annulee">Annulées</option>
+        </select>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="nouvelle-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Nouvelle facture</button>
+      </div>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--factures">
+          <thead>
+            <tr>
+              <th scope="col">Facture</th>
+              <th scope="col">Client</th>
+              <th scope="col">Montant</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Créée le</th>
+              <th scope="col"><span class="gs-invisible">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody data-lignes="factures"></tbody>
+        </table>
+      </div>
+      <p class="gs-admin-vide" data-vide="factures" hidden></p>
+      <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="factures" hidden>Afficher plus de factures</button>
+    </div>
+  </section>
+</main>
+
+<dialog class="gs-dialogue" data-dialogue="colis" aria-labelledby="dlg-colis-titre">
+  <form class="gs-form" data-form="colis" novalidate>
+    <div class="gs-dialogue__tete">
+      <h2 id="dlg-colis-titre" data-dialogue-titre>Enregistrer un colis</h2>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <div class="gs-champ">
+        <label for="col-code">Code client</label>
+        <input id="col-code" name="code" required placeholder="GSE-4323" autocomplete="off" spellcheck="false" data-code-client>
+        <p class="gs-champ__aide gs-client-trouve" data-client-trouve aria-live="polite"></p>
+      </div>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="col-date">Date de réception</label>
+          <input id="col-date" name="date_reception" type="date" required>
+        </div>
+        <div class="gs-champ">
+          <label for="col-heure">Heure de réception</label>
+          <input id="col-heure" name="heure_reception" type="time" required>
+        </div>
+        <div class="gs-champ">
+          <label for="col-desc">Contenu du colis</label>
+          <input id="col-desc" name="description" required maxlength="160" placeholder="Ex. Vêtements, chaussures…">
+        </div>
+        <div class="gs-champ">
+          <label for="col-exp">Expéditeur (magasin) <span class="gs-facultatif">(facultatif)</span></label>
+          <input id="col-exp" name="expediteur" maxlength="80" list="expediteurs-frequents" placeholder="Ex. Amazon, SHEIN, Temu…" autocomplete="off">
+        </div>
+        <div class="gs-champ">
+          <label for="col-suivi">N° de suivi du vendeur <span class="gs-facultatif">(facultatif)</span></label>
+          <input id="col-suivi" name="suivi_transporteur" maxlength="60" placeholder="Ex. TBA304918577000" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="gs-champ">
+          <label for="col-poids">Poids (lb) <span class="gs-facultatif">(facultatif)</span></label>
+          <input id="col-poids" name="poids_lb" inputmode="decimal" maxlength="8" autocomplete="off" placeholder="Ex. 4,5">
+        </div>
+        <div class="gs-champ">
+          <label for="col-service">Service</label>
+          <select id="col-service" name="service">
+            <option value="aerien">Aérien</option>
+            <option value="maritime">Maritime</option>
+            <option value="terrestre">Terrestre</option>
+          </select>
+        </div>
+        <div class="gs-champ">
+          <label for="col-pays">Pays de destination</label>
+          <select id="col-pays" name="pays_destination">
+            <option value="HT">Haïti</option>
+            <option value="DO">République dominicaine</option>
+            <option value="US">États-Unis</option>
+          </select>
+        </div>
+        <div class="gs-champ">
+          <label for="col-dest">Ville de livraison</label>
+          <input id="col-dest" name="destination" maxlength="80" placeholder="Ex. Port-au-Prince">
+        </div>
+      </div>
+      <div class="gs-form__grille" data-bloc-etape>
+        <div class="gs-champ">
+          <label for="col-statut">Statut</label>
+          <select id="col-statut" name="statut">
+            <option value="recu">Reçu</option>
+            <option value="emballe">Emballé</option>
+            <option value="embarque">Embarqué</option>
+            <option value="distribution">Centre de distribution</option>
+            <option value="succursale">Transféré à la succursale</option>
+            <option value="disponible">Disponible</option>
+            <option value="livre">Livré</option>
+            <option value="incident">Action requise</option>
+          </select>
+        </div>
+        <div class="gs-champ">
+          <label for="col-lieu">Lieu</label>
+          <input id="col-lieu" name="lieu" maxlength="80" list="lieux-frequents" value="Miami (Medley), FL">
+        </div>
+        <div class="gs-champ gs-champ--large">
+          <label for="col-note">Message pour le client <span class="gs-facultatif">(facultatif)</span></label>
+          <textarea id="col-note" name="note" rows="2" maxlength="300" placeholder="Visible par le client dans son espace"></textarea>
+        </div>
+        <label class="gs-case gs-champ--large">
+          <input type="checkbox" name="prevenir" checked>
+          <span><strong>Prévenir le client</strong> par e-mail et WhatsApp que son colis est reçu</span>
+        </label>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-envoyer>Enregistrer le colis</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="facture" aria-labelledby="dlg-facture-titre">
+  <form class="gs-form" data-form="facture" novalidate>
+    <div class="gs-dialogue__tete">
+      <h2 id="dlg-facture-titre" data-dialogue-titre>Nouvelle facture</h2>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <div class="gs-champ">
+        <label for="fac-code">Code client</label>
+        <input id="fac-code" name="code" required placeholder="GSE-4323" autocomplete="off" spellcheck="false" data-code-client-facture>
+        <p class="gs-champ__aide gs-client-trouve" data-client-facture aria-live="polite"></p>
+      </div>
+      <fieldset class="gs-choix-colis" data-colis-facture hidden>
+        <legend>Colis à facturer</legend>
+        <div data-liste-colis-facture></div>
+      </fieldset>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="fac-montant">Montant total (US $)</label>
+          <input id="fac-montant" name="montant_usd" type="number" min="0" step="0.01" required placeholder="45.00">
+        </div>
+        <div class="gs-champ">
+          <label for="fac-echeance">À payer avant le</label>
+          <input id="fac-echeance" name="echeance_le" type="date">
+        </div>
+      </div>
+      <div class="gs-champ">
+        <label for="fac-lien">Lien de paiement (facultatif)</label>
+        <input id="fac-lien" name="lien_paiement" type="url" placeholder="Laissez vide : lien PayPal créé automatiquement" autocomplete="off" spellcheck="false">
+        <p class="gs-champ__aide">Laissé vide, un lien PayPal est créé avec le montant : le client paie par carte Visa ou Mastercard. Vous pouvez aussi coller un lien Azul.</p>
+      </div>
+      <div class="gs-champ">
+        <label for="fac-note">Note pour le client (facultatif)</label>
+        <textarea id="fac-note" name="note" rows="2" maxlength="300"></textarea>
+      </div>
+      <div class="gs-form__grille" data-bloc-paiement hidden>
+        <div class="gs-champ">
+          <label for="fac-statut">Statut</label>
+          <select id="fac-statut" name="statut">
+            <option value="a_payer">À payer</option>
+            <option value="payee">Payée</option>
+            <option value="annulee">Annulée</option>
+          </select>
+        </div>
+        <div class="gs-champ">
+          <label for="fac-moyen">Payée par</label>
+          <select id="fac-moyen" name="moyen">
+            <option value="">—</option>
+            <option value="paypal">PayPal</option>
+            <option value="banque">Compte bancaire</option>
+            <option value="azul">Azul</option>
+            <option value="moncash">MonCash</option>
+            <option value="natcash">NatCash</option>
+            <option value="especes">Espèces</option>
+          </select>
+        </div>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="statut" aria-labelledby="dlg-statut-titre">
+  <form class="gs-form" data-form="statut" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-statut-titre">Mettre à jour le statut</h2>
+        <p class="gs-dialogue__sous-titre" data-statut-cible></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <fieldset class="gs-choix-statut">
+        <legend>Nouveau statut</legend>
+        <label><input type="radio" name="statut" value="recu"><span><i class="gs-pastille gs-pastille--recu"></i>Reçu</span></label>
+        <label><input type="radio" name="statut" value="emballe"><span><i class="gs-pastille gs-pastille--emballe"></i>Emballé</span></label>
+        <label><input type="radio" name="statut" value="embarque"><span><i class="gs-pastille gs-pastille--embarque"></i>Embarqué</span></label>
+        <label><input type="radio" name="statut" value="distribution"><span><i class="gs-pastille gs-pastille--distribution"></i>Centre de distribution</span></label>
+        <label><input type="radio" name="statut" value="succursale"><span><i class="gs-pastille gs-pastille--succursale"></i>Transféré à la succursale</span></label>
+        <label><input type="radio" name="statut" value="disponible"><span><i class="gs-pastille gs-pastille--disponible"></i>Disponible</span></label>
+        <label><input type="radio" name="statut" value="livre"><span><i class="gs-pastille gs-pastille--livre"></i>Livré</span></label>
+        <label><input type="radio" name="statut" value="incident"><span><i class="gs-pastille gs-pastille--incident"></i>Action requise</span></label>
+      </fieldset>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="st-lieu" data-libelle-lieu>Lieu <span class="gs-facultatif">(facultatif)</span></label>
+          <input id="st-lieu" name="lieu" maxlength="80" list="lieux-frequents" placeholder="Ex. Port-au-Prince">
+        </div>
+        <div class="gs-champ gs-champ--large">
+          <label for="st-note">Message pour le client <span class="gs-facultatif">(facultatif)</span></label>
+          <textarea id="st-note" name="note" rows="2" maxlength="300" placeholder="Ex. Retrait possible à partir de demain 10 h"></textarea>
+        </div>
+      </div>
+      <label class="gs-case" data-bloc-prevenir hidden>
+        <input type="checkbox" name="prevenir" checked>
+        <span><strong>Prévenir le client</strong> par e-mail et WhatsApp que son colis est disponible</span>
+      </label>
+      <div class="gs-dialogue__historique" data-bloc-historique>
+        <h3>Historique</h3>
+        <ol class="gs-chrono" data-historique></ol>
+      </div>
+      <div class="gs-dialogue__historique" data-bloc-notifications hidden>
+        <h3>Messages envoyés au client</h3>
+        <ul class="gs-notifs" data-notifications></ul>
+      </div>
+      <div class="gs-dialogue__actions-colis" data-bloc-actions>
+        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg>Prévenir le client</button>
+        <button type="button" class="gs-lien-bouton" data-action="modifier-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Modifier les informations du colis</button>
+        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer ce colis</button>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-envoyer>Mettre à jour</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="notification" aria-labelledby="dlg-notif-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-notif-titre" data-notif-titre>Client prévenu</h2>
+        <p class="gs-dialogue__sous-titre" data-notif-sous-titre></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <ul class="gs-envois" data-envois></ul>
+      <p class="gs-dialogue__aide" data-notif-aide hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Fermer</button>
+      <button type="button" class="gs-bouton gs-bouton--plein" data-action="autre-colis" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un autre colis</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="gs-dialogue gs-dialogue--large" data-dialogue="apercu" aria-labelledby="dlg-apercu-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-apercu-titre">Aperçu de l'e-mail</h2>
+        <p class="gs-dialogue__sous-titre" data-apercu-sujet></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps gs-dialogue__corps--apercu">
+      <iframe class="gs-apercu" title="Aperçu de l'e-mail envoyé au client" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" data-apercu></iframe>
+    </div>
+  </div>
+</dialog>
+
+<datalist id="expediteurs-frequents">
+  <option value="Amazon"></option>
+  <option value="SHEIN"></option>
+  <option value="Temu"></option>
+  <option value="AliExpress"></option>
+  <option value="Walmart"></option>
+  <option value="eBay"></option>
+  <option value="Target"></option>
+  <option value="Best Buy"></option>
+  <option value="Chine"></option>
+</datalist>
+
+<datalist id="lieux-frequents">
+  <option value="Miami (Medley), FL"></option>
+  <option value="Port de Miami"></option>
+  <option value="Santo Domingo"></option>
+  <option value="Ciudad Juan Bosch"></option>
+  <option value="Santiago de los Caballeros"></option>
+  <option value="Port-au-Prince"></option>
+  <option value="Pétion-Ville"></option>
+  <option value="Cap-Haïtien"></option>
+  <option value="Les Cayes"></option>
+  <option value="Gonaïves"></option>
+  <option value="Jacmel"></option>
+</datalist>
+
+<div class="gs-toast" data-toast role="status" aria-live="polite" hidden></div>
+</body>
+</html>
