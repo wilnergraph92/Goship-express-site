@@ -1,0 +1,183 @@
+<main id="contenu-principal" tabindex="-1">
+
+<section class="gs-espace-tete" data-no-reveal>
+  <div class="gs-espace-tete__wrap">
+    <div class="gs-espace-tete__texte">
+      <span class="gs-surtitre">Espace client</span>
+      <h1>Bonjour<span data-prenom translate="no"></span></h1>
+      <p>Suivez vos colis en temps réel et retrouvez votre adresse de réception en Floride.</p>
+    </div>
+    <div class="gs-code-carte">
+      <span class="gs-code-carte__libelle">Votre code client</span>
+      <strong class="gs-code-carte__code" data-code translate="no">GSE-······</strong>
+      <button type="button" class="gs-code-carte__copier" data-action="copier-code">[[ico:copy]]<span data-copier-libelle>Copier</span></button>
+    </div>
+  </div>
+</section>
+
+<section class="gs-espace" data-no-reveal>
+  <div class="gs-espace__wrap">
+    <div class="gs-alerte gs-alerte--succes gs-espace__bienvenue" data-bienvenue hidden tabindex="-1">
+      <strong>Bienvenue chez Goship Express !</strong>
+      <p>Votre compte est prêt. Votre code client <b data-code translate="no"></b> vous identifie : ajoutez-le après votre nom dans l'adresse de livraison de tous vos achats en ligne.</p>
+    </div>
+
+    <div class="gs-espace__grille">
+      <div class="gs-espace__principal">
+        <div class="gs-panneau">
+          <div class="gs-panneau__tete">
+            <h2>Mes colis</h2>
+            <span class="gs-direct" data-direct hidden><span class="gs-direct__point" aria-hidden="true"></span>En direct</span>
+          </div>
+          <div class="gs-onglets" role="tablist" aria-label="Mes colis">
+            <button type="button" role="tab" id="onglet-en-cours" aria-selected="true" aria-controls="liste-colis" data-onglet="en-cours">En cours <span class="gs-onglets__nombre" data-nombre="en-cours">0</span></button>
+            <button type="button" role="tab" id="onglet-livres" aria-selected="false" aria-controls="liste-colis" data-onglet="livres" tabindex="-1">Livrés <span class="gs-onglets__nombre" data-nombre="livres">0</span></button>
+          </div>
+          <div class="gs-colis-liste" id="liste-colis" role="tabpanel" aria-labelledby="onglet-en-cours" data-liste-colis aria-busy="true">
+            <div class="gs-squelette" aria-hidden="true"></div>
+            <div class="gs-squelette" aria-hidden="true"></div>
+          </div>
+          <div class="gs-vide" data-vide="en-cours" hidden>
+            <span class="gs-vide__ico">[[ico:package]]</span>
+            <strong>Aucun colis en cours pour l'instant</strong>
+            <p>Faites vos achats en ligne avec votre adresse en Floride : chaque colis apparaît ici dès sa réception à notre entrepôt de Miami, puis à chaque étape jusqu'à la livraison.</p>
+          </div>
+          <div class="gs-vide" data-vide="livres" hidden>
+            <span class="gs-vide__ico">[[ico:check-circle]]</span>
+            <strong>Aucun colis livré pour l'instant</strong>
+            <p>Vos colis livrés restent consultables ici.</p>
+          </div>
+          <p class="gs-form__erreur" data-colis-erreur role="alert" hidden></p>
+        </div>
+      </div>
+
+      <aside class="gs-espace__cote">
+        <div class="gs-panneau">
+          <div class="gs-panneau__tete">
+            <h2>Votre adresse en Floride</h2>
+          </div>
+          <p class="gs-panneau__intro">À utiliser comme adresse de livraison pour tous vos achats en ligne (Amazon, SHEIN, Walmart, eBay…).</p>
+          <div class="gs-adresse" data-address-table>
+            <div><span translate="no">Name</span><span data-nom-adresse translate="no"></span></div>
+            <div><span translate="no">Address 1</span><span translate="no">8140 NW 74th Ave Unit 3</span></div>
+            <div><span translate="no">Address 2</span><span translate="no">APT-46780</span></div>
+            <div><span translate="no">City</span><span translate="no">Medley</span></div>
+            <div><span translate="no">State</span><span translate="no">Florida</span></div>
+            <div><span translate="no">Zip Code</span><span translate="no">33166</span></div>
+            <div><span translate="no">Country</span><span translate="no">United States</span></div>
+            <div><span translate="no">Phone</span><span translate="no">786 525-2944</span></div>
+          </div>
+          <p class="gs-panneau__note">Écrivez toujours votre code client juste après votre nom : nous reconnaissons ainsi vos colis dès leur arrivée.</p>
+          <div class="gs-panneau__actions">
+            <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address">[[ico:copy]]Copier l'adresse</button>
+            <span class="gs-copie-ok" data-copy-feedback hidden role="status">Adresse copiée ✓</span>
+          </div>
+        </div>
+
+        <div class="gs-panneau" data-profil>
+          <div class="gs-panneau__tete">
+            <h2>Mes informations</h2>
+            <button type="button" class="gs-lien-bouton" data-action="modifier-profil" aria-expanded="false">Modifier</button>
+          </div>
+          <dl class="gs-infos" data-profil-lecture>
+            <div><dt>Nom complet</dt><dd data-info="nom_complet" translate="no"></dd></div>
+            <div><dt>E-mail</dt><dd data-info="email" translate="no"></dd></div>
+            <div><dt>Téléphone</dt><dd data-info="telephone" translate="no"></dd></div>
+            <div><dt>Adresse</dt><dd data-info="adresse" translate="no"></dd></div>
+            <div><dt>Ville et région</dt><dd data-info="lieu" translate="no"></dd></div>
+          </dl>
+          <form class="gs-form gs-form--compact" data-form="profil" novalidate hidden>
+            <div class="gs-champ">
+              <label for="pro-nom">Nom complet</label>
+              <input id="pro-nom" name="nom_complet" autocomplete="name" required minlength="3" maxlength="120">
+            </div>
+            <div class="gs-champ">
+              <label for="pro-tel">Téléphone</label>
+              <input id="pro-tel" name="telephone" type="tel" autocomplete="tel" required maxlength="40">
+            </div>
+            <div class="gs-champ">
+              <label for="pro-pays">Pays</label>
+              <select id="pro-pays" name="pays" required data-pays>
+                <option value="">Sélectionnez un pays</option>
+                <option value="HT">Haïti</option>
+                <option value="DO">République dominicaine</option>
+                <option value="US">États-Unis</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="pro-region">Région</label>
+              <select id="pro-region" name="region" required data-region>
+                <option value="">Sélectionnez une région</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="pro-ville">Ville</label>
+              <select id="pro-ville" name="ville" required data-ville>
+                <option value="">Sélectionnez une ville</option>
+              </select>
+              <input class="gs-champ__autre" name="ville_autre" autocomplete="address-level2" required maxlength="80" placeholder="Entrez votre ville" aria-label="Ville" data-ville-autre hidden disabled>
+            </div>
+            <div class="gs-champ">
+              <label for="pro-adresse">Adresse</label>
+              <input id="pro-adresse" name="adresse" autocomplete="street-address" required minlength="3" maxlength="200">
+            </div>
+            <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+            <div class="gs-form__boutons">
+              <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Enregistrer</button>
+              <button class="gs-bouton gs-bouton--contour" type="button" data-action="annuler-profil">Annuler</button>
+            </div>
+          </form>
+          <p class="gs-copie-ok" data-profil-ok hidden role="status"></p>
+        </div>
+
+        <div class="gs-panneau gs-panneau--aide">
+          <strong>Une question sur un colis ?</strong>
+          <p>Notre équipe vous répond sur WhatsApp du lundi au samedi, de 8 h à 18 h.</p>
+          <a class="gs-bouton gs-bouton--wa" data-lien-wa="wa-aide" href="https://wa.me/18495386262" target="_blank" rel="noopener">[[ico:message]]Écrire sur WhatsApp</a>
+        </div>
+
+        <button type="button" class="gs-deconnexion" data-action="deconnexion">[[ico:log-out]]Se déconnecter</button>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<template data-modele="colis">
+  <article class="gs-colis">
+    <div class="gs-colis__tete">
+      <div class="gs-colis__id">
+        <span class="gs-colis__numero" data-champ="numero" translate="no"></span>
+        <p class="gs-colis__desc" data-champ="description" translate="no"></p>
+      </div>
+      <span class="gs-badge" data-champ="statut"></span>
+    </div>
+    <ul class="gs-colis__infos">
+      <li data-champ="recu"></li>
+      <li data-champ="expediteur" translate="no"></li>
+      <li data-champ="service"></li>
+      <li data-champ="poids"></li>
+      <li data-champ="destination"></li>
+      <li data-champ="suivi" translate="no"></li>
+    </ul>
+    <ol class="gs-etapes" data-champ="etapes">
+      <li>Reçu</li>
+      <li>Emballé</li>
+      <li>Embarqué</li>
+      <li>Distribution</li>
+      <li>Succursale</li>
+      <li>Disponible</li>
+      <li>Livré</li>
+    </ol>
+    <p class="gs-colis__note" data-champ="note" translate="no" hidden></p>
+    <div class="gs-colis__pied">
+      <span class="gs-colis__maj" data-champ="maj"></span>
+      <details class="gs-colis__historique">
+        <summary>Historique <span data-champ="nb-etapes"></span></summary>
+        <ol class="gs-chrono" data-champ="historique"></ol>
+      </details>
+    </div>
+  </article>
+</template>
+
+[[textes]]
+</main>

@@ -19,6 +19,7 @@ Site statique (HTML, CSS, JavaScript) en quatre langues — français, anglais, 
 | `assets/js/api.js`, `compte.js`, `admin.js` | Espace client et tableau de bord |
 | `assets/js/notifications.js` | Textes des e-mails et messages WhatsApp envoyés aux clients (4 langues) |
 | `assets/img/` | Logos, photos, icônes et drapeaux (`drapeaux/`) |
+| `outils/generateur/` | **Le générateur des pages** (`build.py`), la maquette d'origine (`export/`) et les pages écrites à la main (`pages/`). C'est la source du site — voir « Modifier le site » |
 | `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et banc d'essai SQL (`essais-sql/`) — **inutile de le mettre en ligne** |
 | `Voir le site en local.command` | Lanceur à double-cliquer pour voir le site sur votre Mac — **inutile de le mettre en ligne** |
 
@@ -301,7 +302,16 @@ Discrètes et désactivées automatiquement si le visiteur a demandé à réduir
 
 ## Modifier le site
 
-Chaque page est un fichier HTML autonome. L'en-tête et le pied de page sont répétés dans chaque page ; pour un changement commun (numéro, adresse, lien), faites une recherche/remplacement dans tous les fichiers de votre éditeur (VS Code : ⇧⌘H), puis relancez `python3 outils/traduire.py`.
+**Les pages à la racine sont fabriquées, pas écrites à la main.** Les modifier directement ne sert à rien : la prochaine génération les écrasera. Tout passe par `outils/generateur/` :
+
+```bash
+python3 outils/generateur/build.py   # les pages françaises
+python3 outils/traduire.py           # en/, es/, ht/
+```
+
+Les deux commandes vont ensemble, dans cet ordre. Les sources sont la maquette (`outils/generateur/export/`) et les pages écrites à la main (`outils/generateur/pages/` : espace client et tableau de bord). Voir `outils/generateur/LISEZ-MOI.md`.
+
+Après chaque changement, relancez les deux commandes **deux fois** : la seconde ne doit rien modifier (`git status` vide). C'est ce qui prouve que le site se reconstruit à l'identique.
 
 ## Application mobile (iPhone et Android)
 

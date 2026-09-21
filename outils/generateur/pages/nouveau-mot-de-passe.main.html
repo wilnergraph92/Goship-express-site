@@ -1,0 +1,50 @@
+<main id="contenu-principal" tabindex="-1">
+
+<section class="gs-compte" data-no-reveal>
+  <div class="gs-compte__wrap gs-compte__wrap--etroit">
+    <div class="gs-carte-auth">
+      <div class="gs-carte-auth__tete">
+        <div class="gs-carte-auth__marque">
+          <span class="gs-carte-auth__icone">[[ico:lock]]</span>
+          <span class="gs-carte-auth__surtitre">Sécurité du compte</span>
+        </div>
+        <h1>Nouveau mot de passe</h1>
+        <p>Choisissez un nouveau mot de passe pour votre compte Goship Express.</p>
+      </div>
+
+      <div class="gs-carte-auth__corps">
+        <p class="gs-attente" data-attente><span class="gs-roue" aria-hidden="true"></span>Vérification du lien…</p>
+
+        <div class="gs-alerte gs-alerte--erreur" data-lien-invalide hidden>
+          <strong>Ce lien n'est plus valide.</strong>
+          <p>Un lien de réinitialisation ne sert qu'une fois et expire au bout d'une heure. <a href="connexion.html#oubli">Demander un nouveau lien</a></p>
+        </div>
+
+        <form class="gs-form" data-form="nouveau-mdp" novalidate hidden>
+          <div class="gs-champ">
+            <label for="nmdp-1">Nouveau mot de passe</label>
+            <div class="gs-mdp">
+              <input id="nmdp-1" name="mot_de_passe" type="password" autocomplete="new-password" required minlength="6" maxlength="72" placeholder="Entrez votre nouveau mot de passe" aria-describedby="nmdp-aide">
+              <button type="button" class="gs-mdp__oeil" data-action="voir-mdp" aria-label="Afficher le mot de passe" aria-pressed="false">[[ico:eye]]</button>
+            </div>
+            <p class="gs-champ__aide" id="nmdp-aide">6 caractères minimum.</p>
+          </div>
+          <div class="gs-champ">
+            <label for="nmdp-2">Confirmez le mot de passe</label>
+            <input id="nmdp-2" name="confirmation" type="password" autocomplete="new-password" required maxlength="72" placeholder="Saisissez-le une seconde fois">
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Enregistrer le mot de passe</button>
+        </form>
+
+        <div class="gs-alerte gs-alerte--succes" data-mdp-ok hidden role="status" tabindex="-1">
+          <strong>Mot de passe modifié.</strong>
+          <p>Vous allez être redirigé vers votre espace client…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+[[textes]]
+</main>
