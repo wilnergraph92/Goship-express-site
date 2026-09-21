@@ -36,3 +36,6 @@ yarn-error.log*
 .env.*
 *.key
 *.pem
+
+# --- Application mobile : elle a son propre dépôt GitHub -----------------
+application-mobile/
