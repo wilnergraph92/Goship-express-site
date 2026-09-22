@@ -675,6 +675,25 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-client-trouve.is-erreur{font-weight:600;color:#b91c1c}
 .gs-choix-statut{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:8px;margin:0;padding:0;border:0}
 .gs-choix-colis{margin:0;padding:0;border:0}
+/* Vue Clients : les statuts en petites pastilles, et la balance due */
+.gs-statuts-mini{display:flex;flex-wrap:wrap;gap:4px 10px}
+.gs-statut-mini{display:inline-flex;align-items:center;gap:5px;font-size:13.5px;color:#2d3850;white-space:nowrap}
+.gs-balance-due{color:#b91c1c;font-weight:800}
+.gs-tableau--clients tr.is-actif-client td{background:#fcfdff}
+
+.gs-choix-colis__tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;
+  gap:10px;margin-bottom:8px}
+.gs-choix-colis__tout{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;color:#2d3850;cursor:pointer}
+.gs-choix-colis__compte{font-size:14px;color:#5b6782}
+.gs-choix-colis__prix{margin-left:auto;padding-left:12px;font-weight:700;color:var(--ink2);white-space:nowrap}
+
+/* Le récapitulatif des montants, sous la sélection des colis */
+.gs-recap{display:grid;gap:6px;padding:14px 16px;border:1px solid #cfd7e6;border-radius:13px;background:#fafbfe}
+.gs-recap__ligne{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:15px;color:#2d3850}
+.gs-recap__ligne strong{font-variant-numeric:tabular-nums}
+.gs-recap__ligne--fort{padding-top:6px;border-top:1px solid #dbe3f0;font-size:16.5px;font-weight:800;color:var(--ink)}
+.gs-recap__ligne--balance{padding-top:6px;border-top:1px solid #dbe3f0;font-size:16.5px;font-weight:800;color:#b91c1c}
+.gs-recap__ligne--balance strong{color:#b91c1c}
 .gs-choix-colis legend{margin-bottom:10px;padding:0;font-size:15px;font-weight:700;color:#2d3850}
 .gs-choix-colis [data-liste-colis-facture]{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;max-height:210px;overflow-y:auto}
 .gs-choix-colis label{position:relative;cursor:pointer}

@@ -263,6 +263,29 @@
     return b;
   }
 
+  // « Voir la facture » : ouvre la facture de ce colis. Un colis d'avant la
+  // facturation automatique n'en a pas : on propose alors de la créer.
+  function boutonFactureDuColis(colis) {
+    var b = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Voir la facture');
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Voir la facture du colis ' + colis.numero);
+    b.addEventListener('click', function () {
+      var fin = attente(b, 'Ouverture…');
+      API.admin.factureDuColis(colis.id).then(function (facture) {
+        if (facture) { choisirVue('factures'); ouvrirFacture(facture); return; }
+        if (!window.confirm('Ce colis n\u2019a pas encore de facture. En créer une maintenant ?')) return;
+        if (!colis.client_id) { toast('Colis sans client : facture impossible.', true); return; }
+        return facturerColis(colis, { id: colis.client_id, nom_complet: colis.nom_client })
+          .then(function (f) {
+            toast('Facture ' + (f && f.numero ? f.numero : '') + ' créée.');
+            choisirVue('factures');
+            return chargerFactures();
+          });
+      }).catch(function (err) { toast(messageErreur(err), true); }).then(fin);
+    });
+    return b;
+  }
+
   function afficherColis(nouveaux) {
     var c = etat.colis;
     corpsColis.textContent = '';
@@ -323,6 +346,7 @@
       bouton.setAttribute('data-maj', colis.id);
       bouton.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
       tdActions.appendChild(bouton);
+      tdActions.appendChild(boutonFactureDuColis(colis));
       tdActions.appendChild(boutonEtiquette(colis, 'gs-bouton gs-bouton--petit gs-bouton--contour'));
       tr.appendChild(tdActions);
 
@@ -482,13 +506,37 @@
   /* ---- Clients ---------------------------------------------------------------- */
   var corpsClients = $('[data-lignes="clients"]');
 
+  // Résumé par client : nombre de colis en cours, poids, montant, balance.
+  // Chargé en même temps que la liste ; s'il échoue, la liste s'affiche quand
+  // même, simplement sans les chiffres.
+  var resumeParClient = {};
+
   function chargerClients() {
     var c = etat.clients;
-    return API.admin.clients({ recherche: c.recherche, page: 0, parPage: PAR_PAGE * c.pages }).then(function (r) {
-      c.lignes = r.lignes;
-      c.total = r.total;
+    return Promise.all([
+      API.admin.clients({ recherche: c.recherche, page: 0, parPage: PAR_PAGE * c.pages }),
+      API.admin.resumeClients().catch(function () { return []; })
+    ]).then(function (r) {
+      c.lignes = r[0].lignes;
+      c.total = r[0].total;
+      resumeParClient = {};
+      (r[1] || []).forEach(function (e) { resumeParClient[e.client_id] = e; });
       afficherClients();
     }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  // Les statuts d'un client, du plus avancé au moins avancé, en petites pastilles
+  function pastillesStatuts(statuts) {
+    var boite = el('span', 'gs-statuts-mini');
+    Object.keys(STATUTS).forEach(function (cle) {
+      var n = statuts[cle];
+      if (!n) return;
+      var p = el('span', 'gs-statut-mini gs-statut-mini--' + cle);
+      p.appendChild(el('i', 'gs-pastille gs-pastille--' + cle));
+      p.appendChild(document.createTextNode(n + ' ' + STATUTS[cle].toLowerCase()));
+      boite.appendChild(p);
+    });
+    return boite;
   }
 
   function afficherClients() {
@@ -496,27 +544,47 @@
     corpsClients.textContent = '';
     c.lignes.forEach(function (client) {
       var tr = el('tr');
-      var tdCode = cellule('Code');
+      var resume = resumeParClient[client.id] || { nbColis: 0, poids: 0, montant: 0, balance: 0, statuts: {}, majLe: null };
+      if (resume.nbColis) tr.classList.add('is-actif-client');
+
+      var tdCode = cellule('Identifiant');
       tdCode.appendChild(el('span', 'gs-cellule-num', client.code || '—'));
       tr.appendChild(tdCode);
 
       var tdNom = cellule('Client');
       tdNom.appendChild(el('span', 'gs-cellule-principale', client.nom_complet || '—'));
+      tdNom.appendChild(el('span', 'gs-cellule-sous',
+        [client.telephone, [client.ville, PAYS[client.pays] || client.pays].filter(Boolean).join(', ')]
+          .filter(Boolean).join(' · ')));
       tdNom.appendChild(el('span', 'gs-cellule-sous', client.email || ''));
       tr.appendChild(tdNom);
 
-      var tdLieu = cellule('Lieu');
-      tdLieu.appendChild(el('span', '', [client.ville, client.region].filter(Boolean).join(', ') || '—'));
-      tdLieu.appendChild(el('span', 'gs-cellule-sous', [client.adresse, PAYS[client.pays] || client.pays].filter(Boolean).join(' · ')));
-      tr.appendChild(tdLieu);
+      var tdNb = cellule('Colis en cours');
+      tdNb.appendChild(el('span', 'gs-cellule-principale', resume.nbColis ? String(resume.nbColis) : '—'));
+      if (client.cree_le) tdNb.appendChild(el('span', 'gs-cellule-sous', 'Inscrit le ' + O.date(client.cree_le)));
+      tr.appendChild(tdNb);
 
-      var tdTel = cellule('Téléphone');
-      tdTel.appendChild(el('span', '', client.telephone || '—'));
-      if (client.langue) tdTel.appendChild(el('span', 'gs-cellule-sous', 'Langue : ' + (LANGUES[client.langue] || client.langue)));
-      tr.appendChild(tdTel);
+      var tdStatuts = cellule('Statut des colis');
+      if (resume.nbColis) tdStatuts.appendChild(pastillesStatuts(resume.statuts));
+      else tdStatuts.appendChild(el('span', 'gs-cellule-sous', 'Aucun colis en cours'));
+      tr.appendChild(tdStatuts);
 
-      var tdDate = cellule('Inscrit le');
-      tdDate.textContent = O.date(client.cree_le);
+      var tdPoids = cellule('Poids total');
+      tdPoids.textContent = resume.poids ? O.nombre(resume.poids) + ' lb' : '—';
+      tr.appendChild(tdPoids);
+
+      var tdMontant = cellule('Montant total');
+      tdMontant.textContent = resume.montant ? argent(resume.montant) : '—';
+      tr.appendChild(tdMontant);
+
+      var tdBalance = cellule('Balance');
+      var soldeur = el('span', resume.balance > 0 ? 'gs-cellule-principale gs-balance-due' : 'gs-cellule-sous',
+                       resume.balance > 0 ? argent(resume.balance) : 'Rien à payer');
+      tdBalance.appendChild(soldeur);
+      tr.appendChild(tdBalance);
+
+      var tdDate = cellule('Dernière mise à jour');
+      tdDate.textContent = resume.majLe ? O.date(resume.majLe, true) : '—';
       tr.appendChild(tdDate);
 
       var tdActions = el('td', 'gs-cellule-actions');
@@ -527,7 +595,17 @@
       ajouter.type = 'button';
       ajouter.setAttribute('aria-label', 'Enregistrer un colis pour ' + (client.nom_complet || client.code));
       ajouter.addEventListener('click', function () { ouvrirColis({ code: client.code }); });
+      var sesFactures = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Ses factures');
+      sesFactures.type = 'button';
+      sesFactures.setAttribute('aria-label', 'Voir les factures de ' + (client.nom_complet || client.code));
+      sesFactures.addEventListener('click', function () {
+        choisirVue('factures');
+        ouvrirFacture(null);
+        champCodeFacture.value = client.code || '';
+        champCodeFacture.dispatchEvent(new Event('input', { bubbles: true }));
+      });
       tdActions.appendChild(voir);
+      tdActions.appendChild(sesFactures);
       tdActions.appendChild(ajouter);
       tr.appendChild(tdActions);
 
@@ -738,33 +816,99 @@
     else listeColisFacture.textContent = '';
   }
 
+  // Les colis proposés à la facturation, par identifiant. La liste ne contient
+  // que ceux du client choisi : deux clients ne peuvent pas se retrouver sur la
+  // même facture, ni par la souris ni par « tout sélectionner ».
+  var colisFacturables = {};
+
   function chargerColisDuClient(client) {
+    colisFacturables = {};
     listeColisFacture.textContent = 'Chargement…';
     API.admin.colis({ clientId: client.id, statut: '', parPage: 40 }).then(function (r) {
       listeColisFacture.textContent = '';
       if (!r.lignes.length) {
         listeColisFacture.appendChild(el('p', 'gs-champ__aide', 'Ce client n’a aucun colis enregistré.'));
+        majTotauxFacture();
         return;
       }
       r.lignes.forEach(function (colis) {
+        if (colis.client_id !== client.id) return;   // ceinture et bretelles
+        colisFacturables[colis.id] = colis;
         var label = el('label');
         var input = document.createElement('input');
         input.type = 'checkbox';
         input.value = colis.id;
         input.setAttribute('data-colis-id', colis.id);
         input.setAttribute('data-colis-libelle', [colis.numero, colis.description].filter(Boolean).join(' — '));
+        input.addEventListener('change', majTotauxFacture);
         var span = el('span');
         span.appendChild(el('strong', '', colis.numero));
-        span.appendChild(el('span', 'gs-cellule-sous', [colis.description, STATUTS[colis.statut]].filter(Boolean).join(' · ')));
+        var poids = colis.poids_lb != null && colis.poids_lb !== '' ? O.nombre(Number(colis.poids_lb)) + ' lb' : '';
+        span.appendChild(el('span', 'gs-cellule-sous',
+          [colis.description, poids, STATUTS[colis.statut]].filter(Boolean).join(' · ')));
         label.appendChild(input);
         label.appendChild(span);
+        label.appendChild(el('span', 'gs-choix-colis__prix', argent(O.prixColis(colis))));
         listeColisFacture.appendChild(label);
       });
+      majTotauxFacture();
     }).catch(function () {
       listeColisFacture.textContent = '';
       listeColisFacture.appendChild(el('p', 'gs-champ__aide', 'Colis indisponibles pour l’instant.'));
+      majTotauxFacture();
     });
   }
+
+  function casesColisFacture() { return $$('[data-colis-id]', listeColisFacture); }
+  function colisCoches() {
+    return casesColisFacture().filter(function (i) { return i.checked; })
+      .map(function (i) { return colisFacturables[i.getAttribute('data-colis-id')]; })
+      .filter(Boolean);
+  }
+
+  // Les totaux se recalculent à chaque coche : total des colis, frais de
+  // service une seule fois quel que soit le nombre de colis, puis la balance.
+  function majTotauxFacture() {
+    var cases = casesColisFacture();
+    var choisis = colisCoches();
+    var totalColis = O.arrondi(choisis.reduce(function (s, c) { return s + O.prixColis(c); }, 0));
+    var frais = choisis.length ? API.tarifs.fraisService : 0;
+    var grand = O.arrondi(totalColis + frais);
+    var paye = Math.max(Number(String(formFacture.montant_paye_usd.value || '').replace(',', '.')) || 0, 0);
+
+    var tout = $('[data-tout-colis-facture]', formFacture);
+    if (tout) {
+      tout.checked = cases.length > 0 && choisis.length === cases.length;
+      tout.indeterminate = choisis.length > 0 && choisis.length < cases.length;
+      tout.disabled = !cases.length;
+    }
+    $('[data-compte-colis]', formFacture).textContent = cases.length
+      ? choisis.length + ' / ' + cases.length + (cases.length > 1 ? ' colis cochés' : ' colis coché')
+      : '';
+
+    var recap = $('[data-recap-facture]');
+    recap.hidden = !choisis.length;
+    if (choisis.length) {
+      $('[data-recap="colis"]', recap).textContent = argent(totalColis);
+      $('[data-recap="frais"]', recap).textContent = argent(frais);
+      $('[data-recap="grand"]', recap).textContent = argent(grand);
+      $('[data-recap="paye"]', recap).textContent = argent(paye);
+      $('[data-recap="balance"]', recap).textContent = argent(Math.max(O.arrondi(grand - paye), 0));
+      formFacture.montant_usd.value = grand.toFixed(2);
+      formFacture.montant_usd.readOnly = true;
+      $('[data-aide-montant]', formFacture).textContent =
+        choisis.length + (choisis.length > 1 ? ' colis' : ' colis') + ' + ' + argent(frais) + ' de frais de service.';
+    } else if (!factureEditee) {
+      formFacture.montant_usd.readOnly = false;
+      $('[data-aide-montant]', formFacture).textContent = 'Cochez des colis, ou saisissez un montant libre.';
+    }
+  }
+
+  $('[data-tout-colis-facture]', formFacture).addEventListener('change', function (e) {
+    casesColisFacture().forEach(function (i) { i.checked = e.target.checked; });
+    majTotauxFacture();
+  });
+  formFacture.montant_paye_usd.addEventListener('input', majTotauxFacture);
 
   champCodeFacture.addEventListener('input', function () {
     clearTimeout(rechercheFacture);
@@ -785,6 +929,10 @@
     blocPaiement.hidden = !facture;
     blocColisFacture.hidden = true;
     listeColisFacture.textContent = '';
+    colisFacturables = {};
+    $('[data-recap-facture]').hidden = true;
+    $('[data-compte-colis]', formFacture).textContent = '';
+    formFacture.montant_usd.readOnly = false;
     if (facture) {
       var client = facture.clients || {};
       champCodeFacture.value = client.code || '';
@@ -798,11 +946,25 @@
       formFacture.note.value = facture.note || '';
       formFacture.statut.value = facture.statut;
       formFacture.moyen.value = facture.moyen || '';
+      formFacture.montant_paye_usd.value = facture.montant_paye_usd != null ? Number(facture.montant_paye_usd).toFixed(2) : '0.00';
+      // Facture déjà émise : on montre ses totaux tels qu'ils ont été arrêtés,
+      // sans les recalculer sur des tarifs qui auraient changé depuis.
+      var t = O.totauxFacture(facture);
+      var recap = $('[data-recap-facture]');
+      recap.hidden = false;
+      $('[data-recap="colis"]', recap).textContent = argent(t.colis);
+      $('[data-recap="frais"]', recap).textContent = argent(t.frais);
+      $('[data-recap="grand"]', recap).textContent = argent(t.grandTotal);
+      $('[data-recap="paye"]', recap).textContent = argent(t.paye);
+      $('[data-recap="balance"]', recap).textContent = argent(t.balance);
+      $('[data-aide-montant]', formFacture).textContent = 'Total arrêté à la création de la facture.';
     } else {
       champCodeFacture.readOnly = false;
       clientFacture = null;
       infoClientFacture.textContent = '';
       infoClientFacture.className = 'gs-champ__aide gs-client-trouve';
+      formFacture.montant_paye_usd.value = '0.00';
+      $('[data-aide-montant]', formFacture).textContent = 'Cochez des colis, ou saisissez un montant libre.';
     }
     dlgFacture.showModal();
   }
@@ -814,22 +976,44 @@
     var montant = Number(String(formFacture.montant_usd.value).replace(',', '.'));
     if (!(montant >= 0)) { erreurFormulaire(formFacture, 'Indiquez le montant de la facture.'); return; }
 
+    var choisis = colisCoches();
+    // Une facture appartient à un seul client. La liste n'en propose jamais
+    // d'autres, mais on refuse quand même plutôt que d'émettre un document faux.
+    var intrus = choisis.filter(function (c) { return c.client_id && c.client_id !== clientFacture.id; });
+    if (intrus.length) {
+      erreurFormulaire(formFacture, 'Un colis sélectionné appartient à un autre client : une facture ne peut en regrouper qu\u2019un seul.');
+      return;
+    }
+
+    var lignes = choisis.map(ligneDeColis);
+    var paye = Math.max(Number(String(formFacture.montant_paye_usd.value || '').replace(',', '.')) || 0, 0);
+    // Frais de service : une seule fois par facture, quel que soit le nombre de
+    // colis, et jamais sur une facture sans colis.
+    var frais = lignes.length ? API.tarifs.fraisService : 0;
+    if (lignes.length) {
+      montant = O.arrondi(lignes.reduce(function (somme, l) { return somme + l.montant_usd; }, 0) + frais);
+    }
+
     var champs = {
       client_id: clientFacture.id,
       montant_usd: montant,
+      montant_paye_usd: O.arrondi(Math.min(paye, montant)),
       echeance_le: formFacture.echeance_le.value || null,
       lien_paiement: formFacture.lien_paiement.value.trim(),
       note: formFacture.note.value.trim()
     };
+    if (!factureEditee) champs.frais_service_usd = frais;
     if (factureEditee) {
       champs.statut = formFacture.statut.value;
       champs.moyen = formFacture.moyen.value;
-      if (champs.statut === 'payee' && !factureEditee.payee_le) champs.payee_le = new Date().toISOString();
+      if (champs.statut === 'payee') {
+        champs.montant_paye_usd = montant;          // réglée : plus rien à devoir
+        if (!factureEditee.payee_le) champs.payee_le = new Date().toISOString();
+      }
+    } else if (champs.montant_paye_usd >= montant && montant > 0) {
+      champs.statut = 'payee';
+      champs.payee_le = new Date().toISOString();
     }
-
-    var lignes = $$('[data-colis-id]', listeColisFacture).filter(function (i) { return i.checked; }).map(function (i) {
-      return { colis_id: i.getAttribute('data-colis-id'), libelle: i.getAttribute('data-colis-libelle'), montant_usd: 0 };
-    });
 
     var bouton = $('button[type="submit"]', formFacture);
     var fin = attente(bouton, 'Enregistrement…');
@@ -1021,6 +1205,52 @@
     return chercherParTexte(texte, numero, prefill);
   }
 
+  /* ---- Prix du colis : poids x tarif -----------------------------------------
+     Le tarif de la maison est 5 $/lb ; il reste remplaçable colis par colis
+     pour un accord particulier. Le prix suit le poids tant que personne ne
+     l'a écrit à la main : dès qu'on le corrige, on ne l'écrase plus.
+     -------------------------------------------------------------------------- */
+  var champTarif = $('[data-tarif-lb]', formColis);
+  var champPrix = $('[data-prix-colis]', formColis);
+  var aidePrix = $('[data-calcul-prix]', formColis);
+  var prixALaMain = false;
+
+  function nombreSaisi(valeur) {
+    var n = Number(String(valeur == null ? '' : valeur).replace(',', '.').trim());
+    return isFinite(n) ? n : NaN;
+  }
+
+  function tarifSaisi() {
+    var t = nombreSaisi(champTarif.value);
+    return t > 0 ? t : API.tarifs.parLivre;
+  }
+
+  function ecrireMontant(champ, valeur) {
+    champ.value = (Math.round(valeur * 100) / 100).toFixed(2).replace('.', ',');
+  }
+
+  function recalculerPrix(forcer) {
+    var poids = nombreSaisi(formColis.elements.poids_lb.value);
+    var tarif = tarifSaisi();
+    if (!(poids > 0)) {
+      if (forcer || !prixALaMain) champPrix.value = '';
+      aidePrix.textContent = 'Indiquez le poids : le prix se calcule tout seul, à ' + argent(tarif) + ' la livre.';
+      return;
+    }
+    var prix = Math.round(poids * tarif * 100) / 100;
+    if (forcer || !prixALaMain) ecrireMontant(champPrix, prix);
+    aidePrix.textContent = O.nombre(poids) + ' lb × ' + argent(tarif) + ' = ' + argent(prix) +
+      ' · frais de service ' + argent(API.tarifs.fraisService) + ' ajoutés sur la facture.';
+  }
+
+  formColis.elements.poids_lb.addEventListener('input', function () { recalculerPrix(false); });
+  champTarif.addEventListener('input', function () { recalculerPrix(false); });
+  champPrix.addEventListener('input', function () { prixALaMain = true; });
+  // Champ vidé : on rend la main au calcul automatique.
+  champPrix.addEventListener('blur', function () {
+    if (!champPrix.value.trim()) { prixALaMain = false; recalculerPrix(true); }
+  });
+
   var delaiCode = null;
   champCode.addEventListener('input', function () {
     clearTimeout(delaiCode);
@@ -1056,6 +1286,40 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
+  /* ---- La facture d'un colis --------------------------------------------------
+     Tout colis enregistré repart avec sa facture : le transport au prix du
+     colis, plus les frais de service, une seule fois. Le lien de paiement est
+     préparé dans la foulée quand les réglages le permettent.
+     -------------------------------------------------------------------------- */
+  function ligneDeColis(colis) {
+    return {
+      colis_id: colis.id,
+      libelle: colis.description || 'Transport',
+      montant_usd: O.prixColis(colis),
+      quantite: 1,
+      poids_lb: colis.poids_lb != null && colis.poids_lb !== '' ? Number(colis.poids_lb) : null
+    };
+  }
+
+  function facturerColis(colis, client) {
+    var lignes = [ligneDeColis(colis)];
+    var frais = API.tarifs.fraisService;
+    var total = O.arrondi(lignes[0].montant_usd + frais);
+    return API.admin.creerFacture({
+      client_id: client.id,
+      montant_usd: total,
+      frais_service_usd: frais,
+      montant_paye_usd: 0
+    }, lignes).then(function (f) {
+      if (!f || f.lien_paiement) return f;
+      var lien = lienCarte(f.numero, total);
+      if (!lien) return f;
+      return API.admin.modifierFacture(f.id, { lien_paiement: lien })
+        .then(function () { return f; })
+        .catch(function () { return f; });   // sans lien, la facture reste valable
+    });
+  }
+
   function ouvrirColis(options) {
     options = options || {};
     colisEdite = options.colis || null;
@@ -1081,9 +1345,18 @@
       f.service.value = colisEdite.service;
       f.pays_destination.value = colisEdite.pays_destination;
       f.destination.value = colisEdite.destination || '';
+      // Un colis déjà enregistré garde son prix tel quel : il a pu être
+      // facturé, et sa facture ne doit pas bouger derrière son dos.
+      champTarif.value = colisEdite.tarif_lb_usd != null ? String(colisEdite.tarif_lb_usd).replace('.', ',') : '';
+      prixALaMain = colisEdite.prix_usd != null;
+      if (colisEdite.prix_usd != null) ecrireMontant(champPrix, Number(colisEdite.prix_usd));
+      recalculerPrix(false);
     } else {
       f.code.value = options.code || etat.colis.clientCode || '';
       f.lieu.value = 'Miami (Medley), FL';
+      prixALaMain = false;
+      champTarif.value = String(API.tarifs.parLivre);
+      recalculerPrix(true);
     }
     dlgColis.showModal();
     if (f.code.value) chercherClient(!colisEdite);
@@ -1135,7 +1408,13 @@
         poids_lb: poids ? Math.round(Number(poids) * 100) / 100 : null,
         service: f.service.value,
         pays_destination: f.pays_destination.value,
-        destination: f.destination.value.trim()
+        destination: f.destination.value.trim(),
+        tarif_lb_usd: tarifSaisi(),
+        prix_usd: (function () {
+          var saisi = nombreSaisi(champPrix.value);
+          if (saisi >= 0) return Math.round(saisi * 100) / 100;
+          return Math.round((Number(poids) || 0) * tarifSaisi() * 100) / 100;
+        }())
       };
       if (!colisEdite) {
         donnees.statut = f.statut.value;
@@ -1151,11 +1430,20 @@
         etat.vus[colis.id] = null;
         chargerStatistiques();
         chargerColis(true);
-        if (prevenir) {
-          notifier([{ colis: colis, client: client }], 'recu', { apresEnregistrement: true });
-        } else {
-          toast(creation ? 'Colis ' + colis.numero + ' enregistré pour ' + client.nom_complet + '.' : 'Colis ' + colis.numero + ' modifié.');
-        }
+        if (!creation) { toast('Colis ' + colis.numero + ' modifié.'); return colis; }
+        // Sa facture dans la foulée. Si elle échoue, le colis reste bien
+        // enregistré : on le dit, plutôt que de faire croire à une perte.
+        return facturerColis(colis, client).then(function (facture) {
+          if (prevenir) notifier([{ colis: colis, client: client }], 'recu', { apresEnregistrement: true });
+          else toast('Colis ' + colis.numero + ' enregistré pour ' + client.nom_complet +
+                     (facture ? ' · facture ' + facture.numero : '') + '.');
+          if (etat.vue === 'factures') chargerFactures();
+          return colis;
+        }).catch(function (err) {
+          toast('Colis ' + colis.numero + ' enregistré, mais sa facture n\u2019a pas pu être créée : ' +
+                messageErreur(err), true);
+          return colis;
+        });
       });
     }).catch(function (err) {
       attente(bouton);

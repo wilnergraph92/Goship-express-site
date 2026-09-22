@@ -139,6 +139,26 @@ svg{display:block}
 .fa__colis{color:#4a5878;letter-spacing:.03em;white-space:nowrap}
 .fa__lignes tfoot th{border-top:1.5pt solid #061a3f;font-size:11pt;font-weight:800}
 .fa__lignes tfoot .fa__total{border-top:1.5pt solid #061a3f;font-size:14pt;font-weight:900}
+.fa__centre{text-align:center;white-space:nowrap}
+.fa__desc{display:block}
+.fa__lignes .fa__colis{display:block;margin-top:.6mm;font-size:8.5pt}
+
+/* Les totaux, alignés à droite sous le tableau */
+.fa__totaux{margin-top:4mm;margin-left:auto;width:78mm;border-collapse:collapse;font-size:10.5pt}
+.fa__totaux th,.fa__totaux td{padding:1.8mm 3mm;text-align:left}
+.fa__totaux th{font-weight:600;color:#2d3850}
+.fa__totaux--grand th,.fa__totaux--grand td{border-top:1.2pt solid #061a3f;font-size:12.5pt;font-weight:900;color:#061a3f}
+.fa__totaux--balance th,.fa__totaux--balance td{background:#f5f7fb;font-size:12pt;font-weight:900;color:#b91c1c}
+
+/* Les paraphes : le nôtre déjà signé, celui du client laissé vide */
+.fa__signatures{margin-top:10mm;display:flex;justify-content:space-between;gap:14mm;
+  break-inside:avoid;page-break-inside:avoid}
+.fa__paraphe{flex:1;min-width:0;text-align:center}
+.fa__signature{display:block;margin:0 auto;width:auto;height:16mm;max-width:100%;object-fit:contain}
+.fa__paraphe-vide{display:block;height:16mm}
+.fa__paraphe-trait{display:block;margin-top:1mm;border-top:.8pt solid #061a3f}
+.fa__paraphe-titre{display:block;margin-top:1.5mm;font-size:9pt;font-weight:800;color:#061a3f}
+.fa__paraphe-sous{display:block;margin-top:.5mm;font-size:8.5pt;color:#4a5878}
 
 .fa__bas{margin-top:8mm;display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
 .fa__paiement{flex:1;min-width:0;font-size:10.5pt;line-height:1.5}

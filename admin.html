@@ -171,11 +171,14 @@
         <table class="gs-tableau gs-tableau--clients">
           <thead>
             <tr>
-              <th scope="col">Code</th>
+              <th scope="col">Identifiant</th>
               <th scope="col">Client</th>
-              <th scope="col">Ville et région</th>
-              <th scope="col">Téléphone</th>
-              <th scope="col">Inscrit le</th>
+              <th scope="col">Colis en cours</th>
+              <th scope="col">Statut des colis</th>
+              <th scope="col">Poids total</th>
+              <th scope="col">Montant total</th>
+              <th scope="col">Balance</th>
+              <th scope="col">Dernière mise à jour</th>
               <th scope="col"><span class="gs-invisible">Actions</span></th>
             </tr>
           </thead>
@@ -258,6 +261,16 @@
           <input id="col-poids" name="poids_lb" inputmode="decimal" maxlength="8" autocomplete="off" placeholder="Ex. 4,5">
         </div>
         <div class="gs-champ">
+          <label for="col-tarif">Tarif (US $ / lb)</label>
+          <input id="col-tarif" name="tarif_lb_usd" inputmode="decimal" maxlength="8" autocomplete="off" placeholder="5" data-tarif-lb>
+          <p class="gs-champ__aide">Tarif de la maison : 5 $/lb. À ne changer que pour un accord particulier.</p>
+        </div>
+        <div class="gs-champ">
+          <label for="col-prix">Prix du colis (US $)</label>
+          <input id="col-prix" name="prix_usd" inputmode="decimal" maxlength="10" autocomplete="off" placeholder="0,00" data-prix-colis>
+          <p class="gs-champ__aide" data-calcul-prix aria-live="polite">Calculé automatiquement : poids × tarif.</p>
+        </div>
+        <div class="gs-champ">
           <label for="col-service">Service</label>
           <select id="col-service" name="service">
             <option value="aerien">Aérien</option>
@@ -328,12 +341,30 @@
       </div>
       <fieldset class="gs-choix-colis" data-colis-facture hidden>
         <legend>Colis à facturer</legend>
+        <div class="gs-choix-colis__tete">
+          <label class="gs-choix-colis__tout"><input type="checkbox" data-tout-colis-facture> Tout sélectionner</label>
+          <span class="gs-choix-colis__compte" data-compte-colis aria-live="polite"></span>
+        </div>
+        <p class="gs-champ__aide">Seuls les colis de ce client apparaissent : une facture ne peut pas mélanger deux clients.</p>
         <div data-liste-colis-facture></div>
       </fieldset>
+      <div class="gs-recap" data-recap-facture hidden>
+        <div class="gs-recap__ligne"><span>Total colis</span><strong data-recap="colis">0,00 $</strong></div>
+        <div class="gs-recap__ligne"><span>Frais de service</span><strong data-recap="frais">10,00 $</strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Grand total</span><strong data-recap="grand">0,00 $</strong></div>
+        <div class="gs-recap__ligne"><span>Déjà payé</span><strong data-recap="paye">0,00 $</strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--balance"><span>Balance</span><strong data-recap="balance">0,00 $</strong></div>
+      </div>
       <div class="gs-form__grille">
         <div class="gs-champ">
           <label for="fac-montant">Montant total (US $)</label>
           <input id="fac-montant" name="montant_usd" type="number" min="0" step="0.01" required placeholder="45.00">
+          <p class="gs-champ__aide" data-aide-montant>Calculé à partir des colis cochés, frais de service compris.</p>
+        </div>
+        <div class="gs-champ">
+          <label for="fac-paye">Déjà payé (US $)</label>
+          <input id="fac-paye" name="montant_paye_usd" type="number" min="0" step="0.01" placeholder="0.00">
+          <p class="gs-champ__aide">Laissez à zéro tant que rien n'est encaissé : la balance vaut alors le grand total.</p>
         </div>
         <div class="gs-champ">
           <label for="fac-echeance">À payer avant le</label>

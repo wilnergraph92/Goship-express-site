@@ -32,6 +32,14 @@
   // outils/generateur/pages/mon-compte.main.html, dans
   // application-mobile/config.js et dans outils/supabase.sql (adresse_miami) :
   // les cinq doivent rester d'accord.
+  // Pied de facture : l'établissement dominicain, son téléphone et son RNC.
+  // Figure sur toute facture, quelle que soit la langue.
+  var SANTO_DOMINGO = {
+    adresse: 'Calle 25 de Febrero La Caleta, Santo Domingo Este 11500',
+    telephone: '809 317-6686',
+    rnc: '1-33-79976-6'
+  };
+
   var MIAMI = {
     nom: 'Goship Express LLC',
     ligne1: '8140 NW 74th Ave Unit 3',
@@ -60,7 +68,9 @@
       titre: 'Facture', etablie: 'Établie le', echeance: 'À payer avant le', payeeLe: 'Payée le',
       statuts: { a_payer: 'À payer', payee: 'Payée', annulee: 'Annulée' },
       factureA: 'Facturé à', codeClient: 'Code client {code}',
-      colonnes: { description: 'Description', colis: 'Colis', montant: 'Montant' },
+      colonnes: { quantite: 'Quantité', poids: 'Poids / lbs', description: 'Description', colis: 'Colis', montant: 'Total' },
+      totalColis: 'Total colis', fraisService: 'Frais de service', balance: 'Balance', grandTotal: 'Grand total',
+      signature: 'Signature autorisée', pourGoship: 'Pour Goship Express',
       total: 'Total à payer', paiement: 'Paiement',
       reglee: 'Facture réglée, merci !', regleePar: 'Payée par {moyen}', regleeLe: 'Payée le {date}',
       annulee: 'Cette facture a été annulée : rien n\'est dû.',
@@ -76,7 +86,9 @@
       titre: 'Invoice', etablie: 'Issued on', echeance: 'Due by', payeeLe: 'Paid on',
       statuts: { a_payer: 'Unpaid', payee: 'Paid', annulee: 'Cancelled' },
       factureA: 'Billed to', codeClient: 'Customer code {code}',
-      colonnes: { description: 'Description', colis: 'Package', montant: 'Amount' },
+      colonnes: { quantite: 'Qty', poids: 'Weight / lbs', description: 'Description', colis: 'Package', montant: 'Total' },
+      totalColis: 'Packages total', fraisService: 'Service fee', balance: 'Balance', grandTotal: 'Grand total',
+      signature: 'Authorised signature', pourGoship: 'For Goship Express',
       total: 'Total due', paiement: 'Payment',
       reglee: 'Invoice paid — thank you!', regleePar: 'Paid by {moyen}', regleeLe: 'Paid on {date}',
       annulee: 'This invoice has been cancelled: nothing is due.',
@@ -92,7 +104,9 @@
       titre: 'Factura', etablie: 'Emitida el', echeance: 'A pagar antes del', payeeLe: 'Pagada el',
       statuts: { a_payer: 'Por pagar', payee: 'Pagada', annulee: 'Anulada' },
       factureA: 'Facturado a', codeClient: 'Código de cliente {code}',
-      colonnes: { description: 'Descripción', colis: 'Paquete', montant: 'Importe' },
+      colonnes: { quantite: 'Cant.', poids: 'Peso / lbs', description: 'Descripción', colis: 'Paquete', montant: 'Total' },
+      totalColis: 'Total paquetes', fraisService: 'Cargo por servicio', balance: 'Balance', grandTotal: 'Gran total',
+      signature: 'Firma autorizada', pourGoship: 'Por Goship Express',
       total: 'Total a pagar', paiement: 'Pago',
       reglee: '¡Factura pagada, gracias!', regleePar: 'Pagada con {moyen}', regleeLe: 'Pagada el {date}',
       annulee: 'Esta factura fue anulada: no hay nada que pagar.',
@@ -108,7 +122,9 @@
       titre: 'Fakti', etablie: 'Fèt le', echeance: 'Pou peye anvan', payeeLe: 'Peye le',
       statuts: { a_payer: 'Pou peye', payee: 'Peye', annulee: 'Anile' },
       factureA: 'Faktire pou', codeClient: 'Kòd kliyan {code}',
-      colonnes: { description: 'Deskripsyon', colis: 'Koli', montant: 'Montan' },
+      colonnes: { quantite: 'Kantite', poids: 'Pwa / lbs', description: 'Deskripsyon', colis: 'Koli', montant: 'Total' },
+      totalColis: 'Total kolis', fraisService: 'Frè sèvis', balance: 'Balans', grandTotal: 'Gran total',
+      signature: 'Siyati otorize', pourGoship: 'Pou Goship Express',
       total: 'Total pou peye', paiement: 'Peman',
       reglee: 'Fakti peye, mèsi !', regleePar: 'Peye ak {moyen}', regleeLe: 'Peye le {date}',
       annulee: 'Fakti sa a anile : ou pa dwe anyen.',
@@ -165,6 +181,38 @@
     img.height = hauteur;
     img.className = classe;
     return parent.appendChild(img);
+  }
+
+  // La signature manuscrite. Contrairement au logo, son absence ne doit rien
+  // imprimer du tout : mieux vaut une facture sans signature qu'un mot à la
+  // place d'un paraphe.
+  function signature(parent, classe) {
+    var img = document.createElement('img');
+    img.src = BASE + 'assets/img/signature-goship.png';
+    img.alt = '';
+    img.setAttribute('aria-hidden', 'true');
+    img.width = 1231;
+    img.height = 382;
+    img.className = classe;
+    img.onerror = function () { if (img.parentNode) img.parentNode.removeChild(img); };
+    return parent.appendChild(img);
+  }
+
+  // Les quatre montants d'une facture. Le calcul vit dans api.js : la facture
+  // imprimée et l'écran doivent toujours afficher la même chose.
+  function totauxDe(facture) {
+    var API = window.GoshipAPI;
+    return API && API.outils && API.outils.totauxFacture
+      ? API.outils.totauxFacture(facture)
+      : { colis: Number(facture.montant_usd) || 0, frais: 0,
+          grandTotal: Number(facture.montant_usd) || 0, paye: 0,
+          balance: Number(facture.montant_usd) || 0 };
+  }
+
+  function nombreLb(n) {
+    var v = Number(n);
+    if (!isFinite(v)) return '—';
+    return (Math.round(v * 100) / 100).toString().replace('.', ',');
   }
 
   function date(valeur, langue) {
@@ -334,6 +382,7 @@
     var langue = langueDe((options || {}).langue || cl.langue);
     var T = TEXTES[langue];
     var lignes = lignesDe(fa);
+    var totaux = totauxDe(fa);
     var page = el('article', 'fa');
     page.lang = langue;
 
@@ -371,32 +420,45 @@
     ligneTexte(qui, null, [cl.ville, cl.region, T.pays[cl.pays] || cl.pays]);
     ligneTexte(qui, null, [cl.telephone, cl.email]);
 
-    // Le détail
+    // Le détail : une ligne par colis, quantité, poids, description et total
     var table = bloc(page, 'table', 'fa__lignes');
     var tr = bloc(bloc(table, 'thead'), 'tr');
-    [T.colonnes.description, T.colonnes.colis, T.colonnes.montant].forEach(function (t, i) {
-      bloc(tr, 'th', i === 2 ? 'fa__droite' : null, t).setAttribute('scope', 'col');
-    });
+    [['quantite', 'fa__centre'], ['poids', 'fa__centre'], ['description', null], ['montant', 'fa__droite']]
+      .forEach(function (col) {
+        bloc(tr, 'th', col[1], T.colonnes[col[0]]).setAttribute('scope', 'col');
+      });
     var tbody = bloc(table, 'tbody');
-    function ligneDetail(libelle, colis, montant) {
+    function ligneDetail(quantite, poids, libelle, numero, montant) {
       var r = bloc(tbody, 'tr');
-      bloc(r, 'td', null, libelle);
-      bloc(r, 'td', 'fa__colis', colis);
+      bloc(r, 'td', 'fa__centre', String(quantite || 1));
+      bloc(r, 'td', 'fa__centre', poids != null && poids !== '' ? nombreLb(poids) : '—');
+      var d = bloc(r, 'td');
+      bloc(d, 'span', 'fa__desc', libelle);
+      if (numero) bloc(d, 'span', 'fa__colis', numero);
       bloc(r, 'td', 'fa__droite', argent(montant, langue));
     }
     if (lignes.length) {
       lignes.forEach(function (l) {
-        ligneDetail(l.libelle || T.transport, numeroColis(l), l.montant_usd);
+        ligneDetail(l.quantite || 1, l.poids_lb, l.libelle || T.transport, numeroColis(l), l.montant_usd);
       });
     } else {
       // Facture d'un seul montant, sans détail : la note en tient lieu
-      ligneDetail(fa.note || T.transportColis, '', fa.montant_usd);
+      ligneDetail(1, null, fa.note || T.transportColis, '', totaux.colis);
     }
-    var total = bloc(bloc(table, 'tfoot'), 'tr');
-    var cellule = bloc(total, 'th', null, T.total);
-    cellule.setAttribute('scope', 'row');
-    cellule.setAttribute('colspan', '2');
-    bloc(total, 'td', 'fa__droite fa__total', argent(fa.montant_usd, langue));
+
+    // Les totaux : colis, frais de service une seule fois, balance, grand total
+    var recap = bloc(page, 'table', 'fa__totaux');
+    var corpsRecap = bloc(recap, 'tbody');
+    function ligneTotal(libelle, montant, classe) {
+      var r = bloc(corpsRecap, 'tr', classe);
+      var t = bloc(r, 'th', null, libelle);
+      t.setAttribute('scope', 'row');
+      bloc(r, 'td', 'fa__droite', argent(montant, langue));
+    }
+    ligneTotal(T.totalColis, totaux.colis);
+    ligneTotal(T.fraisService, totaux.frais);
+    ligneTotal(T.grandTotal, totaux.grandTotal, 'fa__totaux--grand');
+    ligneTotal(T.balance, totaux.balance, 'fa__totaux--balance');
 
     // Le paiement
     var bas = bloc(page, 'section', 'fa__bas');
@@ -425,7 +487,22 @@
       }
     }
 
+    // La signature, puis la ligne laissée au client
+    var paraphes = bloc(page, 'section', 'fa__signatures');
+    var nous = bloc(paraphes, 'div', 'fa__paraphe');
+    signature(nous, 'fa__signature');
+    bloc(nous, 'span', 'fa__paraphe-trait');
+    bloc(nous, 'span', 'fa__paraphe-titre', T.signature);
+    bloc(nous, 'span', 'fa__paraphe-sous', T.pourGoship);
+
+    var eux = bloc(paraphes, 'div', 'fa__paraphe');
+    bloc(eux, 'span', 'fa__paraphe-vide');
+    bloc(eux, 'span', 'fa__paraphe-trait');
+    bloc(eux, 'span', 'fa__paraphe-titre', T.signature);
+    bloc(eux, 'span', 'fa__paraphe-sous', cl.nom_complet || '');
+
     bloc(page, 'footer', 'fa__pied',
+         SANTO_DOMINGO.adresse + ' · Tél. ' + SANTO_DOMINGO.telephone + ' · RNC ' + SANTO_DOMINGO.rnc + '\n' +
          MIAMI.nom + ' · ' + MIAMI.ligne1 + ' ' + MIAMI.ligne2 + ', ' + MIAMI.ville + ', ' +
          MIAMI.etat + ' ' + MIAMI.zip + ' · Tél. ' + MIAMI.telephone + '\n' + T.pied);
     return page;

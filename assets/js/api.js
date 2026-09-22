@@ -31,8 +31,96 @@
   var STATUTS = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre', 'incident'];
   var CHAMPS_PROFIL = ['nom_complet', 'pays', 'region', 'ville', 'adresse', 'telephone', 'langue'];
   var CHAMPS_COLIS = ['client_id', 'suivi_transporteur', 'expediteur', 'description', 'poids_lb', 'service',
-                      'pays_destination', 'destination', 'statut', 'lieu', 'note', 'recu_le'];
-  var CHAMPS_FACTURE = ['client_id', 'montant_usd', 'statut', 'note', 'lien_paiement', 'moyen', 'echeance_le', 'payee_le'];
+                      'pays_destination', 'destination', 'statut', 'lieu', 'note', 'recu_le',
+                      'prix_usd', 'tarif_lb_usd'];
+  var CHAMPS_FACTURE = ['client_id', 'montant_usd', 'statut', 'note', 'lien_paiement', 'moyen', 'echeance_le',
+                        'payee_le', 'frais_service_usd', 'montant_paye_usd'];
+  var CHAMPS_LIGNE = ['colis_id', 'libelle', 'montant_usd', 'quantite', 'poids_lb'];
+
+  /* ---- Les tarifs ------------------------------------------------------------
+     Le transport est facturé à la livre. Le tarif peut être remplacé colis par
+     colis depuis le tableau de bord (un envoi volumineux, un accord
+     particulier) ; les frais de service, eux, sont fixes et ne sont exposés
+     dans aucun formulaire. Les deux sont gelés ici pour qu'aucune page ne
+     puisse les modifier au passage.
+     -------------------------------------------------------------------------- */
+  var TARIF_LB_DEFAUT = 5;
+  var FRAIS_SERVICE = 10;
+
+  function arrondi(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+
+  // Tarif réellement appliqué à un colis : le sien s'il en porte un, sinon
+  // celui de la maison.
+  function tarifDe(colis) {
+    var t = Number((colis || {}).tarif_lb_usd);
+    return t > 0 ? t : TARIF_LB_DEFAUT;
+  }
+
+  // Prix du transport d'un colis. Un colis déjà facturé garde le prix inscrit
+  // sur lui : changer le tarif demain ne doit pas changer une facture d'hier.
+  function prixColis(colis) {
+    var c = colis || {};
+    if (c.prix_usd != null && c.prix_usd !== '') return arrondi(c.prix_usd);
+    return arrondi((Number(c.poids_lb) || 0) * tarifDe(c));
+  }
+
+  // Les quatre montants d'une facture. « montant_usd » reste le grand total,
+  // c'est lui qui sert aux liens de paiement et à l'espace client.
+  function totauxFacture(facture) {
+    var f = facture || {};
+    var lignes = f.lignes || f.facture_lignes || [];
+    var frais = arrondi(f.frais_service_usd);
+    var colis = lignes.length
+      ? lignes.reduce(function (somme, l) { return somme + (Number(l.montant_usd) || 0); }, 0)
+      : (Number(f.montant_usd) || 0) - frais;
+    colis = arrondi(Math.max(colis, 0));
+    var grandTotal = arrondi(colis + frais);
+    var paye = arrondi(f.montant_paye_usd);
+    return {
+      colis: colis,
+      frais: frais,
+      grandTotal: grandTotal,
+      paye: paye,
+      balance: arrondi(Math.max(grandTotal - paye, 0))
+    };
+  }
+
+  // Regroupe colis et factures par client : une ligne par client ayant des
+  // colis en cours, avec ce qu'il attend et ce qu'il reste à encaisser. Sert
+  // à la vue « Clients » du tableau de bord, des deux côtés (base et démo).
+  function regrouperParClient(colis, factures) {
+    var par = {};
+    (colis || []).forEach(function (c) {
+      var id = c.client_id;
+      if (!id) return;
+      var e = par[id] || (par[id] = {
+        client_id: id,
+        code: c.code_client || '',
+        nom_complet: c.nom_client || '',
+        telephone: c.telephone_client || '',
+        email: c.email_client || '',
+        ville: c.ville_client || '',
+        pays: c.pays_client || '',
+        colis: [], nbColis: 0, poids: 0, montant: 0, balance: 0, statuts: {}, majLe: null
+      });
+      e.colis.push(c);
+      e.nbColis += 1;
+      e.poids = arrondi(e.poids + (Number(c.poids_lb) || 0));
+      e.montant = arrondi(e.montant + prixColis(c));
+      e.statuts[c.statut] = (e.statuts[c.statut] || 0) + 1;
+      var maj = c.maj_le || c.cree_le;
+      if (maj && (!e.majLe || new Date(maj) > new Date(e.majLe))) e.majLe = maj;
+    });
+    // Les factures sans détail de lignes : « montant_usd » est déjà le grand
+    // total, totauxFacture retombe donc bien sur ses pieds.
+    (factures || []).forEach(function (f) {
+      var e = par[f.client_id];
+      if (!e) return;
+      e.balance = arrondi(e.balance + totauxFacture(f).balance);
+    });
+    return Object.keys(par).map(function (k) { return par[k]; })
+      .sort(function (a, b) { return new Date(b.majLe || 0) - new Date(a.majLe || 0); });
+  }
 
   function Erreur(code, detail) {
     var e = new Error(detail || code);
@@ -444,10 +532,49 @@
           if (!lignes || !lignes.length) return null;
           return sb().then(function (c) {
             return c.from('facture_lignes').insert(lignes.map(function (l) {
-              return { facture_id: f.id, colis_id: l.colis_id || null, libelle: l.libelle || '', montant_usd: l.montant_usd || 0 };
+              var ligne = choisir(l, CHAMPS_LIGNE);
+              ligne.facture_id = f.id;
+              ligne.colis_id = l.colis_id || null;
+              ligne.libelle = l.libelle || '';
+              ligne.montant_usd = l.montant_usd || 0;
+              ligne.quantite = l.quantite || 1;
+              return ligne;
             }));
           }).then(resultat);
         }).then(function () { return facture; });
+      },
+
+      // La facture d'un colis, pour le bouton « Voir la facture » de sa fiche.
+      // La plus récente si le colis a été refacturé.
+      factureDuColis: function (colisId) {
+        return sb().then(function (c) {
+          return c.from('facture_lignes')
+            .select('facture_id, factures!inner(*, clients(code, nom_complet, telephone, email, adresse, ville, region, pays, langue), facture_lignes(*, colis(numero, description, poids_lb)))')
+            .eq('colis_id', colisId);
+        }).then(resultat).then(function (lignes) {
+          var factures = (lignes || []).map(function (l) { return l.factures; }).filter(Boolean);
+          factures.sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
+          return factures[0] || null;
+        });
+      },
+
+      // Une ligne par client ayant des colis en cours : de quoi voir d'un coup
+      // qui attend quoi, pour combien, et ce qui reste à encaisser.
+      resumeClients: function () {
+        var colis, factures;
+        return sb().then(function (c) {
+          return c.from('colis_details').select('*').neq('statut', 'livre')
+            .order('maj_le', { ascending: false }).limit(500);
+        }).then(resultat).then(function (r) {
+          colis = r || [];
+          return sb();
+        }).then(function (c) {
+          return c.from('factures').select('id, client_id, montant_usd, frais_service_usd, montant_paye_usd, statut')
+            .neq('statut', 'annulee').limit(1000);
+        }).then(resultat).then(function (r) {
+          factures = r || [];
+          return regrouperParClient(colis, factures);
+        });
       },
 
       modifierFacture: function (id, champs) {
@@ -742,7 +869,12 @@
           return Object.assign({}, f, {
             lignes: (f.facture_lignes || []).map(function (l) {
               var colis = (d.colis || []).filter(function (c) { return c.id === l.colis_id; })[0];
-              return { libelle: l.libelle, montant_usd: l.montant_usd, colis: colis ? colis.numero : null };
+              return {
+                libelle: l.libelle, montant_usd: l.montant_usd,
+                quantite: l.quantite || 1,
+                poids_lb: l.poids_lb != null ? l.poids_lb : (colis ? colis.poids_lb : null),
+                colis: colis ? colis.numero : null
+              };
             })
           });
         });
@@ -951,12 +1083,39 @@
           statut: 'a_payer', note: '', lien_paiement: '', moyen: '', echeance_le: null,
           cree_le: maintenant(), payee_le: null,
           facture_lignes: (lignesFacture || []).map(function (l, i) {
-            return { id: i + 1, colis_id: l.colis_id || null, libelle: l.libelle || '', montant_usd: l.montant_usd || 0 };
+            return {
+              id: i + 1, colis_id: l.colis_id || null, libelle: l.libelle || '',
+              montant_usd: l.montant_usd || 0, quantite: l.quantite || 1,
+              poids_lb: l.poids_lb != null ? l.poids_lb : null
+            };
           })
         }, choisir(champs, CHAMPS_FACTURE));
         d.factures.push(f);
         ecrireDonnees(d, 'factures');
         return plusTard(f);
+      },
+
+      // La facture d'un colis, pour le bouton « Voir la facture » de sa fiche.
+      factureDuColis: function (colisId) {
+        var d = lireDonnees();
+        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        var trouvees = (d.factures || []).filter(function (f) {
+          return (f.facture_lignes || []).some(function (l) { return l.colis_id === colisId; });
+        }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
+        var f = trouvees[0];
+        if (!f) return plusTard(null);
+        var client = d.comptes.filter(function (c) { return c.id === f.client_id; })[0];
+        return plusTard(Object.assign({}, f, { clients: client ? publicProfil(client) : null }));
+      },
+
+      // Une ligne par client ayant des colis en cours.
+      resumeClients: function () {
+        var d = lireDonnees();
+        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        var colis = d.colis.filter(function (c) { return c.statut !== 'livre'; })
+          .map(function (c) { return detailsColis(d, c); });
+        var factures = (d.factures || []).filter(function (f) { return f.statut !== 'annulee'; });
+        return plusTard(regrouperParClient(colis, factures));
       },
 
       modifierFacture: function (id, champs) {
@@ -1193,7 +1352,13 @@
   api.normaliserCode = normaliserCode;
   api.outils = {
     texte: texte, date: date, nombre: nombre, argent: argent, etapeDe: etapeDe,
-    remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier
+    remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier,
+    prixColis: prixColis, totauxFacture: totauxFacture, tarifDe: tarifDe, arrondi: arrondi
   };
+
+  // Gelés : une page qui écrirait « API.tarifs.fraisService = 0 » n'obtiendrait
+  // rien. Le tarif à la livre n'est qu'une valeur de départ, remplaçable colis
+  // par colis dans le tableau de bord ; les frais de service ne le sont jamais.
+  api.tarifs = Object.freeze({ parLivre: TARIF_LB_DEFAUT, fraisService: FRAIS_SERVICE });
   window.GoshipAPI = api;
 })();
