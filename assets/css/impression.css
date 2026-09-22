@@ -24,31 +24,46 @@ svg{display:block}
 
 /* --------------------------------------------------------------------------
    L'étiquette d'expédition — 4 × 6 pouces
+   --------------------------------------------------------------------------
+   Dessinée pour une imprimante thermique directe — Y812BT et ses semblables :
+   203 dpi, noir ou blanc, aucun gris. Trois règles en découlent.
+
+   - **Aucun gris, aucune couleur pâle.** Le pilote les remplacerait par une
+     trame de points, qui brouille les petits textes sans rien économiser.
+     Ce qui distingue un texte d'un autre, ici, c'est sa taille et sa graisse.
+   - **Les aplats noirs restent petits.** À 180 mm/s, une grande surface noire
+     ralentit la machine, chauffe la tête et bave sur le papier. Seuls le
+     service et le pays en profitent : quelques centimètres carrés, mais ce
+     sont eux qu'on lit en triant les sacs.
+   - **Rien de plus fin qu'un point.** À 203 dpi, 1 pt fait moins de 3 points,
+     et un filet de 0,6 pt disparaît par endroits. D'où le 8 pt minimum et les
+     filets d'au moins 1 pt.
+
+   Le même dessin sort très bien d'une laser ou d'un jet d'encre : du noir sur
+   du blanc convient partout.
    -------------------------------------------------------------------------- */
-.et{width:4in;height:6in;padding:4mm;display:flex;flex-direction:column;
-  border:1px solid #061a3f;overflow:hidden;page-break-after:always;break-after:page}
+.et{width:4in;height:6in;padding:4mm;display:flex;flex-direction:column;color:#000;
+  border:1pt solid #000;overflow:hidden;page-break-after:always;break-after:page}
 .et:last-child{page-break-after:auto;break-after:auto}
 
 .et__tete{display:flex;align-items:center;justify-content:space-between;gap:3mm;
-  padding:2mm 3mm;background:#061a3f;color:#fff;border-radius:2mm}
-/* Le logo est réglé sur sa hauteur, pas sur sa largeur : c'est elle qui décide
-   de la hauteur du bandeau. « color » sert au texte de remplacement, le jour
-   où l'image manque. */
-.et__logo{display:block;width:auto;height:12mm;color:#fff;font-size:12pt;font-weight:800}
-.et__sous{display:block;margin-top:.8mm;font-size:6.5pt;opacity:.82;letter-spacing:.02em;
+  padding-bottom:2mm;border-bottom:1.5pt solid #000}
+.et__marque{min-width:0}
+.et__logo{display:block;width:auto;height:12mm;font-size:12pt;font-weight:800}
+.et__sous{display:block;margin-top:1mm;font-size:8pt;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.et__service{flex:none;padding:1mm 2.5mm;border:1.2pt solid #fff;border-radius:1.5mm;
-  font-size:8.5pt;font-weight:800;letter-spacing:.08em}
+.et__service{flex:none;padding:1.4mm 3mm;background:#000;color:#fff;border-radius:1mm;
+  font-size:9.5pt;font-weight:800;letter-spacing:.1em}
 
 .et__bande{margin-top:3mm;text-align:center}
 .et__bande svg{width:100%;height:16mm}
 .et__numero{display:block;margin-top:.8mm;font-size:17pt;font-weight:800;letter-spacing:.06em}
 
-.et__dest{margin-top:2.4mm;padding-top:2.4mm;border-top:1pt solid #061a3f;
+.et__dest{margin-top:2.4mm;padding-top:2.4mm;border-top:1pt solid #000;
   display:flex;align-items:flex-start;gap:3mm}
 .et__qui{flex:1;min-width:0}
-.et__libelle{display:block;font-size:6.5pt;font-weight:800;letter-spacing:.14em;
-  text-transform:uppercase;color:#4a5878}
+.et__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.16em;
+  text-transform:uppercase}
 /* Une étiquette a une taille fixe : ce qui est trop long est coupé plutôt que
    de pousser le reste hors du papier. On coupe le nom, l'adresse et le contenu
    — jamais le numéro, le code-barres ni la destination, qui sont ce dont le
@@ -58,23 +73,29 @@ svg{display:block}
 .et__adresse{font-size:10pt;line-height:1.35}
 .et__qui .et__adresse{-webkit-line-clamp:2;line-clamp:2}
 .et__ligne{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.et__code{white-space:nowrap}
 .et__tel{margin-top:.6mm;font-size:10pt;font-weight:700}
-.et__qr{flex:none;width:23mm;text-align:center}
-.et__qr svg{width:23mm;height:23mm}
-.et__qr-texte{display:block;margin-top:.5mm;font-size:6pt;color:#4a5878;letter-spacing:.02em}
+.et__qr{flex:none;width:24mm;text-align:center}
+.et__qr svg{width:24mm;height:24mm}
+.et__qr-texte{display:block;margin-top:.8mm;font-size:7.5pt}
 
-.et__vers{margin-top:2.4mm;padding:2mm 3mm;background:#e7edf9;border-radius:2mm;
-  display:flex;align-items:baseline;gap:3mm}
-.et__pays{font-size:26pt;font-weight:900;line-height:1;letter-spacing:-.01em}
-.et__ville{font-size:12pt;font-weight:800;letter-spacing:.03em;line-height:1.1;
+/* Le pays en blanc sur noir : c'est le seul aplat un peu large de l'étiquette,
+   et c'est celui qui se voit d'un mètre quand on trie. */
+.et__vers{margin-top:2.4mm;display:flex;align-items:stretch;gap:0;
+  border:1.5pt solid #000;border-radius:1mm;overflow:hidden}
+.et__pays{flex:none;display:flex;align-items:center;justify-content:center;
+  min-width:19mm;padding:1.6mm 2mm;background:#000;color:#fff;
+  font-size:24pt;font-weight:900;line-height:1}
+.et__ville{flex:1;min-width:0;align-self:center;padding:1mm 3mm;
+  font-size:13pt;font-weight:800;letter-spacing:.03em;line-height:1.1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .et__exp{margin-top:2.4mm}
-.et__exp .et__adresse{font-size:8pt;line-height:1.3}
+.et__exp .et__adresse{font-size:8.5pt;line-height:1.35}
 
-.et__pied{margin-top:auto;padding-top:2.5mm;border-top:1pt dashed #8a93ac}
+.et__pied{margin-top:auto;padding-top:2.5mm;border-top:1pt dashed #000}
 .et__desc{font-size:10.5pt;font-weight:700;line-height:1.3;-webkit-line-clamp:2;line-clamp:2}
-.et__meta{font-size:8.5pt;color:#4a5878;line-height:1.35;
+.et__meta{font-size:9pt;line-height:1.35;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 

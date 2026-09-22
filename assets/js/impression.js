@@ -253,9 +253,10 @@
     // Bandeau
     var tete = bloc(page, 'header', 'et__tete');
     var marque = bloc(tete, 'div', 'et__marque');
-    // Version blanche du logo : le bandeau est bleu nuit
-    logo(marque, 'logo-goship-blanc.png', 'et__logo', 420, 147);
-    bloc(marque, 'span', 'et__sous', 'Transport de colis · Miami → Haïti · Rép. dominicaine');
+    // Logo noir : une thermique n'imprime qu'en noir pur, et le logo en
+    // couleurs y sortirait en pointillés.
+    logo(marque, 'logo-goship-noir.png', 'et__logo', 420, 147);
+    bloc(marque, 'span', 'et__sous', 'Miami → Haïti · Rép. dominicaine');
     bloc(tete, 'span', 'et__service', (SERVICES[c.service] || c.service || '').toUpperCase());
 
     // Le numéro et son code-barres
@@ -267,7 +268,13 @@
     var dest = bloc(page, 'section', 'et__dest');
     var qui = bloc(dest, 'div', 'et__qui');
     bloc(qui, 'span', 'et__libelle', 'Destinataire');
-    bloc(qui, 'strong', 'et__personne et__coupe', [c.nom_client, c.code_client].filter(Boolean).join('  '));
+    var personne = bloc(qui, 'strong', 'et__personne et__coupe', c.nom_client || '');
+    if (c.code_client) {
+      // Dans son propre élément, insécable : un code coupé en deux
+      // (« GSE- » sur une ligne, « 1204 » sur la suivante) ne se lit pas.
+      personne.appendChild(document.createTextNode('  '));
+      bloc(personne, 'span', 'et__code', c.code_client);
+    }
     if (c.adresse_client) bloc(qui, 'p', 'et__adresse et__coupe', c.adresse_client);
     ligneTexte(qui, 'et__adresse et__ligne', [c.ville_client, c.region_client]);
     ligneTexte(qui, 'et__adresse et__ligne', [fr.pays[c.pays_client] || c.pays_client]);
@@ -275,7 +282,7 @@
 
     var cote = bloc(dest, 'div', 'et__qr');
     if (dessinerCode(cote, 'qr', lienSuivi(numero), 'Suivre le colis ' + numero)) {
-      bloc(cote, 'span', 'et__qr-texte', 'Scannez pour suivre');
+      bloc(cote, 'span', 'et__qr-texte', 'Scannez-moi');
     }
 
     // La destination en très gros : c'est ce qu'on lit en triant les sacs

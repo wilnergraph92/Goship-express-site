@@ -19,7 +19,7 @@ Site statique (HTML, CSS, JavaScript) en quatre langues — français, anglais, 
 | `assets/js/api.js`, `compte.js`, `admin.js` | Espace client et tableau de bord |
 | `assets/js/notifications.js` | Textes des e-mails et messages WhatsApp envoyés aux clients (4 langues) |
 | `assets/js/codes.js` | Calcul des **QR codes** et des **codes-barres** des étiquettes |
-| `assets/js/impression.js`, `assets/css/impression.css` | **Étiquettes d'expédition** et **factures** imprimables |
+| `assets/js/impression.js`, `assets/css/impression.css` | **Étiquettes d'expédition** (imprimante thermique) et **factures** imprimables |
 | `assets/img/` | Logos, photos, icônes et drapeaux (`drapeaux/`) |
 | `outils/generateur/` | **Le générateur des pages** (`build.py`), la maquette d'origine (`export/`) et les pages écrites à la main (`pages/`). C'est la source du site — voir « Modifier le site » |
 | `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et bancs d'essai (`essais-sql/`, `essais-codes/`) — **inutile de le mettre en ligne** |
@@ -400,16 +400,41 @@ Chaque colis enregistré a déjà tout ce qu'il faut pour son étiquette : son n
 Rien à créer, rien à saisir — l'étiquette s'imprime en un clic depuis le tableau de bord.
 
 **L'étiquette** fait 4 × 6 pouces, le format des imprimantes à étiquettes. On y trouve le logo
-Goship Express sur un bandeau bleu nuit (la version blanche du logo, `logo-goship-blanc.png`),
-le code-barres du numéro et le numéro en gros, le destinataire avec son code client, son adresse
-et son téléphone, le pays et la ville de destination en très gros caractères (c'est ce qu'on lit
-en triant les sacs), l'adresse de l'entrepôt de Miami, et en bas le contenu, le poids, le
-magasin et le numéro de suivi du vendeur.
+Goship Express, le code-barres du numéro et le numéro en gros, le destinataire avec son code
+client, son adresse et son téléphone, le pays et la ville de destination en très gros caractères
+(c'est ce qu'on lit en triant les sacs), l'adresse de l'entrepôt de Miami, et en bas le contenu,
+le poids, le magasin et le numéro de suivi du vendeur.
 
 Le papier ayant une taille fixe, un texte trop long est **coupé** au lieu de pousser le reste
 hors de l'étiquette : un nom sur deux lignes au plus, une adresse sur deux lignes, un contenu sur
 deux lignes. Le numéro, le code-barres et la destination ne sont jamais rognés — ce sont eux dont
 le transporteur a besoin.
+
+### Dessinée pour une imprimante thermique
+
+L'étiquette est faite pour une **thermique directe** (Y812BT ou semblable : 203 dpi, 180 mm/s,
+noir ou blanc, sans encre ni ruban). Trois choses en découlent, et il vaut mieux les connaître
+avant de modifier le dessin.
+
+- **Aucun gris, aucune couleur pâle.** Une thermique ne connaît que le noir et le blanc : tout
+  aplat clair serait remplacé par une trame de points, qui brouille les petits textes sans rien
+  économiser. Ce qui distingue un texte d'un autre, sur l'étiquette, c'est sa taille et sa
+  graisse — jamais sa couleur.
+- **Les aplats noirs restent petits.** À 180 mm/s, une grande surface noire ralentit la machine,
+  chauffe la tête d'impression et bave sur le papier. Seuls le service (AÉRIEN, MARITIME…) et le
+  code du pays sont en blanc sur noir : environ 4 cm² en tout, mais ce sont eux qu'on repère d'un
+  mètre en triant les sacs.
+- **Rien de plus fin qu'un point.** À 203 dpi, un point fait 0,125 mm : un filet de 0,6 pt
+  disparaît par endroits et un texte de 6 pt devient illisible. D'où le 8 pt minimum et les
+  filets d'au moins 1 pt.
+
+Le logo de l'étiquette est `assets/img/logo-goship-noir.png`, une version entièrement noire
+obtenue à partir de `logo-goship-blanc.png` (mêmes formes, couleur remplacée par du noir). Le
+logo en couleurs sortirait en pointillés. La facture, elle, part sur une imprimante ordinaire et
+garde le logo en couleurs.
+
+Le même dessin sort très bien d'une laser ou d'un jet d'encre : du noir sur du blanc convient
+partout.
 
 - **Le code-barres** est un **Code 128**, celui des étiquettes d'expédition dans le monde entier.
   N'importe quelle douchette de magasin le lit. Les chiffres y sont écrits deux par deux, ce qui
