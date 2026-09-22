@@ -485,6 +485,34 @@ facture payée dans le tableau de bord (bouton « Marquer payée »).
 l'option « PayPal account optional » activée. Avec un compte personnel, la page demande au client
 de se connecter ou de créer un compte.
 
+### Ce que porte la facture imprimée
+
+- **L'émetteur, en tête** : Goship Express LLC, Calle 25 de Febrero La Caleta, Santo Domingo Este
+  11500, son téléphone et son **RNC**. C'est l'établissement dominicain qui facture ; l'entrepôt de
+  Miami ne reçoit que les achats des clients, et reste sur l'étiquette d'expédition.
+- **Le numéro** : année, mois, puis quatre chiffres tirés au hasard — `2026-09-0417`. 10 000
+  numéros par mois, et le compteur repart à chaque mois. Le tirage est borné à 200 essais et lève
+  une erreur explicite plutôt que de tourner sans fin sur un mois saturé. Voir
+  `outils/supabase-numero-facture.sql`. Les factures déjà remises gardent leur ancien numéro
+  (`FAC-2026-0003`) : c'est celui que le client a sous les yeux.
+- **Une ligne par colis** : quantité, poids en livres, description, numéro du colis et total. Le
+  poids est celui recopié sur la ligne au moment de la facture ; pour les factures d'avant cette
+  recopie, celui du colis prend le relais.
+- **Les trois moyens de paiement**, uniquement sur une facture à payer (les rappeler sur une
+  facture réglée n'aiderait personne) : virement Banco BHD León, PayPal, et transfert Western
+  Union / Unitransfer / Ria. Ces coordonnées sont dans `assets/js/impression.js`, constante
+  `PAIEMENTS` — un seul endroit à changer.
+- **Une seule signature**, la nôtre : une facture n'a pas à être contresignée par le client pour
+  être due.
+- **Le pied de page** : « Merci pour votre confiance ! », dans la langue du client.
+
+L'orange du logo (`#ff6a03`) porte le dessin : le titre, le filet de l'en-tête, le bandeau du
+tableau, la balance et le pied de page. Il en existe une version assombrie (`#c74a00`) pour les
+petits textes, où l'orange vif manquerait de contraste — même teinte, lisible à 8 pt.
+
+Une facture d'un ou deux colis tient sur **une page**. Au-delà, elle passe sur une seconde page,
+ce qui est normal ; les moyens de paiement et la signature ne sont jamais coupés en deux.
+
 ## À compléter
 
 - **Sécurité** : les cinq réglages Supabase de la section « Sécurité » — le plus urgent étant le *Site URL*, encore réglé sur `http://localhost:3000`, et la confirmation des adresses e-mail.
@@ -493,6 +521,7 @@ de se connecter ou de créer un compte.
 - **Espace client** : suivre les étapes « Activer l'espace client » ci-dessus (Supabase, puis e-mails de réinitialisation).
 - **Notifications** : configurer l'envoi des e-mails (Brevo) et, si vous le souhaitez, WhatsApp automatique (voir « Prévenir les clients »). Puis exécuter `outils/supabase-bienvenue.sql` et ses deux réglages, pour les e-mails de bienvenue.
 - **Codes clients** : exécuter `outils/supabase-code-client.sql` pour le passage au format court `GSE-4323` (voir « Le format des codes clients »).
+- **Numéros de facture** : exécuter `outils/supabase-numero-facture.sql` pour le format `2026-09-0417`. Sans lui, les nouvelles factures continuent en `FAC-2026-0004`.
 - **Factures et étiquettes** : exécuter `outils/supabase-factures.sql`. Sans lui, le client ne verra pas ses factures dans « Mon compte », et les étiquettes s'imprimeront sans l'adresse du destinataire.
 - **Termes et conditions** : quatre valeurs n'ont jamais été renseignées dans le document d'origine — `[devise locale]`, `[pourcentage %]`, `[nombre de jours]` et `[montant maximal ou norme en vigueur]`.
 - **Instagram et TikTok** : les icônes du pied de page n'ont pas encore de lien (`href="#top"`).

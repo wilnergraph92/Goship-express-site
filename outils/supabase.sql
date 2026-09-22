@@ -780,17 +780,35 @@ create table if not exists public.facture_lignes (
 create index if not exists factures_client_idx on public.factures (client_id, cree_le desc);
 create index if not exists facture_lignes_facture_idx on public.facture_lignes (facture_id);
 
--- Numéro de facture : FAC-2026-0001
+-- Numéro de facture : année, mois, quatre chiffres tirés au hasard (2026-09-0417),
+-- jamais deux fois le même. 10 000 numéros par mois, et le compteur repart à
+-- chaque mois. Voir outils/supabase-numero-facture.sql.
 create or replace function public.preparer_facture()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_numero text;
+  v_essais int := 0;
 begin
   if coalesce(trim(new.numero), '') = '' then
-    new.numero := 'FAC-' || to_char(now(), 'YYYY') || '-'
-                  || lpad(nextval('public.numero_facture_seq')::text, 4, '0');
+    loop
+      v_numero := to_char(now(), 'YYYY-MM') || '-'
+                  || lpad(floor(random() * 10000)::int::text, 4, '0');
+      exit when not exists (select 1 from public.factures where numero = v_numero);
+      v_essais := v_essais + 1;
+      -- Sans cette limite, un mois déjà bien rempli ferait tourner la boucle
+      -- sans fin : la facture ne s'enregistrerait plus, sans rien dire.
+      if v_essais >= 200 then
+        raise exception 'Plus de numéro de facture libre pour %  : % numéros déjà pris sur 10 000.',
+          to_char(now(), 'YYYY-MM'),
+          (select count(*) from public.factures
+           where numero like to_char(now(), 'YYYY-MM') || '-%');
+      end if;
+    end loop;
+    new.numero := v_numero;
   end if;
   if new.statut = 'payee' and new.payee_le is null then
     new.payee_le := now();

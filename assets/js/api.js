@@ -510,7 +510,8 @@
         return sb().then(function (c) {
           var q = c.from('factures')
             .select('*, clients(code, nom_complet, telephone, email, adresse, region, ville, pays, langue), ' +
-                    'facture_lignes(id, colis_id, libelle, montant_usd, colis(numero))',
+                    'facture_lignes(id, colis_id, libelle, montant_usd, quantite, poids_lb, ' +
+                    'colis(numero, description, poids_lb))',
                     { count: 'exact' })
             .order('cree_le', { ascending: false })
             .range(page * parPage, page * parPage + parPage - 1);
@@ -1077,9 +1078,12 @@
         try { exigerAdmin(d); } catch (e) { return echec(e.code); }
         d.factures = d.factures || [];
         d.numeroFacture = (d.numeroFacture || 0) + 1;
+        // Même format que la base : année, mois, quatre chiffres au hasard
+        var mois = new Date();
         var f = Object.assign({
           id: 'fac-' + d.numeroFacture,
-          numero: 'FAC-' + new Date().getFullYear() + '-' + String(d.numeroFacture).padStart(4, '0'),
+          numero: mois.getFullYear() + '-' + String(mois.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(Math.floor(Math.random() * 10000)).padStart(4, '0'),
           statut: 'a_payer', note: '', lien_paiement: '', moyen: '', echeance_le: null,
           cree_le: maintenant(), payee_le: null,
           facture_lignes: (lignesFacture || []).map(function (l, i) {

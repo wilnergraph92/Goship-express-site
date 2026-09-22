@@ -28,6 +28,7 @@ RACINE = os.path.normpath(os.path.join(SP, '..', '..'))
 TRAVAIL = os.path.join(tempfile.gettempdir(), 'goship-essais-sql')
 SQL = sys.argv[1] if len(sys.argv) > 1 else os.path.join(RACINE, 'outils', 'supabase-bienvenue.sql')
 FACTURES = os.path.join(RACINE, 'outils', 'supabase-factures.sql')
+NUMEROS = os.path.join(RACINE, 'outils', 'supabase-numero-facture.sql')
 PSQL = pathlib.Path(pgserver.__file__).parent / 'pginstall' / 'bin' / 'psql'
 
 DOUBLURES = r"""
@@ -509,6 +510,44 @@ def main():
                        db.lancer("""select count(*)::text from pg_publication_tables
                                     where pubname = 'supabase_realtime';"""),
                        '2'))
+
+    print('\n6. Le numéro des nouvelles factures')
+    db.fichier(NUMEROS)
+    print("  supabase-numero-facture.sql s'installe sans erreur.")
+    db.lancer("""insert into public.factures (client_id, montant_usd) values ('%s', 10.00);""" % marie)
+    numero = db.lancer("""select numero from public.factures
+                          where client_id = '%s' and montant_usd = 10.00;""" % marie)
+    ok.append(verifier('le format est année-mois-quatre chiffres (%s)' % numero,
+                       db.lancer("""select (numero ~ ('^' || to_char(now(), 'YYYY-MM') || '-[0-9]{4}$'))::text
+                                    from public.factures where montant_usd = 10.00;"""),
+                       'true'))
+    # 300 factures d'un coup : aucun numéro ne doit sortir deux fois
+    db.lancer("""insert into public.factures (client_id, montant_usd)
+                 select '%s', 1.00 from generate_series(1, 300);""" % marie)
+    ok.append(verifier('300 factures, 300 numéros tous différents',
+                       db.lancer("""select count(distinct numero)::text from public.factures
+                                    where montant_usd = 1.00;"""),
+                       '300'))
+    ok.append(verifier('toutes au bon format',
+                       db.lancer("""select count(*)::text from public.factures
+                                    where montant_usd = 1.00
+                                      and numero !~ ('^' || to_char(now(), 'YYYY-MM') || '-[0-9]{4}$');"""),
+                       '0'))
+    # Un numéro donné à la main doit être respecté : c'est ainsi qu'on rejoue
+    # une facture perdue, ou qu'on reprend un numéro d'un autre système.
+    db.lancer("""insert into public.factures (numero, client_id, montant_usd)
+                 values ('2026-01-0001', '%s', 5.00);""" % marie)
+    ok.append(verifier('un numéro écrit à la main est conservé',
+                       db.lancer("select numero from public.factures where montant_usd = 5.00;"),
+                       '2026-01-0001'))
+    # Et les anciens numéros ne changent pas
+    db.lancer("""update public.factures set statut = 'payee'
+                  where numero = 'FAC-2026-0001';""")
+    ok.append(verifier('une facture déjà remise garde son ancien numéro',
+                       db.lancer("""select numero from public.factures
+                                    where numero = 'FAC-2026-0001';"""),
+                       'FAC-2026-0001'))
+    db.lancer("delete from public.factures where montant_usd in (1.00, 5.00, 10.00);")
 
     print('\n%d vérifications, %d réussies.' % (len(ok), sum(ok)))
     print('Aperçus : %s/courriel-bienvenue.html et courriel-adresse.html' % TRAVAIL)

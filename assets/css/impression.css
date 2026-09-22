@@ -13,6 +13,12 @@
    aplats à l'impression : sans lui, le bandeau bleu de l'étiquette et le
    tampon « Payée » sortiraient blancs.
    ========================================================================== */
+/* L'orange du logo, relevé sur le fichier : #ff6a03. Il y en a deux, de la
+   même teinte, et pour une raison de lisibilité — l'orange vif est éclatant
+   mais peu contrasté. Il sert donc aux aplats et aux grands caractères ; le
+   même orange assombri sert aux petits textes, où le vif se lirait mal. */
+:root{--or:#ff6a03;--or-fonce:#c74a00;--or-pale:#fff1e4;--encre:#061a3f;--gris:#4a5878}
+
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 
 html,body{margin:0;padding:0;background:#fff;color:#061a3f;
@@ -102,16 +108,17 @@ svg{display:block}
 /* --------------------------------------------------------------------------
    La facture — une page A4
    -------------------------------------------------------------------------- */
-.fa{width:210mm;min-height:297mm;padding:16mm 15mm 12mm;display:flex;flex-direction:column;
+.fa{width:210mm;min-height:297mm;padding:12mm 14mm 8mm;display:flex;flex-direction:column;
   page-break-after:always;break-after:page}
 .fa:last-child{page-break-after:auto;break-after:auto}
 
 .fa__tete{display:flex;align-items:flex-start;justify-content:space-between;gap:10mm;
-  padding-bottom:6mm;border-bottom:1.5pt solid #061a3f}
-.fa__logo{display:block;width:44mm;height:auto}
-.fa__emetteur{margin-top:3mm;white-space:pre-line;font-size:9pt;line-height:1.45;color:#4a5878}
+  padding-bottom:4.5mm;border-bottom:2.2pt solid var(--or)}
+.fa__logo{display:block;width:40mm;height:auto}
+.fa__emetteur{margin-top:2mm;white-space:pre-line;font-size:8.5pt;line-height:1.35;color:var(--gris)}
 .fa__titre{flex:none;text-align:right}
-.fa__titre h1{font-size:24pt;font-weight:900;letter-spacing:.02em;text-transform:uppercase}
+.fa__titre h1{font-size:24pt;font-weight:900;letter-spacing:.02em;text-transform:uppercase;
+  color:var(--or)}
 .fa__numero{display:block;font-size:12pt;font-weight:700;color:#4a5878;letter-spacing:.04em}
 .fa__dates{margin:3mm 0 0;display:grid;grid-template-columns:auto auto;gap:.6mm 3mm;
   justify-content:end;font-size:9pt}
@@ -119,22 +126,22 @@ svg{display:block}
 .fa__dates dd{margin:0;font-weight:700}
 .fa__etat{display:inline-block;margin-top:3mm;padding:1.4mm 3.5mm;border-radius:1.5mm;
   font-size:9.5pt;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
-.fa__etat--a_payer{background:#fdecd9;color:#8a3a00;border:1pt solid #f4600d}
+.fa__etat--a_payer{background:var(--or-pale);color:var(--or-fonce);border:1.2pt solid var(--or)}
 .fa__etat--payee{background:#dff3e4;color:#14562a;border:1pt solid #1d7a3c}
 .fa__etat--annulee{background:#eef0f5;color:#4a5878;border:1pt solid #8a93ac}
 
-.fa__client{margin-top:8mm}
+.fa__client{margin-top:6mm}
 .fa__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.14em;
-  text-transform:uppercase;color:#4a5878}
+  text-transform:uppercase;color:var(--or-fonce)}
 .fa__personne{display:block;margin-top:1mm;font-size:13pt;font-weight:800}
 .fa__code{font-weight:700;letter-spacing:.03em}
-.fa__client p{font-size:10.5pt;line-height:1.45}
+.fa__client p{font-size:10.5pt;line-height:1.35}
 
-.fa__lignes{margin-top:8mm;width:100%;border-collapse:collapse;font-size:10.5pt}
-.fa__lignes th,.fa__lignes td{padding:2.6mm 3mm;text-align:left;vertical-align:top}
-.fa__lignes thead th{background:#061a3f;color:#fff;font-size:8.5pt;font-weight:800;
+.fa__lignes{margin-top:6mm;width:100%;border-collapse:collapse;font-size:10.5pt}
+.fa__lignes th,.fa__lignes td{padding:2.2mm 3mm;text-align:left;vertical-align:top}
+.fa__lignes thead th{background:var(--or);color:#fff;font-size:8.5pt;font-weight:800;
   letter-spacing:.1em;text-transform:uppercase}
-.fa__lignes tbody tr{border-bottom:.6pt solid #e7edf9}
+.fa__lignes tbody tr{border-bottom:.8pt solid #f0d6c1}
 .fa__droite{text-align:right;white-space:nowrap}
 .fa__colis{color:#4a5878;letter-spacing:.03em;white-space:nowrap}
 .fa__lignes tfoot th{border-top:1.5pt solid #061a3f;font-size:11pt;font-weight:800}
@@ -144,34 +151,53 @@ svg{display:block}
 .fa__lignes .fa__colis{display:block;margin-top:.6mm;font-size:8.5pt}
 
 /* Les totaux, alignés à droite sous le tableau */
-.fa__totaux{margin-top:4mm;margin-left:auto;width:78mm;border-collapse:collapse;font-size:10.5pt}
-.fa__totaux th,.fa__totaux td{padding:1.8mm 3mm;text-align:left}
+.fa__totaux{margin-top:3mm;margin-left:auto;width:78mm;border-collapse:collapse;font-size:10.5pt}
+.fa__totaux th,.fa__totaux td{padding:1.4mm 3mm;text-align:left}
 .fa__totaux th{font-weight:600;color:#2d3850}
-.fa__totaux--grand th,.fa__totaux--grand td{border-top:1.2pt solid #061a3f;font-size:12.5pt;font-weight:900;color:#061a3f}
-.fa__totaux--balance th,.fa__totaux--balance td{background:#f5f7fb;font-size:12pt;font-weight:900;color:#b91c1c}
+.fa__totaux--grand th,.fa__totaux--grand td{border-top:1.6pt solid var(--or);font-size:12.5pt;
+  font-weight:900;color:var(--encre)}
+.fa__totaux--balance th,.fa__totaux--balance td{background:var(--or-pale);font-size:12pt;
+  font-weight:900;color:var(--or-fonce)}
 
-/* Les paraphes : le nôtre déjà signé, celui du client laissé vide */
-.fa__signatures{margin-top:10mm;display:flex;justify-content:space-between;gap:14mm;
+/* Notre paraphe, seul : une facture n'a pas à être contresignée pour être due */
+.fa__signatures{margin-top:5mm;display:flex;justify-content:flex-start;
   break-inside:avoid;page-break-inside:avoid}
-.fa__paraphe{flex:1;min-width:0;text-align:center}
-.fa__signature{display:block;margin:0 auto;width:auto;height:16mm;max-width:100%;object-fit:contain}
-.fa__paraphe-vide{display:block;height:16mm}
-.fa__paraphe-trait{display:block;margin-top:1mm;border-top:.8pt solid #061a3f}
+.fa__paraphe{flex:0 0 72mm;min-width:0;text-align:center}
+.fa__signature{display:block;margin:0 auto;width:auto;height:11mm;max-width:100%;object-fit:contain}
+.fa__paraphe-vide{display:block;height:11mm}
+.fa__paraphe-trait{display:block;margin-top:1mm;border-top:1pt solid var(--encre)}
 .fa__paraphe-titre{display:block;margin-top:1.5mm;font-size:9pt;font-weight:800;color:#061a3f}
 .fa__paraphe-sous{display:block;margin-top:.5mm;font-size:8.5pt;color:#4a5878}
 
-.fa__bas{margin-top:8mm;display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
+.fa__bas{margin-top:6mm;display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
 .fa__paiement{flex:1;min-width:0;font-size:10.5pt;line-height:1.5}
 .fa__paiement p{margin-top:1mm}
 .fa__lien{font-weight:700;word-break:break-all;color:#1746a8}
-.fa__note{margin-top:3mm;padding:2.5mm 3mm;background:#f5f7fb;border-left:2pt solid #f4600d;
+.fa__note{margin-top:3mm;padding:2.5mm 3mm;background:var(--or-pale);border-left:2.4pt solid var(--or);
   font-size:10pt}
-.fa__qr{flex:none;width:26mm;text-align:center}
-.fa__qr svg{width:26mm;height:26mm}
+.fa__qr{flex:none;width:22mm;text-align:center}
+.fa__qr svg{width:22mm;height:22mm}
 .fa__qr-texte{display:block;margin-top:1mm;font-size:7.5pt;color:#4a5878}
 
-.fa__pied{margin-top:auto;padding-top:5mm;border-top:.6pt solid #e7edf9;
-  white-space:pre-line;font-size:8pt;line-height:1.5;color:#4a5878;text-align:center}
+/* Les trois moyens de paiement, côte à côte sous le bloc « Paiement ».
+   Ne s'impriment que sur une facture à payer. */
+.fa__moyens{margin-top:5mm;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4mm;
+  break-inside:avoid;page-break-inside:avoid}
+.fa__moyen{padding:2.5mm 3mm;border:.8pt solid #f0d6c1;border-top:1.8pt solid var(--or);
+  border-radius:1.5mm}
+.fa__moyen-titre{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--or-fonce)}
+/* 9 pt : l'adresse PayPal fait 26 caractères et doit tenir sur une ligne dans
+   sa colonne. Plus grande, elle se coupait après « gmail.co ». */
+.fa__moyen-nom{display:block;margin-top:1.2mm;font-size:9pt;font-weight:800;line-height:1.3;
+  overflow-wrap:break-word}
+.fa__moyen-lignes{margin:1.8mm 0 0;display:grid;grid-template-columns:auto minmax(0,1fr);
+  gap:.5mm 2.5mm;font-size:8.5pt;line-height:1.35}
+.fa__moyen-lignes dt{color:var(--gris)}
+.fa__moyen-lignes dd{margin:0;font-weight:700;overflow-wrap:anywhere}
+
+.fa__pied{margin-top:auto;padding-top:3.5mm;border-top:1.4pt solid var(--or);
+  font-size:12pt;font-weight:800;line-height:1.4;color:var(--or-fonce);text-align:center}
 
 
 /* --------------------------------------------------------------------------

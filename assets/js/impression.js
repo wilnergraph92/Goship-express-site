@@ -32,13 +32,27 @@
   // outils/generateur/pages/mon-compte.main.html, dans
   // application-mobile/config.js et dans outils/supabase.sql (adresse_miami) :
   // les cinq doivent rester d'accord.
-  // Pied de facture : l'établissement dominicain, son téléphone et son RNC.
-  // Figure sur toute facture, quelle que soit la langue.
+  // L'émetteur de la facture : l'établissement dominicain, avec son RNC.
+  // C'est lui qui facture, et non l'entrepôt de Miami — celui-ci ne reçoit que
+  // les achats des clients, et reste sur l'étiquette d'expédition.
   var SANTO_DOMINGO = {
-    adresse: 'Calle 25 de Febrero La Caleta, Santo Domingo Este 11500',
+    nom: 'Goship Express LLC',
+    ligne1: 'Calle 25 de Febrero, La Caleta',
+    ligne2: 'Santo Domingo Este 11500',
     telephone: '809 317-6686',
-    rnc: '1-33-79976-6'
+    rnc: '133-79976-6'
   };
+
+  // Les moyens de paiement imprimés sur une facture à payer. Ce sont des
+  // coordonnées d'entreprise : elles ne se traduisent pas, seuls leurs
+  // libellés le sont. « Cuenta Ahorro » est le terme de la banque.
+  var PAIEMENTS = [
+    { cle: 'banque', nom: 'Banco BHD León RD',
+      lignes: [['nom', 'Wilner Delisnord'], ['compte', '39396350014'], ['typeCompte', 'Cuenta Ahorro']] },
+    { cle: 'paypal', nom: 'goshipexpressllc@gmail.com', lignes: [] },
+    { cle: 'transfert', nom: 'Western Union · Unitransfer · Ria',
+      lignes: [['nom', 'Immacula Delisnord'], ['telephone', '809 317-6686'], ['ville', 'Santo Domingo']] }
+  ];
 
   var MIAMI = {
     nom: 'Goship Express LLC',
@@ -80,6 +94,10 @@
       scanner: 'Scannez pour payer', transport: 'Transport', transportColis: 'Transport de colis',
       moyens: { paypal: 'PayPal', banque: 'Compte bancaire', azul: 'Azul',
                 moncash: 'MonCash', natcash: 'NatCash', especes: 'Espèces' },
+      moyensTitres: { banque: 'Virement bancaire', paypal: 'PayPal', transfert: 'Transfert d\'argent' },
+      champs: { nom: 'Nom', compte: 'N° de compte', typeCompte: 'Type de compte',
+                telephone: 'Téléphone', ville: 'Ville' },
+      merci: 'Merci pour votre confiance !',
       pays: { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' },
       pied: 'Montants en dollars des États-Unis. Document établi par Goship Express LLC.'
     },
@@ -99,6 +117,10 @@
       scanner: 'Scan to pay', transport: 'Shipping', transportColis: 'Package shipping',
       moyens: { paypal: 'PayPal', banque: 'Bank account', azul: 'Azul',
                 moncash: 'MonCash', natcash: 'NatCash', especes: 'Cash' },
+      moyensTitres: { banque: 'Bank transfer', paypal: 'PayPal', transfert: 'Money transfer' },
+      champs: { nom: 'Name', compte: 'Account number', typeCompte: 'Account type',
+                telephone: 'Phone', ville: 'City' },
+      merci: 'Thank you for your trust!',
       pays: { HT: 'Haiti', DO: 'Dominican Republic', US: 'United States' },
       pied: 'Amounts in US dollars. Document issued by Goship Express LLC.'
     },
@@ -118,6 +140,10 @@
       scanner: 'Escanee para pagar', transport: 'Transporte', transportColis: 'Transporte de paquetes',
       moyens: { paypal: 'PayPal', banque: 'Cuenta bancaria', azul: 'Azul',
                 moncash: 'MonCash', natcash: 'NatCash', especes: 'Efectivo' },
+      moyensTitres: { banque: 'Transferencia bancaria', paypal: 'PayPal', transfert: 'Transferencia de dinero' },
+      champs: { nom: 'Nombre', compte: 'N.º de cuenta', typeCompte: 'Tipo de cuenta',
+                telephone: 'Teléfono', ville: 'Ciudad' },
+      merci: '¡Gracias por su confianza!',
       pays: { HT: 'Haití', DO: 'República Dominicana', US: 'Estados Unidos' },
       pied: 'Importes en dólares estadounidenses. Documento emitido por Goship Express LLC.'
     },
@@ -137,6 +163,10 @@
       scanner: 'Eskane pou peye', transport: 'Transpò', transportColis: 'Transpò koli',
       moyens: { paypal: 'PayPal', banque: 'Kont labank', azul: 'Azul',
                 moncash: 'MonCash', natcash: 'NatCash', especes: 'Kach' },
+      moyensTitres: { banque: 'Vire labank', paypal: 'PayPal', transfert: 'Voye lajan' },
+      champs: { nom: 'Non', compte: 'Nimewo kont', typeCompte: 'Kalite kont',
+                telephone: 'Telefòn', ville: 'Vil' },
+      merci: 'Mèsi pou konfyans ou !',
       pays: { HT: 'Ayiti', DO: 'Repiblik Dominikèn', US: 'Etazini' },
       pied: 'Montan yo an dola ameriken. Dokiman Goship Express LLC te fè.'
     }
@@ -395,9 +425,8 @@
     var gauche = bloc(tete, 'div', 'fa__marque');
     logo(gauche, 'logo-goship.png', 'fa__logo', 360, 120);
     bloc(gauche, 'p', 'fa__emetteur',
-         MIAMI.nom + '\n' + MIAMI.ligne1 + ' ' + MIAMI.ligne2 + '\n' +
-         MIAMI.ville + ', ' + MIAMI.etat + ' ' + MIAMI.zip + '\n' + MIAMI.pays + '\n' +
-         'Tél. ' + MIAMI.telephone);
+         SANTO_DOMINGO.nom + '\n' + SANTO_DOMINGO.ligne1 + '\n' + SANTO_DOMINGO.ligne2 + '\n' +
+         'Tél. ' + SANTO_DOMINGO.telephone + '\nRNC ' + SANTO_DOMINGO.rnc);
 
     var droite = bloc(tete, 'div', 'fa__titre');
     bloc(droite, 'h1', null, T.titre);
@@ -443,7 +472,14 @@
     }
     if (lignes.length) {
       lignes.forEach(function (l) {
-        ligneDetail(l.quantite || 1, l.poids_lb, l.libelle || T.transport, numeroColis(l), l.montant_usd);
+        // Le poids facturé est recopié sur la ligne au moment de la facture.
+        // Les factures d'avant cette recopie n'en ont pas : on prend alors
+        // celui du colis, plutôt que d'imprimer un tiret.
+        var poids = l.poids_lb;
+        if (poids === null || poids === undefined || poids === '') {
+          poids = l.colis && typeof l.colis === 'object' ? l.colis.poids_lb : null;
+        }
+        ligneDetail(l.quantite || 1, poids, l.libelle || T.transport, numeroColis(l), l.montant_usd);
       });
     } else {
       // Facture d'un seul montant, sans détail : la note en tient lieu
@@ -495,7 +531,25 @@
 
     if (codeDessine) bas.appendChild(cote);
 
-    // La signature, puis la ligne laissée au client
+    // Les autres moyens de paiement. Seulement sur une facture à payer : les
+    // rappeler sur une facture déjà réglée n'aiderait personne.
+    if (fa.statut === 'a_payer') {
+      var moyens = bloc(page, 'section', 'fa__moyens');
+      PAIEMENTS.forEach(function (m) {
+        var carte = bloc(moyens, 'div', 'fa__moyen');
+        bloc(carte, 'span', 'fa__moyen-titre', T.moyensTitres[m.cle]);
+        bloc(carte, 'strong', 'fa__moyen-nom', m.nom);
+        if (!m.lignes.length) return;
+        var dl = bloc(carte, 'dl', 'fa__moyen-lignes');
+        m.lignes.forEach(function (ligne) {
+          bloc(dl, 'dt', null, T.champs[ligne[0]]);
+          bloc(dl, 'dd', null, ligne[1]);
+        });
+      });
+    }
+
+    // Notre signature. Celle du client a été retirée : une facture n'a pas à
+    // être contresignée pour être due.
     var paraphes = bloc(page, 'section', 'fa__signatures');
     var nous = bloc(paraphes, 'div', 'fa__paraphe');
     signature(nous, 'fa__signature');
@@ -503,16 +557,7 @@
     bloc(nous, 'span', 'fa__paraphe-titre', T.signature);
     bloc(nous, 'span', 'fa__paraphe-sous', T.pourGoship);
 
-    var eux = bloc(paraphes, 'div', 'fa__paraphe');
-    bloc(eux, 'span', 'fa__paraphe-vide');
-    bloc(eux, 'span', 'fa__paraphe-trait');
-    bloc(eux, 'span', 'fa__paraphe-titre', T.signature);
-    bloc(eux, 'span', 'fa__paraphe-sous', cl.nom_complet || '');
-
-    bloc(page, 'footer', 'fa__pied',
-         SANTO_DOMINGO.adresse + ' · Tél. ' + SANTO_DOMINGO.telephone + ' · RNC ' + SANTO_DOMINGO.rnc + '\n' +
-         MIAMI.nom + ' · ' + MIAMI.ligne1 + ' ' + MIAMI.ligne2 + ', ' + MIAMI.ville + ', ' +
-         MIAMI.etat + ' ' + MIAMI.zip + ' · Tél. ' + MIAMI.telephone + '\n' + T.pied);
+    bloc(page, 'footer', 'fa__pied', T.merci);
     return page;
   }
 
