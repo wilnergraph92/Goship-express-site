@@ -18,6 +18,8 @@
 <script src="assets/js/config.js" defer></script>
 <script src="assets/js/api.js" defer></script>
 <script src="assets/js/notifications.js" defer></script>
+<script src="assets/js/codes.js" defer></script>
+<script src="assets/js/impression.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
 </head>
 <body class="gs-admin-body">
@@ -135,6 +137,7 @@
       <div class="gs-admin-selection" data-selection hidden>
         <span data-selection-nombre></span>
         <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="statut-groupe">Changer le statut</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="etiquettes-groupe">[[ico:printer]]Imprimer les étiquettes</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-groupe">[[ico:trash]]Supprimer</button>
         <button type="button" class="gs-lien-bouton" data-action="deselectionner">Annuler la sélection</button>
       </div>
@@ -419,6 +422,7 @@
       </div>
       <div class="gs-dialogue__actions-colis" data-bloc-actions>
         <button type="button" class="gs-lien-bouton" data-action="prevenir-client" hidden>[[ico:message]]Prévenir le client</button>
+        <button type="button" class="gs-lien-bouton" data-action="etiquette-colis">[[ico:tag]]Imprimer l'étiquette d'expédition</button>
         <button type="button" class="gs-lien-bouton" data-action="modifier-colis">[[ico:pencil]]Modifier les informations du colis</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis">[[ico:trash]]Supprimer ce colis</button>
       </div>

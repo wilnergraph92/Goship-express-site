@@ -27,6 +27,7 @@ RACINE = os.path.normpath(os.path.join(SP, '..', '..'))
 # rien à faire dans les fichiers qui partent en ligne.
 TRAVAIL = os.path.join(tempfile.gettempdir(), 'goship-essais-sql')
 SQL = sys.argv[1] if len(sys.argv) > 1 else os.path.join(RACINE, 'outils', 'supabase-bienvenue.sql')
+FACTURES = os.path.join(RACINE, 'outils', 'supabase-factures.sql')
 PSQL = pathlib.Path(pgserver.__file__).parent / 'pginstall' / 'bin' / 'psql'
 
 DOUBLURES = r"""
@@ -56,7 +57,14 @@ drop schema if exists auth cascade;
 drop schema if exists vault cascade;
 drop schema if exists net cascade;
 drop table if exists public.notifications cascade;
+drop table if exists public.facture_lignes cascade;
+drop table if exists public.factures cascade;
+drop table if exists public.colis cascade;
 drop table if exists public.clients cascade;
+drop view if exists public.colis_details;
+-- La base d'essai est réutilisée d'un lancement à l'autre : on repart d'un
+-- Supabase tout neuf, sans publication de temps réel, comme chez lui au départ.
+drop publication if exists supabase_realtime;
 
 create schema auth;
 create schema vault;
@@ -88,10 +96,57 @@ create table public.clients (
   code text unique,
   nom_complet text not null default '',
   email text not null default '',
+  telephone text not null default '',
+  pays text not null default '',
+  region text not null default '',
+  ville text not null default '',
+  adresse text not null default '',
   langue text not null default 'fr',
   role text not null default 'client' check (role in ('client', 'admin')),
   cree_le timestamptz not null default now()
 );
+
+-- Colis et factures, réduits aux colonnes dont se servent la vue colis_details
+-- et la fonction mes_factures
+create table public.colis (
+  id uuid primary key default gen_random_uuid(),
+  numero text unique,
+  client_id uuid references public.clients (id) on delete set null,
+  description text not null default '',
+  statut text not null default 'recu',
+  cree_le timestamptz not null default now(),
+  maj_le timestamptz not null default now()
+);
+
+create table public.factures (
+  id uuid primary key default gen_random_uuid(),
+  numero text unique,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  montant_usd numeric(10, 2) not null default 0,
+  statut text not null default 'a_payer',
+  note text not null default '',
+  lien_paiement text not null default '',
+  moyen text not null default '',
+  echeance_le date,
+  cree_le timestamptz not null default now(),
+  payee_le timestamptz
+);
+
+create table public.facture_lignes (
+  id bigint generated always as identity primary key,
+  facture_id uuid not null references public.factures (id) on delete cascade,
+  colis_id uuid references public.colis (id) on delete set null,
+  libelle text not null default '',
+  montant_usd numeric(10, 2) not null default 0
+);
+
+-- Chez Supabase, auth.uid() est le compte connecté, lu dans le jeton envoyé
+-- par le navigateur. Ici on le pose à la main pour rejouer les deux cas :
+-- un client connecté, et personne (le SQL Editor).
+create function auth.uid() returns uuid language sql stable as $$
+  select case when coalesce(current_setting('request.jwt.claims', true), '') = '' then null
+              else (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid end
+$$;
 
 create table public.notifications (
   id bigint generated always as identity primary key,
@@ -343,6 +398,117 @@ def main():
                             where body -> 'to' -> 0 ->> 'email' = 'fr@exemple.com'
                             order by id limit 1 offset %d;""" % i)
         open(os.path.join(TRAVAIL, 'courriel-%s.html' % nom), 'w', encoding='utf-8').write(html)
+
+    print('\n5. Les factures du client, et son adresse sur l\'étiquette')
+    db.fichier(FACTURES)
+    print("  supabase-factures.sql s'installe sans erreur (publication de "
+          'temps réel absente : le script le dit et continue).')
+    marie = '11111111-1111-1111-1111-111111111111'
+    jean = '77777777-7777-7777-7777-777777777777'
+    db.lancer("""insert into public.clients (id, code, nom_complet, email)
+                 values ('%s', 'GSE-7777', 'Jean Baptiste', 'jean@exemple.com')
+                 on conflict (id) do nothing;""" % jean)
+    db.lancer("""update public.clients
+                    set adresse = '12 rue Capois', region = 'Ouest', ville = 'Port-au-Prince',
+                        pays = 'HT', telephone = '+509 3000 0000'
+                  where id = '%s';""" % marie)
+    db.lancer("""insert into public.colis (id, numero, client_id, description)
+                 values ('aaaaaaaa-0000-0000-0000-000000000001', 'GSE-1001-HT', '%s', 'Vêtements');""" % marie)
+
+    # La vue doit porter l'adresse : sans elle, l'étiquette n'a qu'un nom de ville
+    ok.append(verifier("colis_details donne l'adresse du client",
+                       db.lancer("""select adresse_client || ' / ' || region_client || ' / ' || ville_client
+                                    from public.colis_details where numero = 'GSE-1001-HT';"""),
+                       '12 rue Capois / Ouest / Port-au-Prince'))
+    # security_invoker : la vue ne doit ouvrir aucune porte que les règles de
+    # sécurité fermeraient
+    ok.append(verifier('colis_details ne contourne pas les règles (RLS)',
+                       db.lancer("""select array_to_string(reloptions, ',') from pg_class
+                                    where relname = 'colis_details';"""),
+                       'security_invoker=true'))
+
+    db.lancer("""insert into public.factures (id, numero, client_id, montant_usd, statut, lien_paiement, cree_le)
+                 values ('bbbbbbbb-0000-0000-0000-000000000001', 'FAC-2026-0001', '%s', 45.00,
+                         'a_payer', 'https://paypal.me/exemple', now() - interval '2 days'),
+                        ('bbbbbbbb-0000-0000-0000-000000000002', 'FAC-2026-0002', '%s', 12.50,
+                         'payee', '', now());""" % (marie, marie))
+    db.lancer("""insert into public.facture_lignes (facture_id, colis_id, libelle, montant_usd)
+                 values ('bbbbbbbb-0000-0000-0000-000000000001',
+                         'aaaaaaaa-0000-0000-0000-000000000001', 'Transport aérien 4,5 lb', 45.00);""")
+    db.lancer("""insert into public.factures (numero, client_id, montant_usd)
+                 values ('FAC-2026-0003', '%s', 99.00);""" % jean)
+
+    connecte = """set request.jwt.claims = '{"sub":"%s"}';"""
+    ok.append(verifier('mes_factures : les deux factures de Marie, la plus récente d\'abord',
+                       db.lancer(connecte % marie + """
+                                 select string_agg(f ->> 'numero', ', ')
+                                 from jsonb_array_elements(public.mes_factures()) f;"""),
+                       'FAC-2026-0002, FAC-2026-0001'))
+    ok.append(verifier('ni celle de Jean, pourtant dans la même table',
+                       db.lancer(connecte % marie + """
+                                 select count(*)::text from jsonb_array_elements(public.mes_factures()) f
+                                 where f ->> 'numero' = 'FAC-2026-0003';"""),
+                       '0'))
+    ok.append(verifier('le colis facturé est nommé dans la ligne',
+                       db.lancer(connecte % marie + """
+                                 select (f -> 'lignes' -> 0) ->> 'colis' || ' — ' ||
+                                        ((f -> 'lignes' -> 0) ->> 'libelle')
+                                 from jsonb_array_elements(public.mes_factures()) f
+                                 where f ->> 'numero' = 'FAC-2026-0001';"""),
+                       'GSE-1001-HT — Transport aérien 4,5 lb'))
+    ok.append(verifier('le lien de paiement et le montant suivent',
+                       db.lancer(connecte % marie + """
+                                 select (f ->> 'montant_usd') || ' ' || (f ->> 'lien_paiement')
+                                 from jsonb_array_elements(public.mes_factures()) f
+                                 where f ->> 'numero' = 'FAC-2026-0001';"""),
+                       '45.00 https://paypal.me/exemple'))
+    ok.append(verifier('un client sans facture reçoit une liste vide, pas une erreur',
+                       db.lancer("""set request.jwt.claims = '{"sub":"22222222-2222-2222-2222-222222222222"}';
+                                    select public.mes_factures()::text;"""),
+                       '[]'))
+    # Personne n'est connecté : c'est le cas du SQL Editor, et celui d'un visiteur
+    # dont le jeton a expiré
+    ok.append(verifier('sans compte connecté, aucune facture',
+                       db.lancer("""reset request.jwt.claims;
+                                    select public.mes_factures()::text;"""),
+                       '[]'))
+    ok.append(verifier('la fonction est fermée aux visiteurs (anon)',
+                       db.lancer("""select has_function_privilege('anon', 'public.mes_factures()', 'execute')::text;"""),
+                       'false'))
+    ok.append(verifier('et ouverte aux comptes connectés',
+                       db.lancer("""select has_function_privilege('authenticated', 'public.mes_factures()',
+                                                                    'execute')::text;"""),
+                       'true'))
+
+    # Deuxième barrière : les règles de sécurité de la table. Le filtre de la
+    # fonction et ces règles disent la même chose ; chacun doit tenir seul.
+    db.lancer("""alter table public.factures enable row level security;
+                 drop policy if exists factures_lecture on public.factures;
+                 create policy factures_lecture on public.factures
+                   for select to authenticated
+                   using (client_id = (select auth.uid()) or (select public.est_admin()));
+                 grant usage on schema public, auth to authenticated;
+                 grant select on public.factures to authenticated;""")
+    ok.append(verifier('les règles de la table tiennent aussi, seules',
+                       db.lancer_role('authenticator',
+                                      """set role authenticated;
+                                         set essai.admin = 'false';
+                                         set request.jwt.claims = '{"sub":"%s"}';
+                                         select string_agg(numero, ', ' order by numero)
+                                         from public.factures;""" % marie),
+                       'FAC-2026-0001, FAC-2026-0002'))
+
+    # Le vrai chemin du temps réel : avec la publication, les deux tables s'ajoutent
+    db.lancer('create publication supabase_realtime;')
+    db.fichier(FACTURES)
+    ok.append(verifier('avec la publication, les factures passent en direct',
+                       db.lancer("""select string_agg(tablename, ', ' order by tablename)
+                                    from pg_publication_tables where pubname = 'supabase_realtime';"""),
+                       'facture_lignes, factures'))
+    ok.append(verifier('relancer le script ne double rien',
+                       db.lancer("""select count(*)::text from pg_publication_tables
+                                    where pubname = 'supabase_realtime';"""),
+                       '2'))
 
     print('\n%d vérifications, %d réussies.' % (len(ok), sum(ok)))
     print('Aperçus : %s/courriel-bienvenue.html et courriel-adresse.html' % TRAVAIL)

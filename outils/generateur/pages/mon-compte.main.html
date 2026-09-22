@@ -49,6 +49,22 @@
           </div>
           <p class="gs-form__erreur" data-colis-erreur role="alert" hidden></p>
         </div>
+
+        <div class="gs-panneau gs-panneau--factures">
+          <div class="gs-panneau__tete">
+            <h2>Mes factures</h2>
+            <span class="gs-panneau__total" data-total-factures hidden></span>
+          </div>
+          <div class="gs-factures" data-liste-factures aria-busy="true">
+            <div class="gs-squelette" aria-hidden="true"></div>
+          </div>
+          <div class="gs-vide" data-vide="factures" hidden>
+            <span class="gs-vide__ico">[[ico:file-text]]</span>
+            <strong>Aucune facture pour l'instant</strong>
+            <p>Dès que nous chiffrons le transport d'un colis, la facture apparaît ici : vous pouvez la régler en ligne, l'imprimer ou l'enregistrer.</p>
+          </div>
+          <p class="gs-form__erreur" data-factures-erreur role="alert" hidden></p>
+        </div>
       </div>
 
       <aside class="gs-espace__cote">
@@ -175,6 +191,27 @@
         <summary>Historique <span data-champ="nb-etapes"></span></summary>
         <ol class="gs-chrono" data-champ="historique"></ol>
       </details>
+    </div>
+  </article>
+</template>
+
+<template data-modele="facture">
+  <article class="gs-facture">
+    <div class="gs-facture__tete">
+      <div class="gs-facture__id">
+        <span class="gs-facture__numero" data-champ="numero" translate="no"></span>
+        <p class="gs-facture__date" data-champ="date"></p>
+      </div>
+      <div class="gs-facture__cote">
+        <strong class="gs-facture__montant" data-champ="montant" translate="no"></strong>
+        <span class="gs-badge" data-champ="statut"></span>
+      </div>
+    </div>
+    <ul class="gs-facture__lignes" data-champ="lignes"></ul>
+    <p class="gs-facture__note" data-champ="note" translate="no" hidden></p>
+    <div class="gs-facture__actions">
+      <a class="gs-bouton gs-bouton--petit gs-bouton--plein" data-champ="payer" target="_blank" rel="noopener" hidden>[[ico:card]]Payer par carte</a>
+      <button type="button" class="gs-lien-bouton" data-champ="imprimer">[[ico:printer]]Imprimer ou enregistrer</button>
     </div>
   </article>
 </template>

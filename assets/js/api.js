@@ -145,6 +145,10 @@
     if (statut === 429 || code.indexOf('rate_limit') >= 0) return Erreur('trop-de-tentatives');
     if (code === 'otp_expired' || code === 'session_not_found' || code === 'session_expired') return Erreur('lien-invalide');
     if (code === '42501' || code === 'PGRST301' || statut === 401 || statut === 403) return Erreur('non-autorise');
+    // La fonction n'existe pas encore : le script SQL correspondant n'a pas été
+    // lancé dans Supabase. Ce n'est pas une panne — la partie du site qui s'en
+    // sert se contente de ne pas s'afficher.
+    if (code === 'PGRST202' || code === '42883') return Erreur('absent', e.message);
     if (e.name === 'TypeError' || msg.indexOf('failed to fetch') >= 0 || msg.indexOf('network') >= 0 ||
         msg.indexOf('load failed') >= 0) return Erreur('reseau');
     return Erreur('inconnu', e.message);
@@ -254,6 +258,16 @@
       });
     },
 
+    // Les factures du client, avec leurs lignes et le numéro du colis facturé.
+    // Passe par une fonction de la base (mes_factures) : elle sait joindre les
+    // colis aux lignes, et elle ne montre que les factures du compte connecté.
+    mesFactures: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return sb().then(function (c) { return c.rpc('mes_factures'); });
+      }).then(resultat).then(function (lignes) { return lignes || []; });
+    },
+
     // Mises à jour en direct. options.tout : tous les colis et clients (administrateur)
     surveiller: function (rappel, options) {
       options = options || {};
@@ -262,9 +276,14 @@
         var c = r[0], s = r[1];
         if (arrete || !s) return;
         var filtre = { event: '*', schema: 'public', table: 'colis' };
-        if (!options.tout) filtre.filter = 'client_id=eq.' + s.id;
+        var filtreFactures = { event: '*', schema: 'public', table: 'factures' };
+        if (!options.tout) {
+          filtre.filter = 'client_id=eq.' + s.id;
+          filtreFactures.filter = 'client_id=eq.' + s.id;
+        }
         canal = c.channel('gse-' + Math.random().toString(36).slice(2))
-          .on('postgres_changes', filtre, function () { rappel('colis'); });
+          .on('postgres_changes', filtre, function () { rappel('colis'); })
+          .on('postgres_changes', filtreFactures, function () { rappel('factures'); });
         if (options.tout) {
           canal.on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, function () { rappel('clients'); });
         }
@@ -402,7 +421,8 @@
         var parPage = o.parPage || 50, page = o.page || 0;
         return sb().then(function (c) {
           var q = c.from('factures')
-            .select('*, clients(code, nom_complet, telephone, langue), facture_lignes(id, colis_id, libelle, montant_usd)',
+            .select('*, clients(code, nom_complet, telephone, email, adresse, region, ville, pays, langue), ' +
+                    'facture_lignes(id, colis_id, libelle, montant_usd, colis(numero))',
                     { count: 'exact' })
             .order('cree_le', { ascending: false })
             .range(page * parPage, page * parPage + parPage - 1);
@@ -531,9 +551,11 @@
     return nouvellesDonnees();
   }
 
-  function ecrireDonnees(d) {
+  // « quoi » dit ce qui a changé, comme le fait le temps réel de Supabase :
+  // les pages ne rechargent ainsi que la liste concernée.
+  function ecrireDonnees(d, quoi) {
     stockage('ecrire', CLE_DONNEES, JSON.stringify(d));
-    prevenir('colis');
+    prevenir(quoi || 'colis');
   }
 
   function prevenir(quoi) {
@@ -587,6 +609,10 @@
     x.nom_client = cl ? cl.nom_complet : null;
     x.telephone_client = cl ? cl.telephone : null;
     x.email_client = cl ? cl.email : null;
+    // Adresse et région : l'étiquette d'expédition s'en sert (voir la vue
+    // colis_details dans outils/supabase.sql, partie 4)
+    x.adresse_client = cl ? cl.adresse : null;
+    x.region_client = cl ? cl.region : null;
     x.ville_client = cl ? cl.ville : null;
     x.pays_client = cl ? cl.pays : null;
     x.langue_client = cl ? cl.langue : null;
@@ -703,6 +729,23 @@
       var lignes = d.colis.filter(function (c) { return c.client_id === moi.id; })
         .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })
         .map(function (c) { return avecHistorique(d, c); });
+      return plusTard(lignes);
+    },
+
+    mesFactures: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var lignes = (d.factures || []).filter(function (f) { return f.client_id === moi.id; })
+        .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })
+        .map(function (f) {
+          return Object.assign({}, f, {
+            lignes: (f.facture_lignes || []).map(function (l) {
+              var colis = (d.colis || []).filter(function (c) { return c.id === l.colis_id; })[0];
+              return { libelle: l.libelle, montant_usd: l.montant_usd, colis: colis ? colis.numero : null };
+            })
+          });
+        });
       return plusTard(lignes);
     },
 
@@ -880,9 +923,18 @@
         if (o.client_id) lignes = lignes.filter(function (f) { return f.client_id === o.client_id; });
         lignes = lignes.map(function (f) {
           var client = (d.comptes || []).filter(function (c) { return c.id === f.client_id; })[0];
+          // Mêmes champs que la requête Supabase : la facture imprimée porte
+          // l'adresse du client et le numéro de chaque colis facturé.
           return Object.assign({}, f, {
-            clients: client ? { code: client.code, nom_complet: client.nom_complet,
-                                telephone: client.telephone, langue: client.langue } : null
+            clients: client ? {
+              code: client.code, nom_complet: client.nom_complet, telephone: client.telephone,
+              email: client.email, adresse: client.adresse, region: client.region,
+              ville: client.ville, pays: client.pays, langue: client.langue
+            } : null,
+            facture_lignes: (f.facture_lignes || []).map(function (l) {
+              var colis = (d.colis || []).filter(function (c) { return c.id === l.colis_id; })[0];
+              return Object.assign({}, l, { colis: colis ? { numero: colis.numero } : null });
+            })
           });
         });
         return plusTard({ lignes: lignes, total: lignes.length });
@@ -903,7 +955,7 @@
           })
         }, choisir(champs, CHAMPS_FACTURE));
         d.factures.push(f);
-        ecrireDonnees(d);
+        ecrireDonnees(d, 'factures');
         return plusTard(f);
       },
 
@@ -914,7 +966,7 @@
         if (!f) return echec('inconnu');
         Object.assign(f, choisir(champs, CHAMPS_FACTURE));
         if (f.statut === 'payee' && !f.payee_le) f.payee_le = maintenant();
-        ecrireDonnees(d);
+        ecrireDonnees(d, 'factures');
         return plusTard(f);
       },
 
@@ -922,7 +974,7 @@
         var d = lireDonnees();
         try { exigerAdmin(d); } catch (e) { return echec(e.code); }
         d.factures = (d.factures || []).filter(function (x) { return x.id !== id; });
-        ecrireDonnees(d);
+        ecrireDonnees(d, 'factures');
         return plusTard(true);
       },
 
@@ -1006,7 +1058,7 @@
     profil: function () { return Promise.resolve(null); },
     inscrire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
-    changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme,
+    changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme,
     surveiller: function () { return function () {}; },
     suivre: ferme, estAdmin: function () { return Promise.resolve(false); },
     admin: {}
@@ -1051,6 +1103,18 @@
   function nombre(n) {
     try { return new Intl.NumberFormat(LOCALES[LANGUE] || 'fr-FR', { maximumFractionDigits: 1 }).format(n); }
     catch (e) { return String(n); }
+  }
+
+  // Les montants sont en dollars des États-Unis, écrits selon la langue de la
+  // page : « 45,00 $US » en français, « $45.00 » en anglais.
+  function argent(n) {
+    var v = Number(n) || 0;
+    try {
+      return new Intl.NumberFormat(LOCALES[LANGUE] || 'fr-FR',
+                                   { style: 'currency', currency: 'USD' }).format(v);
+    } catch (e) {
+      return v.toFixed(2) + ' USD';
+    }
   }
 
   // Étape du parcours (1 à 5) ; un incident garde l'étape précédente
@@ -1128,7 +1192,7 @@
   api.langue = LANGUE;
   api.normaliserCode = normaliserCode;
   api.outils = {
-    texte: texte, date: date, nombre: nombre, etapeDe: etapeDe,
+    texte: texte, date: date, nombre: nombre, argent: argent, etapeDe: etapeDe,
     remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier
   };
   window.GoshipAPI = api;

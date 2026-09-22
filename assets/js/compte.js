@@ -592,6 +592,112 @@
       });
     };
 
+    /* ---- Mes factures ------------------------------------------------------
+       Le tableau de bord les crée ; le client les lit, les règle et les
+       imprime. Une facture marquée payée change d'état ici sans que la page
+       soit rechargée (voir API.surveiller). */
+    var listeFactures = $('[data-liste-factures]');
+    var modeleFacture = $('template[data-modele="facture"]');
+    var factures = [];
+
+    var carteFacture = function (f) {
+      var fragment = document.importNode(modeleFacture.content, true);
+      var article = fragment.querySelector('.gs-facture');
+      article.setAttribute('data-id', f.id);
+      champ(article, 'numero').textContent = f.numero || '';
+
+      var dates = [t('facture-etablie', { date: O.date(f.cree_le) })];
+      if (f.statut === 'a_payer' && f.echeance_le) {
+        dates.push(t('facture-echeance', { date: O.date(f.echeance_le) }));
+      } else if (f.statut === 'payee' && f.payee_le) {
+        dates.push(t('facture-payee-le', { date: O.date(f.payee_le) }));
+      }
+      champ(article, 'date').textContent = dates.join(' · ');
+      champ(article, 'montant').textContent = O.argent(f.montant_usd);
+
+      var badge = champ(article, 'statut');
+      badge.textContent = t('facture-' + f.statut);
+      badge.className = 'gs-badge gs-badge--facture-' + f.statut;
+
+      var lignes = champ(article, 'lignes');
+      (f.lignes || []).forEach(function (l) {
+        var li = document.createElement('li');
+        var texte = document.createElement('span');
+        texte.textContent = l.libelle || t('facture-transport');
+        li.appendChild(texte);
+        if (l.colis) {
+          var numero = document.createElement('span');
+          numero.className = 'gs-facture__colis';
+          numero.setAttribute('translate', 'no');
+          numero.textContent = t('facture-colis', { numero: l.colis });
+          li.appendChild(numero);
+        }
+        var montant = document.createElement('span');
+        montant.className = 'gs-facture__ligne-montant';
+        montant.textContent = O.argent(l.montant_usd);
+        li.appendChild(montant);
+        lignes.appendChild(li);
+      });
+      lignes.hidden = !(f.lignes || []).length;
+
+      // « Payée par PayPal » vaut mieux, sur une facture réglée, que la note
+      // de relance qui l'accompagnait.
+      var note = champ(article, 'note');
+      var moyen = f.statut === 'payee' && f.moyen ? t('facture-moyen-' + f.moyen) : '';
+      if (moyen || f.note) {
+        note.textContent = moyen || f.note;
+        note.hidden = false;
+      }
+
+      var payer = champ(article, 'payer');
+      // Seules les adresses web deviennent un lien. Un « javascript: » glissé
+      // dans le champ du tableau de bord ne doit pas s'exécuter ici.
+      if (f.statut === 'a_payer' && /^https?:\/\//i.test(f.lien_paiement || '')) {
+        payer.href = f.lien_paiement;
+        payer.hidden = false;
+      }
+      champ(article, 'imprimer').addEventListener('click', function () {
+        if (!window.GoshipImpression) return;
+        window.GoshipImpression.imprimer(
+          [window.GoshipImpression.facture(f, profil, { langue: API.langue })],
+          { papier: 'A4', langue: API.langue, titre: (f.numero || '') + ' — Goship Express' }
+        ).catch(function () { /* la fenêtre d'impression a été refusée */ });
+      });
+      return article;
+    };
+
+    var afficherFactures = function () {
+      listeFactures.textContent = '';
+      listeFactures.removeAttribute('aria-busy');
+      factures.forEach(function (f) { listeFactures.appendChild(carteFacture(f)); });
+      $('[data-vide="factures"]').hidden = factures.length > 0;
+      var aPayer = factures.filter(function (f) { return f.statut === 'a_payer'; }).length;
+      var total = $('[data-total-factures]');
+      total.textContent = aPayer ? t('factures-total', { n: aPayer }) : '';
+      total.hidden = !aPayer;
+    };
+
+    var chargerFactures = function () {
+      return API.mesFactures().then(function (lignes) {
+        factures = lignes || [];
+        $('[data-factures-erreur]').hidden = true;
+        afficherFactures();
+      }).catch(function (err) {
+        if (err.code === 'non-autorise') return;
+        // « absent » : outils/supabase-factures.sql n'a pas encore été lancé.
+        // Le panneau disparaît alors, plutôt que d'annoncer une panne au client.
+        if (err.code === 'absent') {
+          $('.gs-panneau--factures').hidden = true;
+          return;
+        }
+        listeFactures.textContent = '';
+        listeFactures.removeAttribute('aria-busy');
+        var zone = $('[data-factures-erreur]');
+        zone.textContent = t('erreur-' + err.code) || t('erreur-inconnu');
+        zone.hidden = false;
+      });
+    };
+
     // Onglets « En cours » / « Livrés » (flèches du clavier comprises)
     var onglets = $$('[data-onglet]');
     var choisirOnglet = function (bouton) {
@@ -698,11 +804,14 @@
         history.replaceState(null, '', location.pathname);
       }
       chargerColis();
+      chargerFactures();
       var direct = $('[data-direct]');
       var prevu = null;
-      API.surveiller(function () {
+      API.surveiller(function (quoi) {
         clearTimeout(prevu);
-        prevu = setTimeout(chargerColis, 250);
+        prevu = setTimeout(function () {
+          if (quoi === 'factures') chargerFactures(); else chargerColis();
+        }, 250);
       }, { etat: function (actif) { direct.hidden = !actif; } });
     }).catch(function (err) {
       if (err.code === 'non-autorise') { location.replace('connexion.html?retour=mon-compte.html'); return; }

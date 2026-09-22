@@ -18,6 +18,8 @@
 <script src="assets/js/config.js" defer></script>
 <script src="assets/js/api.js" defer></script>
 <script src="assets/js/notifications.js" defer></script>
+<script src="assets/js/codes.js" defer></script>
+<script src="assets/js/impression.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
 </head>
 <body class="gs-admin-body">
@@ -135,6 +137,7 @@
       <div class="gs-admin-selection" data-selection hidden>
         <span data-selection-nombre></span>
         <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="statut-groupe">Changer le statut</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="etiquettes-groupe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Imprimer les étiquettes</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-groupe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer</button>
         <button type="button" class="gs-lien-bouton" data-action="deselectionner">Annuler la sélection</button>
       </div>
@@ -419,6 +422,7 @@
       </div>
       <div class="gs-dialogue__actions-colis" data-bloc-actions>
         <button type="button" class="gs-lien-bouton" data-action="prevenir-client" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg>Prévenir le client</button>
+        <button type="button" class="gs-lien-bouton" data-action="etiquette-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7" cy="7" r="1.2"/></svg>Imprimer l'étiquette d'expédition</button>
         <button type="button" class="gs-lien-bouton" data-action="modifier-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Modifier les informations du colis</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer ce colis</button>
       </div>

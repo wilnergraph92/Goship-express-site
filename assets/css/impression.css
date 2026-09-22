@@ -1,0 +1,131 @@
+/* ==========================================================================
+   Goship Express — étiquettes d'expédition et factures
+   ==========================================================================
+   Cette feuille ne sert qu'aux documents imprimés. Elle est chargée dans un
+   cadre à part par assets/js/impression.js, jamais par les pages du site :
+   elle n'alourdit donc aucune visite.
+
+   Polices du système, volontairement : un document qui part à l'imprimante ne
+   doit pas attendre le téléchargement d'une police, et une étiquette se lit
+   mieux dans un caractère ordinaire et large.
+
+   « print-color-adjust: exact » demande au navigateur de ne pas effacer les
+   aplats à l'impression : sans lui, le bandeau bleu de l'étiquette et le
+   tampon « Payée » sortiraient blancs.
+   ========================================================================== */
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+html,body{margin:0;padding:0;background:#fff;color:#061a3f;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  font-size:11pt;line-height:1.4}
+p,h1,h2,h3{margin:0}
+svg{display:block}
+
+
+/* --------------------------------------------------------------------------
+   L'étiquette d'expédition — 4 × 6 pouces
+   -------------------------------------------------------------------------- */
+.et{width:4in;height:6in;padding:4mm;display:flex;flex-direction:column;
+  border:1px solid #061a3f;overflow:hidden;page-break-after:always;break-after:page}
+.et:last-child{page-break-after:auto;break-after:auto}
+
+.et__tete{display:flex;align-items:center;justify-content:space-between;gap:3mm;
+  padding:2mm 3mm;background:#061a3f;color:#fff;border-radius:2mm}
+.et__nom{display:block;font-size:13pt;font-weight:800;letter-spacing:.04em;line-height:1.1}
+.et__sous{display:block;font-size:6.5pt;opacity:.82;letter-spacing:.02em}
+.et__service{flex:none;padding:1mm 2.5mm;border:1.2pt solid #fff;border-radius:1.5mm;
+  font-size:8.5pt;font-weight:800;letter-spacing:.08em}
+
+.et__bande{margin-top:3mm;text-align:center}
+.et__bande svg{width:100%;height:16mm}
+.et__numero{display:block;margin-top:.8mm;font-size:17pt;font-weight:800;letter-spacing:.06em}
+
+.et__dest{margin-top:3mm;padding-top:3mm;border-top:1pt solid #061a3f;
+  display:flex;align-items:flex-start;gap:3mm}
+.et__qui{flex:1;min-width:0}
+.et__libelle{display:block;font-size:6.5pt;font-weight:800;letter-spacing:.14em;
+  text-transform:uppercase;color:#4a5878}
+.et__personne{display:block;margin-top:.6mm;font-size:13pt;font-weight:800;line-height:1.2}
+.et__adresse{font-size:10pt;line-height:1.35}
+.et__tel{margin-top:.6mm;font-size:10pt;font-weight:700}
+.et__qr{flex:none;width:23mm;text-align:center}
+.et__qr svg{width:23mm;height:23mm}
+.et__qr-texte{display:block;margin-top:.5mm;font-size:6pt;color:#4a5878;letter-spacing:.02em}
+
+.et__vers{margin-top:3mm;padding:2mm 3mm;background:#e7edf9;border-radius:2mm;
+  display:flex;align-items:baseline;gap:3mm}
+.et__pays{font-size:26pt;font-weight:900;line-height:1;letter-spacing:-.01em}
+.et__ville{font-size:12pt;font-weight:800;letter-spacing:.03em;line-height:1.1;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.et__exp{margin-top:3mm}
+.et__exp .et__adresse{font-size:8pt;line-height:1.3}
+
+.et__pied{margin-top:auto;padding-top:2.5mm;border-top:1pt dashed #8a93ac}
+.et__desc{font-size:10.5pt;font-weight:700;line-height:1.3}
+.et__meta{font-size:8.5pt;color:#4a5878;line-height:1.35}
+
+
+/* --------------------------------------------------------------------------
+   La facture — une page A4
+   -------------------------------------------------------------------------- */
+.fa{width:210mm;min-height:297mm;padding:16mm 15mm 12mm;display:flex;flex-direction:column;
+  page-break-after:always;break-after:page}
+.fa:last-child{page-break-after:auto;break-after:auto}
+
+.fa__tete{display:flex;align-items:flex-start;justify-content:space-between;gap:10mm;
+  padding-bottom:6mm;border-bottom:1.5pt solid #061a3f}
+.fa__logo{display:block;width:44mm;height:auto}
+.fa__emetteur{margin-top:3mm;white-space:pre-line;font-size:9pt;line-height:1.45;color:#4a5878}
+.fa__titre{flex:none;text-align:right}
+.fa__titre h1{font-size:24pt;font-weight:900;letter-spacing:.02em;text-transform:uppercase}
+.fa__numero{display:block;font-size:12pt;font-weight:700;color:#4a5878;letter-spacing:.04em}
+.fa__dates{margin:3mm 0 0;display:grid;grid-template-columns:auto auto;gap:.6mm 3mm;
+  justify-content:end;font-size:9pt}
+.fa__dates dt{color:#4a5878}
+.fa__dates dd{margin:0;font-weight:700}
+.fa__etat{display:inline-block;margin-top:3mm;padding:1.4mm 3.5mm;border-radius:1.5mm;
+  font-size:9.5pt;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.fa__etat--a_payer{background:#fdecd9;color:#8a3a00;border:1pt solid #f4600d}
+.fa__etat--payee{background:#dff3e4;color:#14562a;border:1pt solid #1d7a3c}
+.fa__etat--annulee{background:#eef0f5;color:#4a5878;border:1pt solid #8a93ac}
+
+.fa__client{margin-top:8mm}
+.fa__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.14em;
+  text-transform:uppercase;color:#4a5878}
+.fa__personne{display:block;margin-top:1mm;font-size:13pt;font-weight:800}
+.fa__code{font-weight:700;letter-spacing:.03em}
+.fa__client p{font-size:10.5pt;line-height:1.45}
+
+.fa__lignes{margin-top:8mm;width:100%;border-collapse:collapse;font-size:10.5pt}
+.fa__lignes th,.fa__lignes td{padding:2.6mm 3mm;text-align:left;vertical-align:top}
+.fa__lignes thead th{background:#061a3f;color:#fff;font-size:8.5pt;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase}
+.fa__lignes tbody tr{border-bottom:.6pt solid #e7edf9}
+.fa__droite{text-align:right;white-space:nowrap}
+.fa__colis{color:#4a5878;letter-spacing:.03em;white-space:nowrap}
+.fa__lignes tfoot th{border-top:1.5pt solid #061a3f;font-size:11pt;font-weight:800}
+.fa__lignes tfoot .fa__total{border-top:1.5pt solid #061a3f;font-size:14pt;font-weight:900}
+
+.fa__bas{margin-top:8mm;display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
+.fa__paiement{flex:1;min-width:0;font-size:10.5pt;line-height:1.5}
+.fa__paiement p{margin-top:1mm}
+.fa__lien{font-weight:700;word-break:break-all;color:#1746a8}
+.fa__note{margin-top:3mm;padding:2.5mm 3mm;background:#f5f7fb;border-left:2pt solid #f4600d;
+  font-size:10pt}
+.fa__qr{flex:none;width:26mm;text-align:center}
+.fa__qr svg{width:26mm;height:26mm}
+.fa__qr-texte{display:block;margin-top:1mm;font-size:7.5pt;color:#4a5878}
+
+.fa__pied{margin-top:auto;padding-top:5mm;border-top:.6pt solid #e7edf9;
+  white-space:pre-line;font-size:8pt;line-height:1.5;color:#4a5878;text-align:center}
+
+
+/* --------------------------------------------------------------------------
+   À l'écran, le document se voit centré sur fond gris : c'est l'aperçu
+   affiché dans le tableau de bord avant d'imprimer.
+   -------------------------------------------------------------------------- */
+@media screen{
+  body{padding:12px;background:#e7edf9}
+  .et,.fa{margin:0 auto 12px;background:#fff;box-shadow:0 10px 30px -18px rgba(6,26,63,.6)}
+}

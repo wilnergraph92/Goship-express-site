@@ -146,6 +146,10 @@ ICONES = {
     'x': '<path d="M18 6 6 18M6 6l12 12"/>',
     'pencil': '<path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
     'trash': '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    'printer': '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+    'tag': '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7" cy="7" r="1.2"/>',
+    'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>',
+    'card': '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
 }
 
 
@@ -1230,7 +1234,10 @@ def build_compte():
         main = poser_icones(main.replace('[[textes]]', textes_compte()))
         if '[[' in main:
             fail(f'{out}: repère non remplacé')
-        head = build_head(title, desc, None, False, False, scripts=('api', 'compte'), noindex=noindex)
+        # codes.js et impression.js ne servent qu'à « Mon compte » (factures
+        # imprimables) : les autres pages de l'espace client s'en passent.
+        scripts = ('api', 'codes', 'impression', 'compte') if out == 'mon-compte.html' else ('api', 'compte')
+        head = build_head(title, desc, None, False, False, scripts=scripts, noindex=noindex)
         with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
             f.write(head + body[:s] + main + body[e:])
 

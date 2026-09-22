@@ -167,6 +167,7 @@
         chargerStatistiques();
         chargerColis(true);
         if (quoi === 'clients' || etat.vue === 'clients') chargerClients();
+        if (quoi === 'factures' || etat.vue === 'factures') chargerFactures();
       }, 350);
     }, { tout: true, etat: function (actif) { $('[data-direct]').hidden = !actif; } });
   }
@@ -214,6 +215,52 @@
 
   function badge(statut) {
     return el('span', 'gs-badge gs-badge--' + statut, STATUTS[statut] || statut);
+  }
+
+  /* ---- Étiquettes et factures imprimées ----------------------------------
+     assets/js/impression.js dessine le document, code-barres et QR code
+     compris, puis l'envoie à l'imprimante dans un cadre à part. La fenêtre
+     d'impression du navigateur sert d'aperçu : on n'en ajoute pas un second. */
+  var IMP = window.GoshipImpression;
+
+  function imprimer(noeuds, options) {
+    if (!IMP) {
+      toast("L'impression demande le fichier assets/js/impression.js.", true);
+      return Promise.resolve(false);
+    }
+    return IMP.imprimer(noeuds, options).catch(function () {
+      toast("L'impression n'a pas pu s'ouvrir. Réessayez.", true);
+      return false;
+    });
+  }
+
+  // L'étiquette d'expédition : 4 × 6 pouces, une page par colis
+  function imprimerEtiquettes(liste) {
+    if (!IMP || !liste.length) return;
+    var noeuds = liste.map(function (colis) { return IMP.etiquette(colis); });
+    imprimer(noeuds, {
+      papier: '4in 6in',
+      titre: liste.length === 1 ? 'Étiquette ' + liste[0].numero
+                                : liste.length + ' étiquettes Goship Express'
+    }).then(function (fait) {
+      if (fait && liste.length > 1) toast(liste.length + ' étiquettes envoyées à l\'imprimante.');
+    });
+  }
+
+  function imprimerFacture(facture) {
+    if (!IMP) return;
+    var client = facture.clients || {};
+    imprimer([IMP.facture(facture, client)], {
+      papier: 'A4', langue: client.langue || 'fr', titre: 'Facture ' + (facture.numero || '')
+    });
+  }
+
+  function boutonEtiquette(colis, classe) {
+    var b = el('button', classe, 'Étiquette');
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Imprimer l\'étiquette du colis ' + colis.numero);
+    b.addEventListener('click', function () { imprimerEtiquettes([colis]); });
+    return b;
   }
 
   function afficherColis(nouveaux) {
@@ -276,6 +323,7 @@
       bouton.setAttribute('data-maj', colis.id);
       bouton.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
       tdActions.appendChild(bouton);
+      tdActions.appendChild(boutonEtiquette(colis, 'gs-bouton gs-bouton--petit gs-bouton--contour'));
       tr.appendChild(tdActions);
 
       corpsColis.appendChild(tr);
@@ -384,6 +432,12 @@
   $('[data-action="deselectionner"]').addEventListener('click', function () {
     etat.selection = [];
     afficherColis();
+  });
+  // Toutes les étiquettes d'un coup : c'est ce qu'on veut après avoir
+  // enregistré l'arrivée d'un lot.
+  $('[data-action="etiquettes-groupe"]').addEventListener('click', function () {
+    var ids = etat.selection;
+    imprimerEtiquettes(etat.colis.lignes.filter(function (l) { return ids.indexOf(l.id) >= 0; }));
   });
   /* Supprimer les colis cochés. Irréversible : la base emporte aussi leur
      historique. On nomme donc ce qu'on va détruire, jusqu'à trois numéros. */
@@ -609,6 +663,12 @@
         });
         tdActions.appendChild(payee);
       }
+      var imprimerBouton = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Imprimer');
+      imprimerBouton.type = 'button';
+      imprimerBouton.setAttribute('aria-label', 'Imprimer la facture ' + facture.numero);
+      imprimerBouton.addEventListener('click', function () { imprimerFacture(facture); });
+      tdActions.appendChild(imprimerBouton);
+
       var modifier = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Modifier');
       modifier.type = 'button';
       modifier.addEventListener('click', function () { ouvrirFacture(facture); });
@@ -802,6 +862,9 @@
       b.tabIndex = actif ? 0 : -1;
     });
     $$('[data-vue]').forEach(function (v) { v.hidden = v.getAttribute('data-vue') !== vue; });
+    // Les factures ne se rechargent qu'à leur propre changement : en ouvrant
+    // l'onglet, on s'assure de ne pas regarder une liste d'il y a une heure.
+    if (vue === 'factures') chargerFactures();
   }
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
@@ -1087,6 +1150,14 @@
     if (!colis || EVENEMENTS.indexOf(colis.statut) < 0) return;
     dlgStatut.close();
     notifier([{ colis: colis, client: clientDe(colis) }], colis.statut);
+  });
+
+  $('[data-action="etiquette-colis"]', dlgStatut).addEventListener('click', function () {
+    var colis = cibleStatut.colis;
+    // La fenêtre d'impression s'ouvre par-dessus le dialogue : on le ferme
+    // d'abord, sinon l'aperçu ne montre rien.
+    dlgStatut.close();
+    if (colis) imprimerEtiquettes([colis]);
   });
 
   $('[data-action="modifier-colis"]', dlgStatut).addEventListener('click', function () {

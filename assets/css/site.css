@@ -389,6 +389,7 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-espace__wrap>.gs-demo{margin-bottom:14px}
 .gs-espace__grille{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start}
 .gs-espace__cote{display:grid;gap:20px;min-width:0}
+.gs-espace__principal{display:grid;gap:24px;min-width:0;align-content:start}
 .gs-panneau{min-width:0;padding:clamp(20px,2.6vw,30px);border:1px solid #e3e8f2;border-radius:22px;background:#fff;box-shadow:0 40px 70px -56px rgba(6,26,63,.5)}
 .gs-panneau__tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 12px}
 .gs-panneau__tete h2{font-size:21px;font-weight:800;line-height:1.2}
@@ -502,6 +503,38 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-vide__ico{display:grid;place-items:center;width:56px;height:56px;margin:0 auto 14px;border-radius:16px;background:rgba(244,96,13,.1);color:var(--accent)}
 .gs-vide strong{display:block;font-size:17px;color:var(--ink)}
 .gs-vide p{max-width:470px;margin:6px auto 0;font-size:15px}
+
+/* Mes factures (espace client) : mêmes cartes que les colis, en plus compact.
+   Le document imprimé, lui, a sa propre feuille : assets/css/impression.css. */
+.gs-panneau__total{padding:5px 12px;border-radius:999px;background:rgba(244,96,13,.12);
+  color:#c4500b;font-size:13px;font-weight:800;letter-spacing:.01em}
+.gs-factures{display:grid;gap:14px;margin-top:18px;min-width:0}
+.gs-facture{padding:18px 20px;border:1px solid #e3e8f2;border-radius:18px;background:#fff;
+  transition:border-color .25s ease,box-shadow .3s ease}
+.gs-facture:hover{border-color:#cfd8e8;box-shadow:0 26px 44px -34px rgba(6,26,63,.5)}
+.gs-facture__tete{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:10px 14px}
+.gs-facture__id{min-width:0}
+.gs-facture__numero{font-family:'IBM Plex Mono',monospace;font-size:14.5px;font-weight:600;
+  letter-spacing:.04em;color:var(--ink)}
+.gs-facture__date{margin-top:3px;font-size:13.5px;color:#6b7690}
+.gs-facture__cote{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.gs-facture__montant{font-size:21px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.gs-facture__lignes{margin:14px 0 0;padding:14px 0 0;border-top:1px solid #eef2f9;list-style:none;
+  display:grid;gap:7px;font-size:14.5px;color:#4a5878}
+.gs-facture__lignes li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.gs-facture__colis{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6b7690}
+.gs-facture__ligne-montant{margin-left:auto;font-weight:700;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.gs-facture__note{margin-top:14px;padding:11px 14px;border:1px solid #e3e8f2;border-radius:12px;
+  background:var(--cream);font-size:14.5px;line-height:1.5;color:#4a5878}
+.gs-facture__actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:16px}
+.gs-facture__actions .gs-bouton{min-height:42px}
+
+/* Le cadre qui sert à imprimer (assets/js/impression.js) : il doit être
+   affiché pour que le navigateur calcule la mise en page, mais hors de l'écran
+   pour que personne ne le voie. */
+.gs-cadre-impression{position:fixed;left:-10000px;top:0;width:210mm;height:297mm;
+  border:0;opacity:0;pointer-events:none}
 
 /* Suivi de colis de l'accueil */
 .gs-suivi__tete{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}

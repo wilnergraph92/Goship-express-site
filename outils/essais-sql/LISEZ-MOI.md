@@ -15,6 +15,13 @@ pas deux fois, un client connecté ne peut pas les déclencher, et un envoi qui
 échoue n'empêche pas la création du compte. Il écrit aussi les deux e-mails en
 HTML pour qu'on puisse les ouvrir dans un navigateur.
 
+Il installe ensuite `outils/supabase-factures.sql` et contrôle les deux points
+qui comptent : la vue `colis_details` porte bien l'adresse du client (sans elle,
+l'étiquette d'expédition n'aurait qu'un nom de ville), et `mes_factures()` ne
+montre à chacun que ses propres factures. Ce dernier point est vérifié deux
+fois, une fois par barrière : le filtre écrit dans la fonction, puis les règles
+de sécurité de la table, chacun devant tenir seul.
+
 Pour essayer un autre script :
 
 ```bash
