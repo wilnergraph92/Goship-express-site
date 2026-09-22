@@ -75,6 +75,7 @@
       reglee: 'Facture réglée, merci !', regleePar: 'Payée par {moyen}', regleeLe: 'Payée le {date}',
       annulee: 'Cette facture a été annulée : rien n\'est dû.',
       parCarte: 'Par carte Visa ou Mastercard, à cette adresse :',
+      parCode: 'Par carte Visa ou Mastercard : scannez le code ci-contre.',
       parWhatsApp: 'Écrivez-nous sur WhatsApp pour régler cette facture.',
       scanner: 'Scannez pour payer', transport: 'Transport', transportColis: 'Transport de colis',
       moyens: { paypal: 'PayPal', banque: 'Compte bancaire', azul: 'Azul',
@@ -93,6 +94,7 @@
       reglee: 'Invoice paid — thank you!', regleePar: 'Paid by {moyen}', regleeLe: 'Paid on {date}',
       annulee: 'This invoice has been cancelled: nothing is due.',
       parCarte: 'By Visa or Mastercard, at this address:',
+      parCode: 'By Visa or Mastercard: scan the code opposite.',
       parWhatsApp: 'Message us on WhatsApp to settle this invoice.',
       scanner: 'Scan to pay', transport: 'Shipping', transportColis: 'Package shipping',
       moyens: { paypal: 'PayPal', banque: 'Bank account', azul: 'Azul',
@@ -111,6 +113,7 @@
       reglee: '¡Factura pagada, gracias!', regleePar: 'Pagada con {moyen}', regleeLe: 'Pagada el {date}',
       annulee: 'Esta factura fue anulada: no hay nada que pagar.',
       parCarte: 'Con tarjeta Visa o Mastercard, en esta dirección:',
+      parCode: 'Con tarjeta Visa o Mastercard: escanee el código al lado.',
       parWhatsApp: 'Escríbanos por WhatsApp para pagar esta factura.',
       scanner: 'Escanee para pagar', transport: 'Transporte', transportColis: 'Transporte de paquetes',
       moyens: { paypal: 'PayPal', banque: 'Cuenta bancaria', azul: 'Azul',
@@ -129,6 +132,7 @@
       reglee: 'Fakti peye, mèsi !', regleePar: 'Peye ak {moyen}', regleeLe: 'Peye le {date}',
       annulee: 'Fakti sa a anile : ou pa dwe anyen.',
       parCarte: 'Ak kat Visa oswa Mastercard, nan adrès sa a :',
+      parCode: 'Ak kat Visa oswa Mastercard : eskane kòd ki akote a.',
       parWhatsApp: 'Ekri nou sou WhatsApp pou peye fakti sa a.',
       scanner: 'Eskane pou peye', transport: 'Transpò', transportColis: 'Transpò koli',
       moyens: { paypal: 'PayPal', banque: 'Kont labank', azul: 'Azul',
@@ -460,9 +464,18 @@
     ligneTotal(T.grandTotal, totaux.grandTotal, 'fa__totaux--grand');
     ligneTotal(T.balance, totaux.balance, 'fa__totaux--balance');
 
-    // Le paiement
+    // Le paiement. Le code à scanner est dessiné d'abord, car c'est lui qui
+    // décide de la formulation : le lien en toutes lettres tenait quatre
+    // lignes sur le papier. Il ne s'imprime donc plus que si le code n'a pas
+    // pu être produit — sans quoi le client n'aurait aucun moyen de payer.
     var bas = bloc(page, 'section', 'fa__bas');
     var paiement = bloc(bas, 'div', 'fa__paiement');
+    var cote = null, codeDessine = false;
+    if (fa.statut === 'a_payer' && fa.lien_paiement) {
+      cote = el('div', 'fa__qr');
+      codeDessine = !!dessinerCode(cote, 'qr', fa.lien_paiement, T.scanner + ' — ' + (fa.numero || ''));
+      if (codeDessine) bloc(cote, 'span', 'fa__qr-texte', T.scanner);
+    }
     bloc(paiement, 'span', 'fa__libelle', T.paiement);
     if (fa.statut === 'payee') {
       bloc(paiement, 'p', null, T.reglee);
@@ -473,19 +486,14 @@
     } else if (fa.statut === 'annulee') {
       bloc(paiement, 'p', null, T.annulee);
     } else if (fa.lien_paiement) {
-      bloc(paiement, 'p', null, T.parCarte);
-      bloc(paiement, 'p', 'fa__lien', fa.lien_paiement);
+      bloc(paiement, 'p', null, codeDessine ? T.parCode : T.parCarte);
+      if (!codeDessine) bloc(paiement, 'p', 'fa__lien', fa.lien_paiement);
     } else {
       bloc(paiement, 'p', null, T.parWhatsApp);
     }
     if (fa.note && lignes.length) bloc(paiement, 'p', 'fa__note', fa.note);
 
-    if (fa.statut === 'a_payer' && fa.lien_paiement) {
-      var cote = bloc(bas, 'div', 'fa__qr');
-      if (dessinerCode(cote, 'qr', fa.lien_paiement, T.scanner + ' — ' + (fa.numero || ''))) {
-        bloc(cote, 'span', 'fa__qr-texte', T.scanner);
-      }
-    }
+    if (codeDessine) bas.appendChild(cote);
 
     // La signature, puis la ligne laissée au client
     var paraphes = bloc(page, 'section', 'fa__signatures');
