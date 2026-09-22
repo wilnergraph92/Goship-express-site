@@ -31,8 +31,12 @@ svg{display:block}
 
 .et__tete{display:flex;align-items:center;justify-content:space-between;gap:3mm;
   padding:2mm 3mm;background:#061a3f;color:#fff;border-radius:2mm}
-.et__nom{display:block;font-size:13pt;font-weight:800;letter-spacing:.04em;line-height:1.1}
-.et__sous{display:block;font-size:6.5pt;opacity:.82;letter-spacing:.02em}
+/* Le logo est réglé sur sa hauteur, pas sur sa largeur : c'est elle qui décide
+   de la hauteur du bandeau. « color » sert au texte de remplacement, le jour
+   où l'image manque. */
+.et__logo{display:block;width:auto;height:12mm;color:#fff;font-size:12pt;font-weight:800}
+.et__sous{display:block;margin-top:.8mm;font-size:6.5pt;opacity:.82;letter-spacing:.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .et__service{flex:none;padding:1mm 2.5mm;border:1.2pt solid #fff;border-radius:1.5mm;
   font-size:8.5pt;font-weight:800;letter-spacing:.08em}
 
@@ -40,30 +44,38 @@ svg{display:block}
 .et__bande svg{width:100%;height:16mm}
 .et__numero{display:block;margin-top:.8mm;font-size:17pt;font-weight:800;letter-spacing:.06em}
 
-.et__dest{margin-top:3mm;padding-top:3mm;border-top:1pt solid #061a3f;
+.et__dest{margin-top:2.4mm;padding-top:2.4mm;border-top:1pt solid #061a3f;
   display:flex;align-items:flex-start;gap:3mm}
 .et__qui{flex:1;min-width:0}
 .et__libelle{display:block;font-size:6.5pt;font-weight:800;letter-spacing:.14em;
   text-transform:uppercase;color:#4a5878}
-.et__personne{display:block;margin-top:.6mm;font-size:13pt;font-weight:800;line-height:1.2}
+/* Une étiquette a une taille fixe : ce qui est trop long est coupé plutôt que
+   de pousser le reste hors du papier. On coupe le nom, l'adresse et le contenu
+   — jamais le numéro, le code-barres ni la destination, qui sont ce dont le
+   transporteur a besoin. */
+.et__coupe{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+.et__personne{margin-top:.6mm;font-size:13pt;font-weight:800;line-height:1.2;-webkit-line-clamp:2;line-clamp:2}
 .et__adresse{font-size:10pt;line-height:1.35}
+.et__qui .et__adresse{-webkit-line-clamp:2;line-clamp:2}
+.et__ligne{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .et__tel{margin-top:.6mm;font-size:10pt;font-weight:700}
 .et__qr{flex:none;width:23mm;text-align:center}
 .et__qr svg{width:23mm;height:23mm}
 .et__qr-texte{display:block;margin-top:.5mm;font-size:6pt;color:#4a5878;letter-spacing:.02em}
 
-.et__vers{margin-top:3mm;padding:2mm 3mm;background:#e7edf9;border-radius:2mm;
+.et__vers{margin-top:2.4mm;padding:2mm 3mm;background:#e7edf9;border-radius:2mm;
   display:flex;align-items:baseline;gap:3mm}
 .et__pays{font-size:26pt;font-weight:900;line-height:1;letter-spacing:-.01em}
 .et__ville{font-size:12pt;font-weight:800;letter-spacing:.03em;line-height:1.1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.et__exp{margin-top:3mm}
+.et__exp{margin-top:2.4mm}
 .et__exp .et__adresse{font-size:8pt;line-height:1.3}
 
 .et__pied{margin-top:auto;padding-top:2.5mm;border-top:1pt dashed #8a93ac}
-.et__desc{font-size:10.5pt;font-weight:700;line-height:1.3}
-.et__meta{font-size:8.5pt;color:#4a5878;line-height:1.35}
+.et__desc{font-size:10.5pt;font-weight:700;line-height:1.3;-webkit-line-clamp:2;line-clamp:2}
+.et__meta{font-size:8.5pt;color:#4a5878;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 
 /* --------------------------------------------------------------------------

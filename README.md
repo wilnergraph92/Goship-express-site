@@ -399,11 +399,17 @@ Chaque colis enregistré a déjà tout ce qu'il faut pour son étiquette : son n
 (`GSE-1001-HT`) est unique, et c'est de lui que sont tirés son code-barres et son QR code.
 Rien à créer, rien à saisir — l'étiquette s'imprime en un clic depuis le tableau de bord.
 
-**L'étiquette** fait 4 × 6 pouces, le format des imprimantes à étiquettes. On y trouve le
-code-barres du numéro et le numéro en gros, le destinataire avec son code client, son adresse
+**L'étiquette** fait 4 × 6 pouces, le format des imprimantes à étiquettes. On y trouve le logo
+Goship Express sur un bandeau bleu nuit (la version blanche du logo, `logo-goship-blanc.png`),
+le code-barres du numéro et le numéro en gros, le destinataire avec son code client, son adresse
 et son téléphone, le pays et la ville de destination en très gros caractères (c'est ce qu'on lit
 en triant les sacs), l'adresse de l'entrepôt de Miami, et en bas le contenu, le poids, le
 magasin et le numéro de suivi du vendeur.
+
+Le papier ayant une taille fixe, un texte trop long est **coupé** au lieu de pousser le reste
+hors de l'étiquette : un nom sur deux lignes au plus, une adresse sur deux lignes, un contenu sur
+deux lignes. Le numéro, le code-barres et la destination ne sont jamais rognés — ce sont eux dont
+le transporteur a besoin.
 
 - **Le code-barres** est un **Code 128**, celui des étiquettes d'expédition dans le monde entier.
   N'importe quelle douchette de magasin le lit. Les chiffres y sont écrits deux par deux, ce qui

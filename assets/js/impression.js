@@ -155,6 +155,18 @@
     return parent.appendChild(el(balise, classe, texte));
   }
 
+  // Le logo. « alt » n'est pas décoratif ici : si l'image manque, c'est lui
+  // qui s'imprime, et le papier porte quand même le nom de l'entreprise.
+  function logo(parent, fichier, classe, largeur, hauteur) {
+    var img = document.createElement('img');
+    img.src = BASE + 'assets/img/' + fichier;
+    img.alt = 'Goship Express';
+    img.width = largeur;
+    img.height = hauteur;
+    img.className = classe;
+    return parent.appendChild(img);
+  }
+
   function date(valeur, langue) {
     if (!valeur) return '';
     var d = new Date(valeur);
@@ -179,7 +191,16 @@
   }
 
   function ligneTexte(parent, classe, morceaux) {
-    var t = morceaux.filter(function (m) { return m !== undefined && m !== null && m !== ''; }).join(' · ');
+    var vus = {};
+    var t = morceaux.filter(function (m) {
+      if (m === undefined || m === null || m === '') return false;
+      // Chez beaucoup de clients, la ville et la région portent le même nom :
+      // l'écrire deux fois coûterait une ligne entière sur l'étiquette.
+      var cle = String(m).trim().toLowerCase();
+      if (vus[cle]) return false;
+      vus[cle] = true;
+      return true;
+    }).join(' · ');
     return t ? bloc(parent, 'p', classe, t) : null;
   }
 
@@ -232,7 +253,8 @@
     // Bandeau
     var tete = bloc(page, 'header', 'et__tete');
     var marque = bloc(tete, 'div', 'et__marque');
-    bloc(marque, 'strong', 'et__nom', 'GOSHIP EXPRESS');
+    // Version blanche du logo : le bandeau est bleu nuit
+    logo(marque, 'logo-goship-blanc.png', 'et__logo', 420, 147);
     bloc(marque, 'span', 'et__sous', 'Transport de colis · Miami → Haïti · Rép. dominicaine');
     bloc(tete, 'span', 'et__service', (SERVICES[c.service] || c.service || '').toUpperCase());
 
@@ -245,10 +267,10 @@
     var dest = bloc(page, 'section', 'et__dest');
     var qui = bloc(dest, 'div', 'et__qui');
     bloc(qui, 'span', 'et__libelle', 'Destinataire');
-    bloc(qui, 'strong', 'et__personne', [c.nom_client, c.code_client].filter(Boolean).join('  '));
-    if (c.adresse_client) bloc(qui, 'p', 'et__adresse', c.adresse_client);
-    ligneTexte(qui, 'et__adresse', [c.ville_client, c.region_client]);
-    ligneTexte(qui, 'et__adresse', [fr.pays[c.pays_client] || c.pays_client]);
+    bloc(qui, 'strong', 'et__personne et__coupe', [c.nom_client, c.code_client].filter(Boolean).join('  '));
+    if (c.adresse_client) bloc(qui, 'p', 'et__adresse et__coupe', c.adresse_client);
+    ligneTexte(qui, 'et__adresse et__ligne', [c.ville_client, c.region_client]);
+    ligneTexte(qui, 'et__adresse et__ligne', [fr.pays[c.pays_client] || c.pays_client]);
     if (c.telephone_client) bloc(qui, 'p', 'et__tel', c.telephone_client);
 
     var cote = bloc(dest, 'div', 'et__qr');
@@ -271,7 +293,7 @@
     // Le contenu, en bas
     var pied = bloc(page, 'footer', 'et__pied');
     var contenu = bloc(pied, 'div', 'et__contenu');
-    if (c.description) bloc(contenu, 'p', 'et__desc', c.description);
+    if (c.description) bloc(contenu, 'p', 'et__desc et__coupe', c.description);
     ligneTexte(contenu, 'et__meta', [
       c.poids_lb !== null && c.poids_lb !== undefined && c.poids_lb !== ''
         ? String(c.poids_lb).replace('.', ',') + ' lb' : '',
@@ -311,13 +333,7 @@
     // Bandeau : logo, numéro, dates
     var tete = bloc(page, 'header', 'fa__tete');
     var gauche = bloc(tete, 'div', 'fa__marque');
-    var logo = document.createElement('img');
-    logo.src = BASE + 'assets/img/logo-goship.png';
-    logo.alt = 'Goship Express';
-    logo.width = 360;
-    logo.height = 120;
-    logo.className = 'fa__logo';
-    gauche.appendChild(logo);
+    logo(gauche, 'logo-goship.png', 'fa__logo', 360, 120);
     bloc(gauche, 'p', 'fa__emetteur',
          MIAMI.nom + '\n' + MIAMI.ligne1 + ' ' + MIAMI.ligne2 + '\n' +
          MIAMI.ville + ', ' + MIAMI.etat + ' ' + MIAMI.zip + '\n' + MIAMI.pays + '\n' +
