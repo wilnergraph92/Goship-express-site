@@ -225,8 +225,11 @@
     </div>
     <div class="gs-dialogue__corps">
       <div class="gs-champ">
-        <label for="col-code">Code client</label>
-        <input id="col-code" name="code" required placeholder="GSE-4323" autocomplete="off" spellcheck="false" data-code-client>
+        <label for="col-code">Client</label>
+        <div class="gs-completion-zone">
+          <input id="col-code" name="code" required placeholder="Identifiant GSE, nom ou e-mail" autocomplete="off" spellcheck="false" data-code-client role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="col-clients-trouves">
+          <div class="gs-completion" id="col-clients-trouves" role="listbox" aria-label="Clients correspondants" data-completion-client hidden></div>
+        </div>
         <p class="gs-champ__aide gs-client-trouve" data-client-trouve aria-live="polite"></p>
       </div>
       <div class="gs-form__grille">

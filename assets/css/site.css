@@ -662,6 +662,14 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-dialogue .gs-champ textarea{padding:11px 14px;font-size:15.5px}
 .gs-dialogue .gs-form__erreur{margin-top:0}
 .gs-champ--large{grid-column:1/-1}
+.gs-completion-zone{position:relative}
+.gs-completion{position:absolute;top:calc(100% + 6px);right:0;left:0;z-index:30;max-height:258px;padding:6px;overflow-y:auto;border:1px solid #cfd7e6;border-radius:13px;background:#fff;box-shadow:0 14px 34px rgba(6,26,63,.16)}
+.gs-completion[hidden]{display:none}
+.gs-completion__vide{margin:0;padding:11px 12px;font-size:14.5px;color:#5b6782}
+.gs-completion__item{display:block;width:100%;padding:9px 12px;border:0;border-radius:9px;background:none;color:var(--ink);font:inherit;font-size:15px;line-height:1.35;text-align:left;cursor:pointer}
+.gs-completion__item:hover,.gs-completion__item.is-actif,.gs-completion__item:focus-visible{outline:none;background:var(--mist)}
+.gs-completion__code{font-weight:700;color:var(--ink2)}
+.gs-completion__det{display:block;margin-top:2px;overflow:hidden;font-size:13.5px;color:#5b6782;text-overflow:ellipsis;white-space:nowrap}
 .gs-client-trouve{min-height:1.5em}
 .gs-client-trouve.is-ok{font-weight:600;color:#15803d}
 .gs-client-trouve.is-erreur{font-weight:600;color:#b91c1c}

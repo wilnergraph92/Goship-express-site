@@ -887,9 +887,12 @@
   var formColis = $('form[data-form="colis"]', dlgColis);
   var champCode = $('[data-code-client]', formColis);
   var infoClient = $('[data-client-trouve]', formColis);
+  var listeClients = $('[data-completion-client]', formColis);
   var colisEdite = null;
   var clientChoisi = null;
   var recherchesClient = 0;
+  var suggestions = [];
+  var suggestionActive = -1;
 
   function montrerClient(client, message) {
     clientChoisi = client;
@@ -899,34 +902,149 @@
       : (message || '');
   }
 
+  function prefillClient(client) {
+    var f = formColis.elements;
+    if (PAYS[client.pays] && client.pays !== 'US') f.pays_destination.value = client.pays;
+    if (!f.destination.value) f.destination.value = client.ville || '';
+  }
+
+  // Liste déroulante sous le champ, quand plusieurs clients correspondent
+  function fermerSuggestions() {
+    suggestions = [];
+    suggestionActive = -1;
+    listeClients.hidden = true;
+    listeClients.textContent = '';
+    champCode.setAttribute('aria-expanded', 'false');
+    champCode.removeAttribute('aria-activedescendant');
+  }
+
+  function surlignerSuggestion(index) {
+    suggestionActive = index;
+    $$('[role="option"]', listeClients).forEach(function (o, i) {
+      var actif = i === index;
+      o.classList.toggle('is-actif', actif);
+      o.setAttribute('aria-selected', actif ? 'true' : 'false');
+      if (actif) {
+        champCode.setAttribute('aria-activedescendant', o.id);
+        if (o.scrollIntoView) o.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    if (index < 0) champCode.removeAttribute('aria-activedescendant');
+  }
+
+  function choisirSuggestion(client) {
+    champCode.value = client.code || '';
+    montrerClient(client);
+    if (!colisEdite) prefillClient(client);
+    fermerSuggestions();
+    champCode.focus();
+  }
+
+  function afficherSuggestions(clients) {
+    listeClients.textContent = '';
+    suggestions = clients;
+    suggestionActive = -1;
+    if (!clients.length) {
+      var vide = document.createElement('p');
+      vide.className = 'gs-completion__vide';
+      vide.textContent = 'Aucun client ne correspond.';
+      listeClients.appendChild(vide);
+    } else {
+      clients.forEach(function (client, i) {
+        var bouton = document.createElement('button');
+        bouton.type = 'button';
+        bouton.id = 'col-client-' + i;
+        bouton.className = 'gs-completion__item';
+        bouton.setAttribute('role', 'option');
+        bouton.setAttribute('aria-selected', 'false');
+        var code = document.createElement('span');
+        code.className = 'gs-completion__code';
+        code.textContent = client.code || '—';
+        bouton.appendChild(code);
+        bouton.appendChild(document.createTextNode(' · ' + (client.nom_complet || '')));
+        var detail = document.createElement('span');
+        detail.className = 'gs-completion__det';
+        detail.textContent = [client.email, client.ville].filter(Boolean).join(' — ');
+        bouton.appendChild(detail);
+        bouton.addEventListener('click', function () { choisirSuggestion(client); });
+        listeClients.appendChild(bouton);
+      });
+    }
+    listeClients.hidden = false;
+    champCode.setAttribute('aria-expanded', 'true');
+  }
+
+  // Recherche par identifiant GSE, nom ou e-mail. Un identifiant complet est
+  // résolu directement ; tout autre texte passe par la recherche multi-champs,
+  // qui propose la liste des correspondances dès qu'il y en a plusieurs.
+  function chercherParTexte(texte, numero, prefill) {
+    return API.admin.clients({ recherche: texte, parPage: 8 }).then(function (r) {
+      if (numero !== recherchesClient) return clientChoisi;
+      var lignes = (r && r.lignes) || [];
+      if (!lignes.length) {
+        afficherSuggestions([]);
+        montrerClient(null, 'Aucun client ne correspond à « ' + texte + ' ».');
+        return null;
+      }
+      if (lignes.length === 1) {
+        fermerSuggestions();
+        montrerClient(lignes[0]);
+        if (prefill) prefillClient(lignes[0]);
+        return lignes[0];
+      }
+      afficherSuggestions(lignes);
+      montrerClient(null, lignes.length + ' clients correspondent — choisissez dans la liste.');
+      return null;
+    }).catch(function (err) { fermerSuggestions(); montrerClient(null, messageErreur(err)); return null; });
+  }
+
   function chercherClient(prefill) {
-    var code = API.normaliserCode(champCode.value);
-    if (!code) { montrerClient(null, champCode.value.trim() ? 'Code client invalide (format GSE-4323).' : ''); return Promise.resolve(null); }
+    var texte = champCode.value.trim();
+    if (!texte) { fermerSuggestions(); montrerClient(null, ''); return Promise.resolve(null); }
     var numero = ++recherchesClient;
     infoClient.className = 'gs-champ__aide gs-client-trouve';
     infoClient.textContent = 'Recherche du client…';
-    return API.admin.chercherClient(code).then(function (client) {
-      if (numero !== recherchesClient) return clientChoisi;
-      if (!client) { montrerClient(null, 'Aucun client avec le code ' + code + '.'); return null; }
-      montrerClient(client);
-      if (prefill) {
-        var f = formColis.elements;
-        if (PAYS[client.pays] && client.pays !== 'US') f.pays_destination.value = client.pays;
-        if (!f.destination.value) f.destination.value = client.ville || '';
-      }
-      return client;
-    }).catch(function (err) { montrerClient(null, messageErreur(err)); return null; });
+    var code = API.normaliserCode(texte);
+    if (code) {
+      return API.admin.chercherClient(code).then(function (client) {
+        if (numero !== recherchesClient) return clientChoisi;
+        if (client) {
+          fermerSuggestions();
+          montrerClient(client);
+          if (prefill) prefillClient(client);
+          return client;
+        }
+        return chercherParTexte(texte, numero, prefill);
+      }).catch(function (err) { montrerClient(null, messageErreur(err)); return null; });
+    }
+    if (texte.length < 2) { fermerSuggestions(); montrerClient(null, ''); return Promise.resolve(null); }
+    return chercherParTexte(texte, numero, prefill);
   }
 
   var delaiCode = null;
   champCode.addEventListener('input', function () {
     clearTimeout(delaiCode);
     clientChoisi = null;
-    delaiCode = setTimeout(function () { chercherClient(!colisEdite); }, 350);
+    delaiCode = setTimeout(function () { chercherClient(!colisEdite); }, 300);
   });
+  champCode.addEventListener('keydown', function (e) {
+    if (listeClients.hidden || !suggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); surlignerSuggestion((suggestionActive + 1) % suggestions.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); surlignerSuggestion((suggestionActive - 1 + suggestions.length) % suggestions.length); }
+    else if (e.key === 'Enter' && suggestionActive >= 0) { e.preventDefault(); choisirSuggestion(suggestions[suggestionActive]); }
+    else if (e.key === 'Escape') { e.preventDefault(); fermerSuggestions(); }
+    else if (e.key === 'Tab') fermerSuggestions();
+  });
+  // Un identifiant saisi en clair est remis au format GSE-0000, mais jamais un
+  // nom ni un e-mail : « client2024@… » ne doit pas devenir « GSE-2024 ».
   champCode.addEventListener('blur', function () {
+    if (clientChoisi && clientChoisi.code) { champCode.value = clientChoisi.code; return; }
+    if (!/^\s*(gse)?[\s-]*\d{4,}\s*$/i.test(champCode.value)) return;
     var code = API.normaliserCode(champCode.value);
     if (code) champCode.value = code;
+  });
+  document.addEventListener('click', function (e) {
+    if (e.target !== champCode && !listeClients.contains(e.target)) fermerSuggestions();
   });
 
   // Date et heure au format des champs du formulaire (heure locale)
@@ -943,6 +1061,7 @@
     colisEdite = options.colis || null;
     formColis.reset();
     erreurFormulaire(formColis, '');
+    fermerSuggestions();
     montrerClient(null, '');
     var f = formColis.elements;
     var reception = colisEdite && (colisEdite.recu_le || colisEdite.cree_le) ? new Date(colisEdite.recu_le || colisEdite.cree_le) : new Date();
@@ -1003,7 +1122,7 @@
     (clientChoisi ? Promise.resolve(clientChoisi) : chercherClient(false)).then(function (client) {
       if (!client) {
         attente(bouton);
-        erreurFormulaire(formColis, 'Indiquez le code d’un client existant (ex. GSE-4323).');
+        erreurFormulaire(formColis, 'Choisissez un client existant : identifiant GSE, nom ou e-mail.');
         f.code.focus();
         return;
       }
