@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0&amp;display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+:root{--ink:#061a3f;--ink2:#0d2b6b;--ink3:#1746a8;--accent:#f4600d;--accent2:#1f5fe0;--cream:#f5f7fb;--mist:#e7edf9;--r:18px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
+body{margin:0;background:#fff;color:#061a3f;font-family:'Manrope',system-ui,sans-serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;text-wrap:pretty}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--ink2)}
+h1,h2,h3,h4{margin:0;font-family:'Archivo','Manrope',sans-serif;font-stretch:110%;letter-spacing:-0.022em}
+p{margin:0}
+img{max-width:100%}
+input,textarea,select,button{font-family:inherit;font-size:16px}
+form input,form textarea,form select{width:100%;min-width:0}
+form label{min-width:0}
+input::placeholder,textarea::placeholder{color:#8a93ac}
+#contact input::placeholder,#contact textarea::placeholder{color:rgba(255,255,255,.45)}
+summary{list-style:none;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+details[open] .om-plus{transform:rotate(45deg);background:var(--accent) !important;color:#fff;border-color:var(--accent) !important}
+@keyframes om-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes om-rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</helmet>
+
+<div style="overflow-x:hidden">
+
+<div style="background:#030f2b;color:#94a7cc;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase">
+  <div style="max-width:1320px;margin:0 auto;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;justify-content:space-between">
+    <span style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;background:var(--accent);display:block"></span>8140 NW 74th Ave, Unit 3, Apt 46780, Medley, Florida 33166</span>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:center">
+      <span style="color:#dde5f8">goshipexpressllc@gmail.com</span>
+      <span>Lun–Sam · 8h–18h</span>
+      
+    </div>
+  </div>
+</div>
+
+<header style="position:sticky;top:0;z-index:60;background:rgba(6,26,63,.95);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.1)">
+  <div style="max-width:1320px;margin:0 auto;padding:14px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;justify-content:space-between">
+    <a href="#top" style="display:flex;align-items:center;flex:none">
+      <span style="display:flex;align-items:center;background:#fff;border-radius:13px;padding:8px 14px;box-shadow:0 10px 26px -14px rgba(0,0,0,.7)">
+        <img src="goship-logo.png" alt="GOShip Express — Freight &amp; Cargo" style="display:block;height:40px;width:auto">
+      </span>
+    </a>
+    <nav style="display:flex;align-items:center;gap:30px;flex-wrap:wrap;font-size:15px;font-weight:600">
+      <a href="Goship%20Express.dc.html" style="color:var(--accent)" style-hover="color:var(--accent)">Accueil</a>
+      <a href="A-propos.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">À propos</a>
+      <a href="Nos-Services.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">Nos Services</a>
+      <a href="Blog.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">Blog</a>
+      <a href="Contacts.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">Contacts</a>
+    </nav>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">
+      <a href="tel:+18495386262" style="display:flex;align-items:center;gap:11px;color:#fff;white-space:nowrap">
+        <span style="display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:rgba(244,96,13,.18);border:1px solid rgba(244,96,13,.5);color:var(--accent);font-size:16px">☎</span>
+        <span style="display:flex;flex-direction:column;line-height:1.25">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#95a5ca">APPELEZ-NOUS</span>
+          <span style="font-weight:700;font-size:15px">+1 849 538-6262</span>
+        </span>
+      </a>
+      <a href="Contacts.dc.html#contact" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)" style-hover="background:#d4500a;color:#fff">Demander un devis</a>
+    </div>
+  </div>
+</header>
+
+<section id="top" style="position:relative;background:var(--ink);color:#fff;overflow:hidden">
+  <img src="https://images.unsplash.com/photo-1724597500306-a4cbb7d1324e?auto=format&amp;fit=crop&amp;w=2000&amp;q=72" alt="Porte-conteneurs en pleine mer" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+  <div style="position:absolute;inset:0;background:linear-gradient(100deg,rgba(6,26,63,.97) 0%,rgba(6,26,63,.9) 40%,rgba(6,26,63,.42) 74%,rgba(13,43,107,.6) 100%)"></div>
+  <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:26px 26px;opacity:.45"></div>
+
+  <div style="position:relative;max-width:1320px;margin:0 auto;padding:clamp(56px,7vw,104px) 28px clamp(120px,13vw,180px);display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:clamp(44px,6vw,80px);align-items:center">
+    <div style="min-width:0;animation:om-rise .7s cubic-bezier(.2,.7,.3,1) both">
+      <div style="display:inline-flex;align-items:center;gap:14px;padding:9px 9px 9px 18px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.06);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#dde5f8">
+        USA · Santo Domingo · Haïti
+        <span style="display:flex;gap:3px;padding:5px 11px;background:var(--accent);border-radius:999px">
+          <span style="width:6px;height:6px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+          <span style="width:6px;height:6px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+        </span>
+      </div>
+      <h1 style="margin-top:30px;font-size:clamp(42px,6.3vw,86px);line-height:.93;font-weight:800">Vos colis partent<br>de Miami.<br><span style="color:var(--accent)">Ils arrivent chez eux.</span></h1>
+      <p style="margin-top:26px;max-width:540px;font-size:clamp(17px,1.5vw,19.5px);color:#c4d0ec">Réception, consolidation, transport et livraison de colis entre les États-Unis, Santo Domingo et Haïti. Délais annoncés, prix clairs, colis suivis de bout en bout.</p>
+      <div style="margin-top:38px;display:flex;flex-wrap:wrap;gap:14px">
+        <a href="Contacts.dc.html#contact" style="display:inline-flex;align-items:center;gap:16px;background:var(--accent);color:#fff;font-weight:700;padding:18px 18px 18px 28px;border-radius:14px;box-shadow:0 22px 44px -20px rgba(244,96,13,.95)" style-hover="background:#d4500a;color:#fff;transform:translateY(-2px)">
+          Obtenir un devis gratuit
+          <span style="display:grid;place-items:center;width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:9px">
+            <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+          </span>
+        </a>
+        <a href="#suivi" style="display:inline-flex;align-items:center;gap:12px;border:1px solid rgba(255,255,255,.3);color:#fff;font-weight:700;padding:18px 28px;border-radius:14px" style-hover="background:rgba(255,255,255,.1);color:#fff">Suivre un colis</a>
+      </div>
+      <div style="margin-top:46px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:20px;max-width:620px">
+        <div style="padding-left:16px;border-left:2px solid var(--accent)">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;line-height:1.1">98 %</span>
+          <p style="font-size:13.5px;color:#a8b6d8;line-height:1.4">livrés dans le délai annoncé</p>
+        </div>
+        <div style="padding-left:16px;border-left:2px solid rgba(255,255,255,.2)">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;line-height:1.1">3 corridors</span>
+          <p style="font-size:13.5px;color:#a8b6d8;line-height:1.4">maritime, aérien, terrestre</p>
+        </div>
+        <div style="padding-left:16px;border-left:2px solid rgba(255,255,255,.2)">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:600;line-height:1.1">2 h</span>
+          <p style="font-size:13.5px;color:#a8b6d8;line-height:1.4">pour recevoir votre devis</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="position:relative;min-width:0;animation:om-rise .95s cubic-bezier(.2,.7,.3,1) both">
+      <div style="position:relative;border-radius:24px 96px 24px 24px;overflow:hidden;border:1px solid rgba(255,255,255,.18);box-shadow:0 50px 90px -40px rgba(0,0,0,.85)">
+        <img src="./about-mu77sl2m-qwoi.png" alt="Colis en carton prêts à l'expédition" loading="lazy" style="display: block; width: 100%; height: clamp(320px,38vw,470px); object-fit: fill">
+      </div>
+      <div style="position:absolute;left:clamp(-14px,-1vw,0px);bottom:-30px;background:#fff;color:var(--ink);border-radius:12px;padding:14px 18px;box-shadow:0 26px 50px -22px rgba(0,0,0,.7);transform:rotate(-2.4deg);max-width:290px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px dashed #c9d5ea;padding-bottom:10px">
+          <img src="goship-logo.png" alt="GOShip Express" style="display:block;height:22px;width:auto">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:#8a93ac">AIR / SEA</span>
+        </div>
+        <p style="margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.06em">GSE-4821-HT</p>
+        <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;color:#5b6782">MIAMI → PORT-AU-PRINCE</p>
+        <div style="margin-top:10px;display:flex;align-items:flex-end;gap:2px;height:22px">
+          <span style="width:2px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:1px;height:80%;background:var(--ink);display:block"></span>
+          <span style="width:3px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:1px;height:70%;background:var(--ink);display:block"></span>
+          <span style="width:2px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:4px;height:85%;background:var(--ink);display:block"></span>
+          <span style="width:1px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:2px;height:75%;background:var(--ink);display:block"></span>
+          <span style="width:3px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:1px;height:90%;background:var(--ink);display:block"></span>
+          <span style="width:2px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:1px;height:70%;background:var(--ink);display:block"></span>
+          <span style="width:3px;height:100%;background:var(--ink);display:block"></span>
+          <span style="width:2px;height:85%;background:var(--ink);display:block"></span>
+        </div>
+      </div>
+      <div style="position:absolute;top:26px;right:-22px;display:flex;flex-direction:column;gap:8px">
+        <span style="width:16px;height:16px;border-top:4px solid var(--accent);border-right:4px solid var(--accent);transform:rotate(45deg);display:block"></span>
+        <span style="width:16px;height:16px;border-top:4px solid var(--accent);border-right:4px solid var(--accent);transform:rotate(45deg);display:block;opacity:.55"></span>
+        <span style="width:16px;height:16px;border-top:4px solid var(--accent);border-right:4px solid var(--accent);transform:rotate(45deg);display:block;opacity:.25"></span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;bottom:0;height:62px;background:var(--accent);clip-path:polygon(0 100%,100% 0,100% 100%)"></div>
+</section>
+
+<sc-if value="{{ showTracking }}" hint-placeholder-val="{{ true }}">
+<section id="suivi" style="background:var(--cream);padding:0 28px clamp(72px,9vw,120px)">
+  <div style="max-width:1160px;margin:0 auto;transform:translateY(-52px);background:#fff;border-radius:24px;box-shadow:0 50px 90px -50px rgba(6,26,63,.5);border:1px solid #e3e8f2;padding:clamp(28px,3.4vw,44px)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:28px;align-items:end">
+      <div style="min-width:0">
+        <span style="display:flex;align-items:center;gap:9px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)"><span style="width:6px;height:6px;background:var(--accent);display:block"></span>Suivi de colis</span>
+        <h3 style="margin-top:14px;font-size:clamp(24px,2.6vw,34px);line-height:1.08;font-weight:800">Où est mon colis ?</h3>
+        <p style="margin-top:10px;font-size:15.5px;color:#55627e">Entrez votre référence GSE : chaque étape est horodatée, de la réception en Floride à la livraison.</p>
+      </div>
+      <form onSubmit="{{ onTrack }}" style="display:flex;flex-wrap:wrap;gap:12px;min-width:0">
+        <input value="{{ trackValue }}" onChange="{{ onTrackInput }}" placeholder="Ex. GSE-4821-HT" style="flex:1 1 200px;padding:17px 18px;border-radius:12px;border:1px solid #d6ddec;background:var(--cream);color:var(--ink);font-family:'IBM Plex Mono',monospace;letter-spacing:.06em">
+        <button type="submit" style="display:inline-flex;align-items:center;gap:12px;background:var(--ink);color:#fff;font-weight:700;border:none;padding:17px 26px;border-radius:12px;cursor:pointer" style-hover="background:var(--accent)">
+          Suivre
+          <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+        </button>
+      </form>
+    </div>
+    <sc-if value="{{ trackResult }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:32px;border-top:1px dashed #dbe2ef;padding-top:28px">
+        <div style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:22px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;background:var(--ink);color:#fff;padding:8px 13px;border-radius:8px">{{ trackResult }}</span>
+          <span style="font-size:14.5px;font-weight:700;color:var(--accent2)">En transit · Miami → Port-au-Prince</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#8a93ac">Exemple de démonstration</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px">
+          <div style="padding:18px;border-radius:14px;background:rgba(31,95,224,.08);border:1px solid rgba(31,95,224,.25)">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#1a46b8">ÉTAPE 01</span>
+            <p style="margin-top:7px;font-size:15px;font-weight:700">Reçu à Medley</p>
+            <p style="font-size:13px;color:#5b6782">Vérifié et photographié</p>
+          </div>
+          <div style="padding:18px;border-radius:14px;background:rgba(31,95,224,.08);border:1px solid rgba(31,95,224,.25)">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#1a46b8">ÉTAPE 02</span>
+            <p style="margin-top:7px;font-size:15px;font-weight:700">Consolidé</p>
+            <p style="font-size:13px;color:#5b6782">Regroupé avec vos autres achats</p>
+          </div>
+          <div style="padding:18px;border-radius:14px;background:rgba(244,96,13,.1);border:1px solid rgba(244,96,13,.35)">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#b9490a">ÉTAPE 03</span>
+            <p style="margin-top:7px;font-size:15px;font-weight:700">En transit</p>
+            <p style="font-size:13px;color:#5b6782">Départ maritime hebdomadaire</p>
+          </div>
+          <div style="padding:18px;border-radius:14px;background:#eef2f9;border:1px solid #dfe5f0">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#8a93ac">ÉTAPE 04</span>
+            <p style="margin-top:7px;font-size:15px;font-weight:700;color:#8a93ac">Livraison</p>
+            <p style="font-size:13px;color:#98a0b5">À domicile ou retrait en agence</p>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:clamp(24px,3vw,44px)">
+    <div style="display:flex;gap:14px;align-items:flex-start">
+      <span style="flex:none;width:13px;height:13px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);transform:rotate(45deg);display:block;margin-top:6px"></span>
+      <span><strong style="display:block;font-size:16.5px;font-weight:700">Adresse US incluse</strong><span style="font-size:14.5px;color:#55627e">Une adresse en Floride à votre nom, dès l'ouverture du compte.</span></span>
+    </div>
+    
+    <div style="display:flex;gap:14px;align-items:flex-start">
+      <span style="flex:none;width:13px;height:13px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);transform:rotate(45deg);display:block;margin-top:6px"></span>
+      <span><strong style="display:block;font-size:16.5px;font-weight:700">Dédouanement inclus</strong><span style="font-size:14.5px;color:#55627e">Documents et formalités traités par nos équipes locales.</span></span>
+    </div>
+    <div style="display:flex;gap:14px;align-items:flex-start">
+      <span style="flex:none;width:13px;height:13px;border-top:3px solid var(--accent);border-right:3px solid var(--accent);transform:rotate(45deg);display:block;margin-top:6px"></span>
+      <span><strong style="display:block;font-size:16.5px;font-weight:700">Suivi WhatsApp</strong><span style="font-size:14.5px;color:#55627e">Chaque étape confirmée à vous et à votre destinataire.</span></span>
+    </div>
+  </div>
+</section>
+</sc-if>
+
+<section style="background:#fff;padding:clamp(84px,9.5vw,150px) 28px">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:clamp(48px,6vw,90px);align-items:center">
+    <div style="position:relative;min-width:0;order:2">
+      <div style="border-radius:24px;overflow:hidden;border:1px solid #e3e8f2">
+        <img src="https://images.unsplash.com/photo-1592085198739-ffcad7f36b54?auto=format&amp;fit=crop&amp;w=1200&amp;q=72" alt="Entrepôt de consolidation, colis sur racks" loading="lazy" style="display:block;width:100%;height:clamp(300px,34vw,430px);object-fit:cover">
+      </div>
+      <div style="position:absolute;right:-14px;bottom:-46px;width:clamp(180px,26%,240px);border-radius:18px;overflow:hidden;border:5px solid #fff;box-shadow:0 30px 60px -30px rgba(6,26,63,.55)">
+        <img src="https://images.unsplash.com/photo-1616432043562-3671ea2e5242?auto=format&amp;fit=crop&amp;w=800&amp;q=72" alt="Camion de fret sur la route" loading="lazy" style="display:block;width:100%;height:150px;object-fit:cover">
+      </div>
+      <div style="position:absolute;left:-14px;bottom:-40px;background:var(--accent);color:#fff;border-radius:16px;padding:20px 24px;box-shadow:0 30px 60px -30px rgba(6,26,63,.6)">
+        
+        <p style="font-size:13px;font-weight:600;max-width:120px;line-height:1.3">sur le corridor USA – Caraïbes</p>
+      </div>
+    </div>
+    <div style="min-width:0;order:1">
+      <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#b9490a"><span style="width:26px;height:2px;background:var(--accent);display:block"></span>Pourquoi Goship</span>
+      <h2 style="margin-top:22px;font-size:clamp(32px,4.2vw,56px);line-height:1;font-weight:800">Un colis suivi,<br>un client rassuré.</h2>
+      <p style="margin-top:22px;max-width:520px;font-size:17.5px;color:#55627e">Nous gérons la chaîne complète : votre adresse de réception en Floride, le regroupement de vos achats, le transport maritime ou aérien, les formalités douanières et la livraison finale. Un seul interlocuteur, une seule facture.</p>
+      <div style="margin-top:34px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px 28px">
+        <span style="display:flex;align-items:flex-start;gap:12px;font-size:15.5px;font-weight:600"><span style="flex:none;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:rgba(244,96,13,.14);color:var(--accent);font-size:12px">✓</span>Réception et photo à l'arrivée</span>
+        <span style="display:flex;align-items:flex-start;gap:12px;font-size:15.5px;font-weight:600"><span style="flex:none;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:rgba(244,96,13,.14);color:var(--accent);font-size:12px">✓</span>Consolidation gratuite 30 jours</span>
+        <span style="display:flex;align-items:flex-start;gap:12px;font-size:15.5px;font-weight:600"><span style="flex:none;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:rgba(244,96,13,.14);color:var(--accent);font-size:12px">✓</span>Emballage renforcé sur demande</span>
+        <span style="display:flex;align-items:flex-start;gap:12px;font-size:15.5px;font-weight:600"><span style="flex:none;display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:rgba(244,96,13,.14);color:var(--accent);font-size:12px">✓</span>Facturation entreprise</span>
+      </div>
+      <div style="margin-top:40px;display:flex;flex-wrap:wrap;gap:18px;align-items:center">
+        <a href="Nos-Services.dc.html#services" style="display:inline-flex;align-items:center;gap:12px;background:var(--ink);color:#fff;font-weight:700;padding:17px 26px;border-radius:13px" style-hover="background:var(--accent);color:#fff">
+          Voir nos services
+          <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+        </a>
+        <a href="tel:+18495386262" style="display:flex;align-items:center;gap:12px;color:var(--ink)">
+          <span style="display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:rgba(244,96,13,.12);color:var(--accent);font-size:18px">☎</span>
+          <span style="display:flex;flex-direction:column;line-height:1.3;white-space:nowrap">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#8a93ac">UNE QUESTION ?</span>
+            <span style="font-weight:700;font-size:15.5px">+1 849 538-6262</span>
+          </span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="position:relative;background:var(--ink);color:#fff;overflow:hidden">
+  
+  
+  
+</section>
+
+
+
+<section id="pourquoi" style="background:#fff;padding:clamp(60px,7.5vw,116px) 20px clamp(40px,5vw,80px)">
+  <h2 style="max-width:1100px;margin:0 auto;text-align:center;color:var(--accent);text-transform:uppercase;font-size:clamp(25px,4.1vw,52px);line-height:1.05;font-weight:800">Pourquoi choisir <br>Goship Express</h2>
+
+  <div style="max-width:1200px;margin:clamp(20px,2.4vw,36px) auto 0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch">
+  <div style="position:relative;width:100%;min-width:880px;aspect-ratio:1200/900;container-type:inline-size">
+
+    <div style="position:absolute;left:22.5%;top:21.1%;width:55%;aspect-ratio:1;border-radius:50%;border:2px dashed rgba(6,26,63,.32);pointer-events:none"></div>
+    <div style="position:absolute;left:28.5%;top:29.5%;width:43%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(244,96,13,.18),rgba(244,96,13,0) 70%);pointer-events:none"></div>
+
+    <div style="position:absolute;left:30.83%;top:32.2%;width:38.33%;aspect-ratio:1;border-radius:50%;overflow:hidden;box-shadow:0 40px 80px -42px rgba(6,26,63,.6)">
+      <img src="./pourquoi-livreur.jpeg" alt="Livreur GoShip Express avec des colis, un camion et un avion" style="display:block;width:100%;height:100%;object-fit:cover;object-position:52% 30%">
+    </div>
+
+    <div style="position:absolute;left:30.83%;top:0;width:38.33%;height:28.2%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:1.2cqw;text-align:center;transition:transform .4s cubic-bezier(.2,.7,.3,1)" style-hover="transform:translateY(-10px)">
+      <div style="min-width:0">
+        <h3 style="font-size:clamp(13px,1.55cqw,19px);line-height:1.25;font-weight:800">Expédition sécurisée</h3>
+        <p style="margin-top:.5cqw;font-size:clamp(10.5px,1.2cqw,15px);line-height:1.5;color:#55627e">Vos colis sont pris en charge avec le plus grand soin, avec un suivi en temps réel pour une tranquillité d'esprit totale.</p>
+      </div>
+      <div style="flex:none;width:clamp(58px,10.67cqw,128px);aspect-ratio:1;border-radius:50%;border:2px solid var(--accent);background:#fff;display:grid;place-items:center;box-shadow:0 16px 34px -20px rgba(244,96,13,.75);transition:transform .4s cubic-bezier(.2,.7,.3,1),box-shadow .4s,border-color .4s" style-hover="transform:scale(1.09);box-shadow:0 26px 44px -18px rgba(244,96,13,.9);border-color:var(--ink)">
+        <span style="font-family:'Material Symbols Outlined';font-weight:400;font-size:clamp(24px,3.6cqw,44px);line-height:1;color:var(--accent)">local_shipping</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:1.67%;top:29.4%;width:29.4%;height:22.2%;display:flex;align-items:center;gap:1.4cqw;transition:transform .4s cubic-bezier(.2,.7,.3,1)" style-hover="transform:translateY(-10px)">
+      <div style="flex:1;min-width:0;text-align:right">
+        <h3 style="font-size:clamp(13px,1.55cqw,19px);line-height:1.25;font-weight:800">Solutions logistiques intelligentes</h3>
+        <p style="margin-top:.5cqw;font-size:clamp(10.5px,1.2cqw,15px);line-height:1.5;color:#55627e">GoShip Express utilise des technologies avancées et une gestion optimisée des itinéraires pour accélérer les livraisons, réduire les coûts et améliorer l'efficacité, garantissant ainsi un service fluide et performant.</p>
+      </div>
+      <div style="flex:none;width:clamp(58px,10.67cqw,128px);aspect-ratio:1;border-radius:50%;border:2px solid var(--accent);background:#fff;display:grid;place-items:center;box-shadow:0 16px 34px -20px rgba(244,96,13,.75);transition:transform .4s cubic-bezier(.2,.7,.3,1),box-shadow .4s,border-color .4s" style-hover="transform:scale(1.09);box-shadow:0 26px 44px -18px rgba(244,96,13,.9);border-color:var(--ink)">
+        <span style="font-family:'Material Symbols Outlined';font-weight:400;font-size:clamp(24px,3.6cqw,44px);line-height:1;color:var(--accent)">sensors</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;right:1.67%;top:29.4%;width:29.4%;height:22.2%;display:flex;flex-direction:row-reverse;align-items:center;gap:1.4cqw;transition:transform .4s cubic-bezier(.2,.7,.3,1)" style-hover="transform:translateY(-10px)">
+      <div style="flex:1;min-width:0;text-align:left">
+        <h3 style="font-size:clamp(13px,1.55cqw,19px);line-height:1.25;font-weight:800">Tarifs compétitifs</h3>
+        <p style="margin-top:.5cqw;font-size:clamp(10.5px,1.2cqw,15px);line-height:1.5;color:#55627e">Profitez d'un excellent rapport qualité-prix avec des solutions adaptées à votre budget.</p>
+      </div>
+      <div style="flex:none;width:clamp(58px,10.67cqw,128px);aspect-ratio:1;border-radius:50%;border:2px solid var(--accent);background:#fff;display:grid;place-items:center;box-shadow:0 16px 34px -20px rgba(244,96,13,.75);transition:transform .4s cubic-bezier(.2,.7,.3,1),box-shadow .4s,border-color .4s" style-hover="transform:scale(1.09);box-shadow:0 26px 44px -18px rgba(244,96,13,.9);border-color:var(--ink)">
+        <span style="font-family:'Material Symbols Outlined';font-weight:400;font-size:clamp(24px,3.6cqw,44px);line-height:1;color:var(--accent)">inventory_2</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;left:1.67%;top:65%;width:29.4%;height:20%;display:flex;align-items:center;gap:1.4cqw;transition:transform .4s cubic-bezier(.2,.7,.3,1)" style-hover="transform:translateY(-10px)">
+      <div style="flex:1;min-width:0;text-align:right">
+        <h3 style="font-size:clamp(13px,1.55cqw,19px);line-height:1.25;font-weight:800">Rapidité et efficacité</h3>
+        <p style="margin-top:.5cqw;font-size:clamp(10.5px,1.2cqw,15px);line-height:1.5;color:#55627e">Nous garantissons des livraisons rapides grâce à un réseau logistique optimisé et des partenaires de confiance.</p>
+      </div>
+      <div style="flex:none;width:clamp(58px,10.67cqw,128px);aspect-ratio:1;border-radius:50%;border:2px solid var(--accent);background:#fff;display:grid;place-items:center;box-shadow:0 16px 34px -20px rgba(244,96,13,.75);transition:transform .4s cubic-bezier(.2,.7,.3,1),box-shadow .4s,border-color .4s" style-hover="transform:scale(1.09);box-shadow:0 26px 44px -18px rgba(244,96,13,.9);border-color:var(--ink)">
+        <span style="font-family:'Material Symbols Outlined';font-weight:400;font-size:clamp(24px,3.6cqw,44px);line-height:1;color:var(--accent)">timer</span>
+      </div>
+    </div>
+
+    <div style="position:absolute;right:1.67%;top:65%;width:29.4%;height:20%;display:flex;flex-direction:row-reverse;align-items:center;gap:1.4cqw;transition:transform .4s cubic-bezier(.2,.7,.3,1)" style-hover="transform:translateY(-10px)">
+      <div style="flex:1;min-width:0;text-align:left">
+        <h3 style="font-size:clamp(13px,1.55cqw,19px);line-height:1.25;font-weight:800">Service client dédié</h3>
+        <p style="margin-top:.5cqw;font-size:clamp(10.5px,1.2cqw,15px);line-height:1.5;color:#55627e">Une équipe réactive est à votre disposition pour vous accompagner et répondre à toutes vos questions.</p>
+      </div>
+      <div style="flex:none;width:clamp(58px,10.67cqw,128px);aspect-ratio:1;border-radius:50%;border:2px solid var(--accent);background:#fff;display:grid;place-items:center;box-shadow:0 16px 34px -20px rgba(244,96,13,.75);transition:transform .4s cubic-bezier(.2,.7,.3,1),box-shadow .4s,border-color .4s" style-hover="transform:scale(1.09);box-shadow:0 26px 44px -18px rgba(244,96,13,.9);border-color:var(--ink)">
+        <span style="font-family:'Material Symbols Outlined';font-weight:400;font-size:clamp(24px,3.6cqw,44px);line-height:1;color:var(--accent)">support_agent</span>
+      </div>
+    </div>
+
+  </div>
+  </div>
+</section>
+
+<section id="services" style="background:var(--cream);padding:clamp(84px,9.5vw,150px) 28px">
+  <div style="max-width:1320px;margin:0 auto">
+    <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-end;justify-content:space-between">
+      <div style="max-width:640px;min-width:0">
+        <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#b9490a"><span style="width:26px;height:2px;background:var(--accent);display:block"></span>Nos services</span>
+        <h2 style="margin-top:22px;font-size:clamp(32px,4.2vw,56px);line-height:1;font-weight:800">De l'achat en ligne à la porte du client</h2>
+      </div>
+      <p style="max-width:340px;font-size:16px;color:#55627e">Prenez la chaîne complète, ou seulement celui qui vous manque.</p>
+    </div>
+
+    <div style="margin-top:clamp(44px,5vw,72px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px">
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -34px rgba(6,26,63,.4)">
+        <div style="position:relative">
+          <img src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Bacs de réception en entrepôt" loading="lazy" style="display:block;width:100%;height:200px;object-fit:cover">
+          <span style="position:absolute;right:22px;bottom:-26px;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;box-shadow:0 14px 26px -12px rgba(244,96,13,.9)">RX</span>
+        </div>
+        <div style="padding:32px 28px 34px">
+          <h3 style="font-size:22px;line-height:1.15;font-weight:800">Adresse de réception aux USA</h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782">Une adresse en Floride à votre nom. On reçoit, on vérifie, on photographie chaque colis.</p>
+          <a href="#adresse" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:var(--accent)">Ouvrir mon adresse<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -34px rgba(6,26,63,.4)">
+        <div style="position:relative">
+          <img src="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Colis regroupés avant expédition" loading="lazy" style="display:block;width:100%;height:200px;object-fit:cover">
+          <span style="position:absolute;right:22px;bottom:-26px;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;box-shadow:0 14px 26px -12px rgba(244,96,13,.9)">CO</span>
+        </div>
+        <div style="padding:32px 28px 34px">
+          <h3 style="font-size:22px;line-height:1.15;font-weight:800">Consolidation de colis</h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782">Plusieurs achats, un seul envoi. Vous ne payez qu'un transport, pas cinq.</p>
+          <a href="Contacts.dc.html#contact" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:var(--accent)">Estimer mon envoi<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -34px rgba(6,26,63,.4)">
+        <div style="position:relative">
+          <img src="https://images.unsplash.com/photo-1634638022845-1ab614a94128?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Navire porte-conteneurs chargé" loading="lazy" style="display:block;width:100%;height:200px;object-fit:cover">
+          <span style="position:absolute;right:22px;bottom:-26px;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;box-shadow:0 14px 26px -12px rgba(244,96,13,.9)">MR</span>
+        </div>
+        <div style="padding:32px 28px 34px">
+          <h3 style="font-size:22px;line-height:1.15;font-weight:800">Fret maritime</h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782">Le meilleur coût au kilo pour les volumes. Départs hebdomadaires depuis la Floride.</p>
+          <a href="Nos-Services.dc.html#services" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:var(--accent)">Voir les délais<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </div>
+
+      <div style="position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:30px;background:var(--ink);color:#fff;border:1px solid var(--ink);border-radius:var(--r);padding:34px 30px;overflow:hidden">
+        <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(244,96,13,.4),transparent 65%)"></div>
+        <div style="position:relative">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--accent)">AR · AÉRIEN EXPRESS</span>
+          <p style="margin-top:20px;font-family:'Archivo',sans-serif;font-stretch:110%;font-size:clamp(44px,5vw,62px);font-weight:800;line-height:.9">3–5<span style="font-size:.42em;letter-spacing:.04em"> JOURS</span></p>
+          <h3 style="margin-top:18px;font-size:22px;line-height:1.15;font-weight:800">Fret aérien express</h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#c0cdea">Urgent, fragile ou de valeur : départs plusieurs fois par semaine vers Port-au-Prince.</p>
+        </div>
+        <a href="Contacts.dc.html#contact" style="position:relative;display:inline-flex;align-items:center;justify-content:space-between;gap:14px;background:var(--accent);color:#fff;font-weight:700;padding:16px 22px;border-radius:12px" style-hover="background:#d4500a;color:#fff">Réserver un espace<span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+      </div>
+
+      
+
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -34px rgba(6,26,63,.4)">
+        <div style="position:relative">
+          
+          <span style="position:absolute;right:22px;bottom:-26px;display:grid;place-items:center;width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;box-shadow:0 14px 26px -12px rgba(244,96,13,.9)">LV</span>
+        </div>
+        
+      </div>
+    </div>
+  </div>
+</section><div style="background:var(--ink);overflow:hidden;border-top:1px solid rgba(255,255,255,.08);border-bottom:1px solid rgba(255,255,255,.08)">
+  <div style="display:flex;width:max-content;animation:om-marquee 36s linear infinite">
+    <div style="display:flex;align-items:center;gap:44px;padding:17px 22px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:#aebcdd;white-space:nowrap">
+      <span>Départs maritimes hebdomadaires</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Aérien express 3–5 jours</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Consolidation gratuite 30 jours</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Dédouanement inclus</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Assurance optionnelle</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:44px;padding:17px 22px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:#aebcdd;white-space:nowrap">
+      <span>Départs maritimes hebdomadaires</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Aérien express 3–5 jours</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Consolidation gratuite 30 jours</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Dédouanement inclus</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+      <span>Assurance optionnelle</span><span style="width:8px;height:8px;border-top:2px solid var(--accent);border-right:2px solid var(--accent);transform:rotate(45deg);display:block"></span>
+    </div>
+  </div>
+</div>
+
+<section id="adresse" style="background:#fff;padding:clamp(84px,9.5vw,150px) 28px 0">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:clamp(44px,6vw,80px);align-items:center">
+    <div style="min-width:0">
+      <div style="border:1px solid var(--accent);border-radius:6px;overflow:hidden">
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr;border-bottom:1px solid #eef2f9">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">Name</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">Votre nom complet</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr;border-bottom:1px solid #eef2f9">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">Address 1</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">8140 NW 74th Ave, Unit 3</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr;border-bottom:1px solid #eef2f9">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">Address 2</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">ABX 46780</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr;border-bottom:1px solid #eef2f9">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">City</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">Medley (Miami)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr;border-bottom:1px solid #eef2f9">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">State</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">Florida (FL)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr;border-bottom:1px solid #eef2f9">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">Zip Code</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">33166</span>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(120px,38%) 1fr">
+          <span style="padding:18px 20px;font-weight:800;font-size:16px;color:var(--accent);border-right:1px solid #eef2f9">Phone</span>
+          <span style="padding:18px 20px;font-size:16px;color:#5b6782">786 525-2944</span>
+        </div>
+      </div>
+      <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
+        <button onClick="{{ onCopy }}" type="button" style="display:inline-flex;align-items:center;gap:12px;background:var(--ink);color:#fff;font-weight:700;border:none;padding:15px 22px;border-radius:12px;cursor:pointer" style-hover="background:var(--accent)">
+          Copier l'adresse
+          <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+        </button>
+        <sc-if value="{{ copied }}" hint-placeholder-val="{{ false }}">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#1a46b8">Adresse copiée ✓</span>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="min-width:0">
+      <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#b9490a"><span style="width:26px;height:2px;background:var(--accent);display:block"></span>Votre adresse aux USA</span>
+      <h2 style="margin-top:22px;font-size:clamp(28px,3.4vw,44px);line-height:1.02;font-weight:800;color:var(--accent)">Comment commander avec Goship Express ?</h2>
+      <p style="margin-top:22px;max-width:580px;font-size:17px;color:#55627e">
+        <strong style="color: var(--ink); font-weight: 700;">Acheter avec Goship Express est très simple.</strong> Uilisez l'adresse de réception en Floride dans le tableau&nbsp;&nbsp;ci-contre. Achetez ensuite sur Amazon, SHEIN, Walmart, eBay ou chez n'importe quel fournisseur, comme d'habitude. Au moment du paiement, renseignez l'adresse de livraison exactement comme dans le tableau ci-contre, en ajoutant votre nom complet</p>
+      <p style="margin-top:16px;max-width:580px;font-size:17px;color:#55627e">
+        Dès réception au dépôt de Medley, nous photographions votre colis, le regroupons avec vos autres achats si vous le souhaitez, puis l'expédions vers Haïti ou Santo Domingo. Vous êtes livré à domicile ou retirez en agence, sans aucune démarche douanière de votre côté. <strong style="color:var(--ink);font-weight:700">C'est aussi simple que ça.</strong>
+      </p>
+      <div style="margin-top:30px;display:flex;flex-wrap:wrap;gap:14px">
+        <a href="Contacts.dc.html#contact" style="display:inline-flex;align-items:center;gap:14px;background:var(--accent);color:#fff;font-weight:700;padding:17px 18px 17px 26px;border-radius:14px;box-shadow:0 18px 40px -20px rgba(244,96,13,.95)" style-hover="background:#d4500a;color:#fff;transform:translateY(-2px)">
+          Ouvrir mon compte gratuitement
+          <span style="display:grid;place-items:center;width:32px;height:32px;background:rgba(255,255,255,.2);border-radius:9px">
+            <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+          </span>
+        </a>
+        <a href="Contacts.dc.html#faq" style="display:inline-flex;align-items:center;gap:12px;border:1px solid #d6ddec;color:var(--ink);font-weight:700;padding:17px 26px;border-radius:14px" style-hover="background:var(--cream);color:var(--ink)">Lire la FAQ</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:clamp(64px,7vw,110px);background:var(--cream);border-top:1px solid #e3e8f2">
+    <div style="max-width:1320px;margin:0 auto;padding:clamp(48px,6vw,80px) 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:24px">
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);padding:32px 30px;box-shadow:0 26px 44px -34px rgba(6,26,63,.35)">
+        <span style="display:grid;place-items:center;width:56px;height:56px;border-radius:14px 4px 14px 4px;background:rgba(244,96,13,.12);color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600"><img src="./box-mu7cqxm1-1929.png" alt="box" width="512" height="512" style="max-width: 100%; height: 33px; display: block; object-fit: cover; width: 31px; aspect-ratio: 512 / 512"></span>
+        <h3 style="margin-top:22px;font-size:20px;font-weight:800;line-height:1.2">Colis express</h3>
+        <p style="margin-top:10px;font-size:15px;color:#5b6782">Réception traitée sous 24 à 48 h au dépôt de Medley.</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);padding:32px 30px;box-shadow:0 26px 44px -34px rgba(6,26,63,.35)">
+        <span style="display:grid;place-items:center;width:56px;height:56px;border-radius:14px 4px 14px 4px;background:rgba(244,96,13,.12);color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600"><img src="./espace-reserve-mu7cxii3-ejai.png" alt="espace-reserve" width="512" height="512" style="max-width: 100%; height: 44px; display: block; object-fit: cover; width: 44px; aspect-ratio: 512 / 512"></span>
+        <h3 style="margin-top:22px;font-size:20px;font-weight:800;line-height:1.2">Suivi de bout en bout</h3>
+        <p style="margin-top:10px;font-size:15px;color:#5b6782">Chaque étape horodatée, jusqu'à la remise en main propre.</p>
+      </div>
+      <div style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);padding:32px 30px;box-shadow:0 26px 44px -34px rgba(6,26,63,.35)">
+        <span style="display:grid;place-items:center;width:56px;height:56px;border-radius:14px 4px 14px 4px;background:rgba(244,96,13,.12);color:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600"><img src="./email-mu7cu10b-09l6.png" alt="email" width="512" height="512" style="max-width: 100%; height: 34px; display: block; object-fit: cover; width: 42px; aspect-ratio: 512 / 512"></span>
+        <h3 style="margin-top:22px;font-size:20px;font-weight:800;line-height:1.2">Notifications immédiates</h3>
+        <p style="margin-top:10px;font-size:15px;color:#5b6782">Alerte WhatsApp à la réception, au départ et à l'arrivée.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="entreprises" style="position:relative;background:var(--ink);color:#fff;overflow:hidden">
+  <div style="position:absolute;top:0;right:0;width:44%;height:7px;background:var(--accent)"></div>
+  <div style="max-width:1320px;margin:0 auto;padding:clamp(84px,9.5vw,150px) 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:clamp(48px,6vw,86px);align-items:center">
+    <div style="min-width:0">
+      <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)"><span style="width:26px;height:2px;background:var(--accent);display:block"></span>Comptes entreprises</span>
+      <h2 style="margin-top:22px;font-size:clamp(32px,4.2vw,56px);line-height:1;font-weight:800">Un partenaire logistique,<br>pas un simple transporteur.</h2>
+      <p style="margin-top:22px;max-width:540px;font-size:17.5px;color:#c0cdea">Commerçants, quincailleries, pharmacies, ONG : nous structurons votre approvisionnement depuis les États-Unis avec des volumes réguliers, des coûts prévisibles et un reporting clair.</p>
+      <div style="margin-top:34px;display:grid;gap:2px;max-width:560px;border-top:1px solid rgba(255,255,255,.14)">
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.14)">
+          <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);padding-top:4px">01</span>
+          <span style="font-size:16px"><strong style="font-weight:700">Tarifs dégressifs</strong> selon vos volumes mensuels.</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.14)">
+          <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);padding-top:4px">02</span>
+          <span style="font-size:16px"><strong style="font-weight:700">Enlèvement programmé</strong> chez vos fournisseurs américains.</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.14)">
+          <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);padding-top:4px">03</span>
+          <span style="font-size:16px"><strong style="font-weight:700">Facturation mensuelle</strong> et rapport d'expéditions.</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:16px;padding:20px 0;border-bottom:1px solid rgba(255,255,255,.14)">
+          <span style="flex:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--accent);padding-top:4px">04</span>
+          <span style="font-size:16px"><strong style="font-weight:700">Interlocuteur dédié</strong>, joignable par WhatsApp.</span>
+        </div>
+      </div>
+      <a href="Contacts.dc.html#contact" style="margin-top:38px;display:inline-flex;align-items:center;gap:16px;background:var(--accent);color:#fff;font-weight:700;padding:18px 18px 18px 28px;border-radius:14px;box-shadow:0 22px 44px -20px rgba(244,96,13,.95)" style-hover="background:#d4500a;color:#fff;transform:translateY(-2px)">
+        Ouvrir un compte entreprise
+        <span style="display:grid;place-items:center;width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:9px">
+          <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>
+        </span>
+      </a>
+    </div>
+    <div style="position:relative;min-width:0">
+      <div style="border-radius:24px 24px 96px 24px;overflow:hidden;border:1px solid rgba(255,255,255,.18);box-shadow:0 50px 90px -40px rgba(0,0,0,.85)">
+        <img src="https://images.unsplash.com/photo-1565793298595-6a879b1d9492?auto=format&amp;fit=crop&amp;w=1200&amp;q=75" alt="Flotte de camions au dépôt" loading="lazy" style="display: block; width: 644px; height: 678px; object-fit: cover">
+      </div>
+      <div style="position:absolute;right:-6px;bottom:-34px;background:#fff;color:var(--ink);border-radius:16px;padding:22px 26px;box-shadow:0 34px 64px -30px rgba(0,0,0,.65);max-width:250px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;color:#8a93ac">ENGAGEMENT</span>
+        <p style="margin-top:10px;font-size:16.5px;font-weight:700;line-height:1.3">Devis chiffré sous 2 h ouvrées, tarif garanti 30 jours.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="background:var(--mist);padding:clamp(80px,9vw,140px) 28px">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px">
+    <div style="background:#fff;border-radius:var(--r);padding:38px 34px;border:1px solid #dae2f1">
+      <span style="font-family:'Archivo',sans-serif;font-size:46px;line-height:.6;color:var(--accent)">“</span>
+      <p style="margin-top:18px;font-size:18.5px;line-height:1.5;font-weight:600">Nos commandes arrivent groupées et à l'heure. On a arrêté de courir après nos colis chaque mois.</p>
+      <div style="margin-top:28px;display:flex;align-items:center;gap:14px">
+        <image-slot id="gs-av-1" shape="circle" style="width:54px;height:54px;flex:none" placeholder="Photo"></image-slot>
+        <span style="display:flex;flex-direction:column;line-height:1.35">
+          <strong style="font-size:15.5px;font-weight:700">Marie-Ange D.</strong>
+          <span style="font-size:13.5px;color:#7c87a4">Boutique cosmétiques · Pétion-Ville</span>
+        </span>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:var(--r);padding:38px 34px;border:1px solid #dae2f1">
+      <span style="font-family:'Archivo',sans-serif;font-size:46px;line-height:.6;color:var(--accent)">“</span>
+      <p style="margin-top:18px;font-size:18.5px;line-height:1.5;font-weight:600">Le dédouanement était notre cauchemar. Goship s'en occupe, nous recevons juste la facture.</p>
+      <div style="margin-top:28px;display:flex;align-items:center;gap:14px">
+        <image-slot id="gs-av-2" shape="circle" style="width:54px;height:54px;flex:none" placeholder="Photo"></image-slot>
+        <span style="display:flex;flex-direction:column;line-height:1.35">
+          <strong style="font-size:15.5px;font-weight:700">Jean-Robert P.</strong>
+          <span style="font-size:13.5px;color:#7c87a4">Responsable achats · Santo Domingo</span>
+        </span>
+      </div>
+    </div>
+    <div style="background:var(--ink2);color:#fff;border-radius:var(--r);padding:38px 34px;display:flex;flex-direction:column;justify-content:space-between;gap:26px">
+      <div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--accent)">PARLONS DE VOTRE ENVOI</span>
+        <h3 style="margin-top:16px;font-size:28px;font-weight:800;line-height:1.08">Un devis clair, en moins de 2 heures.</h3>
+        <p style="margin-top:12px;font-size:15.5px;color:#c0cdea">Dites-nous ce que vous envoyez, on vous dit combien et quand.</p>
+      </div>
+      <a href="Contacts.dc.html#contact" style="display:inline-flex;align-items:center;justify-content:space-between;gap:14px;background:var(--accent);color:#fff;font-weight:700;padding:17px 22px;border-radius:13px" style-hover="background:#d4500a;color:#fff">Demander mon devis<span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+    </div>
+  </div>
+</section>
+
+<footer style="color: #a4b3d6; padding: clamp(56px,7vw,92px) 28px 0; background-color: #101114">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:40px">
+    <div style="min-width:0;max-width:340px">
+      <span style="display: inline-flex; align-items: center; border-radius: 14px; padding: 12px 16px; background-color: #F4600C">
+        <img src="./logo-w-mu7cz2s7-qtjg.png" alt="GOShip Express — Freight &amp; Cargo" style="display:block;height:46px;width:auto">
+      </span>
+      <p style="margin-top:20px;font-size:14.5px;line-height:1.7">Transport, réception et livraison de colis entre les États-Unis, Santo Domingo et Haïti. Des solutions simples, rapides et adaptées à vos besoins.</p>
+      <div style="margin-top:22px;display:flex;gap:10px">
+        <a href="https://www.facebook.com/share/1EnDJ5wgFG/" style="display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.07); color: #FFFFFF; font-size: 13px; font-weight: 700" style-hover="background:var(--accent);color:#fff">f</a>
+        
+        <a href="#top" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700" style-hover="background:var(--accent);color:#fff">IG</a><a href="#top" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700" style-hover="background:var(--accent);color:#fff">Tok</a>
+        <a href="#top" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700" style-hover="background:var(--accent);color:#fff">wa</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Services</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="#adresse" style="color:#a4b3d6" style-hover="color:var(--accent)">Adresse de réception USA</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Consolidation de colis</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Fret maritime</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Fret aérien express</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Dédouanement</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navigation</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="Goship%20Express.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Accueil</a>
+        <a href="A-propos.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">À propos</a>
+        <a href="Nos-Services.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Nos Services</a>
+        <a href="Blog.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Blog</a>
+        <a href="Contacts.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Contacts</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Nous joindre</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <span style="color:#dde5f8;font-weight:700">+1 849 538-6262</span>
+        <span style="word-break:break-word">goshipexpressllc@gmail.com</span>
+        <span>Lun–Sam · 8h00–18h00</span>
+        <span>8140 NW 74th Ave, Unit 3, Apt 46780<br>Medley, Florida 33166</span>
+        <a href="Contacts.dc.html#contact" style="margin-top:6px;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;font-weight:700;padding:14px 20px;border-radius:11px;justify-self:start" style-hover="background:#d4500a;color:#fff">Demander un devis<span style="width:8px;height:8px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+      </div>
+    </div>
+  </div>
+  <div style="max-width:1320px;margin:clamp(40px,5vw,64px) auto 0;padding:24px 0 28px;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase">
+    <span>© 2026 Goship Express LLC · Tous droits réservés</span>
+    <span style="display:flex;flex-wrap:wrap;gap:12px 22px">
+      <a href="Termes-et-Conditions.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Termes &amp; conditions</a>
+      <a href="Marchandises-Dangereuses.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Marchandises dangereuses</a>
+      <a href="Support.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Support</a>
+      <a href="Fermer-un-compte.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Fermer un compte</a>
+      <a href="Confidentialite.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Confidentialité</a>
+    </span>
+  </div>
+  
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentColor&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#f4600d&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Direction artistique&quot;, &quot;options&quot;: [&quot;#f4600d&quot;, &quot;#1f5fe0&quot;, &quot;#f5b301&quot;, &quot;#e23c2f&quot;] },
+  &quot;corners&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Arrondi&quot;, &quot;Net&quot;], &quot;default&quot;: &quot;Arrondi&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Direction artistique&quot; },
+  &quot;showTracking&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Sections&quot; },
+  &quot;showPricing&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Sections&quot; }
+}">
+class Component extends DCLogic {
+  state = { track: '', trackResult: null, sent: false, copied: false };
+
+  copyAddress = () => {
+    const txt = "Votre nom complet\n8140 NW 74th Ave, Unit 3\nApt 46780 (+ votre n° client GSE)\nMedley (Miami), Florida (FL) 33166\n+1 849 538-6262";
+    const done = () => {
+      this.setState({ copied: true });
+      clearTimeout(this._t);
+      this._t = setTimeout(() => this.setState({ copied: false }), 2600);
+    };
+    try {
+      if (navigator.clipboard) { navigator.clipboard.writeText(txt).then(done, done); return; }
+    } catch (e) { /* fallback below */ }
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    done();
+  };
+
+  applyVars() {
+    const d = document.documentElement;
+    if (this.props.accentColor) d.style.setProperty('--accent', this.props.accentColor);
+    d.style.setProperty('--r', this.props.corners === 'Net' ? '3px' : '18px');
+  }
+  componentDidMount() { this.applyVars(); }
+  componentDidUpdate() { this.applyVars(); }
+
+  renderVals() {
+    return {
+      showPricing: this.props.showPricing ?? true,
+      showTracking: this.props.showTracking ?? true,
+      trackValue: this.state.track,
+      trackResult: this.state.trackResult,
+      sent: this.state.sent,
+      notSent: !this.state.sent,
+      copied: this.state.copied,
+      onCopy: this.copyAddress,
+      onTrackInput: (e) => this.setState({ track: e.target.value }),
+      onTrack: (e) => {
+        e.preventDefault();
+        const ref = (this.state.track || '').trim().toUpperCase();
+        this.setState({ trackResult: ref || 'GSE-4821-HT' });
+      },
+      onSubmit: (e) => { e.preventDefault(); this.setState({ sent: true }); },
+      onReset: () => this.setState({ sent: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

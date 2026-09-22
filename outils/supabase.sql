@@ -11,6 +11,7 @@
 --   colis              les colis, chacun rattaché à un client (GSE-1001-HT…)
 --   colis_historique   chaque changement de statut : date, lieu, note
 --   notifications      les e-mails et messages WhatsApp envoyés aux clients
+--   factures           les factures, et leurs lignes (un colis par ligne)
 --
 -- Sécurité : chaque client ne voit que son profil et ses colis ; seuls les
 -- comptes administrateurs voient tout et peuvent enregistrer des colis.
@@ -299,6 +300,8 @@ with (security_invoker = true) as
          cl.nom_complet as nom_client,
          cl.telephone   as telephone_client,
          cl.email       as email_client,
+         cl.adresse     as adresse_client,
+         cl.region      as region_client,
          cl.ville       as ville_client,
          cl.pays        as pays_client,
          cl.langue      as langue_client
@@ -1617,6 +1620,78 @@ revoke execute on function public.courriel_gabarit(text, text, text, text, text,
   from public, anon;
 revoke execute on function public.renvoyer_courriels_bienvenue(text) from public, anon;
 grant execute on function public.renvoyer_courriels_bienvenue(text) to authenticated;
+
+
+-- 15. Les factures dans l'espace client --------------------------------------------
+-- Le tableau de bord crée les factures (partie 10) ; le client les lit ici, et
+-- les voit changer d'état sans recharger sa page.
+--
+-- L'adresse complète du client se trouve dans la vue colis_details de la
+-- partie 4 : c'est elle qui s'imprime sur les étiquettes d'expédition.
+
+-- Les factures du client -------------------------------------------------------
+-- Appelée par « Mon compte » (assets/js/api.js, mesFactures).
+--
+-- Volontairement **sans** security definer : la fonction s'exécute avec les
+-- droits de celui qui l'appelle, donc les règles de sécurité des tables
+-- s'appliquent malgré tout. Le filtre « client_id = auth.uid() » dit la même
+-- chose une seconde fois : même une erreur d'écriture ici ne laisserait
+-- personne lire les factures d'un autre.
+create or replace function public.mes_factures()
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(f order by f.cree_le desc), '[]'::jsonb)
+  from (
+    select jsonb_build_object(
+             'id',            fa.id,
+             'numero',        fa.numero,
+             'montant_usd',   fa.montant_usd,
+             'statut',        fa.statut,
+             'note',          fa.note,
+             'lien_paiement', fa.lien_paiement,
+             'moyen',         fa.moyen,
+             'echeance_le',   fa.echeance_le,
+             'cree_le',       fa.cree_le,
+             'payee_le',      fa.payee_le,
+             'lignes',        coalesce((
+               select jsonb_agg(jsonb_build_object(
+                        'libelle',     l.libelle,
+                        'montant_usd', l.montant_usd,
+                        'colis',       co.numero) order by l.id)
+               from public.facture_lignes l
+               left join public.colis co on co.id = l.colis_id
+               where l.facture_id = fa.id), '[]'::jsonb)) as f,
+           fa.cree_le
+    from public.factures fa
+    where fa.client_id = (select auth.uid())
+  ) f
+$$;
+
+revoke execute on function public.mes_factures() from public, anon;
+grant execute on function public.mes_factures() to authenticated;
+
+
+-- Les factures en direct -------------------------------------------------------
+-- « Payée » cochée dans le tableau de bord, et la facture change d'état chez le
+-- client dans la seconde. Les règles de sécurité s'appliquent aussi à ces
+-- messages : chacun ne reçoit que les changements de ses propres factures.
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'factures') then
+    alter publication supabase_realtime add table public.factures;
+  end if;
+  if not exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'facture_lignes') then
+    alter publication supabase_realtime add table public.facture_lignes;
+  end if;
+exception
+  when undefined_object then
+    raise notice 'Publication supabase_realtime absente : factures sans mise à jour en direct.';
+end $$;
 
 -- Fin. Rien d'autre à faire ici : les réglages restants (confirmation des
 -- adresses e-mail, adresses de retour autorisées, longueur des mots de passe)

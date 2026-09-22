@@ -26,6 +26,8 @@
 <script src="../assets/js/config.js" defer></script>
 <script src="../assets/js/site.js" defer></script>
 <script src="../assets/js/api.js" defer></script>
+<script src="../assets/js/codes.js" defer></script>
+<script src="../assets/js/impression.js" defer></script>
 <script src="../assets/js/compte.js" defer></script>
 </head>
 <body>
@@ -147,6 +149,22 @@
             <p>Sus paquetes entregados siguen disponibles aquí.</p>
           </div>
           <p class="gs-form__erreur" data-colis-erreur role="alert" hidden></p>
+        </div>
+
+        <div class="gs-panneau gs-panneau--factures">
+          <div class="gs-panneau__tete">
+            <h2>Mis facturas</h2>
+            <span class="gs-panneau__total" data-total-factures hidden></span>
+          </div>
+          <div class="gs-factures" data-liste-factures aria-busy="true">
+            <div class="gs-squelette" aria-hidden="true"></div>
+          </div>
+          <div class="gs-vide" data-vide="factures" hidden>
+            <span class="gs-vide__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg></span>
+            <strong>Ninguna factura por ahora</strong>
+            <p>En cuanto calculamos el transporte de un paquete, la factura aparece aquí: puede pagarla en línea, imprimirla o guardarla.</p>
+          </div>
+          <p class="gs-form__erreur" data-factures-erreur role="alert" hidden></p>
         </div>
       </div>
 
@@ -278,6 +296,27 @@
   </article>
 </template>
 
+<template data-modele="facture">
+  <article class="gs-facture">
+    <div class="gs-facture__tete">
+      <div class="gs-facture__id">
+        <span class="gs-facture__numero" data-champ="numero" translate="no"></span>
+        <p class="gs-facture__date" data-champ="date"></p>
+      </div>
+      <div class="gs-facture__cote">
+        <strong class="gs-facture__montant" data-champ="montant" translate="no"></strong>
+        <span class="gs-badge" data-champ="statut"></span>
+      </div>
+    </div>
+    <ul class="gs-facture__lignes" data-champ="lignes"></ul>
+    <p class="gs-facture__note" data-champ="note" translate="no" hidden></p>
+    <div class="gs-facture__actions">
+      <a class="gs-bouton gs-bouton--petit gs-bouton--plein" data-champ="payer" target="_blank" rel="noopener" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>Pagar con tarjeta</a>
+      <button type="button" class="gs-lien-bouton" data-champ="imprimer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Imprimir o guardar</button>
+    </div>
+  </article>
+</template>
+
 <template data-textes>
   <p data-t="statut-recu">Recibido</p>
   <p data-t="statut-emballe">Embalado</p>
@@ -344,6 +383,21 @@
   <p data-t="demo-lien">Modo de demostración: no se envía ningún correo. Abra directamente el enlace de restablecimiento:</p>
   <p data-t="profil-ok">Datos guardados ✓</p>
   <p data-t="demo-bandeau">Modo de demostración: mientras no se configure Supabase, las cuentas y los paquetes se guardan solo en este navegador.</p>
+  <p data-t="facture-a_payer">Por pagar</p>
+  <p data-t="facture-payee">Pagada</p>
+  <p data-t="facture-annulee">Anulada</p>
+  <p data-t="facture-etablie">Emitida el {date}</p>
+  <p data-t="facture-echeance">a pagar antes del {date}</p>
+  <p data-t="facture-payee-le">pagada el {date}</p>
+  <p data-t="facture-colis">Paquete {numero}</p>
+  <p data-t="facture-transport">Transporte</p>
+  <p data-t="facture-moyen-paypal">Pagada con PayPal</p>
+  <p data-t="facture-moyen-banque">Pagada por transferencia bancaria</p>
+  <p data-t="facture-moyen-azul">Pagada con Azul</p>
+  <p data-t="facture-moyen-moncash">Pagada con MonCash</p>
+  <p data-t="facture-moyen-natcash">Pagada con NatCash</p>
+  <p data-t="facture-moyen-especes">Pagada en efectivo</p>
+  <p data-t="factures-total">{n} por pagar</p>
   <p data-t="admin-avis">Esta es una cuenta de administrador.</p>
   <p data-t="admin-lien">Abrir el panel de control</p>
 </template>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="preconnect" href="https://images.unsplash.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap" rel="stylesheet">
+<script src="./image-slot.js"></script>
+<style>
+:root{--ink:#061a3f;--ink2:#0d2b6b;--ink3:#1746a8;--accent:#f4600d;--accent2:#1f5fe0;--cream:#f5f7fb;--mist:#e7edf9;--r:18px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
+body{margin:0;background:#fff;color:#061a3f;font-family:'Manrope',system-ui,sans-serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;text-wrap:pretty}
+a{color:var(--accent);text-decoration:none}
+a:hover{color:var(--ink2)}
+h1,h2,h3,h4{margin:0;font-family:'Archivo','Manrope',sans-serif;font-stretch:110%;letter-spacing:-0.022em}
+p{margin:0}
+img{max-width:100%}
+input,textarea,select,button{font-family:inherit;font-size:16px}
+form input,form textarea,form select{width:100%;min-width:0}
+form label{min-width:0}
+input::placeholder,textarea::placeholder{color:#8a93ac}
+#contact input::placeholder,#contact textarea::placeholder{color:rgba(255,255,255,.45)}
+summary{list-style:none;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+details[open] .om-plus{transform:rotate(45deg);background:var(--accent) !important;color:#fff;border-color:var(--accent) !important}
+@keyframes om-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes om-rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</helmet>
+
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#061a3f"></rect><rect x="30" y="34" width="40" height="32" rx="4" fill="#f4600d"></rect><rect x="38" y="44" width="24" height="4" rx="2" fill="#fff"></rect><rect x="38" y="53" width="16" height="4" rx="2" fill="#fff"></rect></svg></template>
+<div style="overflow-x:hidden">
+
+<div style="background:#030f2b;color:#94a7cc;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase">
+  <div style="max-width:1320px;margin:0 auto;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;justify-content:space-between">
+    <span style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;background:var(--accent);display:block"></span>8140 NW 74th Ave, Unit 3, Apt 46780, Medley, Florida 33166</span>
+    <div style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:center">
+      <span style="color:#dde5f8">goshipexpressllc@gmail.com</span>
+      <span>Lun–Sam · 8h–18h</span>
+      <span style="color:var(--accent)">Devis sous 2 h</span>
+    </div>
+  </div>
+</div>
+
+<header style="position:sticky;top:0;z-index:60;background:rgba(6,26,63,.95);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.1)">
+  <div style="max-width:1320px;margin:0 auto;padding:14px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;justify-content:space-between">
+    <a href="#top" style="display:flex;align-items:center;flex:none">
+      <span style="display:flex;align-items:center;background:#fff;border-radius:13px;padding:8px 14px;box-shadow:0 10px 26px -14px rgba(0,0,0,.7)">
+        <img src="goship-logo.png" alt="GOShip Express — Freight &amp; Cargo" style="display:block;height:40px;width:auto">
+      </span>
+    </a>
+    <nav style="display:flex;align-items:center;gap:30px;flex-wrap:wrap;font-size:15px;font-weight:600">
+      <a href="Goship%20Express.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">Accueil</a>
+      <a href="A-propos.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">À propos</a>
+      <a href="Nos-Services.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">Nos Services</a>
+      <a href="Blog.dc.html" style="color:var(--accent)" style-hover="color:var(--accent)">Blog</a>
+      <a href="Contacts.dc.html" style="color:#dde5f8" style-hover="color:var(--accent)">Contacts</a>
+    </nav>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">
+      <a href="tel:+18495386262" style="display:flex;align-items:center;gap:11px;color:#fff;white-space:nowrap">
+        <span style="display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:rgba(244,96,13,.18);border:1px solid rgba(244,96,13,.5);color:var(--accent);font-size:16px">☎</span>
+        <span style="display:flex;flex-direction:column;line-height:1.25">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#95a5ca">APPELEZ-NOUS</span>
+          <span style="font-weight:700;font-size:15px">+1 849 538-6262</span>
+        </span>
+      </a>
+      <a href="Contacts.dc.html#contact" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)" style-hover="background:#d4500a;color:#fff">Demander un devis</a>
+    </div>
+  </div>
+</header>
+
+<section id="top" style="position:relative;background:var(--ink);color:#fff;overflow:hidden">
+  <img src="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?auto=format&amp;fit=crop&amp;w=1800&amp;q=70" alt="Colis en carton" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4" />
+  <div style="position:absolute;inset:0;background:linear-gradient(100deg,rgba(6,26,63,.96),rgba(6,26,63,.74) 62%,rgba(13,43,107,.8))"></div>
+  <div style="position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:26px 26px;opacity:.45"></div>
+  <div style="position:relative;max-width:1320px;margin:0 auto;padding:clamp(60px,7vw,110px) 28px clamp(76px,9vw,132px)">
+    <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)"><span style="width:26px;height:2px;background:var(--accent);display:block"></span>Blog</span>
+    <h1 style="margin-top:24px;font-size:clamp(38px,5.4vw,74px);line-height:.95;font-weight:800;max-width:860px">Conseils, douane et bonnes pratiques d'expédition</h1>
+    <p style="margin-top:24px;max-width:580px;font-size:17.5px;color:#c0cdea">Tout ce qu'il faut savoir pour acheter aux États-Unis et recevoir sans mauvaise surprise.</p>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;height:48px;background:var(--accent);clip-path:polygon(0 100%,100% 0,100% 100%)"></div>
+</section>
+
+<section style="background:var(--cream);padding:clamp(84px,9.5vw,150px) 28px">
+  <div style="max-width:1320px;margin:0 auto">
+    <div style="max-width:660px">
+      <span style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#b9490a"><span style="width:26px;height:2px;background:var(--accent);display:block"></span>Conseils &amp; actualités</span>
+      <h2 style="margin-top:22px;font-size:clamp(30px,3.8vw,50px);line-height:1.02;font-weight:800">Acheter aux USA, livrer aux Caraïbes : nos guides</h2>
+    </div>
+    <div style="margin-top:clamp(44px,5vw,72px);display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:26px">
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-conseils-livraison.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1587293852726-70cdb56c2866?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Colis prêts à l'expédition" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Conseils</span><span style="color:#8a93ac">15 sept. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-conseils-livraison.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">10 conseils essentiels pour utiliser un service de livraison</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Acheter sur Amazon, Shein, Temu ou eBay depuis la République dominicaine est de plus en plus courant grâce aux services de livraison. Mais si vous ne savez pas…</p>
+          <a href="Article-conseils-livraison.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-optimiser-expeditions.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1592085198739-ffcad7f36b54?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Entrepôt de consolidation" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Entreprises</span><span style="color:#8a93ac">10 sept. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-optimiser-expeditions.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Comment optimiser les expéditions dans votre entreprise</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Savoir comment optimiser les expéditions pour gagner du temps et de l'argent est essentiel, tant pour les particuliers qui envoient des colis de temps en temps que…</p>
+          <a href="Article-optimiser-expeditions.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-premiere-livraison.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Bacs de réception en entrepôt" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Guide</span><span style="color:#8a93ac">4 sept. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-premiere-livraison.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Utiliser un service de livraison pour la première fois</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Acheter dans des boutiques internationales peut sembler compliqué la première fois, surtout lorsque l’on ne sait pas comment fonctionne un service de livraison en…</p>
+          <a href="Article-premiere-livraison.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-partenaire-colis-etranger.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1605732563938-8f8d4e7ad651?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Conteneurs sur un terminal" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Goship</span><span style="color:#8a93ac">28 août 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-partenaire-colis-etranger.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Votre partenaire de confiance pour recevoir vos colis depuis l'étranger</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Vous êtes-vous déjà demandé comment recevoir vos achats internationaux rapidement, en toute sécurité et sans complications ? Goship Express est la solution idéale…</p>
+          <a href="Article-partenaire-colis-etranger.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-impact-ecommerce.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1606964212858-c215029db704?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Conteneurs et formalités douanières" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">E-commerce</span><span style="color:#8a93ac">21 août 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-impact-ecommerce.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">L'impact des services de livraison sur le commerce électronique</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Au cours des dix dernières années, la République dominicaine a connu une transformation significative dans la manière dont ses citoyens achètent des produits,…</p>
+          <a href="Article-impact-ecommerce.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-boutiques-chinoises.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1670121180530-cfcba4438038?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Cargo à quai" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Achats</span><span style="color:#8a93ac">14 août 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-boutiques-chinoises.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Les 6 meilleures boutiques chinoises pour vos achats</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Si vous adorez le shopping en ligne et que vous ne pouvez pas résister aux prix ultra-bas des boutiques chinoises, cet article est fait pour vous ! 🌟 Aujourd’hui,…</p>
+          <a href="Article-boutiques-chinoises.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-pourquoi-goship-express.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1616432043562-3671ea2e5242?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Camion de livraison" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Goship</span><span style="color:#8a93ac">7 août 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-pourquoi-goship-express.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Pourquoi Goship Express est votre meilleur choix pour Amazon, Shein et eBay</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">L’essor des achats en ligne a incité de nombreux habitants de la République dominicaine à utiliser des plateformes internationales pour acheter des produits à des…</p>
+          <a href="Article-pourquoi-goship-express.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-service-de-messagerie.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1695222833131-54ee679ae8e5?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Camion sur la route" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Guide</span><span style="color:#8a93ac">31 juil. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-service-de-messagerie.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Qu'est-ce qu'un service de messagerie et comment fonctionne-t-il ?</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Si vous avez déjà effectué des achats à l'étranger ou si vous avez besoin d'envoyer un colis hors du pays, vous vous êtes sûrement déjà demandé ce qu'est un service…</p>
+          <a href="Article-service-de-messagerie.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-tendances-2026.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1494412519320-aa613dfb7738?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Terminal à conteneurs vu du ciel" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Tendances</span><span style="color:#8a93ac">24 juil. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-tendances-2026.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Tendances de la logistique et de la livraison de colis pour 2026</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">La logistique et la livraison de colis intelligentes de 2026 redéfinissent la manière dont les entreprises gèrent les expéditions, optimisent les itinéraires et…</p>
+          <a href="Article-tendances-2026.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-maritime-vs-aerien.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1634638022845-1ab614a94128?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Navire porte-conteneurs" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Comparatif</span><span style="color:#8a93ac">17 juil. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-maritime-vs-aerien.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Transport maritime ou transport aérien : que choisir ?</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Le transport maritime et le transport aérien constituent deux modes distincts de transport de marchandises dans le cadre de la logistique internationale, chacun…</p>
+          <a href="Article-maritime-vs-aerien.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+      <article style="background:#fff;border:1px solid #e3e8f2;border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;transition:transform .3s,box-shadow .3s" style-hover="transform:translateY(-8px);box-shadow:0 36px 60px -40px rgba(6,26,63,.45)">
+        <a href="Article-entreprise-fiable.dc.html" style="display:block"><img src="https://images.unsplash.com/photo-1724597500306-a4cbb7d1324e?auto=format&amp;fit=crop&amp;w=900&amp;q=72" alt="Porte-conteneurs en pleine mer" loading="lazy" style="display:block;width:100%;height:210px;object-fit:cover"></a>
+        <div style="padding:30px 28px 34px;display:flex;flex-direction:column;flex:1">
+          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase">
+            <span style="color:#b9490a">Guide</span><span style="color:#8a93ac">10 juil. 2026</span>
+          </div>
+          <h3 style="margin-top:14px;font-size:21px;font-weight:800;line-height:1.18"><a href="Article-entreprise-fiable.dc.html" style="color:var(--ink)" style-hover="color:var(--accent)">Entreprise de livraison fiable : comment choisir la meilleure</a></h3>
+          <p style="margin-top:12px;font-size:15.5px;color:#5b6782;flex:1">Envoyer un colis peut sembler simple : il suffit de remplir un formulaire, d’indiquer l’adresse et d’attendre la livraison. Cependant, derrière chaque envoi se cache…</p>
+          <a href="Article-entreprise-fiable.dc.html" style="margin-top:20px;display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#b9490a;align-self:flex-start" style-hover="color:var(--ink)">Lire l'article<span style="width:7px;height:7px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg);display:block"></span></a>
+        </div>
+      </article>
+    </div>
+
+    <div style="margin-top:clamp(44px,5vw,72px);display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:28px;align-items:center;background:var(--ink);color:#fff;border-radius:var(--r);padding:clamp(32px,4vw,52px)">
+      <div style="min-width:0">
+        <h3 style="font-size:clamp(24px,2.6vw,32px);font-weight:800;line-height:1.08">Recevez nos conseils d'expédition</h3>
+        <p style="margin-top:12px;font-size:16px;color:#c0cdea">Un e-mail par mois : délais du mois, changements douaniers, astuces d'emballage. Rien d'autre.</p>
+      </div>
+      <form onSubmit="{{ onSubmit }}" style="display:flex;flex-wrap:wrap;gap:12px;min-width:0">
+        <input required="required" type="email" placeholder="vous@exemple.com" style="flex:1 1 200px;padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff" />
+        <button type="submit" style="display:inline-flex;align-items:center;gap:12px;background:var(--accent);color:#fff;font-weight:700;border:none;padding:16px 24px;border-radius:12px;cursor:pointer" style-hover="background:#d4500a">S'inscrire<span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer style="color: #a4b3d6; padding: clamp(56px,7vw,92px) 28px 0; background-color: #101114">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:40px">
+    <div style="min-width:0;max-width:340px">
+      <span style="display: inline-flex; align-items: center; border-radius: 14px; padding: 12px 16px; background-color: #F4600C">
+        <img src="./logo-w-mu7cz2s7-qtjg.png" alt="GOShip Express — Freight &amp; Cargo" style="display:block;height:46px;width:auto">
+      </span>
+      <p style="margin-top:20px;font-size:14.5px;line-height:1.7">Transport, réception et livraison de colis entre les États-Unis, Santo Domingo et Haïti. Des solutions simples, rapides et adaptées à vos besoins.</p>
+      <div style="margin-top:22px;display:flex;gap:10px">
+        <a href="https://www.facebook.com/share/1EnDJ5wgFG/" style="display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.07); color: #FFFFFF; font-size: 13px; font-weight: 700" style-hover="background:var(--accent);color:#fff">f</a>
+        
+        <a href="#top" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700" style-hover="background:var(--accent);color:#fff">IG</a><a href="#top" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700" style-hover="background:var(--accent);color:#fff">Tok</a>
+        <a href="#top" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700" style-hover="background:var(--accent);color:#fff">wa</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Services</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="Goship%20Express.dc.html#adresse" style="color:#a4b3d6" style-hover="color:var(--accent)">Adresse de réception USA</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Consolidation de colis</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Fret maritime</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Fret aérien express</a>
+        <a href="Nos-Services.dc.html#services" style="color:#a4b3d6" style-hover="color:var(--accent)">Dédouanement</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navigation</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="Goship%20Express.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Accueil</a>
+        <a href="A-propos.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">À propos</a>
+        <a href="Nos-Services.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Nos Services</a>
+        <a href="Blog.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Blog</a>
+        <a href="Contacts.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Contacts</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Nous joindre</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <span style="color:#dde5f8;font-weight:700">+1 849 538-6262</span>
+        <span style="word-break:break-word">goshipexpressllc@gmail.com</span>
+        <span>Lun–Sam · 8h00–18h00</span>
+        <span>8140 NW 74th Ave, Unit 3, Apt 46780<br>Medley, Florida 33166</span>
+        <a href="Contacts.dc.html#contact" style="margin-top:6px;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;font-weight:700;padding:14px 20px;border-radius:11px;justify-self:start" style-hover="background:#d4500a;color:#fff">Demander un devis<span style="width:8px;height:8px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+      </div>
+    </div>
+  </div>
+  <div style="max-width:1320px;margin:clamp(40px,5vw,64px) auto 0;padding:24px 0 28px;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase">
+    <span>© 2026 Goship Express LLC · Tous droits réservés</span>
+    <span style="display:flex;flex-wrap:wrap;gap:12px 22px">
+      <a href="Termes-et-Conditions.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Termes &amp; conditions</a>
+      <a href="Marchandises-Dangereuses.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Marchandises dangereuses</a>
+      <a href="Support.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Support</a>
+      <a href="Fermer-un-compte.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Fermer un compte</a>
+      <a href="Confidentialite.dc.html" style="color:#a4b3d6" style-hover="color:var(--accent)">Confidentialité</a>
+    </span>
+  </div>
+  
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;accentColor&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#f4600d&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Direction artistique&quot;, &quot;options&quot;: [&quot;#f4600d&quot;, &quot;#1f5fe0&quot;, &quot;#f5b301&quot;, &quot;#e23c2f&quot;] },
+  &quot;corners&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Arrondi&quot;, &quot;Net&quot;], &quot;default&quot;: &quot;Arrondi&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Direction artistique&quot; },
+  &quot;showTracking&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Sections&quot; },
+  &quot;showPricing&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Sections&quot; }
+}">
+class Component extends DCLogic {
+  state = { track: '', trackResult: null, sent: false, copied: false };
+
+  copyAddress = () => {
+    const txt = "Votre nom complet\n8140 NW 74th Ave, Unit 3\nApt 46780 (+ votre n° client GSE)\nMedley (Miami), Florida (FL) 33166\n+1 849 538-6262";
+    const done = () => {
+      this.setState({ copied: true });
+      clearTimeout(this._t);
+      this._t = setTimeout(() => this.setState({ copied: false }), 2600);
+    };
+    try {
+      if (navigator.clipboard) { navigator.clipboard.writeText(txt).then(done, done); return; }
+    } catch (e) { /* fallback below */ }
+    const ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    done();
+  };
+
+  applyVars() {
+    const d = document.documentElement;
+    if (this.props.accentColor) d.style.setProperty('--accent', this.props.accentColor);
+    d.style.setProperty('--r', this.props.corners === 'Net' ? '3px' : '18px');
+  }
+  componentDidMount() { this.applyVars(); }
+  componentDidUpdate() { this.applyVars(); }
+
+  renderVals() {
+    return {
+      showPricing: this.props.showPricing ?? true,
+      showTracking: this.props.showTracking ?? true,
+      trackValue: this.state.track,
+      trackResult: this.state.trackResult,
+      sent: this.state.sent,
+      notSent: !this.state.sent,
+      copied: this.state.copied,
+      onCopy: this.copyAddress,
+      onTrackInput: (e) => this.setState({ track: e.target.value }),
+      onTrack: (e) => {
+        e.preventDefault();
+        const ref = (this.state.track || '').trim().toUpperCase();
+        this.setState({ trackResult: ref || 'GSE-4821-HT' });
+      },
+      onSubmit: (e) => { e.preventDefault(); this.setState({ sent: true }); },
+      onReset: () => this.setState({ sent: false })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+<main id="contenu-principal" tabindex="-1">
+
+<section class="gs-compte" data-no-reveal>
+  <div class="gs-compte__wrap">
+    <div class="gs-carte-auth">
+      <div class="gs-carte-auth__tete">
+        <div class="gs-carte-auth__marque">
+          <span class="gs-carte-auth__icone">[[ico:user-plus]]</span>
+          <span class="gs-carte-auth__surtitre">Nouveau client</span>
+        </div>
+        <h1>Créer votre compte</h1>
+        <p>Remplissez vos informations pour recevoir votre code client et suivre vos colis plus facilement.</p>
+      </div>
+
+      <ul class="gs-atouts">
+        <li><span class="gs-atouts__ico gs-atouts__ico--vert">[[ico:check-circle]]</span>Inscription rapide</li>
+        <li><span class="gs-atouts__ico gs-atouts__ico--bleu">[[ico:shield]]</span>Compte sécurisé</li>
+        <li><span class="gs-atouts__ico gs-atouts__ico--ciel">[[ico:map-pin]]</span>Région et ville</li>
+      </ul>
+
+      <div class="gs-carte-auth__corps">
+        <div class="gs-alerte gs-alerte--info" data-espace-ferme hidden>
+          <strong>L'espace client ouvre très bientôt.</strong> En attendant, ouvrez votre compte avec un conseiller sur WhatsApp : <a data-lien-wa="wa-inscription" href="https://wa.me/18495386262" target="_blank" rel="noopener">écrire sur WhatsApp</a>.
+        </div>
+
+        <div class="gs-methode" data-methode>
+          <p class="gs-methode__titre">Choisissez votre méthode d'inscription</p>
+          <p class="gs-methode__texte" data-methode-texte="formulaire">Remplissez directement le formulaire ci-dessous.</p>
+          <p class="gs-methode__texte" data-methode-texte="choix" hidden>Deux façons d'ouvrir votre compte Goship Express.</p>
+          <div class="gs-methode__choisie" data-methode-choisie>
+            <div>
+              <strong>Inscription avec le formulaire</strong>
+              <span>Renseignez toutes les informations demandées.</span>
+            </div>
+            <button type="button" class="gs-lien-bouton" data-action="methodes" aria-expanded="false">Retour</button>
+          </div>
+          <div class="gs-methode__liste" data-methode-liste hidden>
+            <button type="button" class="gs-methode__option" data-action="methode-formulaire">
+              <span class="gs-methode__pictogramme">[[ico:clipboard]]</span>
+              <span class="gs-methode__libelle"><strong>Inscription avec le formulaire</strong><span>Renseignez toutes les informations demandées.</span></span>
+              <span class="gs-chevron" aria-hidden="true"></span>
+            </button>
+            <a class="gs-methode__option" data-lien-wa="wa-inscription" href="https://wa.me/18495386262" target="_blank" rel="noopener">
+              <span class="gs-methode__pictogramme gs-methode__pictogramme--wa">[[ico:message]]</span>
+              <span class="gs-methode__libelle"><strong>Inscription par WhatsApp</strong><span>Un conseiller ouvre votre compte avec vous.</span></span>
+              <span class="gs-chevron" aria-hidden="true"></span>
+            </a>
+          </div>
+        </div>
+
+        <form class="gs-form" data-form="inscription" novalidate>
+          <input class="gs-hp" type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <div class="gs-form__grille">
+            <div class="gs-champ">
+              <label for="ins-nom">Nom complet<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-nom" name="nom_complet" autocomplete="name" required minlength="3" maxlength="120" placeholder="Entrez votre nom complet">
+            </div>
+            <div class="gs-champ">
+              <label for="ins-pays">Pays<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-pays" name="pays" required data-pays>
+                <option value="">Sélectionnez un pays</option>
+                <option value="HT">Haïti</option>
+                <option value="DO">République dominicaine</option>
+                <option value="US">États-Unis</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-region">Région<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-region" name="region" required data-region>
+                <option value="">Sélectionnez une région</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-ville">Ville<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-ville" name="ville" required data-ville>
+                <option value="">Sélectionnez une ville</option>
+              </select>
+              <input class="gs-champ__autre" name="ville_autre" autocomplete="address-level2" required maxlength="80" placeholder="Entrez votre ville" aria-label="Ville" data-ville-autre hidden disabled>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-adresse">Adresse<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-adresse" name="adresse" autocomplete="street-address" required minlength="3" maxlength="200" placeholder="Entrez votre adresse">
+            </div>
+            <div class="gs-champ">
+              <label for="ins-tel">Téléphone<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-tel" name="telephone" type="tel" autocomplete="tel" required maxlength="40" placeholder="Entrez votre téléphone" data-telephone>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-email">E-mail<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="Entrez votre e-mail" spellcheck="false">
+            </div>
+            <div class="gs-champ">
+              <label for="ins-mdp">Mot de passe<span class="gs-requis" aria-hidden="true">*</span></label>
+              <div class="gs-mdp">
+                <input id="ins-mdp" name="mot_de_passe" type="password" autocomplete="new-password" required minlength="6" maxlength="72" placeholder="Entrez votre mot de passe" aria-describedby="ins-mdp-aide">
+                <button type="button" class="gs-mdp__oeil" data-action="voir-mdp" aria-label="Afficher le mot de passe" aria-pressed="false">[[ico:eye]]</button>
+              </div>
+              <p class="gs-champ__aide" id="ins-mdp-aide">6 caractères minimum.</p>
+            </div>
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>S'inscrire</button>
+          <p class="gs-form__mention">En créant un compte, vous acceptez nos <a href="termes-et-conditions.html">termes et conditions</a> et notre <a href="confidentialite.html">politique de confidentialité</a>.</p>
+        </form>
+
+        <div class="gs-alerte gs-alerte--succes" data-confirmation hidden tabindex="-1">
+          <strong>Vérifiez votre boîte mail</strong>
+          <p data-confirmation-texte></p>
+        </div>
+
+        <p class="gs-carte-auth__pied">Vous avez déjà un compte ? <a href="connexion.html">Se connecter</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+[[textes]]
+</main>

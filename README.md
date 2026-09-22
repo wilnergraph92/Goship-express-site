@@ -18,8 +18,11 @@ Site statique (HTML, CSS, JavaScript) en quatre langues — français, anglais, 
 | `assets/js/site.js` | Menu, sélecteur de langue, suivi de colis, formulaires, animations |
 | `assets/js/api.js`, `compte.js`, `admin.js` | Espace client et tableau de bord |
 | `assets/js/notifications.js` | Textes des e-mails et messages WhatsApp envoyés aux clients (4 langues) |
+| `assets/js/codes.js` | Calcul des **QR codes** et des **codes-barres** des étiquettes |
+| `assets/js/impression.js`, `assets/css/impression.css` | **Étiquettes d'expédition** et **factures** imprimables |
 | `assets/img/` | Logos, photos, icônes et drapeaux (`drapeaux/`) |
-| `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et banc d'essai SQL (`essais-sql/`) — **inutile de le mettre en ligne** |
+| `outils/generateur/` | **Le générateur des pages** (`build.py`), la maquette d'origine (`export/`) et les pages écrites à la main (`pages/`). C'est la source du site — voir « Modifier le site » |
+| `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et bancs d'essai (`essais-sql/`, `essais-codes/`) — **inutile de le mettre en ligne** |
 | `Voir le site en local.command` | Lanceur à double-cliquer pour voir le site sur votre Mac — **inutile de le mettre en ligne** |
 
 ## Voir le site sur votre ordinateur
@@ -102,6 +105,7 @@ Pour savoir où vous en êtes, la requête de contrôle est à la fin de `outils
 
 - **Créer un compte** (bouton orange de l'en-tête) : nom complet, pays, région, ville, adresse, téléphone, e-mail et mot de passe. Chaque compte reçoit automatiquement un **code client unique**, tiré au hasard : « GSE- » suivi de 4 chiffres (ex. GSE-4323). Le client reçoit aussitôt **deux e-mails** : son code, puis son adresse en Floride (voir « Les deux e-mails de bienvenue »).
 - **Mon compte** : son code client, son **adresse en Floride** à utiliser pour ses achats en ligne (avec son nom et son code, prête à copier), ses colis en cours et livrés, l'historique de chaque colis et ses coordonnées modifiables. La page se met à jour **en direct** dès que l'équipe change un statut.
+- **Mes factures** (dans « Mon compte », sous les colis) : chaque facture avec son montant, son état (À payer, Payée, Annulée), la date limite, le détail ligne par ligne — un colis par ligne — et la note de l'équipe. Un bouton **« Payer par carte »** quand un lien de paiement est prêt, et un bouton **« Imprimer ou enregistrer »** qui sort la facture sur une page A4, dans la langue du client. Comme les colis, la liste se met à jour **en direct** : une facture marquée payée dans le tableau de bord change d'état chez le client dans la seconde.
 - **Suivi de colis** (accueil) : n'importe qui peut suivre un colis avec son numéro (GSE-1001-HT…) ou le numéro de suivi du vendeur. Seuls le statut et les étapes sont affichés, jamais le nom, l'adresse ni le contenu.
 
 Statuts disponibles : Reçu → Emballé → Embarqué → Centre de distribution → Transféré à la succursale → Disponible → Livré, plus « Action requise » en cas de problème (le message joint s'affiche chez le client).
@@ -110,6 +114,8 @@ Statuts disponibles : Reçu → Emballé → Embarqué → Centre de distributio
 
 - **Enregistrer un colis** à sa réception : code client (le nom du client s'affiche pour vérification), date et heure de réception (remplies automatiquement, modifiables), contenu, expéditeur (Amazon, SHEIN…), numéro de suivi du vendeur, poids, service, destination. Le numéro de colis (GSE-1001-HT, GSE-1002-DO…) est attribué automatiquement.
 - **Mettre à jour** le statut d'un colis, avec un lieu et un message pour le client ; ou cocher plusieurs colis et **changer leur statut en une fois** (un conteneur qui part, par exemple).
+- **Imprimer l'étiquette d'expédition** d'un colis (bouton « Étiquette » sur sa ligne, ou depuis sa fiche) ; ou cocher plusieurs colis et **imprimer toutes leurs étiquettes en une fois**, ce qu'on veut après avoir enregistré l'arrivée d'un lot. Voir « Étiquettes, QR codes et codes-barres ».
+- **Facturer** (onglet Factures) : créer une facture, la marquer payée, l'envoyer sur WhatsApp, et l'**imprimer** sur une page A4 (bouton « Imprimer »), dans la langue du client.
 - Rechercher un colis ou un client, filtrer par statut, voir les colis d'un client, corriger ou supprimer un colis.
 
 ### Prévenir les clients (e-mail et WhatsApp)
@@ -301,7 +307,16 @@ Discrètes et désactivées automatiquement si le visiteur a demandé à réduir
 
 ## Modifier le site
 
-Chaque page est un fichier HTML autonome. L'en-tête et le pied de page sont répétés dans chaque page ; pour un changement commun (numéro, adresse, lien), faites une recherche/remplacement dans tous les fichiers de votre éditeur (VS Code : ⇧⌘H), puis relancez `python3 outils/traduire.py`.
+**Les pages à la racine sont fabriquées, pas écrites à la main.** Les modifier directement ne sert à rien : la prochaine génération les écrasera. Tout passe par `outils/generateur/` :
+
+```bash
+python3 outils/generateur/build.py   # les pages françaises
+python3 outils/traduire.py           # en/, es/, ht/
+```
+
+Les deux commandes vont ensemble, dans cet ordre. Les sources sont la maquette (`outils/generateur/export/`) et les pages écrites à la main (`outils/generateur/pages/` : espace client et tableau de bord). Voir `outils/generateur/LISEZ-MOI.md`.
+
+Après chaque changement, relancez les deux commandes **deux fois** : la seconde ne doit rien modifier (`git status` vide). C'est ce qui prouve que le site se reconstruit à l'identique.
 
 ## Application mobile (iPhone et Android)
 
@@ -378,11 +393,50 @@ de Miami, le téléphone et les agences, `assets/` le logo et les icônes.
 convient) : un compte Apple Developer (99 $ par an), un compte Google Play (25 $ une fois) et un
 compte Expo gratuit, qui fabrique les deux versions sur ses serveurs.
 
+## Étiquettes, QR codes et codes-barres
+
+Chaque colis enregistré a déjà tout ce qu'il faut pour son étiquette : son numéro
+(`GSE-1001-HT`) est unique, et c'est de lui que sont tirés son code-barres et son QR code.
+Rien à créer, rien à saisir — l'étiquette s'imprime en un clic depuis le tableau de bord.
+
+**L'étiquette** fait 4 × 6 pouces, le format des imprimantes à étiquettes. On y trouve le
+code-barres du numéro et le numéro en gros, le destinataire avec son code client, son adresse
+et son téléphone, le pays et la ville de destination en très gros caractères (c'est ce qu'on lit
+en triant les sacs), l'adresse de l'entrepôt de Miami, et en bas le contenu, le poids, le
+magasin et le numéro de suivi du vendeur.
+
+- **Le code-barres** est un **Code 128**, celui des étiquettes d'expédition dans le monde entier.
+  N'importe quelle douchette de magasin le lit. Les chiffres y sont écrits deux par deux, ce qui
+  raccourcit le code : à largeur égale, les barres sont plus larges, donc plus faciles à lire.
+- **Le QR code** mène à la page de suivi du colis (`index.html?suivi=GSE-1001-HT`) dès que
+  l'adresse du site est renseignée dans `assets/js/config.js` (`siteUrl`). Tant qu'elle est vide,
+  il contient le numéro du colis tout court, ce qui suffit à le retrouver. Il est calculé avec le
+  niveau de correction **M** : un coin plié ou une trace de pluie n'empêchent pas la lecture.
+
+Les deux sont **calculés dans la page**, sans bibliothèque et sans service extérieur : aucun
+numéro de colis ne sort du site, et les codes sont dessinés en SVG, donc nets à l'impression —
+une image floue ne passerait pas au scanner. Le calcul est dans `assets/js/codes.js`, et il est
+comparé module par module à deux bibliothèques de référence par
+`outils/essais-codes/essai-codes.py` (voir `outils/essais-codes/LISEZ-MOI.md`).
+
+**La facture imprimée** sort sur une page A4, avec le logo, l'adresse de Goship Express LLC,
+les coordonnées du client, le détail ligne par ligne, le total, le moyen de paiement et — si un
+lien de paiement est prêt — un QR code « Scannez pour payer ». Elle s'imprime **dans la langue du
+client** (français, anglais, espagnol, créole) : les textes sont dans `assets/js/impression.js`,
+comme ceux des e-mails sont dans `notifications.js`. L'étiquette, elle, reste en français : c'est
+un papier interne, imprimé à Miami.
+
+L'impression passe par une page séparée avec sa propre feuille de style
+(`assets/css/impression.css`) : c'est ce qui permet de fixer la taille du papier — 4 × 6 pouces
+pour une étiquette, A4 pour une facture — sans que le style du site s'en mêle. La fenêtre
+d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistrer au format PDF ».
+
 ## Paiement des factures
 
 Les factures se créent dans le tableau de bord (onglet **Factures**) : code client, colis à
-facturer, montant, date limite et note. Le client les voit dans l'application, avec un bouton
-**« Payer par carte bancaire »**.
+facturer, montant, date limite et note. Le client les retrouve dans **« Mon compte »** sur le site
+et dans l'application, avec un bouton **« Payer par carte »** et un bouton pour imprimer la facture
+ou l'enregistrer en PDF.
 
 Le lien de paiement vient de `assets/js/config.js` :
 
@@ -408,6 +462,7 @@ de se connecter ou de créer un compte.
 - **Espace client** : suivre les étapes « Activer l'espace client » ci-dessus (Supabase, puis e-mails de réinitialisation).
 - **Notifications** : configurer l'envoi des e-mails (Brevo) et, si vous le souhaitez, WhatsApp automatique (voir « Prévenir les clients »). Puis exécuter `outils/supabase-bienvenue.sql` et ses deux réglages, pour les e-mails de bienvenue.
 - **Codes clients** : exécuter `outils/supabase-code-client.sql` pour le passage au format court `GSE-4323` (voir « Le format des codes clients »).
+- **Factures et étiquettes** : exécuter `outils/supabase-factures.sql`. Sans lui, le client ne verra pas ses factures dans « Mon compte », et les étiquettes s'imprimeront sans l'adresse du destinataire.
 - **Termes et conditions** : quatre valeurs n'ont jamais été renseignées dans le document d'origine — `[devise locale]`, `[pourcentage %]`, `[nombre de jours]` et `[montant maximal ou norme en vigueur]`.
 - **Instagram et TikTok** : les icônes du pied de page n'ont pas encore de lien (`href="#top"`).
 - **Nom de domaine** : voir « Nom de domaine » ci-dessus.

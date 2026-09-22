@@ -1,0 +1,65 @@
+<main id="contenu-principal" tabindex="-1">
+
+<section class="gs-compte" data-no-reveal>
+  <div class="gs-compte__wrap gs-compte__wrap--etroit">
+    <div class="gs-carte-auth">
+      <div class="gs-carte-auth__tete">
+        <div class="gs-carte-auth__marque">
+          <span class="gs-carte-auth__icone">[[ico:user]]</span>
+          <span class="gs-carte-auth__surtitre">Espace client</span>
+        </div>
+        <h1>Se connecter</h1>
+        <p>Retrouvez votre code client et suivez vos colis en temps réel.</p>
+      </div>
+
+      <div class="gs-carte-auth__corps">
+        <div class="gs-alerte gs-alerte--info" data-espace-ferme hidden>
+          <strong>L'espace client ouvre très bientôt.</strong> En attendant, suivez vos colis avec notre équipe sur WhatsApp : <a data-lien-wa="wa-aide" href="https://wa.me/18495386262" target="_blank" rel="noopener">écrire sur WhatsApp</a>.
+        </div>
+
+        <form class="gs-form" data-form="connexion" novalidate>
+          <div class="gs-champ">
+            <label for="cnx-email">E-mail</label>
+            <input id="cnx-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="Entrez votre e-mail" spellcheck="false">
+          </div>
+          <div class="gs-champ">
+            <div class="gs-champ__entete">
+              <label for="cnx-mdp">Mot de passe</label>
+              <a class="gs-champ__lien" href="#oubli" data-action="oubli">Mot de passe oublié ?</a>
+            </div>
+            <div class="gs-mdp">
+              <input id="cnx-mdp" name="mot_de_passe" type="password" autocomplete="current-password" required maxlength="72" placeholder="Entrez votre mot de passe">
+              <button type="button" class="gs-mdp__oeil" data-action="voir-mdp" aria-label="Afficher le mot de passe" aria-pressed="false">[[ico:eye]]</button>
+            </div>
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Se connecter</button>
+        </form>
+
+        <form class="gs-form" id="oubli" data-form="oubli" novalidate hidden>
+          <div class="gs-form__intro">
+            <strong>Mot de passe oublié ?</strong>
+            <p>Entrez l'adresse e-mail de votre compte : nous vous envoyons un lien pour choisir un nouveau mot de passe.</p>
+          </div>
+          <div class="gs-champ">
+            <label for="oubli-email">E-mail</label>
+            <input id="oubli-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="Entrez votre e-mail" spellcheck="false">
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <div class="gs-alerte gs-alerte--succes" data-oubli-ok hidden role="status">
+            <strong>E-mail envoyé.</strong>
+            <p>Si un compte existe avec cette adresse, vous allez recevoir un lien valable une heure. Pensez à vérifier vos courriers indésirables.</p>
+            <p data-oubli-demo hidden></p>
+          </div>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Envoyer le lien</button>
+          <button class="gs-lien-bouton gs-form__retour" type="button" data-action="retour-connexion">Retour à la connexion</button>
+        </form>
+
+        <p class="gs-carte-auth__pied">Pas encore de compte ? <a href="inscription.html">Créer un compte</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+[[textes]]
+</main>
