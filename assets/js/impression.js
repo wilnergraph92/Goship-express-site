@@ -27,43 +27,30 @@
 (function () {
   'use strict';
 
-  // L'adresse de l'entrepôt, telle qu'elle est écrite aux clients. Elle
-  // apparaît aussi dans outils/generateur/build.py, dans
-  // outils/generateur/pages/mon-compte.main.html, dans
-  // application-mobile/config.js et dans outils/supabase.sql (adresse_miami) :
-  // les cinq doivent rester d'accord.
   // L'émetteur de la facture : l'établissement dominicain, avec son RNC.
-  // C'est lui qui facture, et non l'entrepôt de Miami — celui-ci ne reçoit que
-  // les achats des clients, et reste sur l'étiquette d'expédition.
+  // C'est lui qui facture, et non la société américaine — celle-ci ne fait que
+  // recevoir à Miami les achats des clients.
   var SANTO_DOMINGO = {
-    nom: 'Goship Express LLC',
+    nom: 'Goship Express S.R.L',
     ligne1: 'Calle 25 de Febrero, La Caleta',
     ligne2: 'Santo Domingo Este 11500',
     telephone: '809 317-6686',
     rnc: '133-79976-6'
   };
 
-  // Les moyens de paiement imprimés sur une facture à payer. Ce sont des
-  // coordonnées d'entreprise : elles ne se traduisent pas, seuls leurs
-  // libellés le sont. « Cuenta Ahorro » est le terme de la banque.
+  // Les moyens de paiement imprimés sur une facture à payer : un titre, sa
+  // valeur, puis une ligne par information. Ce sont des coordonnées
+  // d'entreprise — elles ne se traduisent pas, seuls leurs libellés le sont.
+  // « Cuenta Ahorro » est le terme de la banque. Une ligne sans libellé
+  // s'imprime telle quelle : le bénéficiaire d'un transfert d'argent n'a pas
+  // besoin d'être annoncé deux fois.
   var PAIEMENTS = [
-    { cle: 'banque', nom: 'Banco BHD León RD',
+    { cle: 'banque', valeur: 'Banco BHD León RD',
       lignes: [['nom', 'Wilner Delisnord'], ['compte', '39396350014'], ['typeCompte', 'Cuenta Ahorro']] },
-    { cle: 'paypal', nom: 'goshipexpressllc@gmail.com', lignes: [] },
-    { cle: 'transfert', nom: 'Western Union · Unitransfer · Ria',
-      lignes: [['nom', 'Immacula Delisnord'], ['telephone', '809 317-6686'], ['ville', 'Santo Domingo']] }
+    { cle: 'paypal', valeur: 'goshipexpressllc@gmail.com', lignes: [] },
+    { cle: 'transfert', valeur: 'Western Union, Unitransfer, Ria…',
+      lignes: [['', 'Immacula Delisnord'], ['', '809 317-6686'], ['', 'Santo Domingo']] }
   ];
-
-  var MIAMI = {
-    nom: 'Goship Express LLC',
-    ligne1: '8140 NW 74th Ave Unit 3',
-    ligne2: 'APT-46780',
-    ville: 'Medley',
-    etat: 'Florida',
-    zip: '33166',
-    pays: 'United States',
-    telephone: '786 525-2944'
-  };
 
   // Le site vit à la racine en français, et dans en/, es/ et ht/ pour les
   // autres langues : le chemin vers assets/ n'est donc pas le même partout.
@@ -98,8 +85,7 @@
       champs: { nom: 'Nom', compte: 'N° de compte', typeCompte: 'Type de compte',
                 telephone: 'Téléphone', ville: 'Ville' },
       merci: 'Merci pour votre confiance !',
-      pays: { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' },
-      pied: 'Montants en dollars des États-Unis. Document établi par Goship Express LLC.'
+      pays: { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' }
     },
     en: {
       titre: 'Invoice', etablie: 'Issued on', echeance: 'Due by', payeeLe: 'Paid on',
@@ -121,8 +107,7 @@
       champs: { nom: 'Name', compte: 'Account number', typeCompte: 'Account type',
                 telephone: 'Phone', ville: 'City' },
       merci: 'Thank you for your trust!',
-      pays: { HT: 'Haiti', DO: 'Dominican Republic', US: 'United States' },
-      pied: 'Amounts in US dollars. Document issued by Goship Express LLC.'
+      pays: { HT: 'Haiti', DO: 'Dominican Republic', US: 'United States' }
     },
     es: {
       titre: 'Factura', etablie: 'Emitida el', echeance: 'A pagar antes del', payeeLe: 'Pagada el',
@@ -144,8 +129,7 @@
       champs: { nom: 'Nombre', compte: 'N.º de cuenta', typeCompte: 'Tipo de cuenta',
                 telephone: 'Teléfono', ville: 'Ciudad' },
       merci: '¡Gracias por su confianza!',
-      pays: { HT: 'Haití', DO: 'República Dominicana', US: 'Estados Unidos' },
-      pied: 'Importes en dólares estadounidenses. Documento emitido por Goship Express LLC.'
+      pays: { HT: 'Haití', DO: 'República Dominicana', US: 'Estados Unidos' }
     },
     ht: {
       titre: 'Fakti', etablie: 'Fèt le', echeance: 'Pou peye anvan', payeeLe: 'Peye le',
@@ -167,8 +151,7 @@
       champs: { nom: 'Non', compte: 'Nimewo kont', typeCompte: 'Kalite kont',
                 telephone: 'Telefòn', ville: 'Vil' },
       merci: 'Mèsi pou konfyans ou !',
-      pays: { HT: 'Ayiti', DO: 'Repiblik Dominikèn', US: 'Etazini' },
-      pied: 'Montan yo an dola ameriken. Dokiman Goship Express LLC te fè.'
+      pays: { HT: 'Ayiti', DO: 'Repiblik Dominikèn', US: 'Etazini' }
     }
   };
 
@@ -367,19 +350,17 @@
       bloc(cote, 'span', 'et__qr-texte', 'Scannez-moi');
     }
 
-    // La destination en très gros : c'est ce qu'on lit en triant les sacs
+    // La destination en très gros : c'est ce qu'on lit en triant les sacs.
+    // La ville est celle que le client a choisie en s'inscrivant, car c'est
+    // là qu'il vient chercher ses colis ; celle saisie sur le colis ne sert
+    // que si le compte n'en porte aucune.
     var vers = bloc(page, 'section', 'et__vers');
     bloc(vers, 'strong', 'et__pays', c.pays_destination || '');
-    bloc(vers, 'span', 'et__ville', (c.destination || c.ville_client || '').toUpperCase());
+    bloc(vers, 'span', 'et__ville', (c.ville_client || c.destination || '').toUpperCase());
 
-    // Expéditeur
-    var exp = bloc(page, 'section', 'et__exp');
-    bloc(exp, 'span', 'et__libelle', 'Expéditeur');
-    bloc(exp, 'p', 'et__adresse', MIAMI.nom + ' — ' + MIAMI.ligne1 + ', ' + MIAMI.ligne2);
-    bloc(exp, 'p', 'et__adresse',
-         MIAMI.ville + ', ' + MIAMI.etat + ' ' + MIAMI.zip + ', ' + MIAMI.pays + ' · ' + MIAMI.telephone);
-
-    // Le contenu, en bas
+    // Le contenu du colis, à la place de l'adresse de l'expéditeur : celle-ci
+    // était toujours la même — la nôtre — et n'apprenait rien à personne,
+    // alors que ce qu'il y a dans le carton se vérifie à chaque étape.
     var pied = bloc(page, 'footer', 'et__pied');
     var contenu = bloc(pied, 'div', 'et__contenu');
     if (c.description) bloc(contenu, 'p', 'et__desc et__coupe', c.description);
@@ -486,8 +467,16 @@
       ligneDetail(1, null, fa.note || T.transportColis, '', totaux.colis);
     }
 
+    // Le bas de la facture : comment payer à gauche, les totaux, le code à
+    // scanner et notre paraphe à droite. Deux colonnes côte à côte, parce que
+    // les moyens de paiement écrits en toutes lettres prennent de la hauteur
+    // et que la place laissée libre à côté des totaux était perdue.
+    var reglement = bloc(page, 'section', 'fa__reglement');
+    var paiement = bloc(reglement, 'div', 'fa__paiement');
+    var cote = bloc(reglement, 'div', 'fa__cote');
+
     // Les totaux : colis, frais de service une seule fois, balance, grand total
-    var recap = bloc(page, 'table', 'fa__totaux');
+    var recap = bloc(cote, 'table', 'fa__totaux');
     var corpsRecap = bloc(recap, 'tbody');
     function ligneTotal(libelle, montant, classe) {
       var r = bloc(corpsRecap, 'tr', classe);
@@ -504,13 +493,11 @@
     // décide de la formulation : le lien en toutes lettres tenait quatre
     // lignes sur le papier. Il ne s'imprime donc plus que si le code n'a pas
     // pu être produit — sans quoi le client n'aurait aucun moyen de payer.
-    var bas = bloc(page, 'section', 'fa__bas');
-    var paiement = bloc(bas, 'div', 'fa__paiement');
-    var cote = null, codeDessine = false;
+    var qr = null, codeDessine = false;
     if (fa.statut === 'a_payer' && fa.lien_paiement) {
-      cote = el('div', 'fa__qr');
-      codeDessine = !!dessinerCode(cote, 'qr', fa.lien_paiement, T.scanner + ' — ' + (fa.numero || ''));
-      if (codeDessine) bloc(cote, 'span', 'fa__qr-texte', T.scanner);
+      qr = el('div', 'fa__qr');
+      codeDessine = !!dessinerCode(qr, 'qr', fa.lien_paiement, T.scanner + ' — ' + (fa.numero || ''));
+      if (codeDessine) bloc(qr, 'span', 'fa__qr-texte', T.scanner);
     }
     bloc(paiement, 'span', 'fa__libelle', T.paiement);
     if (fa.statut === 'payee') {
@@ -529,28 +516,27 @@
     }
     if (fa.note && lignes.length) bloc(paiement, 'p', 'fa__note', fa.note);
 
-    if (codeDessine) bas.appendChild(cote);
-
-    // Les autres moyens de paiement. Seulement sur une facture à payer : les
-    // rappeler sur une facture déjà réglée n'aiderait personne.
+    // Les autres moyens de paiement, en texte simple : ni cadre, ni colonnes.
+    // Seulement sur une facture à payer — les rappeler sur une facture déjà
+    // réglée n'aiderait personne.
     if (fa.statut === 'a_payer') {
-      var moyens = bloc(page, 'section', 'fa__moyens');
       PAIEMENTS.forEach(function (m) {
-        var carte = bloc(moyens, 'div', 'fa__moyen');
-        bloc(carte, 'span', 'fa__moyen-titre', T.moyensTitres[m.cle]);
-        bloc(carte, 'strong', 'fa__moyen-nom', m.nom);
-        if (!m.lignes.length) return;
-        var dl = bloc(carte, 'dl', 'fa__moyen-lignes');
+        var groupe = bloc(paiement, 'div', 'fa__moyen');
+        var tete = bloc(groupe, 'p', 'fa__moyen-tete');
+        bloc(tete, 'strong', null, T.moyensTitres[m.cle]);
+        tete.appendChild(document.createTextNode(' : ' + m.valeur));
         m.lignes.forEach(function (ligne) {
-          bloc(dl, 'dt', null, T.champs[ligne[0]]);
-          bloc(dl, 'dd', null, ligne[1]);
+          bloc(groupe, 'p', 'fa__moyen-ligne',
+               (ligne[0] ? T.champs[ligne[0]] + ' : ' : '') + ligne[1]);
         });
       });
     }
 
-    // Notre signature. Celle du client a été retirée : une facture n'a pas à
-    // être contresignée pour être due.
-    var paraphes = bloc(page, 'section', 'fa__signatures');
+    // Sous les totaux : le code à scanner, puis notre signature. Celle du
+    // client a été retirée : une facture n'a pas à être contresignée pour
+    // être due.
+    var paraphes = bloc(cote, 'div', 'fa__paraphes');
+    if (codeDessine) paraphes.appendChild(qr);
     var nous = bloc(paraphes, 'div', 'fa__paraphe');
     signature(nous, 'fa__signature');
     bloc(nous, 'span', 'fa__paraphe-trait');
@@ -639,7 +625,6 @@
     etiquette: etiquette,
     facture: facture,
     imprimer: imprimer,
-    miami: MIAMI,
     lienSuivi: lienSuivi
   };
 })();

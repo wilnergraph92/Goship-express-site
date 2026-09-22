@@ -65,7 +65,11 @@ svg{display:block}
 .et__bande svg{width:100%;height:16mm}
 .et__numero{display:block;margin-top:.8mm;font-size:17pt;font-weight:800;letter-spacing:.06em}
 
-.et__dest{margin-top:2.4mm;padding-top:2.4mm;border-top:1pt solid #000;
+/* « flex:1 » : c'est ce bloc qui absorbe le blanc restant. L'étiquette a une
+   hauteur fixe, et depuis que l'expéditeur n'y figure plus il en reste ; mieux
+   vaut le laisser sous l'adresse que sous le contenu du colis, pour que la
+   destination et le contenu tiennent ensemble en bas du papier. */
+.et__dest{flex:1;margin-top:2.4mm;padding-top:2.4mm;border-top:1pt solid #000;
   display:flex;align-items:flex-start;gap:3mm}
 .et__qui{flex:1;min-width:0}
 .et__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.16em;
@@ -92,14 +96,17 @@ svg{display:block}
 .et__pays{flex:none;display:flex;align-items:center;justify-content:center;
   min-width:19mm;padding:1.6mm 2mm;background:#000;color:#fff;
   font-size:24pt;font-weight:900;line-height:1}
+/* Sur deux lignes au besoin : « Petite Rivière de l'Artibonite » ne tient pas
+   sur une seule, et c'est justement le mot qu'on ne doit jamais rogner. */
 .et__ville{flex:1;min-width:0;align-self:center;padding:1mm 3mm;
-  font-size:13pt;font-weight:800;letter-spacing:.03em;line-height:1.1;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  font-size:13pt;font-weight:800;letter-spacing:.03em;line-height:1.15;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  overflow:hidden}
 
-.et__exp{margin-top:2.4mm}
-.et__exp .et__adresse{font-size:8.5pt;line-height:1.35}
-
-.et__pied{margin-top:auto;padding-top:2.5mm;border-top:1pt dashed #000}
+/* Le contenu du colis, là où figurait l'expéditeur. Il suit la destination
+   au lieu d'être renvoyé en bas du papier : le blanc qui reste vaut mieux au
+   bord de l'étiquette qu'au milieu. */
+.et__pied{margin-top:2.4mm;padding-top:2.5mm;border-top:1pt dashed #000}
 .et__desc{font-size:10.5pt;font-weight:700;line-height:1.3;-webkit-line-clamp:2;line-clamp:2}
 .et__meta{font-size:9pt;line-height:1.35;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -150,8 +157,11 @@ svg{display:block}
 .fa__desc{display:block}
 .fa__lignes .fa__colis{display:block;margin-top:.6mm;font-size:8.5pt}
 
-/* Les totaux, alignés à droite sous le tableau */
-.fa__totaux{margin-top:3mm;margin-left:auto;width:78mm;border-collapse:collapse;font-size:10.5pt}
+/* Les totaux, en tête de la colonne de droite. Une facture de plus de cinq
+   colis déborde sur une deuxième page : la coupure peut tomber n'importe où,
+   sauf au milieu de ce tableau-ci. */
+.fa__totaux{width:100%;border-collapse:collapse;font-size:10.5pt;
+  break-inside:avoid;page-break-inside:avoid}
 .fa__totaux th,.fa__totaux td{padding:1.4mm 3mm;text-align:left}
 .fa__totaux th{font-weight:600;color:#2d3850}
 .fa__totaux--grand th,.fa__totaux--grand td{border-top:1.6pt solid var(--or);font-size:12.5pt;
@@ -159,42 +169,40 @@ svg{display:block}
 .fa__totaux--balance th,.fa__totaux--balance td{background:var(--or-pale);font-size:12pt;
   font-weight:900;color:var(--or-fonce)}
 
-/* Notre paraphe, seul : une facture n'a pas à être contresignée pour être due */
-.fa__signatures{margin-top:5mm;display:flex;justify-content:flex-start;
+/* Le bas de la facture, en deux colonnes : comment payer à gauche, les
+   totaux et le paraphe à droite. Les moyens de paiement écrits en toutes
+   lettres prennent de la hauteur ; les mettre à côté des totaux, au lieu de
+   dessous, évite de pousser la facture sur une deuxième page. */
+.fa__reglement{margin-top:6mm;display:flex;align-items:flex-start;gap:8mm}
+.fa__paiement{flex:1;min-width:0;font-size:10.5pt;line-height:1.5}
+/* Les paragraphes du bloc lui-même, pas ceux des moyens de paiement : ces
+   derniers sont des listes de lignes, et respirer entre chacune les délierait. */
+.fa__paiement > p{margin-top:1mm}
+.fa__cote{flex:none;width:78mm}
+.fa__lien{font-weight:700;word-break:break-all;color:#1746a8}
+.fa__note{margin-top:3mm;padding:2.5mm 3mm;background:var(--or-pale);border-left:2.4pt solid var(--or);
+  font-size:10pt}
+
+/* Les moyens de paiement : du texte, rien d'autre. Ni cadre, ni colonnes, ni
+   filets — c'est ce qui se lit le plus vite, et une adresse longue peut alors
+   s'étaler sur toute la largeur au lieu d'être coupée en deux. */
+.fa__moyen{margin-top:4mm;font-size:10pt;line-height:1.45;
   break-inside:avoid;page-break-inside:avoid}
-.fa__paraphe{flex:0 0 72mm;min-width:0;text-align:center}
+.fa__moyen-tete,.fa__moyen-ligne{margin:0;overflow-wrap:break-word}
+
+/* Sous les totaux : le code à scanner, puis notre paraphe — seul, car une
+   facture n'a pas à être contresignée pour être due. */
+.fa__paraphes{margin-top:9mm;display:flex;align-items:flex-start;gap:6mm;
+  break-inside:avoid;page-break-inside:avoid}
+.fa__qr{flex:none;width:22mm;text-align:center}
+.fa__qr svg{width:22mm;height:22mm}
+.fa__qr-texte{display:block;margin-top:1mm;font-size:7.5pt;color:#4a5878}
+.fa__paraphe{flex:1;min-width:0;text-align:center}
 .fa__signature{display:block;margin:0 auto;width:auto;height:11mm;max-width:100%;object-fit:contain}
 .fa__paraphe-vide{display:block;height:11mm}
 .fa__paraphe-trait{display:block;margin-top:1mm;border-top:1pt solid var(--encre)}
 .fa__paraphe-titre{display:block;margin-top:1.5mm;font-size:9pt;font-weight:800;color:#061a3f}
 .fa__paraphe-sous{display:block;margin-top:.5mm;font-size:8.5pt;color:#4a5878}
-
-.fa__bas{margin-top:6mm;display:flex;align-items:flex-start;justify-content:space-between;gap:8mm}
-.fa__paiement{flex:1;min-width:0;font-size:10.5pt;line-height:1.5}
-.fa__paiement p{margin-top:1mm}
-.fa__lien{font-weight:700;word-break:break-all;color:#1746a8}
-.fa__note{margin-top:3mm;padding:2.5mm 3mm;background:var(--or-pale);border-left:2.4pt solid var(--or);
-  font-size:10pt}
-.fa__qr{flex:none;width:22mm;text-align:center}
-.fa__qr svg{width:22mm;height:22mm}
-.fa__qr-texte{display:block;margin-top:1mm;font-size:7.5pt;color:#4a5878}
-
-/* Les trois moyens de paiement, côte à côte sous le bloc « Paiement ».
-   Ne s'impriment que sur une facture à payer. */
-.fa__moyens{margin-top:5mm;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4mm;
-  break-inside:avoid;page-break-inside:avoid}
-.fa__moyen{padding:2.5mm 3mm;border:.8pt solid #f0d6c1;border-top:1.8pt solid var(--or);
-  border-radius:1.5mm}
-.fa__moyen-titre{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--or-fonce)}
-/* 9 pt : l'adresse PayPal fait 26 caractères et doit tenir sur une ligne dans
-   sa colonne. Plus grande, elle se coupait après « gmail.co ». */
-.fa__moyen-nom{display:block;margin-top:1.2mm;font-size:9pt;font-weight:800;line-height:1.3;
-  overflow-wrap:break-word}
-.fa__moyen-lignes{margin:1.8mm 0 0;display:grid;grid-template-columns:auto minmax(0,1fr);
-  gap:.5mm 2.5mm;font-size:8.5pt;line-height:1.35}
-.fa__moyen-lignes dt{color:var(--gris)}
-.fa__moyen-lignes dd{margin:0;font-weight:700;overflow-wrap:anywhere}
 
 .fa__pied{margin-top:auto;padding-top:3.5mm;border-top:1.4pt solid var(--or);
   font-size:12pt;font-weight:800;line-height:1.4;color:var(--or-fonce);text-align:center}

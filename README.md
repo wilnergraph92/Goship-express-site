@@ -402,13 +402,22 @@ Rien à créer, rien à saisir — l'étiquette s'imprime en un clic depuis le t
 **L'étiquette** fait 4 × 6 pouces, le format des imprimantes à étiquettes. On y trouve le logo
 Goship Express, le code-barres du numéro et le numéro en gros, le destinataire avec son code
 client, son adresse et son téléphone, le pays et la ville de destination en très gros caractères
-(c'est ce qu'on lit en triant les sacs), l'adresse de l'entrepôt de Miami, et en bas le contenu,
-le poids, le magasin et le numéro de suivi du vendeur.
+(c'est ce qu'on lit en triant les sacs), puis le contenu du colis : description, poids, magasin
+et numéro de suivi du vendeur.
+
+**La ville de destination est celle que le client a choisie en s'inscrivant** — `HT` ·
+`PORT-AU-PRINCE`, `HT` · `CAP-HAÏTIEN`, `DO` · `SANTO DOMINGO ESTE` — car c'est là qu'il vient
+chercher ses colis. La ville saisie sur le colis ne sert que si le compte n'en porte aucune.
+
+L'adresse de l'expéditeur n'y figure plus : elle était toujours la même — la nôtre — et
+n'apprenait rien à personne, alors que le contenu du carton se vérifie à chaque étape. Elle reste
+écrite aux clients dans « Mon compte » et dans l'application.
 
 Le papier ayant une taille fixe, un texte trop long est **coupé** au lieu de pousser le reste
 hors de l'étiquette : un nom sur deux lignes au plus, une adresse sur deux lignes, un contenu sur
 deux lignes. Le numéro, le code-barres et la destination ne sont jamais rognés — ce sont eux dont
-le transporteur a besoin.
+le transporteur a besoin ; une ville aussi longue que « Petite Rivière de l'Artibonite » passe
+simplement sur deux lignes.
 
 ### Dessinée pour une imprimante thermique
 
@@ -450,7 +459,7 @@ une image floue ne passerait pas au scanner. Le calcul est dans `assets/js/codes
 comparé module par module à deux bibliothèques de référence par
 `outils/essais-codes/essai-codes.py` (voir `outils/essais-codes/LISEZ-MOI.md`).
 
-**La facture imprimée** sort sur une page A4, avec le logo, l'adresse de Goship Express LLC,
+**La facture imprimée** sort sur une page A4, avec le logo, l'adresse de Goship Express S.R.L,
 les coordonnées du client, le détail ligne par ligne, le total, le moyen de paiement et — si un
 lien de paiement est prêt — un QR code « Scannez pour payer ». Elle s'imprime **dans la langue du
 client** (français, anglais, espagnol, créole) : les textes sont dans `assets/js/impression.js`,
@@ -487,9 +496,9 @@ de se connecter ou de créer un compte.
 
 ### Ce que porte la facture imprimée
 
-- **L'émetteur, en tête** : Goship Express LLC, Calle 25 de Febrero La Caleta, Santo Domingo Este
-  11500, son téléphone et son **RNC**. C'est l'établissement dominicain qui facture ; l'entrepôt de
-  Miami ne reçoit que les achats des clients, et reste sur l'étiquette d'expédition.
+- **L'émetteur, en tête** : Goship Express S.R.L, Calle 25 de Febrero La Caleta, Santo Domingo
+  Este 11500, son téléphone et son **RNC**. C'est l'établissement dominicain qui facture, et non
+  la société américaine : celle-ci ne fait que recevoir à Miami les achats des clients.
 - **Le numéro** : année, mois, puis quatre chiffres tirés au hasard — `2026-09-0417`. 10 000
   numéros par mois, et le compteur repart à chaque mois. Le tirage est borné à 200 essais et lève
   une erreur explicite plutôt que de tourner sans fin sur un mois saturé. Voir
@@ -500,8 +509,13 @@ de se connecter ou de créer un compte.
   recopie, celui du colis prend le relais.
 - **Les trois moyens de paiement**, uniquement sur une facture à payer (les rappeler sur une
   facture réglée n'aiderait personne) : virement Banco BHD León, PayPal, et transfert Western
-  Union / Unitransfer / Ria. Ces coordonnées sont dans `assets/js/impression.js`, constante
-  `PAIEMENTS` — un seul endroit à changer.
+  Union / Unitransfer / Ria. Ils s'écrivent **en texte simple** — un titre, sa valeur, puis une
+  ligne par information — sans cadre ni tableau. Ces coordonnées sont dans
+  `assets/js/impression.js`, constante `PAIEMENTS` : un seul endroit à changer, et seuls les
+  libellés (« Nom », « N° de compte »…) suivent la langue du client.
+- **Deux colonnes en bas de page** : comment payer à gauche, les totaux, le QR code et la
+  signature à droite. Écrits en toutes lettres, les moyens de paiement prennent de la hauteur ;
+  les mettre à côté des totaux plutôt que dessous gagne environ 55 mm.
 - **Une seule signature**, la nôtre : une facture n'a pas à être contresignée par le client pour
   être due.
 - **Le pied de page** : « Merci pour votre confiance ! », dans la langue du client.
@@ -510,8 +524,9 @@ L'orange du logo (`#ff6a03`) porte le dessin : le titre, le filet de l'en-tête,
 tableau, la balance et le pied de page. Il en existe une version assombrie (`#c74a00`) pour les
 petits textes, où l'orange vif manquerait de contraste — même teinte, lisible à 8 pt.
 
-Une facture d'un ou deux colis tient sur **une page**. Au-delà, elle passe sur une seconde page,
-ce qui est normal ; les moyens de paiement et la signature ne sont jamais coupés en deux.
+Une facture de **cinq colis** tient encore sur une page, dans les quatre langues. Au-delà, elle
+passe sur une seconde page, ce qui est normal ; le tableau des totaux, chaque moyen de paiement
+et la signature ne sont jamais coupés en deux.
 
 ## À compléter
 
