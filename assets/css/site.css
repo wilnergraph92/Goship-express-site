@@ -749,6 +749,57 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-toast{position:fixed;z-index:100;bottom:24px;left:50%;max-width:calc(100vw - 32px);padding:13px 18px;border-radius:12px;background:var(--ink);color:#fff;font-size:15px;font-weight:600;box-shadow:0 20px 40px -20px rgba(0,0,0,.6);translate:-50% 0;animation:gs-toast .35s cubic-bezier(.2,.7,.3,1)}
 @keyframes gs-toast{from{opacity:0;translate:-50% 14px}}
 .gs-toast--erreur{background:#b91c1c}
+/* Le poste de scan (onglet Scanner du tableau de bord, assets/js/scanner.js).
+   Pensé pour un entrepôt : gros caractères, aucune animation, l'état du
+   dernier scan lisible de loin. */
+.gs-scan{display:grid;gap:18px;padding-top:18px}
+.gs-scan__saisie label{display:block;margin-bottom:8px;font-size:15px;font-weight:700;color:#2d3850}
+.gs-scan__ligne{display:flex;gap:10px}
+.gs-scan__ligne input{flex:1;min-width:0;height:64px;padding:0 20px;border:2px solid #cfd7e6;border-radius:14px;background:#fff;color:var(--ink);font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:24px;font-weight:600;letter-spacing:.02em}
+.gs-scan__ligne input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 4px rgba(31,95,224,.15)}
+.gs-scan__ligne .gs-bouton{min-height:64px}
+.gs-scan__reglages{display:flex;flex-wrap:wrap;align-items:end;gap:10px 16px}
+.gs-scan__reglages .gs-champ{flex:1 1 220px;display:grid;gap:6px;font-size:14px;font-weight:700;color:#2d3850}
+.gs-scan__reglages .gs-champ input,.gs-scan__reglages .gs-champ select{height:48px}
+.gs-scan__reglages .gs-champ__aide{flex-basis:100%;margin:0}
+.gs-scan.is-rapide .gs-scan__ligne input{border-color:var(--accent)}
+.gs-scan__etat{display:grid;gap:4px;padding:18px 20px;border-radius:14px;border:1px solid #d6ddec;background:#f5f7fb}
+.gs-scan__etat strong{font-size:26px;line-height:1.15;letter-spacing:.01em;color:var(--ink)}
+.gs-scan__etat span{font-size:15.5px;color:#3c4966}
+.gs-scan__etat.is-succes{background:#ecfdf3;border-color:#86efac}
+.gs-scan__etat.is-succes strong{color:#15803d}
+.gs-scan__etat.is-attention{background:#fffbeb;border-color:#fcd34d}
+.gs-scan__etat.is-attention strong{color:#b45309}
+.gs-scan__etat.is-erreur{background:#fef2f2;border-color:#fca5a5}
+.gs-scan__etat.is-erreur strong{color:#b91c1c}
+.gs-scan__boutons-etat{display:flex;gap:8px;margin-top:6px}
+.gs-scan__boutons-etat:empty{display:none}
+.gs-scan__corps{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.gs-scan__fiche,.gs-scan__journal{padding:18px 20px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
+.gs-scan__tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.gs-scan__numero{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:24px;color:var(--ink)}
+.gs-scan__statut{display:inline-flex;align-items:center;gap:8px;font-size:17px;font-weight:700;color:var(--ink)}
+.gs-scan__infos{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:14px 0 0;font-size:15px}
+.gs-scan__infos dt{color:#6b7690}
+.gs-scan__infos dd{margin:0;font-weight:600;color:var(--ink)}
+.gs-scan__alerte{margin:14px 0 0;padding:10px 14px;border-radius:10px;background:#fffbeb;color:#92400e;font-weight:600}
+.gs-scan__alerte--incident{background:#fef2f2;color:#b91c1c}
+.gs-scan__operations{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.gs-scan__confirmation:empty{display:none}
+.gs-scan__confirmation{display:grid;gap:10px;margin-top:14px;padding:14px;border:2px solid var(--ink);border-radius:12px}
+.gs-scan__confirmation p{margin:0;font-weight:700}
+.gs-scan__raison{height:48px;padding:0 14px;border:1px solid #cfd7e6;border-radius:10px;font:inherit}
+.gs-scan__actions{display:flex;gap:8px}
+.gs-scan__historique{margin-top:18px}
+.gs-scan__historique h3,.gs-scan__journal h3{margin:0;font-size:15px}
+.gs-scan__journal ol{display:grid;gap:6px;margin:12px 0 0;padding:0;list-style:none;font-size:14px}
+.gs-scan__journal li{display:grid;grid-template-columns:auto 1fr;gap:0 8px;padding:6px 8px;border-left:3px solid #cfd7e6}
+.gs-scan__journal li span:last-child{grid-column:2}
+.gs-scan__journal li.is-succes{border-left-color:#22c55e}
+.gs-scan__journal li.is-attention{border-left-color:#f59e0b}
+.gs-scan__journal li.is-erreur{border-left-color:#ef4444}
+.gs-scan__heure{color:#6b7690;font-variant-numeric:tabular-nums}
+@media (max-width:900px){.gs-scan__corps{grid-template-columns:1fr}.gs-scan__ligne{flex-direction:column}}
 
 @media (max-width:859px){
   .gs-tableau thead{display:none}

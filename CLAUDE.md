@@ -38,6 +38,8 @@ application-mobile/                 app Expo — DÉPÔT SÉPARÉ, ignoré par g
 | `impression.js` | Étiquettes 4×6 et factures A4, en 4 langues |
 | `site.js` | Pages publiques, suivi de colis |
 | `codes.js` | QR codes et codes-barres |
+| `scan-parser.js` | Lecture d'un code scanné (étiquette, QR, suivi vendeur) — aucune requête |
+| `scanner.js` | Onglet « Scanner » du tableau de bord (`admin.html#scanner`) |
 | `notifications.js` | E-mail et WhatsApp |
 | `config.js` | Clés Supabase et réglages — **contient des secrets** |
 
@@ -79,7 +81,11 @@ porte ; le déclencheur `verrou_statut` refuse tout autre `UPDATE` du
 statut, et `evenement_immuable` toute modification d'une ligne de
 `colis_historique` (on corrige par un événement `CORRECTION`, motif
 obligatoire). `changer_statut_colis` et `statuts_possibles` vivent dans ce
-fichier, pas dans `supabase-services.sql`. Les colonnes d'événement
+fichier, pas dans `supabase-services.sql`. Le poste de scan
+(`outils/supabase-scanner.sql`, `scanner_colis` / `scanner_operation`)
+n'est qu'une porte de plus vers `executer_operation` : aucune règle n'y
+vit. Les étiquettes ne changent pas pour lui — il lit le Code128 (numéro)
+et le QR (lien `index.html?suivi=`) déjà imprimés. Les colonnes d'événement
 (`type_evenement`, `statut_precedent`, `auteur_id`, `visibilite`,
 `corrige_id`…) sont déclarées dans `supabase.sql`, parce que le suivi
 public et la règle de lecture du client s'en servent. Les huit statuts ne
@@ -128,8 +134,8 @@ Les migrations sont dans `outils/*.sql`, à exécuter dans Supabase >
 SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
 donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
-`supabase-evenements.sql` — relancer l'un impose de relancer ceux qui le
-suivent. Elles sont écrites pour être **rejouables sans risque** :
+`supabase-evenements.sql`, `supabase-scanner.sql` — relancer l'un impose
+de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.
 

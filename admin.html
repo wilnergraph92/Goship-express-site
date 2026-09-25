@@ -21,6 +21,8 @@
 <script src="assets/js/codes.js" defer></script>
 <script src="assets/js/impression.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
+<script src="assets/js/scan-parser.js" defer></script>
+<script src="assets/js/scanner.js" defer></script>
 </head>
 <body class="gs-admin-body">
 <a class="gs-skip" href="#contenu-principal">Aller au contenu</a>
@@ -112,6 +114,7 @@
       <button type="button" role="tab" aria-selected="true" data-onglet-vue="colis">Colis<span class="gs-admin-onglets__total" data-total="colis"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" tabindex="-1">Clients<span class="gs-admin-onglets__total" data-total="clients"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" tabindex="-1">Factures<span class="gs-admin-onglets__total" data-total="factures"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" tabindex="-1">Scanner</button>
     </div>
 
     <div class="gs-admin-vue" data-vue="colis" role="tabpanel">
@@ -187,6 +190,47 @@
       </div>
       <p class="gs-admin-vide" data-vide="clients" hidden></p>
       <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="clients" hidden>Afficher plus de clients</button>
+    </div>
+
+    <!-- Le poste de scan (assets/js/scanner.js). Un scanner USB ou Bluetooth
+         en mode clavier tape le code dans le champ, puis Entrée ; la saisie à
+         la main passe par le même chemin. Ouvrable directement :
+         admin.html#scanner. -->
+    <div class="gs-admin-vue gs-scan" data-vue="scanner" role="tabpanel" hidden>
+      <form class="gs-scan__saisie" data-scan-form novalidate>
+        <label for="scan-code">Scannez un colis — ou tapez son numéro</label>
+        <div class="gs-scan__ligne">
+          <input id="scan-code" data-scan-code maxlength="500" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="GSE-1001-HT, QR de l'étiquette ou suivi du vendeur">
+          <button type="submit" class="gs-bouton gs-bouton--plein">Rechercher</button>
+        </div>
+      </form>
+      <div class="gs-scan__reglages">
+        <label class="gs-champ">
+          <span>Mode</span>
+          <select data-scan-mode aria-describedby="scan-mode-aide">
+            <option value="">Consulter, puis choisir l'opération</option>
+          </select>
+        </label>
+        <label class="gs-champ">
+          <span>Lieu de ce poste</span>
+          <input data-scan-lieu maxlength="80" list="lieux-frequents" placeholder="Ex. Miami (Medley), FL">
+        </label>
+        <label class="gs-case"><input type="checkbox" data-scan-son checked><span>Son</span></label>
+        <p class="gs-champ__aide" id="scan-mode-aide" data-scan-mode-aide>Chaque scan affiche le colis et les opérations permises.</p>
+      </div>
+      <div class="gs-scan__etat" data-scan-etat role="status" aria-live="assertive">
+        <strong data-scan-titre>Prêt : scannez un colis</strong>
+        <span data-scan-detail></span>
+        <span class="gs-scan__boutons-etat" data-scan-boutons-etat></span>
+      </div>
+      <div class="gs-scan__corps">
+        <section class="gs-scan__fiche" data-scan-fiche hidden aria-label="Colis scanné"></section>
+        <aside class="gs-scan__journal" aria-label="Derniers scans">
+          <h3>Derniers scans</h3>
+          <ol data-scan-journal></ol>
+          <p class="gs-champ__aide" data-scan-journal-vide>Aucun scan pour l'instant.</p>
+        </aside>
+      </div>
     </div>
 
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>
