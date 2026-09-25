@@ -63,6 +63,24 @@ implémentations**, sinon le mode démo casse silencieusement. Elles sont
 loin l'une de l'autre dans le fichier — cherche le nom de la méthode, tu
 la trouveras deux fois.
 
+### Les règles métier vivent dans la base
+
+`outils/supabase-services.sql` : déclencheurs (`regles_colis`,
+`regles_facture`, `regles_facture_ligne`, `journaliser_*`) qui s'appliquent
+à tout chemin d'écriture, et fonctions de service appelées par `api.js`
+(`creer_colis`, `modifier_colis`, `changer_statut_colis`,
+`statuts_possibles`, `trouver_colis`, `facturer_colis`, `creer_facture`).
+Le prix, le statut initial, les transitions, les doublons et le journal
+d'audit se décident là, jamais dans une page.
+
+Le mode démo en garde une copie dans `api.js` (`TRANSITIONS`,
+`reglesColis`, `facturerColisDemo`…). **Une règle changée dans le SQL se
+change aussi dans la copie démo**, et `python3
+outils/essais-services/essai-services.py` compare les deux (matrice des
+transitions cas par cas, tarifs, arrondis). Les erreurs métier ont la
+forme `message = CODE`, `detail = phrase`, `hint = 'goship'` ;
+`erreurSupabase` les reconnaît et `admin.js` affiche la phrase.
+
 ## Facturation
 
 Transport facturé **5 $/lb**, plus **10 $ de frais de service** une seule
@@ -79,17 +97,24 @@ Les quatre montants d'une facture viennent tous de
 `API.outils.totauxFacture()` — écran et papier doivent afficher la même
 chose. Ne recalcule jamais à la main ailleurs.
 
+Le prix d'un colis se calcule dans la base (`prix_transport`, appelé par
+`regles_colis`) : celui qu'envoie une page est ignoré. Le champ prix du
+formulaire admin n'est qu'un aperçu en lecture seule. Une nouvelle facture
+passe par `creer_facture` / `facturer_colis`, qui refusent un colis déjà
+sur une facture active (`INVOICE_ALREADY_EXISTS`).
+
 Les factures antérieures au 22/09/2026 portent `frais_service_usd = 0`,
 volontairement : leur total ne devait pas changer rétroactivement.
 
 ## Base de données
 
 Tables : `clients`, `colis`, `colis_historique`, `notifications`,
-`prealertes`, `factures`, `facture_lignes`, `appareils`. Vue
+`prealertes`, `factures`, `facture_lignes`, `appareils`, `journal_audit`. Vue
 `colis_details` (colis + client). RLS activé partout, ~35 policies.
 
 Les migrations sont dans `outils/*.sql`, à exécuter dans Supabase >
-SQL Editor. Elles sont écrites pour être **rejouables sans risque** :
+SQL Editor. Ordre sur une base neuve : `supabase.sql`,
+`supabase-facturation.sql`, `supabase-services.sql`. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.
 
@@ -111,7 +136,15 @@ l'autre.
 ## Travailler et vérifier
 
 Ouvre `Voir le site en local.command`, ou sers le dossier. Le mode démo
-s'active tout seul en local, sans configuration.
+s'active tout seul en local, **sans configuration** — or `config.js`
+contient les vraies clés : servi tel quel, même en local, le site parle à
+la base de production. Pour un essai automatisé, remplace `config.js` par
+une configuration vide (interception de requête) et coupe tout appel à
+`*.supabase.co`.
+
+Bancs d'essai : `outils/essais-services/` (règles métier, SQL + démo),
+`outils/essais-sql/` (e-mails, factures client), `outils/essais-codes/`
+(QR, Code128). Tous tournent sans toucher la vraie base.
 
 Déploiement : **GitHub Pages depuis `main`**. Un `git push origin main`
 met le site en ligne. Les commits vont directement sur `main` — pas de

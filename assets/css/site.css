@@ -324,6 +324,8 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-champ select:invalid{color:#8a93ac}
 .gs-champ select option{color:var(--ink)}
 .gs-champ select:disabled{background-color:#f5f7fb;cursor:not-allowed}
+/* Montant calculé par la base : lisible, mais pas modifiable */
+.gs-champ input[readonly]{background-color:#f5f7fb;cursor:default}
 .gs-champ input:hover,.gs-champ select:hover,.gs-champ textarea:hover{border-color:#aab6cc}
 .gs-champ input:focus,.gs-champ select:focus,.gs-champ textarea:focus{outline:none;border-color:#10308f;box-shadow:0 0 0 4px rgba(16,48,143,.12)}
 .gs-champ.is-invalide input,.gs-champ.is-invalide select{border-color:#e5484d;box-shadow:0 0 0 4px rgba(229,72,77,.1)}
@@ -711,6 +713,9 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-choix-statut label:hover span{border-color:#aab6cc}
 .gs-choix-statut input:checked+span{border-color:var(--ink);background:#f3f6fd;box-shadow:inset 0 0 0 1px var(--ink)}
 .gs-choix-statut input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+/* Statut que la base refuserait depuis l'étape actuelle du colis */
+.gs-choix-statut input:disabled+span{opacity:.42;cursor:not-allowed}
+.gs-choix-statut label:hover input:disabled+span{border-color:#d6ddec}
 .gs-dialogue__historique h3{font-size:15px;font-weight:700;color:#2d3850}
 .gs-dialogue__actions-colis{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;padding-top:14px;border-top:1px dashed #e3e8f2}
 .gs-dialogue__actions-colis .gs-lien-bouton{font-size:14.5px}
