@@ -9,7 +9,9 @@ vérifie les deux, et vérifie qu'ils disent la même chose.
 ```bash
 python3 outils/essais-services/essai-services.py     # les règles métier (Phase 2)
 python3 outils/essais-services/essai-evenements.py   # le moteur d'événements (Phase 3)
+python3 outils/essais-services/essai-scanner.py      # le poste de scan, côté base (Phase 4)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
+node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,
@@ -73,6 +75,21 @@ règles de sécurité des tables s'appliquent donc pour de bon.
 - **Les deux côtés d'accord** : le catalogue des événements, la nature de
   chaque transition et chaque validation d'opération, cas par cas, entre la
   base et `api.js`.
+
+## Ce que prouvent `essai-scanner.py` et `essai-scanner.js`
+
+- **La lecture des codes** : le code-barres et le QR de nos étiquettes, les
+  QR imprimés en local ou dans une autre langue, les numéros tirés au
+  hasard, les cartons Amazon, UPS, SHEIN et USPS (avec son préfixe 420), un
+  scanner QWERTY branché sur un poste AZERTY — et tout ce qui doit être
+  refusé sans même interroger la base (code trop court, QR de facture…).
+- **Le rythme des frappes** : un scanner sans touche Entrée est reconnu, une
+  saisie à la main n'est jamais envoyée toute seule.
+- **La fiche** : ce que le poste affiche, sans adresse ni téléphone du client,
+  et les seules opérations que la base permet.
+- **Scan → opération → événement → statut**, le double scan, le retry après
+  coupure, les opérations refusées, le colis livré, l'action requise, deux
+  postes en même temps, et une recherche parmi 20 000 colis par l'index.
 
 ## Ce que prouve `essai-demo.js`
 

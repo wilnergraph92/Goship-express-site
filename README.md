@@ -475,7 +475,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, puis `outils/supabase-evenements.sql`. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, puis `outils/supabase-scanner.sql`. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 
@@ -523,6 +523,20 @@ Tous les événements ne changent pas le statut. Un colis peut être *inspecté*
 
 Pour le futur scanner, tout est prêt côté base : `executer_operation_par_reference` (le numéro scanné, GSE ou vendeur), `operations_possibles` (les boutons à proposer), `historique_colis`, `dernier_evenement`, `rechercher_evenements`.
 
+### Le poste de scan
+
+L'onglet **Scanner** du tableau de bord (ou directement `admin.html#scanner`) transforme un ordinateur de l'entrepôt ou de l'agence en poste de scan.
+
+- **Le matériel.** N'importe quel scanner de codes-barres USB ou Bluetooth réglé en mode **clavier** (HID, « keyboard wedge » — le réglage d'usine de la plupart). Il tape le code lu puis Entrée ; rien à installer, fonctionne sous Windows et macOS, dans Chrome et Edge. Un scanner réglé sans touche Entrée marche aussi : son code part tout seul après un court silence. Un scanner réglé en QWERTY sur un poste AZERTY est reconnu et corrigé.
+- **Ce qu'il lit.** Les codes déjà imprimés, sans rien changer : le **code-barres** de l'étiquette (le numéro GSE), son **QR code** (le lien de suivi), et le **numéro de suivi du vendeur** sur le carton (Amazon, UPS, USPS…). Le QR d'une facture (lien de paiement) est refusé.
+- **Mode normal.** Chaque scan affiche le colis — client, contenu, poids, destination, statut, dernier événement, lieu — et les seules opérations que la base permet à ce moment. Un changement de statut se confirme d'un clic ; une opération interne (inspecter, consolider, charger) part directement. « Action requise » demande sa raison.
+- **Mode rapide.** On choisit une opération (ex. « Expédié »), puis chaque colis scanné est enregistré ainsi, sans question — la base refuse ce qui ne suit pas le parcours. Idéal pour un lot qui part ou qui arrive.
+- **Le lieu du poste** est noté sur chaque événement (« Miami (Medley), FL », une agence…). Il est gardé sur cet ordinateur.
+- **Aucun faux succès.** « ✓ » ne s'affiche qu'après la réponse de la base. Sans connexion, le poste affiche « Connexion impossible » et propose « Réessayer » : la même demande repart avec la même clé, donc jamais deux fois. Un colis scanné deux fois de suite, ou par deux postes en même temps, ne fait qu'un événement (« Déjà fait »).
+- **Un numéro inconnu** n'enregistre rien et ne crée aucun colis : la réception d'un nouveau colis se fait par « Enregistrer un colis ».
+
+Pour essayer sans scanner : tapez le numéro dans le champ et appuyez sur « Rechercher » — c'est exactement le même chemin.
+
 ### Les erreurs
 
 Quand la base refuse, elle répond par un code et une phrase en français, que le tableau de bord affiche telle quelle :
@@ -540,6 +554,7 @@ Quand la base refuse, elle répond par un code et une phrase en français, que l
 | `EVENT_TYPE_INVALID`, `INVALID_EVENT_DATA`, `INVALID_LOCATION` | événement inconnu, précisions refusées (ou motif de correction manquant), lieu trop long |
 | `STATUS_ALREADY_SET` | le colis est déjà à ce statut |
 | `EVENT_IMMUTABLE` | tentative de modifier ou d'effacer un événement |
+| `INVALID_SCAN_FORMAT` | code scanné illisible (refusé par la page avant même d'interroger la base) |
 
 Les refus de permission et les transitions interdites sont aussi notés dans les journaux de Supabase (*Logs* > *Postgres*, chercher « goship »), sans aucune donnée secrète.
 

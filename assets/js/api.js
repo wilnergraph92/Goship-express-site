@@ -699,6 +699,31 @@
 
       // Suivi interne : un colis par son numéro GSE ou le suivi du vendeur,
       // avec son historique complet (notes comprises). null s'il n'existe pas.
+      /* ---- Le poste de scan (outils/supabase-scanner.sql) ----------------
+         Deux appels, une requête chacun. Aucune règle ici : la base cherche,
+         valide et écrit ; la page affiche ce qu'elle répond. */
+
+      // Le code lu → la fiche du colis (client, dernier événement, livraison
+      // ou action requise, historique, opérations permises), ou null.
+      scannerColis: function (reference) {
+        return sb().then(function (c) { return c.rpc('scanner_colis', { p_reference: String(reference || '') }); })
+          .then(resultat);
+      },
+
+      // Le code lu + une opération → le moteur d'événements → { code
+      // (« OK » ou « ALREADY_IN_TARGET_STATE »), message, resultat, fiche }.
+      // o : { lieu, note, metadonnees, cle, attendu, cible }
+      operationScanner: function (reference, type, o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('scanner_operation', {
+            p_reference: String(reference || ''), p_type: type, p_lieu: o.lieu == null ? null : o.lieu,
+            p_note: o.note == null ? null : o.note, p_metadonnees: o.metadonnees || {}, p_cle: o.cle || null,
+            p_statut_attendu: o.attendu || null, p_cible: o.cible || null
+          });
+        }).then(resultat);
+      },
+
       trouverColis: function (reference) {
         return sb().then(function (c) { return c.rpc('trouver_colis', { p_reference: String(reference || '') }); })
           .then(resultat);
@@ -1032,6 +1057,51 @@
       metadonnees: avant ? {} : { source: 'creation' }, cle_idempotence: null, visibilite: 'publique',
       corrige_id: null, cree_le: date || maintenant()
     });
+  }
+
+  // Les opérations du poste de scan, et la fiche qu'il affiche : même
+  // contenu que operations_du_scanner et fiche_scanner (supabase-scanner.sql).
+  var OPERATIONS_SCANNER = ['COLIS_INSPECTE', 'COLIS_EMBALLE', 'COLIS_CONSOLIDE', 'COLIS_CHARGE', 'COLIS_EXPEDIE',
+                            'COLIS_ARRIVE', 'COLIS_TRANSFERE', 'COLIS_DISPONIBLE', 'COLIS_LIVRE', 'ACTION_REQUISE',
+                            'ACTION_RESOLUE'];
+
+  function colisParReference(d, reference) {
+    var r = String(reference || '').trim().toUpperCase();
+    return d.colis.filter(function (x) { return x.numero === r; })[0] ||
+      d.colis.filter(function (x) { return x.suivi_transporteur && x.suivi_transporteur === r; })
+        .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })[0] || null;
+  }
+
+  function ficheScanner(d, c) {
+    var liste = historiqueDe(d, c.id);
+    var precedent = statutPrecedent(liste, c.statut);
+    var cl = d.comptes.filter(function (x) { return x.id === c.client_id; })[0];
+    function derniere(statut) {
+      var e = liste.filter(function (h) { return h.statut === statut && h.id != null && evenementVisible(h, liste); }).pop();
+      return e ? evenementJson(d, e) : null;
+    }
+    return {
+      colis: {
+        id: c.id, numero: c.numero, suivi_transporteur: c.suivi_transporteur || '', description: c.description || '',
+        expediteur: c.expediteur || '', poids_lb: c.poids_lb, service: c.service, pays_destination: c.pays_destination,
+        destination: c.destination || '', statut: c.statut, lieu: c.lieu || '', note: c.note || '',
+        recu_le: c.recu_le, maj_le: c.maj_le, prix_usd: prixColis(c)
+      },
+      client: cl ? { code: cl.code, nom_complet: cl.nom_complet, ville: cl.ville, pays: cl.pays } : null,
+      origine: 'Miami (Medley), FL',
+      precedent: precedent,
+      dernier_evenement: liste.length ? evenementJson(d, liste[liste.length - 1]) : null,
+      livraison: c.statut === 'livre' ? derniere('livre') : null,
+      action_requise: c.statut === 'incident' ? derniere('incident') : null,
+      operations: OPERATIONS_SCANNER.filter(function (k) {
+        return !validerOperation(c.statut, precedent, k, null).code;
+      }).map(function (k) {
+        var cible = validerOperation(c.statut, precedent, k, null).cible;
+        return { type: k, libelle: TYPES_EVENEMENT[k].libelle, statut: cible, change_statut: cible !== c.statut,
+                 lieu_requis: TYPES_EVENEMENT[k].lieu_requis };
+      }),
+      historique: liste.map(function (h) { return evenementJson(d, h); })
+    };
   }
 
   function resultatOperation(d, colisId, e, deja) {
@@ -1689,6 +1759,44 @@
         } catch (e) { return rejeter(e); }
       },
 
+      scannerColis: function (reference) {
+        var d = lireDonnees();
+        try {
+          exigerAdmin(d);
+          var r = String(reference || '').trim();
+          if (r.length < 4 || r.length > 60) throw Erreur('INVALID_SCAN_FORMAT', 'Code illisible : ' + r.slice(0, 60) + '.');
+          var c = colisParReference(d, r);
+          return plusTard(c ? ficheScanner(d, c) : null);
+        } catch (e) { return rejeter(e); }
+      },
+
+      operationScanner: function (reference, type, o) {
+        o = o || {};
+        var d = lireDonnees();
+        try {
+          var moi = exigerAdmin(d);
+          var v = String(type || '').trim().toUpperCase();
+          if (OPERATIONS_SCANNER.indexOf(v) < 0) {
+            throw Erreur('EVENT_TYPE_INVALID', 'Opération impossible depuis le scanner : ' + (type || '(vide)') + '.');
+          }
+          var r = String(reference || '').trim();
+          if (r.length < 4 || r.length > 60) throw Erreur('INVALID_SCAN_FORMAT', 'Code illisible : ' + r.slice(0, 60) + '.');
+          var c = colisParReference(d, r);
+          if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis ne porte le numéro ' + r.toUpperCase() + '.');
+          var res = operationDemo(d, moi, c.id, v, {
+            lieu: o.lieu, note: o.note, metadonnees: Object.assign({}, o.metadonnees || {}, { source: 'scanner' }),
+            cle: o.cle, attendu: o.attendu, cible: o.cible
+          });
+          if (!res.deja) ecrireDonnees(d);
+          return plusTard({
+            code: res.deja ? 'ALREADY_IN_TARGET_STATE' : 'OK',
+            message: (res.deja ? 'Déjà fait : ' : '') + TYPES_EVENEMENT[v].libelle,
+            resultat: res,
+            fiche: ficheScanner(d, trouverColisDemo(d, c.id))
+          });
+        } catch (e) { return rejeter(e); }
+      },
+
       trouverColis: function (reference) {
         var d = lireDonnees();
         try { exigerAdmin(d); } catch (e) { return rejeter(e); }
@@ -2146,7 +2254,8 @@
   api.regles = Object.freeze({
     transitions: TRANSITIONS, transitionPermise: transitionPermise, statutPrecedent: statutPrecedent,
     prixTransport: prixTransport, typesEvenement: TYPES_EVENEMENT, natureTransition: natureTransition,
-    typePourStatut: typePourStatut, validerOperation: validerOperation
+    typePourStatut: typePourStatut, validerOperation: validerOperation,
+    libellesStatut: Object.freeze(LIBELLES), operationsScanner: Object.freeze(OPERATIONS_SCANNER.slice())
   });
   window.GoshipAPI = api;
 })();
