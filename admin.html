@@ -267,8 +267,8 @@
         </div>
         <div class="gs-champ">
           <label for="col-prix">Prix du colis (US $)</label>
-          <input id="col-prix" name="prix_usd" inputmode="decimal" maxlength="10" autocomplete="off" placeholder="0,00" data-prix-colis>
-          <p class="gs-champ__aide" data-calcul-prix aria-live="polite">Calculé automatiquement : poids × tarif.</p>
+          <input id="col-prix" name="prix_usd" inputmode="decimal" maxlength="10" autocomplete="off" placeholder="0,00" readonly tabindex="-1" data-prix-colis>
+          <p class="gs-champ__aide" data-calcul-prix aria-live="polite">Calculé par le système : poids × tarif.</p>
         </div>
         <div class="gs-champ">
           <label for="col-service">Service</label>
@@ -293,20 +293,7 @@
       </div>
       <div class="gs-form__grille" data-bloc-etape>
         <div class="gs-champ">
-          <label for="col-statut">Statut</label>
-          <select id="col-statut" name="statut">
-            <option value="recu">Reçu</option>
-            <option value="emballe">Emballé</option>
-            <option value="embarque">Embarqué</option>
-            <option value="distribution">Centre de distribution</option>
-            <option value="succursale">Transféré à la succursale</option>
-            <option value="disponible">Disponible</option>
-            <option value="livre">Livré</option>
-            <option value="incident">Action requise</option>
-          </select>
-        </div>
-        <div class="gs-champ">
-          <label for="col-lieu">Lieu</label>
+          <label for="col-lieu">Lieu de réception</label>
           <input id="col-lieu" name="lieu" maxlength="80" list="lieux-frequents" value="Miami (Medley), FL">
         </div>
         <div class="gs-champ gs-champ--large">

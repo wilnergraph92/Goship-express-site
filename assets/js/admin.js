@@ -23,13 +23,50 @@
     'non-autorise': 'Accès refusé : session expirée ou compte non administrateur. Reconnectez-vous.',
     'trop-de-tentatives': 'Trop de tentatives. Patientez quelques minutes.',
     'non-confirme': 'Adresse e-mail pas encore confirmée.',
+    // Les refus de la base (outils/supabase-services.sql). Elle joint le plus
+    // souvent une phrase plus précise, qui a la priorité (messageErreur).
+    SHIPMENT_NOT_FOUND: 'Ce colis n’existe plus : rechargez la liste.',
+    CLIENT_NOT_FOUND: 'Client introuvable : choisissez un client existant.',
+    INVALID_WEIGHT: 'Poids invalide : indiquez un nombre de livres supérieur à zéro.',
+    INVALID_RATE: 'Tarif invalide : entre 0 et 1 000 $ la livre.',
+    INVALID_DESCRIPTION: 'Décrivez le contenu du colis.',
+    INVALID_SERVICE: 'Service inconnu.',
+    INVALID_DESTINATION: 'Destination inconnue.',
+    INVALID_DATE: 'Date invalide.',
+    INVALID_STATUS: 'Statut inconnu.',
+    INVALID_STATUS_TRANSITION: 'Ce changement de statut n’est pas permis.',
+    STATUS_CONFLICT: 'Le colis a changé de statut entre-temps : rechargez la liste.',
+    CONCURRENT_MODIFICATION: 'Le colis a été modifié entre-temps par quelqu’un d’autre : rouvrez-le.',
+    LOCATION_REQUIRED: 'Indiquez l’agence où le client peut retirer son colis.',
+    TRACKING_ALREADY_EXISTS: 'Ce numéro de suivi vendeur est déjà celui d’un autre colis.',
+    DUPLICATE_OPERATION: 'Cette demande a déjà été traitée pour un autre client.',
+    INVOICE_ALREADY_EXISTS: 'Ce colis est déjà sur une facture.',
+    INVOICE_CLIENT_MISMATCH: 'Une facture ne regroupe que les colis d’un seul client.',
+    INVOICE_LOCKED: 'Cette partie de la facture est arrêtée depuis sa création.',
+    INVALID_AMOUNT: 'Montant invalide.',
+    INVALID_INPUT: 'Données incomplètes.',
+    // La base n'a pas encore reçu outils/supabase-services.sql
+    absent: 'La base n’est pas à jour : lancez outils/supabase-services.sql dans Supabase (SQL Editor).',
     inconnu: 'Une erreur est survenue. Réessayez.'
   };
   var PAR_PAGE = 50;
 
   function $(sel, scope) { return (scope || document).querySelector(sel); }
   function $$(sel, scope) { return Array.prototype.slice.call((scope || document).querySelectorAll(sel)); }
-  function messageErreur(err) { return ERREURS[err && err.code] || ERREURS.inconnu; }
+  function messageErreur(err) {
+    if (err && err.metier && err.detail) return err.detail;
+    return ERREURS[err && err.code] || ERREURS.inconnu;
+  }
+
+  // Une clé par demande d'enregistrement, tirée à l'ouverture du formulaire et
+  // gardée jusqu'au succès : un second clic, ou un nouvel essai après une
+  // coupure, est reconnu par la base au lieu de créer un doublon.
+  function nouvelleCle() {
+    var octets = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(octets);
+    else for (var i = 0; i < 16; i++) octets[i] = Math.floor(Math.random() * 256);
+    return Array.prototype.map.call(octets, function (o) { return (o < 16 ? '0' : '') + o.toString(16); }).join('');
+  }
 
   function el(balise, classe, texte) {
     var n = document.createElement(balise);
@@ -275,7 +312,9 @@
         if (facture) { choisirVue('factures'); ouvrirFacture(facture); return; }
         if (!window.confirm('Ce colis n\u2019a pas encore de facture. En créer une maintenant ?')) return;
         if (!colis.client_id) { toast('Colis sans client : facture impossible.', true); return; }
-        return facturerColis(colis, { id: colis.client_id, nom_complet: colis.nom_client })
+        // La base crée la facture, ou rend celle qu'un collègue vient de créer
+        return API.admin.facturerColis(colis.id)
+          .then(function (r) { return ajouterLienPaiement(r.facture); })
           .then(function (f) {
             toast('Facture ' + (f && f.numero ? f.numero : '') + ' créée.');
             choisirVue('factures');
@@ -958,7 +997,11 @@
       $('[data-recap="paye"]', recap).textContent = argent(t.paye);
       $('[data-recap="balance"]', recap).textContent = argent(t.balance);
       $('[data-aide-montant]', formFacture).textContent = 'Total arrêté à la création de la facture.';
+      // Une facture de colis garde le total de ses colis : la base refuse
+      // qu'on le change (INVOICE_LOCKED), autant ne pas le proposer.
+      formFacture.montant_usd.readOnly = (facture.facture_lignes || []).some(function (l) { return l.colis_id; });
     } else {
+      cleFacture = nouvelleCle();
       champCodeFacture.readOnly = false;
       clientFacture = null;
       infoClientFacture.textContent = '';
@@ -968,6 +1011,8 @@
     }
     dlgFacture.showModal();
   }
+
+  var cleFacture = null;
 
   formFacture.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -985,15 +1030,7 @@
       return;
     }
 
-    var lignes = choisis.map(ligneDeColis);
     var paye = Math.max(Number(String(formFacture.montant_paye_usd.value || '').replace(',', '.')) || 0, 0);
-    // Frais de service : une seule fois par facture, quel que soit le nombre de
-    // colis, et jamais sur une facture sans colis.
-    var frais = lignes.length ? API.tarifs.fraisService : 0;
-    if (lignes.length) {
-      montant = O.arrondi(lignes.reduce(function (somme, l) { return somme + l.montant_usd; }, 0) + frais);
-    }
-
     var champs = {
       client_id: clientFacture.id,
       montant_usd: montant,
@@ -1002,7 +1039,6 @@
       lien_paiement: formFacture.lien_paiement.value.trim(),
       note: formFacture.note.value.trim()
     };
-    if (!factureEditee) champs.frais_service_usd = frais;
     if (factureEditee) {
       champs.statut = formFacture.statut.value;
       champs.moyen = formFacture.moyen.value;
@@ -1010,24 +1046,22 @@
         champs.montant_paye_usd = montant;          // réglée : plus rien à devoir
         if (!factureEditee.payee_le) champs.payee_le = new Date().toISOString();
       }
-    } else if (champs.montant_paye_usd >= montant && montant > 0) {
-      champs.statut = 'payee';
-      champs.payee_le = new Date().toISOString();
     }
 
+    // Une nouvelle facture : la base fait les comptes (prix des colis, frais
+    // de service une fois, statut « payée » si tout est réglé). Le montant
+    // saisi ne compte que pour une facture sans colis.
     var bouton = $('button[type="submit"]', formFacture);
     var fin = attente(bouton, 'Enregistrement…');
     var action = factureEditee
       ? API.admin.modifierFacture(factureEditee.id, champs)
-      : API.admin.creerFacture(champs, lignes);
+      : API.admin.creerFacture(champs, choisis.map(function (c) { return c.id; }), cleFacture)
+          .then(function (r) {
+            cleFacture = null;
+            // Aucun lien fourni : on en fabrique un avec l'adresse PayPal des réglages
+            return champs.lien_paiement ? r.facture : ajouterLienPaiement(r.facture);
+          });
     action.then(function (f) {
-      // Aucun lien fourni : on en fabrique un avec l'adresse PayPal des réglages
-      if (!factureEditee && f && !champs.lien_paiement) {
-        var lien = lienCarte(f.numero, montant);
-        if (lien) return API.admin.modifierFacture(f.id, { lien_paiement: lien }).then(function () { return f; });
-      }
-      return f;
-    }).then(function (f) {
       dlgFacture.close();
       toast(factureEditee ? 'Facture mise à jour.' : 'Facture ' + (f && f.numero ? f.numero : '') + ' créée.');
       return chargerFactures();
@@ -1207,49 +1241,59 @@
 
   /* ---- Prix du colis : poids x tarif -----------------------------------------
      Le tarif de la maison est 5 $/lb ; il reste remplaçable colis par colis
-     pour un accord particulier. Le prix suit le poids tant que personne ne
-     l'a écrit à la main : dès qu'on le corrige, on ne l'écrase plus.
+     pour un accord particulier. Le prix, lui, ne se saisit plus : c'est la
+     base qui le calcule (outils/supabase-services.sql, regles_colis) et qui
+     l'arrête. Le champ n'en montre qu'un aperçu, fait avec la même règle.
      -------------------------------------------------------------------------- */
   var champTarif = $('[data-tarif-lb]', formColis);
   var champPrix = $('[data-prix-colis]', formColis);
   var aidePrix = $('[data-calcul-prix]', formColis);
-  var prixALaMain = false;
 
   function nombreSaisi(valeur) {
     var n = Number(String(valeur == null ? '' : valeur).replace(',', '.').trim());
     return isFinite(n) ? n : NaN;
   }
 
+  // Champ vide : le tarif de la maison. Zéro reste zéro (un envoi offert).
   function tarifSaisi() {
-    var t = nombreSaisi(champTarif.value);
-    return t > 0 ? t : API.tarifs.parLivre;
+    if (!champTarif.value.trim()) return API.tarifs.parLivre;
+    return nombreSaisi(champTarif.value);
   }
 
   function ecrireMontant(champ, valeur) {
-    champ.value = (Math.round(valeur * 100) / 100).toFixed(2).replace('.', ',');
+    champ.value = O.arrondi(valeur).toFixed(2).replace('.', ',');
   }
 
-  function recalculerPrix(forcer) {
+  function recalculerPrix() {
     var poids = nombreSaisi(formColis.elements.poids_lb.value);
     var tarif = tarifSaisi();
+    if (!(tarif >= 0)) {
+      champPrix.value = '';
+      aidePrix.textContent = 'Tarif invalide : un nombre de dollars par livre, 5 par défaut.';
+      return;
+    }
+    // Un colis déjà enregistré garde le prix arrêté tant que ni son poids ni
+    // son tarif ne changent : il a pu être facturé.
+    if (colisEdite && colisEdite.prix_usd != null && poids === Number(colisEdite.poids_lb) &&
+        tarif === O.tarifDe(colisEdite)) {
+      ecrireMontant(champPrix, Number(colisEdite.prix_usd));
+      aidePrix.textContent = 'Prix arrêté à l’enregistrement du colis.';
+      return;
+    }
     if (!(poids > 0)) {
-      if (forcer || !prixALaMain) champPrix.value = '';
+      champPrix.value = '';
       aidePrix.textContent = 'Indiquez le poids : le prix se calcule tout seul, à ' + argent(tarif) + ' la livre.';
       return;
     }
-    var prix = Math.round(poids * tarif * 100) / 100;
-    if (forcer || !prixALaMain) ecrireMontant(champPrix, prix);
+    var prix = API.regles.prixTransport(poids, tarif);
+    ecrireMontant(champPrix, prix);
     aidePrix.textContent = O.nombre(poids) + ' lb × ' + argent(tarif) + ' = ' + argent(prix) +
-      ' · frais de service ' + argent(API.tarifs.fraisService) + ' ajoutés sur la facture.';
+      (colisEdite ? ' · recalculé à l’enregistrement ; une facture déjà émise ne change pas.'
+                  : ' · frais de service ' + argent(API.tarifs.fraisService) + ' ajoutés sur la facture.');
   }
 
-  formColis.elements.poids_lb.addEventListener('input', function () { recalculerPrix(false); });
-  champTarif.addEventListener('input', function () { recalculerPrix(false); });
-  champPrix.addEventListener('input', function () { prixALaMain = true; });
-  // Champ vidé : on rend la main au calcul automatique.
-  champPrix.addEventListener('blur', function () {
-    if (!champPrix.value.trim()) { prixALaMain = false; recalculerPrix(true); }
-  });
+  formColis.elements.poids_lb.addEventListener('input', recalculerPrix);
+  champTarif.addEventListener('input', recalculerPrix);
 
   var delaiCode = null;
   champCode.addEventListener('input', function () {
@@ -1287,42 +1331,25 @@
   }
 
   /* ---- La facture d'un colis --------------------------------------------------
-     Tout colis enregistré repart avec sa facture : le transport au prix du
-     colis, plus les frais de service, une seule fois. Le lien de paiement est
+     Tout colis enregistré repart avec sa facture : la base les crée ensemble,
+     dans la même transaction (creer_colis). Reste ici le lien de paiement,
      préparé dans la foulée quand les réglages le permettent.
      -------------------------------------------------------------------------- */
-  function ligneDeColis(colis) {
-    return {
-      colis_id: colis.id,
-      libelle: colis.description || 'Transport',
-      montant_usd: O.prixColis(colis),
-      quantite: 1,
-      poids_lb: colis.poids_lb != null && colis.poids_lb !== '' ? Number(colis.poids_lb) : null
-    };
+  function ajouterLienPaiement(f) {
+    if (!f || f.lien_paiement) return Promise.resolve(f);
+    var lien = lienCarte(f.numero, Number(f.montant_usd));
+    if (!lien) return Promise.resolve(f);
+    return API.admin.modifierFacture(f.id, { lien_paiement: lien })
+      .then(function () { return f; })
+      .catch(function () { return f; });   // sans lien, la facture reste valable
   }
 
-  function facturerColis(colis, client) {
-    var lignes = [ligneDeColis(colis)];
-    var frais = API.tarifs.fraisService;
-    var total = O.arrondi(lignes[0].montant_usd + frais);
-    return API.admin.creerFacture({
-      client_id: client.id,
-      montant_usd: total,
-      frais_service_usd: frais,
-      montant_paye_usd: 0
-    }, lignes).then(function (f) {
-      if (!f || f.lien_paiement) return f;
-      var lien = lienCarte(f.numero, total);
-      if (!lien) return f;
-      return API.admin.modifierFacture(f.id, { lien_paiement: lien })
-        .then(function () { return f; })
-        .catch(function () { return f; });   // sans lien, la facture reste valable
-    });
-  }
+  var cleColis = null;
 
   function ouvrirColis(options) {
     options = options || {};
     colisEdite = options.colis || null;
+    cleColis = colisEdite ? null : nouvelleCle();
     formColis.reset();
     erreurFormulaire(formColis, '');
     fermerSuggestions();
@@ -1348,15 +1375,12 @@
       // Un colis déjà enregistré garde son prix tel quel : il a pu être
       // facturé, et sa facture ne doit pas bouger derrière son dos.
       champTarif.value = colisEdite.tarif_lb_usd != null ? String(colisEdite.tarif_lb_usd).replace('.', ',') : '';
-      prixALaMain = colisEdite.prix_usd != null;
-      if (colisEdite.prix_usd != null) ecrireMontant(champPrix, Number(colisEdite.prix_usd));
-      recalculerPrix(false);
+      recalculerPrix();
     } else {
       f.code.value = options.code || etat.colis.clientCode || '';
       f.lieu.value = 'Miami (Medley), FL';
-      prixALaMain = false;
       champTarif.value = String(API.tarifs.parLivre);
-      recalculerPrix(true);
+      recalculerPrix();
     }
     dlgColis.showModal();
     if (f.code.value) chercherClient(!colisEdite);
@@ -1369,9 +1393,11 @@
     erreurFormulaire(formColis, '');
     var f = formColis.elements;
     var bouton = $('[data-envoyer]', formColis);
+    // Ces contrôles ne font que prévenir plus tôt : la base refait les mêmes,
+    // et c'est elle qui décide.
     var poids = String(f.poids_lb.value || '').replace(',', '.').trim();
-    if (poids && (isNaN(Number(poids)) || Number(poids) < 0)) {
-      erreurFormulaire(formColis, 'Poids invalide : indiquez un nombre en livres (ex. 4,5).');
+    if (!poids || isNaN(Number(poids)) || Number(poids) <= 0) {
+      erreurFormulaire(formColis, 'Indiquez le poids du colis, en livres (ex. 4,5).');
       f.poids_lb.focus();
       return;
     }
@@ -1405,43 +1431,46 @@
         expediteur: f.expediteur.value.trim(),
         recu_le: reception.toISOString(),
         suivi_transporteur: f.suivi_transporteur.value.trim(),
-        poids_lb: poids ? Math.round(Number(poids) * 100) / 100 : null,
+        poids_lb: Math.round(Number(poids) * 100) / 100,
         service: f.service.value,
         pays_destination: f.pays_destination.value,
         destination: f.destination.value.trim(),
-        tarif_lb_usd: tarifSaisi(),
-        prix_usd: (function () {
-          var saisi = nombreSaisi(champPrix.value);
-          if (saisi >= 0) return Math.round(saisi * 100) / 100;
-          return Math.round((Number(poids) || 0) * tarifSaisi() * 100) / 100;
-        }())
+        // Tel que saisi : la base lit « 5,5 » comme 5.5, et refuse ce qui
+        // n'est pas un tarif (INVALID_RATE). Vide : le tarif de la maison.
+        tarif_lb_usd: champTarif.value.trim() || null
       };
-      if (!colisEdite) {
-        donnees.statut = f.statut.value;
+      // Ni prix ni statut : la base calcule l'un et fait naître le colis
+      // « Reçu ». Le lieu et le message sont ceux de ce premier événement.
+      var creation = !colisEdite;
+      if (creation) {
         donnees.lieu = f.lieu.value.trim();
         donnees.note = f.note.value.trim();
       }
-      var creation = !colisEdite;
       var prevenir = creation && f.prevenir.checked;
-      var action = creation ? API.admin.creerColis(donnees) : API.admin.modifierColis(colisEdite.id, donnees);
-      return action.then(function (colis) {
+      var action = creation ? API.admin.creerColis(donnees, cleColis)
+                            : API.admin.modifierColis(colisEdite.id, donnees, colisEdite.maj_le);
+      return action.then(function (r) {
+        var colis = creation ? r.colis : r;
         attente(bouton);
         dlgColis.close();
         etat.vus[colis.id] = null;
         chargerStatistiques();
         chargerColis(true);
         if (!creation) { toast('Colis ' + colis.numero + ' modifié.'); return colis; }
-        // Sa facture dans la foulée. Si elle échoue, le colis reste bien
-        // enregistré : on le dit, plutôt que de faire croire à une perte.
-        return facturerColis(colis, client).then(function (facture) {
+        cleColis = null;
+        if (r.deja) {
+          // Second envoi de la même demande : la base a rendu le colis déjà
+          // créé. Rien n'est fait deux fois, ni facture ni message au client.
+          toast('Colis ' + colis.numero + ' déjà enregistré : rien n\u2019a été créé en double.');
+          return colis;
+        }
+        // Colis et facture sont nés ensemble ; seul le lien de paiement reste
+        // à poser, et son échec ne retire rien au reste.
+        return ajouterLienPaiement(r.facture).then(function (facture) {
           if (prevenir) notifier([{ colis: colis, client: client }], 'recu', { apresEnregistrement: true });
           else toast('Colis ' + colis.numero + ' enregistré pour ' + client.nom_complet +
                      (facture ? ' · facture ' + facture.numero : '') + '.');
           if (etat.vue === 'factures') chargerFactures();
-          return colis;
-        }).catch(function (err) {
-          toast('Colis ' + colis.numero + ' enregistré, mais sa facture n\u2019a pas pu être créée : ' +
-                messageErreur(err), true);
           return colis;
         });
       });
@@ -1472,6 +1501,7 @@
     $('[data-action="prevenir-client"]', dlgStatut).hidden = !(colis && EVENEMENTS.indexOf(colis.statut) >= 0);
     var historique = $('[data-historique]', dlgStatut);
     historique.textContent = '';
+    griserStatuts(null);
     if (colis) {
       var radio = $('input[name="statut"][value="' + colis.statut + '"]', formStatut);
       if (radio) radio.checked = true;
@@ -1480,12 +1510,30 @@
       API.admin.historique(colis.id).then(function (h) {
         O.remplirHistorique(historique, h, { notes: true, libelle: function (s) { return STATUTS[s] || s; } });
       }).catch(function () { /* historique facultatif */ });
+      // Les statuts que ce colis ne peut pas prendre sont grisés. C'est la
+      // base qui répond : elle seule connaît la règle et l'historique complet.
+      // Sans réponse, rien n'est grisé et la base refusera le cas échéant.
+      if (API.admin.statutsPossibles) {
+        API.admin.statutsPossibles(colis.id).then(function (p) {
+          if (cibleStatut.colis === colis) griserStatuts(p.possibles);
+        }).catch(function () { /* simple confort d'affichage */ });
+      }
       afficherNotificationsEnvoyees(colis.id);
     }
     majChoixStatut();
     dlgStatut.showModal();
     var coche = $('input[name="statut"]:checked', formStatut) || $('input[name="statut"]', formStatut);
     coche.focus();
+  }
+
+  // possibles : la liste des statuts permis, ou null pour tout laisser ouvert
+  // (un lot mêle des colis à des étapes différentes : la base triera).
+  function griserStatuts(possibles) {
+    $$('input[name="statut"]', formStatut).forEach(function (r) {
+      var permis = !possibles || possibles.indexOf(r.value) >= 0;
+      r.disabled = !permis;
+      r.parentNode.title = permis ? '' : 'Transition non permise depuis le statut actuel';
+    });
   }
 
   // « Disponible en agence » : l'agence devient obligatoire et le client est prévenu
@@ -1530,10 +1578,29 @@
     var concernes = (cibleStatut.colis ? [cibleStatut.colis] : etat.colis.lignes.filter(function (l) {
       return cibleStatut.ids.indexOf(l.id) >= 0;
     })).filter(function (l) { return l.statut !== 'disponible'; });
+    // Le statut que la page affichait pour chaque colis : si quelqu'un l'a
+    // changé entre-temps, la base le dit au lieu d'écraser son travail.
+    var attendus = {};
+    (cibleStatut.colis ? [cibleStatut.colis] : etat.colis.lignes).forEach(function (l) {
+      if (cibleStatut.ids.indexOf(l.id) >= 0) attendus[l.id] = l.statut;
+    });
     attente(bouton, 'Mise à jour…');
-    API.admin.changerStatut(cibleStatut.ids, { statut: statut, lieu: lieu, note: note })
-      .then(function (n) {
+    API.admin.changerStatut(cibleStatut.ids, { statut: statut, lieu: lieu, note: note }, attendus)
+      .then(function (r) {
         attente(bouton);
+        // Tout ou rien : un seul colis bloquant, et aucun n'a changé. On dit
+        // lesquels, le dialogue reste ouvert pour les décocher.
+        if (r.refus.length) {
+          var details = r.refus.slice(0, 4).map(function (x) { return x.detail; }).join(' · ') +
+            (r.refus.length > 4 ? ' · et ' + (r.refus.length - 4) + ' autre(s).' : '');
+          erreurFormulaire(formStatut, cibleStatut.ids.length > 1
+            ? 'Aucun colis n\u2019a changé. ' + details : details);
+          return;
+        }
+        var n = r.modifies + r.inchanges;
+        // Ne prévenir que les colis réellement passés à « Disponible » par
+        // cette demande : un double clic ne renvoie pas le message.
+        concernes = concernes.filter(function (l) { return r.ids.indexOf(l.id) >= 0; });
         dlgStatut.close();
         cibleStatut.ids.forEach(function (id) { etat.vus[id] = null; });
         if (!cibleStatut.colis) etat.selection = [];

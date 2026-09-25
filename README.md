@@ -22,7 +22,7 @@ Site statique (HTML, CSS, JavaScript) en quatre langues — français, anglais, 
 | `assets/js/impression.js`, `assets/css/impression.css` | **Étiquettes d'expédition** (imprimante thermique) et **factures** imprimables |
 | `assets/img/` | Logos, photos, icônes et drapeaux (`drapeaux/`) |
 | `outils/generateur/` | **Le générateur des pages** (`build.py`), la maquette d'origine (`export/`) et les pages écrites à la main (`pages/`). C'est la source du site — voir « Modifier le site » |
-| `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et bancs d'essai (`essais-sql/`, `essais-codes/`) — **inutile de le mettre en ligne** |
+| `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et bancs d'essai (`essais-sql/`, `essais-services/`, `essais-codes/`) — **inutile de le mettre en ligne** |
 | `Voir le site en local.command` | Lanceur à double-cliquer pour voir le site sur votre Mac — **inutile de le mettre en ligne** |
 
 ## Voir le site sur votre ordinateur
@@ -97,7 +97,7 @@ Pour savoir où vous en êtes, la requête de contrôle est à la fin de `outils
 
 **Changer de format ne touche que les nouveaux comptes.** Les codes déjà attribués restent tels quels, et c'est voulu : un client a pu donner le sien à Amazon, et des colis peuvent déjà porter son ancien code. Le même fichier contient, prêt à l'emploi mais désactivé, le bloc qui les renumérote — à n'utiliser que si vous êtes sûr qu'aucun colis n'est en route.
 
-**Essayer un script SQL avant de le lancer sur la vraie base.** Les fichiers de `outils/` s'exécutent sur la base de production : une erreur s'y voit sur de vrais clients. `outils/essais-sql/` permet de les faire tourner d'abord sur un PostgreSQL local jetable, qui se crée tout seul. Voir `outils/essais-sql/LISEZ-MOI.md`.
+**Essayer un script SQL avant de le lancer sur la vraie base.** Les fichiers de `outils/` s'exécutent sur la base de production : une erreur s'y voit sur de vrais clients. `outils/essais-sql/` permet de les faire tourner d'abord sur un PostgreSQL local jetable, qui se crée tout seul. Voir `outils/essais-sql/LISEZ-MOI.md`. Les règles métier (`supabase-services.sql`) ont leur propre banc : `outils/essais-services/`.
 
 ## Espace client et tableau de bord
 
@@ -112,8 +112,8 @@ Statuts disponibles : Reçu → Emballé → Embarqué → Centre de distributio
 
 ### Ce que fait l'équipe (`admin.html`)
 
-- **Enregistrer un colis** à sa réception : code client (le nom du client s'affiche pour vérification), date et heure de réception (remplies automatiquement, modifiables), contenu, expéditeur (Amazon, SHEIN…), numéro de suivi du vendeur, poids, service, destination. Le numéro de colis (GSE-1001-HT, GSE-1002-DO…) est attribué automatiquement.
-- **Mettre à jour** le statut d'un colis, avec un lieu et un message pour le client ; ou cocher plusieurs colis et **changer leur statut en une fois** (un conteneur qui part, par exemple).
+- **Enregistrer un colis** à sa réception : code client (le nom du client s'affiche pour vérification), date et heure de réception (remplies automatiquement, modifiables), contenu, expéditeur (Amazon, SHEIN…), numéro de suivi du vendeur, poids, service, destination. Le numéro de colis (GSE-1001-HT, GSE-1002-DO…) est attribué automatiquement, le colis naît au statut « Reçu », et son **prix** (poids × tarif) et sa **facture** sont créés par la base dans le même mouvement. Voir « Les règles métier ».
+- **Mettre à jour** le statut d'un colis, avec un lieu et un message pour le client ; ou cocher plusieurs colis et **changer leur statut en une fois** (un conteneur qui part, par exemple). Les statuts impossibles depuis l'étape actuelle sont grisés ; pour un lot, si un seul colis ne peut pas suivre, aucun ne change et le tableau de bord dit lequel.
 - **Imprimer l'étiquette d'expédition** d'un colis (bouton « Étiquette » sur sa ligne, ou depuis sa fiche) ; ou cocher plusieurs colis et **imprimer toutes leurs étiquettes en une fois**, ce qu'on veut après avoir enregistré l'arrivée d'un lot. Voir « Étiquettes, QR codes et codes-barres ».
 - **Facturer** (onglet Factures) : créer une facture, la marquer payée, l'envoyer sur WhatsApp, et l'**imprimer** sur une page A4 (bouton « Imprimer »), dans la langue du client.
 - Rechercher un colis ou un client, filtrer par statut, voir les colis d'un client, corriger ou supprimer un colis.
@@ -470,6 +470,53 @@ L'impression passe par une page séparée avec sa propre feuille de style
 (`assets/css/impression.css`) : c'est ce qui permet de fixer la taille du papier — 4 × 6 pouces
 pour une étiquette, A4 pour une facture — sans que le style du site s'en mêle. La fenêtre
 d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistrer au format PDF ».
+
+## Les règles métier
+
+Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
+
+**À installer une fois** : Supabase > *SQL Editor* > *New query* > coller `outils/supabase-services.sql` > *Run*. Sans risque, relançable ; sur une base neuve, après `supabase.sql` et `supabase-facturation.sql`. **Lancez-le avant de mettre en ligne la nouvelle version du site** : sans lui, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. La dernière ligne affichée doit indiquer `services_sur_7 = 7` et `regles_sur_6 = 6`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+
+### Ce que la base garantit
+
+- **Le prix.** Poids × tarif, arrondi au cent, calculé par la base. Le prix envoyé par une page est ignoré. Il est recalculé seulement si le poids ou le tarif du colis change ; une facture déjà émise, elle, ne bouge jamais. Tarif de la maison 5 $/lb (remplaçable colis par colis, de 0 à 1 000 $), frais de service 10 $ une fois par facture.
+- **Les données du colis.** Un vrai client (pas un compte de l'équipe), un contenu décrit, un poids supérieur à zéro (et inférieur à 10 000 lb, au-delà c'est une faute de frappe), un service et une destination connus, une date de réception qui n'est pas dans le futur. Un numéro de suivi vendeur ne sert qu'à un seul colis.
+- **Les statuts.** Un colis naît « Reçu ». Ensuite :
+
+  ```
+  Reçu → (Emballé) → Embarqué → (Centre de distribution) → (Transféré à la succursale) → Disponible → Livré
+  ```
+
+  Les étapes entre parenthèses peuvent être sautées ; les autres non. En particulier, « Livré » exige « Disponible » : c'est à ce moment que le client est prévenu. « Action requise » peut interrompre tout colis non livré ; il en sort en revenant à son étape, ou en passant à une étape qui l'aurait suivie. Et une erreur de saisie se corrige toujours en revenant à l'étape précédente du colis (« Livré » par erreur redevient « Disponible »). « Disponible » exige le nom de l'agence.
+- **Tout ou rien.** Le changement de statut et son étape dans l'historique sont écrits ensemble : jamais l'un sans l'autre. Un colis et sa facture aussi. Pour un lot, si un seul colis bloque, aucun ne change.
+- **Pas de doublon.** Un double clic, un envoi répété après une coupure, un scan répété : la base reconnaît la demande et ne refait rien (pas de second colis, pas de seconde facture, pas d'étape en double). Un colis ne figure que sur une facture active ; pour le refacturer, annulez d'abord l'ancienne.
+- **Deux personnes à la fois.** Si un collègue a changé le colis pendant que vous le regardiez, la base refuse votre modification au lieu d'écraser la sienne, et le dit.
+- **Une facture émise est arrêtée.** Ses frais de service, son client et, si elle porte des colis, son total ne se modifient plus. Les paiements, l'échéance, la note et le lien de paiement, si.
+- **Le journal.** Chaque création, modification, changement de statut, paiement et modification de client est noté dans la table `journal_audit` : qui, quoi, quand, avant, après. Pour un client, seul le nom des champs modifiés est noté, jamais son adresse ni son téléphone. Seule l'équipe le lit ; personne ne peut y écrire.
+- **Les permissions.** Chaque fonction vérifie la permission du compte connecté (`shipments.create`, `shipments.update_status`, `invoices.create`…), en plus des règles de sécurité des tables. Aujourd'hui, deux rôles : l'équipe peut tout, un client ne voit que ce qui est à lui. La liste est dans `permissions_du_role`, le seul endroit à changer quand viendront des rôles plus fins.
+
+### Les erreurs
+
+Quand la base refuse, elle répond par un code et une phrase en français, que le tableau de bord affiche telle quelle :
+
+| Code | Quand |
+|---|---|
+| `PERMISSION_DENIED` | le compte n'a pas le droit (affiché « Accès refusé ») |
+| `CLIENT_NOT_FOUND`, `SHIPMENT_NOT_FOUND` | client ou colis introuvable |
+| `INVALID_WEIGHT`, `INVALID_RATE`, `INVALID_DESCRIPTION`, `INVALID_SERVICE`, `INVALID_DESTINATION`, `INVALID_DATE`, `INVALID_AMOUNT`, `INVALID_INPUT` | donnée refusée |
+| `INVALID_STATUS`, `INVALID_STATUS_TRANSITION`, `LOCATION_REQUIRED` | statut inconnu, transition interdite, agence manquante |
+| `STATUS_CONFLICT`, `CONCURRENT_MODIFICATION` | quelqu'un d'autre a changé le colis entre-temps |
+| `TRACKING_ALREADY_EXISTS` | numéro de suivi vendeur déjà utilisé |
+| `DUPLICATE_OPERATION` | une demande déjà traitée, rejouée pour un autre client |
+| `INVOICE_ALREADY_EXISTS`, `INVOICE_CLIENT_MISMATCH`, `INVOICE_LOCKED` | colis déjà facturé, colis d'un autre client, facture arrêtée |
+
+Les refus de permission et les transitions interdites sont aussi notés dans les journaux de Supabase (*Logs* > *Postgres*, chercher « goship »), sans aucune donnée secrète.
+
+### Pour les développeurs
+
+Les fonctions appelées par le site : `creer_colis`, `modifier_colis`, `changer_statut_colis`, `statuts_possibles`, `trouver_colis`, `facturer_colis`, `creer_facture`. Le suivi public reste `suivre_colis`. Côté site, rien ne change dans les noms : `API.admin.creerColis`, `changerStatut`… appellent ces fonctions. Le mode démonstration applique les mêmes règles dans le navigateur, et `outils/essais-services/` vérifie que les deux répondent pareil, cas par cas.
+
+**Plus tard** : quand l'application mobile aura été vérifiée (elle ne doit pas écrire dans la table `colis`), la fin de `supabase-services.sql` contient, prêtes à l'emploi, les deux lignes qui ferment l'écriture directe dans les tables : il ne restera alors que les fonctions comme porte d'entrée.
 
 ## Paiement des factures
 
