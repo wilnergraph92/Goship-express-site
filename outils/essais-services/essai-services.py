@@ -31,7 +31,7 @@ PSQL = pathlib.Path(pgserver.__file__).parent / 'pginstall' / 'bin' / 'psql'
 BASE = 'goship_services'
 
 SCRIPTS = [os.path.join(RACINE, 'outils', f) for f in
-           ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql')]
+           ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql')]
 
 # Ce que Supabase apporte et qu'un PostgreSQL ordinaire n'a pas : les comptes
 # (auth), le coffre-fort (vault), les appels sortants (pg_net) et le stockage.
@@ -188,10 +188,12 @@ def creer(db, compte, champs, cle=None, facturer=True):
                  % (colis(champs), "'%s'" % cle if cle else 'null', 'true' if facturer else 'false'))
 
 
-def statut(db, compte, ids, vers, lieu='', note='', attendus=None):
-    return jsonq(db, compte, "select public.changer_statut_colis(array[%s]::uuid[], '%s', '%s', '%s', %s);"
+def statut(db, compte, ids, vers, lieu='', note='', attendus=None, motif=None, cle=None):
+    return jsonq(db, compte, "select public.changer_statut_colis(array[%s]::uuid[], '%s', '%s', '%s', %s, %s, %s);"
                  % (','.join("'%s'" % i for i in ids), vers, lieu.replace("'", "''"), note.replace("'", "''"),
-                    "'%s'::jsonb" % json.dumps(attendus) if attendus else 'null'))
+                    "'%s'::jsonb" % json.dumps(attendus) if attendus else 'null',
+                    "'%s'" % motif.replace("'", "''") if motif else 'null',
+                    "'%s'" % cle if cle else 'null'))
 
 
 def un(db, texte):
@@ -306,7 +308,7 @@ def main():
                              "select count(*) from m;" % c['id']), '0')
     verifier('un visiteur ne peut même pas appeler les services',
              un(db, "select has_function_privilege('anon', 'public.creer_colis(jsonb, text, boolean)', 'execute')"
-                    " or has_function_privilege('anon', 'public.changer_statut_colis(uuid[], text, text, text, jsonb)', 'execute');"),
+                    " or has_function_privilege('anon', 'public.changer_statut_colis(uuid[], text, text, text, jsonb, text, text)', 'execute');"),
              'f')
     verifier('peut() : l\'équipe voit tout', db.comme(ADMIN, "select public.peut('shipments.view');"), 't')
     verifier('peut() : un client voit SES colis',
@@ -326,8 +328,9 @@ def main():
              'INVALID_STATUS_TRANSITION')
     verifier('Action requise → Embarqué (retour)', statut(db, ADMIN, [i], 'embarque', 'Port-au-Prince')['modifies'], 1)
     p = jsonq(db, ADMIN, "select public.statuts_possibles('%s');" % i)
-    verifier('statuts possibles depuis Embarqué', ','.join(sorted(p['possibles'])),
-             'disponible,distribution,embarque,incident,recu,succursale')
+    verifier('statuts possibles depuis Embarqué (Reçu seulement en correction)',
+             (','.join(sorted(p['possibles'])), p['correction']),
+             ('disponible,distribution,embarque,incident,succursale', 'recu'))
     verifier('Disponible sans agence : refusé',
              db.erreur(ADMIN, "select public.changer_statut_colis(array['%s']::uuid[], 'disponible');" % i),
              'LOCATION_REQUIRED')
@@ -335,8 +338,10 @@ def main():
     verifier('Disponible → Livré', statut(db, ADMIN, [i], 'livre', 'Pétion-Ville')['modifies'], 1)
     verifier('Livré → Reçu : interdit', statut(db, ADMIN, [i], 'recu')['refus'][0]['code'],
              'INVALID_STATUS_TRANSITION')
-    verifier('Livré → Disponible : correction d\'une erreur de saisie',
-             statut(db, ADMIN, [i], 'disponible', 'Agence de Pétion-Ville')['modifies'], 1)
+    verifier('Livré → Disponible sans motif : refusé (c\'est une correction)',
+             statut(db, ADMIN, [i], 'disponible', 'Agence de Pétion-Ville')['refus'][0]['code'], 'INVALID_EVENT_DATA')
+    verifier('Livré → Disponible avec son motif : correction enregistrée',
+             statut(db, ADMIN, [i], 'disponible', 'Agence de Pétion-Ville', motif='Livré par erreur')['modifies'], 1)
     verifier('statut inconnu', db.erreur(ADMIN, "select public.changer_statut_colis(array['%s']::uuid[], 'perdu');" % i),
              'INVALID_STATUS')
     verifier('colis inconnu',

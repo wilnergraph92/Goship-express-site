@@ -1484,6 +1484,7 @@
   var dlgStatut = $('[data-dialogue="statut"]');
   var formStatut = $('form[data-form="statut"]', dlgStatut);
   var cibleStatut = { ids: [], colis: null };
+  var cleStatut = null;
 
   function ouvrirStatut(ids, colis) {
     cibleStatut = { ids: ids, colis: colis };
@@ -1502,20 +1503,22 @@
     var historique = $('[data-historique]', dlgStatut);
     historique.textContent = '';
     griserStatuts(null);
+    cleStatut = nouvelleCle();
+    formStatut.elements.motif.value = '';
     if (colis) {
       var radio = $('input[name="statut"][value="' + colis.statut + '"]', formStatut);
       if (radio) radio.checked = true;
       formStatut.elements.lieu.value = colis.lieu || '';
       formStatut.elements.note.value = colis.note || '';
       API.admin.historique(colis.id).then(function (h) {
-        O.remplirHistorique(historique, h, { notes: true, libelle: function (s) { return STATUTS[s] || s; } });
+        O.remplirHistorique(historique, h, { notes: true, libelle: libelleEvenement });
       }).catch(function () { /* historique facultatif */ });
       // Les statuts que ce colis ne peut pas prendre sont grisés. C'est la
       // base qui répond : elle seule connaît la règle et l'historique complet.
       // Sans réponse, rien n'est grisé et la base refusera le cas échéant.
       if (API.admin.statutsPossibles) {
         API.admin.statutsPossibles(colis.id).then(function (p) {
-          if (cibleStatut.colis === colis) griserStatuts(p.possibles);
+          if (cibleStatut.colis === colis) { griserStatuts(p.possibles, p.correction); majChoixStatut(); }
         }).catch(function () { /* simple confort d'affichage */ });
       }
       afficherNotificationsEnvoyees(colis.id);
@@ -1528,12 +1531,34 @@
 
   // possibles : la liste des statuts permis, ou null pour tout laisser ouvert
   // (un lot mêle des colis à des étapes différentes : la base triera).
-  function griserStatuts(possibles) {
+  // correction : l'étape d'avant, permise seulement comme correction (motif
+  // obligatoire), ou null.
+  var statutCorrection = null;
+  function griserStatuts(possibles, correction) {
+    statutCorrection = correction || null;
     $$('input[name="statut"]', formStatut).forEach(function (r) {
-      var permis = !possibles || possibles.indexOf(r.value) >= 0;
+      var permis = !possibles || possibles.indexOf(r.value) >= 0 || r.value === statutCorrection;
       r.disabled = !permis;
-      r.parentNode.title = permis ? '' : 'Transition non permise depuis le statut actuel';
+      r.parentNode.title = !permis ? 'Transition non permise depuis le statut actuel'
+        : (r.value === statutCorrection ? 'Retour à l\u2019étape précédente : correction, motif obligatoire' : '');
     });
+  }
+
+  // Le libellé d'un événement de l'historique. Les étapes gardent le nom de
+  // leur statut ; les opérations internes et les corrections disent ce
+  // qu'elles sont. Une étape annulée par une correction le dit aussi.
+  var EVENEMENTS_INTERNES = { COLIS_INSPECTE: 'Inspecté', COLIS_CONSOLIDE: 'Consolidé', COLIS_CHARGE: 'Chargé' };
+  function libelleEvenement(statut, h) {
+    h = h || {};
+    var texte;
+    if (EVENEMENTS_INTERNES[h.type_evenement]) texte = EVENEMENTS_INTERNES[h.type_evenement] + ' (interne)';
+    else if (h.type_evenement === 'CORRECTION') {
+      texte = 'Correction → ' + (STATUTS[statut] || statut) +
+        (h.metadonnees && h.metadonnees.motif ? ' — ' + h.metadonnees.motif : '');
+    } else texte = STATUTS[statut] || statut;
+    if (h.corrige) texte += ' (annulé par une correction)';
+    if (h.auteur) texte += ' · ' + h.auteur;
+    return texte;
   }
 
   // « Disponible en agence » : l'agence devient obligatoire et le client est prévenu
@@ -1542,9 +1567,14 @@
   function majChoixStatut() {
     var statut = ($('input[name="statut"]:checked', formStatut) || {}).value;
     var colis = cibleStatut.colis;
+    // Le motif : pour un colis, quand le statut coché est une correction ;
+    // pour un lot, toujours proposé (la base dira pour quels colis il manque).
+    $('[data-bloc-motif]', formStatut).hidden = colis ? !(statut && statut === statutCorrection) : false;
     var disponible = statut === 'disponible';
-    // Le client est prévenu quand son colis devient disponible (pas à chaque modification)
-    $('[data-bloc-prevenir]', formStatut).hidden = !disponible || !!(colis && colis.statut === 'disponible');
+    // Le client est prévenu quand son colis devient disponible (pas à chaque
+    // modification, ni quand une correction le ramène à « Disponible »)
+    $('[data-bloc-prevenir]', formStatut).hidden = !disponible || !!(colis && colis.statut === 'disponible') ||
+      !!(colis && statut === statutCorrection);
     if (disponible) libelleLieu.textContent = 'Agence où retirer le colis';
     else libelleLieu.innerHTML = libelleLieuOrigine;
     var lieu = formStatut.elements.lieu;
@@ -1570,6 +1600,12 @@
       f.lieu.focus();
       return;
     }
+    var motif = f.motif.value.trim();
+    if (cibleStatut.colis && statut === statutCorrection && !motif) {
+      erreurFormulaire(formStatut, 'Revenir à l\u2019étape précédente est une correction : indiquez-en le motif.');
+      f.motif.focus();
+      return;
+    }
     erreurFormulaire(formStatut, '');
     var bouton = $('[data-envoyer]', formStatut);
     var prevenir = statut === 'disponible' && f.prevenir.checked && !$('[data-bloc-prevenir]', formStatut).hidden;
@@ -1585,7 +1621,7 @@
       if (cibleStatut.ids.indexOf(l.id) >= 0) attendus[l.id] = l.statut;
     });
     attente(bouton, 'Mise à jour…');
-    API.admin.changerStatut(cibleStatut.ids, { statut: statut, lieu: lieu, note: note }, attendus)
+    API.admin.changerStatut(cibleStatut.ids, { statut: statut, lieu: lieu, note: note }, attendus, motif || null, cleStatut)
       .then(function (r) {
         attente(bouton);
         // Tout ou rien : un seul colis bloquant, et aucun n'a changé. On dit

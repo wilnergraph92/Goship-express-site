@@ -73,11 +73,23 @@ la trouveras deux fois.
 Le prix, le statut initial, les transitions, les doublons et le journal
 d'audit se décident là, jamais dans une page.
 
+**Le statut d'un colis ne change que par un événement**
+(`outils/supabase-evenements.sql`) : `executer_operation` est la seule
+porte ; le déclencheur `verrou_statut` refuse tout autre `UPDATE` du
+statut, et `evenement_immuable` toute modification d'une ligne de
+`colis_historique` (on corrige par un événement `CORRECTION`, motif
+obligatoire). `changer_statut_colis` et `statuts_possibles` vivent dans ce
+fichier, pas dans `supabase-services.sql`. Les colonnes d'événement
+(`type_evenement`, `statut_precedent`, `auteur_id`, `visibilite`,
+`corrige_id`…) sont déclarées dans `supabase.sql`, parce que le suivi
+public et la règle de lecture du client s'en servent. Les huit statuts ne
+changent pas ; les événements sont plus fins (`types_evenement()`).
+
 Le mode démo en garde une copie dans `api.js` (`TRANSITIONS`,
+`TYPES_EVENEMENT`, `validerOperation`, `operationDemo`,
 `reglesColis`, `facturerColisDemo`…). **Une règle changée dans le SQL se
-change aussi dans la copie démo**, et `python3
-outils/essais-services/essai-services.py` compare les deux (matrice des
-transitions cas par cas, tarifs, arrondis). Les erreurs métier ont la
+change aussi dans la copie démo**, et `essai-services.py` /
+`essai-evenements.py` comparent les deux cas par cas. Les erreurs métier ont la
 forme `message = CODE`, `detail = phrase`, `hint = 'goship'` ;
 `erreurSupabase` les reconnaît et `admin.js` affiche la phrase.
 
@@ -113,8 +125,11 @@ Tables : `clients`, `colis`, `colis_historique`, `notifications`,
 `colis_details` (colis + client). RLS activé partout, ~35 policies.
 
 Les migrations sont dans `outils/*.sql`, à exécuter dans Supabase >
-SQL Editor. Ordre sur une base neuve : `supabase.sql`,
-`supabase-facturation.sql`, `supabase-services.sql`. Elles sont écrites pour être **rejouables sans risque** :
+SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
+donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
+`supabase-facturation.sql`, `supabase-services.sql`,
+`supabase-evenements.sql` — relancer l'un impose de relancer ceux qui le
+suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.
 
@@ -142,7 +157,8 @@ la base de production. Pour un essai automatisé, remplace `config.js` par
 une configuration vide (interception de requête) et coupe tout appel à
 `*.supabase.co`.
 
-Bancs d'essai : `outils/essais-services/` (règles métier, SQL + démo),
+Bancs d'essai : `outils/essais-services/` (règles métier et moteur
+d'événements, SQL + démo, migration depuis la version publiée),
 `outils/essais-sql/` (e-mails, factures client), `outils/essais-codes/`
 (QR, Code128). Tous tournent sans toucher la vraie base.
 

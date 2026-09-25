@@ -7,12 +7,14 @@ comporte sur votre ordinateur exactement comme en ligne. Ce banc d'essai
 vérifie les deux, et vérifie qu'ils disent la même chose.
 
 ```bash
-python3 outils/essais-services/essai-services.py   # la base (et la comparaison)
-node outils/essais-services/essai-demo.js          # le mode démonstration seul
+python3 outils/essais-services/essai-services.py     # les règles métier (Phase 2)
+python3 outils/essais-services/essai-evenements.py   # le moteur d'événements (Phase 3)
+node outils/essais-services/essai-demo.js            # le mode démonstration seul
 ```
 
-**À relancer après toute modification de `supabase-services.sql`, de
-`supabase.sql` ou des règles dans `api.js`.**
+**À relancer après toute modification de `supabase.sql`,
+`supabase-services.sql`, `supabase-evenements.sql` ou des règles dans
+`api.js`.**
 
 ## Ce que prouve `essai-services.py`
 
@@ -47,6 +49,30 @@ règles de sécurité des tables s'appliquent donc pour de bon.
 - **Volume** : 5 000 colis, une page filtrée en moins d'une seconde.
 - **Les deux côtés d'accord** : même matrice des transitions (tous les cas,
   un par un), mêmes tarifs, mêmes prix au cent près.
+
+## Ce que prouve `essai-evenements.py`
+
+- **La migration** : il installe d'abord la base telle qu'elle est publiée
+  (les fichiers de la dernière version, lus dans Git — variable
+  `GOSHIP_AVANT` pour en choisir une autre), y crée colis, factures et
+  historique, puis installe la nouvelle version par-dessus. Les événements
+  passés restent intacts au caractère près, aucun n'est inventé, factures et
+  prix ne bougent pas, et un ancien colis continue sa route.
+- **Les transitions** : valides, refusées, « Action requise » et son retour,
+  la livraison, « Livré » final, la correction avec son motif.
+- **Les événements sans changement de statut** : inspection, consolidation,
+  chargement — invisibles pour le client et le suivi public.
+- **Un événement est un fait** : ni modifiable ni effaçable, même au SQL
+  Editor ; un client ne peut ni en écrire ni en fabriquer.
+- **Double scan, idempotence, conflits** et **concurrence** : deux postes sur
+  le même colis au même instant, la même requête HTTP en double, un retry
+  réseau.
+- **L'historique complet** d'un colis : exactement les événements attendus,
+  avec statut d'avant, statut d'après, auteur et heure, dans le même ordre à
+  chaque lecture.
+- **Les deux côtés d'accord** : le catalogue des événements, la nature de
+  chaque transition et chaque validation d'opération, cas par cas, entre la
+  base et `api.js`.
 
 ## Ce que prouve `essai-demo.js`
 
