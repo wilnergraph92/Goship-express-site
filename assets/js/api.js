@@ -114,13 +114,129 @@
   }
 
   // Le dernier statut de l'historique (dans l'ordre d'écriture) qui n'est ni
-  // l'actuel ni un incident.
+  // l'actuel, ni un incident, ni une étape annulée par une correction.
   function statutPrecedent(historique, actuel) {
     var h = historique || [];
+    var corriges = h.map(function (e) { return e.corrige_id; }).filter(function (x) { return x != null; });
     for (var i = h.length - 1; i >= 0; i--) {
-      if (h[i].statut !== actuel && h[i].statut !== 'incident') return h[i].statut;
+      if (h[i].statut !== actuel && h[i].statut !== 'incident' && corriges.indexOf(h[i].id) < 0) return h[i].statut;
     }
     return null;
+  }
+
+  /* ---- Les événements (Phase 3) ----------------------------------------------
+     Comme les transitions : ils font foi dans la base
+     (outils/supabase-evenements.sql), et sont copiés ici pour le mode
+     démonstration. outils/essais-services/essai-evenements.py compare le
+     catalogue, la nature de chaque transition et chaque validation, cas par
+     cas.
+     -------------------------------------------------------------------------- */
+  var LIBELLES = {
+    recu: 'Reçu', emballe: 'Emballé', embarque: 'Embarqué', distribution: 'Centre de distribution',
+    succursale: 'Transféré à la succursale', disponible: 'Disponible', livre: 'Livré', incident: 'Action requise'
+  };
+
+  var TYPES_EVENEMENT = (function () {
+    function t(libelle, statut, depuis, visibilite, permission, special, lieuRequis) {
+      return { libelle: libelle, statut: statut, depuis: depuis, visibilite: visibilite, permission: permission,
+               special: special, lieu_requis: lieuRequis };
+    }
+    var maj = 'shipments.update_status', scan = 'shipments.scan', entrepot = ['recu', 'emballe'];
+    return {
+      COLIS_RECU: t("Reçu à l'entrepôt", 'recu', null, 'publique', 'shipments.create', null, false),
+      COLIS_INSPECTE: t('Inspecté', null, entrepot, 'interne', scan, null, false),
+      COLIS_EMBALLE: t('Emballé', 'emballe', null, 'publique', maj, null, false),
+      COLIS_CONSOLIDE: t('Consolidé', null, entrepot, 'interne', scan, null, false),
+      COLIS_CHARGE: t('Chargé', null, entrepot, 'interne', scan, null, false),
+      COLIS_EXPEDIE: t('Expédié', 'embarque', null, 'publique', maj, null, false),
+      COLIS_ARRIVE: t('Arrivé au centre de distribution', 'distribution', null, 'publique', maj, null, false),
+      COLIS_TRANSFERE: t('Transféré à la succursale', 'succursale', null, 'publique', maj, null, false),
+      COLIS_DISPONIBLE: t('Disponible', 'disponible', null, 'publique', maj, null, true),
+      COLIS_LIVRE: t('Livré', 'livre', null, 'publique', maj, null, false),
+      ACTION_REQUISE: t('Action requise', 'incident', null, 'publique', maj, null, false),
+      ACTION_RESOLUE: t('Action résolue', null, ['incident'], 'publique', maj, 'sortie', false),
+      CORRECTION: t('Correction', null, null, 'interne', 'shipments.correct', 'correction', false),
+      MISE_A_JOUR: t('Étape mise à jour', null, null, 'publique', maj, 'mise_a_jour', false)
+    };
+  })();
+  Object.keys(TYPES_EVENEMENT).forEach(function (k) {
+    if (TYPES_EVENEMENT[k].depuis) Object.freeze(TYPES_EVENEMENT[k].depuis);
+    Object.freeze(TYPES_EVENEMENT[k]);
+  });
+  Object.freeze(TYPES_EVENEMENT);
+  var TYPE_DU_STATUT = {
+    recu: 'COLIS_RECU', emballe: 'COLIS_EMBALLE', embarque: 'COLIS_EXPEDIE', distribution: 'COLIS_ARRIVE',
+    succursale: 'COLIS_TRANSFERE', disponible: 'COLIS_DISPONIBLE', livre: 'COLIS_LIVRE', incident: 'ACTION_REQUISE'
+  };
+
+  // nature_transition : identique, normale, sortie_incident, correction, ou null
+  function natureTransition(de, vers, precedent) {
+    if (!vers || !TRANSITIONS[vers]) return null;
+    if (de === vers) return 'identique';
+    if (!de || !TRANSITIONS[de]) return 'normale';
+    if (de === 'incident') {
+      var avant = precedent || 'recu';
+      return vers === avant || (vers !== 'incident' && (TRANSITIONS[avant] || []).indexOf(vers) >= 0)
+        ? 'sortie_incident' : null;
+    }
+    if (TRANSITIONS[de].indexOf(vers) >= 0) return 'normale';
+    if (precedent && vers === precedent) return 'correction';
+    return null;
+  }
+
+  // type_pour_statut : l'événement qui mène au statut coché
+  function typePourStatut(de, vers, precedent) {
+    switch (natureTransition(de, vers, precedent)) {
+      case 'identique': return 'MISE_A_JOUR';
+      case 'correction': return 'CORRECTION';
+      case 'sortie_incident': return 'ACTION_RESOLUE';
+      case 'normale': return TYPE_DU_STATUT[vers] || null;
+      default: return null;
+    }
+  }
+
+  // valider_operation : { code (null si permis), detail, cible, nature }
+  function validerOperation(actuel, precedent, type, cible) {
+    var t = TYPES_EVENEMENT[type];
+    function non(code, detail, c, n) { return { code: code, detail: detail, cible: c, nature: n || null }; }
+    function lib(s) { return LIBELLES[s] || s; }
+    if (!t) return non('EVENT_TYPE_INVALID', 'Type d’événement inconnu : ' + (type || '(vide)') + '.', null);
+    var c, n;
+    if (t.special === 'correction') {
+      c = cible || precedent;
+      n = natureTransition(actuel, c, precedent);
+      if (!precedent || c !== precedent || n !== 'correction') {
+        return non('INVALID_STATUS_TRANSITION', 'Correction impossible : on ne revient qu’à l’étape précédente du colis.', c, n);
+      }
+    } else if (t.special === 'sortie') {
+      c = cible || precedent || 'recu';
+      n = natureTransition(actuel, c, precedent);
+      if (actuel !== 'incident' || n !== 'sortie_incident') {
+        return non('INVALID_STATUS_TRANSITION', 'Action résolue : le colis doit être en « Action requise » et reprendre son étape, ou une suivante.', c, n);
+      }
+    } else if (t.special === 'mise_a_jour') {
+      c = actuel;
+      n = 'identique';
+      if (cible && cible !== actuel) return non('INVALID_EVENT_DATA', 'Une mise à jour ne change pas le statut.', cible);
+    } else if (!t.statut) {
+      c = actuel;
+      n = 'identique';
+      if (cible && cible !== actuel) return non('INVALID_EVENT_DATA', t.libelle + ' ne change pas le statut du colis.', cible);
+      if (t.depuis && t.depuis.indexOf(actuel) < 0) {
+        return non('INVALID_STATUS_TRANSITION', t.libelle + ' : impossible au statut « ' + lib(actuel) + ' ».', c);
+      }
+    } else {
+      c = t.statut;
+      if (cible && cible !== c) {
+        return non('INVALID_EVENT_DATA', t.libelle + ' mène au statut « ' + lib(c) + ' », pas ailleurs.', cible);
+      }
+      if (c === actuel) return non('STATUS_ALREADY_SET', 'Le colis est déjà au statut « ' + lib(c) + ' ».', c, 'identique');
+      n = natureTransition(actuel, c, precedent);
+      if (n !== 'normale' && n !== 'sortie_incident') {
+        return non('INVALID_STATUS_TRANSITION', lib(actuel) + ' → ' + lib(c) + ' : transition interdite.', c, n);
+      }
+    }
+    return { code: null, detail: null, cible: c, nature: n };
   }
 
   // Les quatre montants d'une facture. « montant_usd » reste le grand total,
@@ -234,8 +350,11 @@
     return String(texte || '').replace(/[,()*%\\:"']/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
   }
 
+  // Dans l'ordre où les événements ont été écrits (leur identifiant), comme
+  // la base les rend ; à défaut d'identifiant, par date.
   function trierHistorique(colis) {
     colis.historique = (colis.historique || colis.colis_historique || []).slice().sort(function (a, b) {
+      if (a.id != null && b.id != null) return a.id - b.id;
       return new Date(a.cree_le) - new Date(b.cree_le);
     });
     delete colis.colis_historique;
@@ -410,7 +529,8 @@
         return sb().then(function (c) {
           return c.from('colis')
             .select('id, numero, suivi_transporteur, expediteur, description, poids_lb, service, pays_destination, ' +
-                    'destination, statut, lieu, note, recu_le, cree_le, maj_le, colis_historique(statut, lieu, note, cree_le)')
+                    'destination, statut, lieu, note, recu_le, cree_le, maj_le, ' +
+                    'colis_historique(id, type_evenement, statut, lieu, note, cree_le)')
             .eq('client_id', s.id)
             .order('maj_le', { ascending: false });
         }).then(resultat).then(function (lignes) { return lignes.map(trierHistorique); });
@@ -499,11 +619,10 @@
         });
       },
 
+      // Tous les événements du colis, dans l'ordre où ils ont été écrits :
+      // type, statut avant et après, auteur, lieu, précisions, corrections.
       historique: function (id) {
-        return sb().then(function (c) {
-          return c.from('colis_historique').select('statut, lieu, note, cree_le').eq('colis_id', id)
-            .order('cree_le', { ascending: true });
-        }).then(resultat);
+        return sb().then(function (c) { return c.rpc('historique_colis', { p_colis: id }); }).then(resultat);
       },
 
       chercherClient: function (code) {
@@ -557,14 +676,18 @@
         }).then(resultat);
       },
 
-      // Tout ou rien. Réponse : { modifies, inchanges, ids, refus: [{ id,
-      // numero, code, detail }] }. attendus : { id: statut affiché } pour
-      // repérer un colis changé par quelqu'un d'autre entre-temps.
-      changerStatut: function (ids, etape, attendus) {
+      // Chaque statut coché devient l'événement qui y mène, écrit par le
+      // moteur (outils/supabase-evenements.sql). Tout ou rien. Réponse :
+      // { modifies, inchanges, ids, evenements, refus: [{ id, numero, code,
+      // detail }] }. attendus : { id: statut affiché } pour repérer un colis
+      // changé par quelqu'un d'autre entre-temps. motif : obligatoire pour un
+      // retour à l'étape d'avant (correction). cle : la même demande renvoyée
+      // ne refait rien.
+      changerStatut: function (ids, etape, attendus, motif, cle) {
         return sb().then(function (c) {
           return c.rpc('changer_statut_colis', {
             p_ids: ids, p_statut: etape.statut, p_lieu: etape.lieu || '', p_note: etape.note || '',
-            p_attendus: attendus || null
+            p_attendus: attendus || null, p_motif: motif || null, p_cle: cle || null
           });
         }).then(resultat);
       },
@@ -843,11 +966,37 @@
     return null;
   }
 
-  function avecHistorique(d, c) {
+  // Ce que voient le client et le suivi public : ni les opérations internes,
+  // ni une étape annulée par une correction (règle historique_lecture et
+  // suivre_colis dans outils/supabase.sql). tout : la vue de l'équipe.
+  function evenementVisible(h, liste) {
+    if (h.visibilite === 'interne') return false;
+    return h.id == null || !liste.some(function (x) { return x.corrige_id === h.id; });
+  }
+
+  function avecHistorique(d, c, tout) {
     var x = JSON.parse(JSON.stringify(c));
-    x.historique = d.historique.filter(function (h) { return h.colis_id === c.id; })
-      .map(function (h) { return { statut: h.statut, lieu: h.lieu, note: h.note, cree_le: h.cree_le }; });
-    return trierHistorique(x);
+    var liste = historiqueDe(d, c.id);
+    x.historique = liste.filter(function (h) { return tout || evenementVisible(h, liste); })
+      .map(function (h) {
+        return { statut: h.statut, lieu: h.lieu, note: h.note, cree_le: h.cree_le, type_evenement: h.type_evenement || null };
+      });
+    return x;
+  }
+
+  // Un événement tel que le rend la base (evenement_json)
+  function evenementJson(d, h) {
+    var auteur = d.comptes.filter(function (c) { return c.id === h.auteur_id; })[0];
+    return {
+      id: h.id, colis_id: h.colis_id, type_evenement: h.type_evenement || null,
+      statut_precedent: h.statut_precedent == null ? null : h.statut_precedent, statut: h.statut,
+      lieu: h.lieu || '', note: h.note || '', metadonnees: h.metadonnees || {},
+      auteur_id: h.auteur_id || null, auteur_role: h.auteur_role || null,
+      auteur: auteur ? (auteur.nom_complet || auteur.email) : null,
+      visibilite: h.visibilite || 'publique', corrige_id: h.corrige_id == null ? null : h.corrige_id,
+      corrige: h.id != null && d.historique.some(function (x) { return x.corrige_id === h.id; }),
+      cree_le: h.cree_le
+    };
   }
 
   function detailsColis(d, c) {
@@ -868,8 +1017,140 @@
     return x;
   }
 
+  // L'événement écrit quand un colis naît (completer_evenement, chemin de la
+  // création) : COLIS_RECU, sans statut précédent, par le compte connecté.
   function historiser(d, c, date) {
-    d.historique.push({ colis_id: c.id, statut: c.statut, lieu: c.lieu || '', note: c.note || '', cree_le: date || maintenant() });
+    var h = historiqueDe(d, c.id);
+    var avant = h.length ? h[h.length - 1].statut : null;
+    var moi = compteConnecte(d);
+    d.seqEvenement = (d.seqEvenement || 0) + 1;
+    d.historique.push({
+      id: d.seqEvenement, colis_id: c.id, statut: c.statut, lieu: c.lieu || '', note: c.note || '',
+      type_evenement: !avant ? 'COLIS_RECU'
+        : (avant === c.statut ? 'MISE_A_JOUR' : (typePourStatut(avant, c.statut, null) || 'MISE_A_JOUR')),
+      statut_precedent: avant, auteur_id: moi ? moi.id : null, auteur_role: moi ? moi.role : null,
+      metadonnees: avant ? {} : { source: 'creation' }, cle_idempotence: null, visibilite: 'publique',
+      corrige_id: null, cree_le: date || maintenant()
+    });
+  }
+
+  function resultatOperation(d, colisId, e, deja) {
+    var c = trouverColisDemo(d, colisId);
+    return {
+      deja: deja,
+      change_statut: !deja && !!e && e.statut_precedent !== e.statut,
+      colis: c ? { id: c.id, numero: c.numero, statut: c.statut, lieu: c.lieu || '', note: c.note || '', maj_le: c.maj_le } : null,
+      evenement: e ? evenementJson(d, e) : null
+    };
+  }
+
+  // executer_operation, version démonstration : mêmes étapes, mêmes refus.
+  // o : { lieu, note, metadonnees, cle, attendu, cible, motif }
+  function operationDemo(d, moi, colisId, type, o) {
+    o = o || {};
+    var v = String(type || '').trim().toUpperCase();
+    var t = TYPES_EVENEMENT[v];
+    if (!t) throw Erreur('EVENT_TYPE_INVALID', 'Type d\u2019événement inconnu : ' + (type || '(vide)') + '.');
+    var meta = o.metadonnees == null ? {} : o.metadonnees;
+    if (typeof meta !== 'object' || Array.isArray(meta)) {
+      throw Erreur('INVALID_EVENT_DATA', 'Les précisions d\u2019un événement sont un objet JSON.');
+    }
+    var texteMeta = JSON.stringify(meta);
+    if (texteMeta.length > 4000) throw Erreur('INVALID_EVENT_DATA', 'Précisions trop longues (4 000 caractères au plus).');
+    if (/"[^"]*(pass|mot_de_passe|secret|token|jeton|api_?key|cle_api|service_role)[^"]*"\s*:/i.test(texteMeta)) {
+      throw Erreur('INVALID_EVENT_DATA', 'Aucun mot de passe, jeton ni clé dans les précisions d\u2019un événement.');
+    }
+    var motif = String(o.motif || '').trim().slice(0, 300);
+    if (t.special === 'correction') {
+      if (!motif) throw Erreur('INVALID_EVENT_DATA', 'Une correction exige son motif.');
+      meta = Object.assign({}, meta, { motif: motif });
+    }
+    if (o.lieu != null && String(o.lieu).length > 80) throw Erreur('INVALID_LOCATION', 'Lieu trop long (80 caractères au plus).');
+    if (o.note != null && String(o.note).length > 300) {
+      throw Erreur('INVALID_EVENT_DATA', 'Message trop long (300 caractères au plus).');
+    }
+    var cle = o.cle ? String(o.cle).trim() : null;
+    if (cle) {
+      var connu = d.historique.filter(function (h) { return h.cle_idempotence === cle; })[0];
+      if (connu) {
+        if (connu.colis_id !== colisId || connu.type_evenement !== v) {
+          throw Erreur('DUPLICATE_OPERATION', 'Cette clé de requête a déjà servi pour une autre opération.');
+        }
+        return resultatOperation(d, colisId, connu, true);
+      }
+    }
+    var c = trouverColisDemo(d, colisId);
+    if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
+    var liste = historiqueDe(d, c.id);
+    var precedent = statutPrecedent(liste, c.statut);
+    var dernier = liste[liste.length - 1] || null;
+
+    if (o.attendu && o.attendu !== c.statut) {
+      if (dernier && dernier.type_evenement === v && (!t.statut || t.statut === c.statut)) {
+        return resultatOperation(d, c.id, dernier, true);
+      }
+      throw Erreur('STATUS_CONFLICT', c.numero + ' est passé à « ' + LIBELLES[c.statut] + ' » entre-temps : rechargez-le.');
+    }
+    var r = validerOperation(c.statut, precedent, v, o.cible || null);
+    if (r.code === 'STATUS_ALREADY_SET' && dernier && dernier.type_evenement === v) {
+      return resultatOperation(d, c.id, dernier, true);
+    }
+    if (r.code) throw Erreur(r.code, c.numero + ' — ' + r.detail);
+    var cible = r.cible, lieu, note;
+
+    if (!t.statut && (!t.special || t.special === 'mise_a_jour')) {
+      lieu = String(o.lieu != null ? o.lieu : (c.lieu || '')).trim();
+      note = String(o.note != null ? o.note : (t.special === 'mise_a_jour' ? (c.note || '') : '')).trim();
+    } else if (t.special === 'correction' || t.special === 'sortie') {
+      var etape = liste.filter(function (h) {
+        return h.statut === cible && h.visibilite !== 'interne' && evenementVisible(h, liste);
+      }).pop();
+      lieu = String(o.lieu != null ? o.lieu : (etape ? etape.lieu || '' : '')).trim();
+      note = String(o.note != null ? o.note : (etape ? etape.note || '' : '')).trim();
+    } else {
+      lieu = String(o.lieu || '').trim();
+      note = String(o.note || '').trim();
+    }
+    if (t.lieu_requis && !lieu) throw Erreur('LOCATION_REQUIRED', 'Indiquez l\u2019agence où le client peut retirer son colis.');
+    if (t.special === 'mise_a_jour' && (c.lieu || '') === lieu && (c.note || '') === note) {
+      return resultatOperation(d, c.id, dernier, true);
+    }
+    if (!t.statut && !t.special && dernier && dernier.type_evenement === v && dernier.lieu === lieu &&
+        (dernier.note || '') === note && Date.now() - new Date(dernier.cree_le).getTime() < 120e3) {
+      return resultatOperation(d, c.id, dernier, true);
+    }
+    var corrige = null;
+    if (t.special === 'correction') {
+      var annule = liste.filter(function (h) {
+        return h.statut === c.statut && h.visibilite !== 'interne' && evenementVisible(h, liste);
+      }).pop();
+      corrige = annule ? annule.id : null;
+    }
+
+    d.seqEvenement = (d.seqEvenement || 0) + 1;
+    var e = {
+      id: d.seqEvenement, colis_id: c.id, type_evenement: v, statut_precedent: c.statut, statut: cible,
+      lieu: lieu, note: note, metadonnees: meta, auteur_id: moi ? moi.id : null, auteur_role: moi ? moi.role : null,
+      cle_idempotence: cle, visibilite: t.visibilite, corrige_id: corrige, cree_le: maintenant()
+    };
+    d.historique.push(e);
+    if (cible !== c.statut || t.special === 'mise_a_jour') {
+      var avant = { statut: c.statut, lieu: c.lieu || '', note: c.note || '' };
+      c.statut = cible;
+      c.lieu = lieu;
+      c.note = note;
+      c.maj_le = maintenant();
+      var diff = difference(avant, c, ['statut', 'lieu', 'note']);
+      if (diff) {
+        journaliser(d, moi, avant.statut !== cible ? 'colis.statut' : 'colis.modification', 'colis', c.id,
+                    diff.avant, diff.apres);
+      }
+    }
+    if (t.special === 'correction') {
+      journaliser(d, moi, 'colis.correction', 'colis', c.id, { statut: e.statut_precedent, evenement: corrige },
+                  { statut: cible, evenement: e.id, motif: motif });
+    }
+    return resultatOperation(d, c.id, e, false);
   }
 
   function exigerAdmin(d) {
@@ -886,11 +1167,6 @@
      Aucune écriture n'a lieu tant que tout n'est pas validé : une erreur au
      milieu laisse les données telles qu'elles étaient, comme une transaction.
      -------------------------------------------------------------------------- */
-  var LIBELLES = {
-    recu: 'Reçu', emballe: 'Emballé', embarque: 'Embarqué', distribution: 'Centre de distribution',
-    succursale: 'Transféré à la succursale', disponible: 'Disponible', livre: 'Livré', incident: 'Action requise'
-  };
-
   function rejeter(e) {
     return new Promise(function (ok, ko) { setTimeout(function () { ko(e); }, 220); });
   }
@@ -1249,11 +1525,11 @@
         return plusTard(page(lignes, o));
       },
 
+      // historique_colis : tous les événements, dans l'ordre d'écriture
       historique: function (id) {
         var d = lireDonnees();
         try { exigerAdmin(d); } catch (e) { return echec(e.code); }
-        var c = d.colis.filter(function (x) { return x.id === id; })[0];
-        return plusTard(c ? avecHistorique(d, c).historique : []);
+        return plusTard(historiqueDe(d, id).map(function (h) { return evenementJson(d, h); }));
       },
 
       chercherClient: function (code) {
@@ -1338,55 +1614,61 @@
       },
 
       // Même contrat que changer_statut_colis : tout ou rien, et
-      // { modifies, inchanges, ids, refus }
-      changerStatut: function (ids, etape, attendus) {
+      // { modifies, inchanges, ids, evenements, refus }
+      changerStatut: function (ids, etape, attendus, motif, cle) {
         var d = lireDonnees();
         try {
           var moi = exigerAdmin(d);
-          var statut = etape.statut, lieu = String(etape.lieu || '').trim().slice(0, 80);
-          var note = String(etape.note || '').trim().slice(0, 300);
+          var statut = etape.statut, lieu = String(etape.lieu || '').trim(), note = String(etape.note || '').trim();
           if (!TRANSITIONS[statut]) throw Erreur('INVALID_STATUS', 'Statut inconnu : ' + (statut || '(vide)') + '.');
+          if (lieu.length > 80) throw Erreur('INVALID_LOCATION', 'Lieu trop long (80 caractères au plus).');
           if (statut === 'disponible' && !lieu) {
-            throw Erreur('LOCATION_REQUIRED', 'Indiquez l’agence où le client peut retirer son colis.');
+            throw Erreur('LOCATION_REQUIRED', 'Indiquez l\u2019agence où le client peut retirer son colis.');
           }
           var uniques = (ids || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; });
           if (!uniques.length) throw Erreur('INVALID_INPUT', 'Aucun colis choisi.');
           if (uniques.length > 500) throw Erreur('INVALID_INPUT', 'Au plus 500 colis à la fois.');
-          var aChanger = [], inchanges = 0, refus = [];
+          var plan = [], inchanges = 0, refus = [];
           uniques.forEach(function (id) {
             var c = trouverColisDemo(d, id);
             var attendu = attendus ? attendus[id] : null;
             if (!c) {
               refus.push({ id: id, numero: null, code: 'SHIPMENT_NOT_FOUND', statut: null,
-                           detail: 'Un colis choisi n’existe plus.' });
+                           detail: 'Un colis choisi n\u2019existe plus.' });
+            } else if (cle && d.historique.some(function (h) { return h.cle_idempotence === cle + ':' + id; })) {
+              inchanges++;
             } else if (c.statut === statut) {
               if ((attendu && attendu !== statut) || ((c.lieu || '') === lieu && (c.note || '') === note)) inchanges++;
-              else aChanger.push(c);
+              else plan.push({ c: c, type: 'MISE_A_JOUR' });
             } else if (attendu && attendu !== c.statut) {
               refus.push({ id: id, numero: c.numero, code: 'STATUS_CONFLICT', statut: c.statut,
                            detail: c.numero + ' est passé à « ' + LIBELLES[c.statut] + ' » entre-temps : rechargez la liste.' });
-            } else if (!transitionPermise(c.statut, statut, statutPrecedent(historiqueDe(d, c.id), c.statut))) {
-              refus.push({ id: id, numero: c.numero, code: 'INVALID_STATUS_TRANSITION', statut: c.statut,
-                           detail: c.numero + ' : ' + LIBELLES[c.statut] + ' → ' + LIBELLES[statut] + ' interdit.' });
             } else {
-              aChanger.push(c);
+              var type = typePourStatut(c.statut, statut, statutPrecedent(historiqueDe(d, c.id), c.statut));
+              if (!type) {
+                refus.push({ id: id, numero: c.numero, code: 'INVALID_STATUS_TRANSITION', statut: c.statut,
+                             detail: c.numero + ' : ' + LIBELLES[c.statut] + ' → ' + LIBELLES[statut] + ' interdit.' });
+              } else if (type === 'CORRECTION' && !String(motif || '').trim()) {
+                refus.push({ id: id, numero: c.numero, code: 'INVALID_EVENT_DATA', statut: c.statut,
+                             detail: c.numero + ' : revenir à « ' + LIBELLES[statut] + ' » est une correction, donnez-en le motif.' });
+              } else {
+                plan.push({ c: c, type: type });
+              }
             }
           });
-          if (refus.length) return plusTard({ modifies: 0, inchanges: 0, ids: [], refus: refus });
-          aChanger.forEach(function (c) {
-            var avant = { statut: c.statut, lieu: c.lieu || '', note: c.note || '' };
-            c.statut = statut;
-            c.lieu = lieu;
-            c.note = note;
-            c.maj_le = maintenant();
-            historiser(d, c);
-            var diff = difference(avant, c, ['statut', 'lieu', 'note']);
-            journaliser(d, moi, avant.statut !== statut ? 'colis.statut' : 'colis.modification', 'colis', c.id,
-                        diff.avant, diff.apres);
+          if (refus.length) return plusTard({ modifies: 0, inchanges: 0, ids: [], evenements: [], refus: refus });
+          var modifies = [], evenements = [];
+          plan.forEach(function (p) {
+            var r = operationDemo(d, moi, p.c.id, p.type, {
+              lieu: lieu, note: note, metadonnees: { source: 'tableau_de_bord' }, cle: cle ? cle + ':' + p.c.id : null,
+              attendu: p.c.statut, cible: p.type === 'ACTION_RESOLUE' ? statut : null, motif: motif
+            });
+            if (r.deja) inchanges++;
+            else { modifies.push(p.c.id); evenements.push(r.evenement); }
           });
-          if (aChanger.length) ecrireDonnees(d);
-          return plusTard({ modifies: aChanger.length, inchanges: inchanges,
-                            ids: aChanger.map(function (c) { return c.id; }), refus: [] });
+          if (modifies.length) ecrireDonnees(d);
+          return plusTard({ modifies: modifies.length, inchanges: inchanges, ids: modifies, evenements: evenements,
+                            refus: [] });
         } catch (e) { return rejeter(e); }
       },
 
@@ -1397,8 +1679,13 @@
           var c = trouverColisDemo(d, id);
           if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
           var precedent = statutPrecedent(historiqueDe(d, id), c.statut);
-          return plusTard({ actuel: c.statut, precedent: precedent,
-                            possibles: STATUTS.filter(function (s) { return transitionPermise(c.statut, s, precedent); }) });
+          return plusTard({
+            actuel: c.statut, precedent: precedent,
+            possibles: STATUTS.filter(function (s) {
+              return ['identique', 'normale', 'sortie_incident'].indexOf(natureTransition(c.statut, s, precedent)) >= 0;
+            }),
+            correction: natureTransition(c.statut, precedent, precedent) === 'correction' ? precedent : null
+          });
         } catch (e) { return rejeter(e); }
       },
 
@@ -1410,7 +1697,7 @@
         var c = d.colis.filter(function (x) { return x.numero === n || (x.suivi_transporteur && x.suivi_transporteur === n); })
           .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })[0];
         if (!c) return plusTard(null);
-        return plusTard(Object.assign(detailsColis(d, c), { historique: avecHistorique(d, c).historique }));
+        return plusTard(Object.assign(detailsColis(d, c), { historique: avecHistorique(d, c, true).historique }));
       },
 
       journal: function (o) {
@@ -1800,7 +2087,7 @@
       var li = document.createElement('li');
       var s = document.createElement('span');
       s.className = 'gs-chrono__statut';
-      s.textContent = libelle(h.statut);
+      s.textContent = libelle(h.statut, h);
       var m = document.createElement('span');
       m.className = 'gs-chrono__meta';
       m.textContent = [date(h.cree_le, true), h.lieu].filter(Boolean).join(' · ');
@@ -1858,7 +2145,8 @@
   // plutôt à la base (admin.statutsPossibles) : c'est elle qui décide.
   api.regles = Object.freeze({
     transitions: TRANSITIONS, transitionPermise: transitionPermise, statutPrecedent: statutPrecedent,
-    prixTransport: prixTransport
+    prixTransport: prixTransport, typesEvenement: TYPES_EVENEMENT, natureTransition: natureTransition,
+    typePourStatut: typePourStatut, validerOperation: validerOperation
   });
   window.GoshipAPI = api;
 })();

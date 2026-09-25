@@ -20,8 +20,9 @@
 --      s'appliquent à tout le monde, quel que soit le chemin : le tableau de
 --      bord, l'application mobile, une ancienne page restée en cache, le SQL
 --      Editor. C'est la vraie barrière.
---   2. des FONCTIONS DE SERVICE (creer_colis, changer_statut_colis,
---      facturer_colis…) que le site appelle. Elles ajoutent ce qu'un
+--   2. des FONCTIONS DE SERVICE (creer_colis, modifier_colis,
+--      facturer_colis…) que le site appelle. Le changement de statut, lui,
+--      passe par le moteur d'événements (outils/supabase-evenements.sql). Elles ajoutent ce qu'un
 --      déclencheur ne sait pas faire : vérifier la permission, poser un verrou,
 --      reconnaître une requête répétée, créer colis et facture d'un seul bloc,
 --      et répondre par une erreur métier claire.
@@ -171,7 +172,8 @@ as $$
     when 'admin' then array[
       'clients.view', 'clients.create', 'clients.edit',
       'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
-      'shipments.scan', 'shipments.update_status',
+      'shipments.scan', 'shipments.update_status', 'shipments.correct',
+      'events.view',
       'invoices.view', 'invoices.create', 'invoices.edit',
       'audit.view']
     when 'client' then array[
@@ -234,9 +236,11 @@ $$;
 -- sort en revenant à l'étape où il était, ou en passant à une étape qui l'aurait
 -- suivie (le problème réglé, le colis a continué sa route).
 --
--- Enfin, une erreur de saisie se corrige : on peut toujours revenir à l'étape
--- précédente du colis (celle d'avant dans son historique). « Livré » par
--- erreur redevient ainsi « Disponible ».
+-- Enfin, une erreur de saisie se corrige en revenant à l'étape précédente du
+-- colis (celle d'avant dans son historique) — mais seulement par un événement
+-- CORRECTION, avec son motif et la permission shipments.correct : c'est la
+-- procédure explicite, journalisée, de outils/supabase-evenements.sql. « Livré »
+-- par erreur redevient ainsi « Disponible », jamais par un simple clic.
 --
 -- Cette matrice existe aussi dans assets/js/api.js (REGLES.transitions), pour
 -- griser les choix impossibles et pour le mode démonstration ;
@@ -284,9 +288,10 @@ as $$
 $$;
 
 -- L'étape d'avant : le dernier statut de l'historique qui n'est ni l'actuel, ni
--- un incident. Trié par identifiant (ordre d'écriture) et non par date : la
--- première étape porte la date de réception saisie, qui peut être postérieure
--- de quelques minutes aux étapes suivantes.
+-- un incident, ni une étape annulée par une correction. Trié par identifiant
+-- (ordre d'écriture) et non par date : la première étape porte la date de
+-- réception saisie, qui peut être postérieure de quelques minutes aux étapes
+-- suivantes.
 create or replace function public.statut_precedent(p_colis uuid, p_actuel text)
 returns text
 language sql
@@ -297,38 +302,13 @@ as $$
   select h.statut
   from public.colis_historique h
   where h.colis_id = p_colis and h.statut not in (coalesce(p_actuel, ''), 'incident')
+    and not exists (select 1 from public.colis_historique x where x.corrige_id = h.id)
   order by h.id desc
   limit 1
 $$;
 
--- Les statuts qu'un colis peut prendre maintenant : de quoi griser les autres
--- dans le tableau de bord (StatusService.canTransition).
-create or replace function public.statuts_possibles(p_colis uuid)
-returns jsonb
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $$
-declare
-  v_statut text;
-  v_precedent text;
-begin
-  perform public.exiger_permission('shipments.update_status');
-  select statut into v_statut from public.colis where id = p_colis;
-  if not found then
-    perform public.erreur_metier('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
-  end if;
-  v_precedent := public.statut_precedent(p_colis, v_statut);
-  return jsonb_build_object(
-    'actuel', v_statut,
-    'precedent', v_precedent,
-    'possibles', coalesce((
-      select jsonb_agg(s order by n)
-      from jsonb_object_keys(public.transitions_statut()) with ordinality as k(s, n)
-      where public.transition_permise(v_statut, s, v_precedent)), '[]'::jsonb));
-end;
-$$;
+-- Les statuts qu'un colis peut prendre maintenant (statuts_possibles) : voir
+-- outils/supabase-evenements.sql.
 
 
 -- 6. Journal d'audit -----------------------------------------------------------
@@ -993,102 +973,10 @@ begin
 end;
 $$;
 
--- Changer le statut d'un ou de plusieurs colis (StatusService.changeStatus).
---
--- Tout ou rien : si un seul colis du lot ne peut pas prendre le statut, aucun
--- ne change, et la réponse dit lesquels bloquent et pourquoi. L'équipe
--- décoche l'intrus et recommence ; un conteneur ne part pas à moitié dans la
--- base.
---
--- p_attendus : { "id du colis": "statut que la page affichait" }. Si un autre
--- membre de l'équipe a changé le colis entre-temps, c'est un conflit
--- (STATUS_CONFLICT) — sauf s'il l'a mis exactement au statut demandé : la
--- requête est alors déjà satisfaite (double clic, double scan, nouvel essai
--- après une coupure) et rien n'est écrit une seconde fois.
---
--- L'événement d'historique naît du même UPDATE (historiser_colis) : il ne
--- peut pas exister d'événement sans changement de statut, ni l'inverse.
-create or replace function public.changer_statut_colis(p_ids uuid[], p_statut text, p_lieu text default '',
-                                                       p_note text default '', p_attendus jsonb default null)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  c public.colis;
-  v_ids uuid[];
-  v_lieu text := left(trim(coalesce(p_lieu, '')), 80);
-  v_note text := left(trim(coalesce(p_note, '')), 300);
-  v_attendu text;
-  v_a_changer uuid[] := '{}';
-  v_inchanges jsonb := '[]'::jsonb;
-  v_refus jsonb := '[]'::jsonb;
-begin
-  perform public.exiger_permission('shipments.update_status');
-  if p_statut is null or not (public.transitions_statut() ? p_statut) then
-    perform public.erreur_metier('INVALID_STATUS', 'Statut inconnu : ' || coalesce(p_statut, '(vide)') || '.');
-  end if;
-  if p_statut = 'disponible' and v_lieu = '' then
-    perform public.erreur_metier('LOCATION_REQUIRED', 'Indiquez l''agence où le client peut retirer son colis.');
-  end if;
-  select array_agg(distinct i) into v_ids from unnest(coalesce(p_ids, '{}')) i where i is not null;
-  if v_ids is null then
-    perform public.erreur_metier('INVALID_INPUT', 'Aucun colis choisi.');
-  end if;
-  if array_length(v_ids, 1) > 500 then
-    perform public.erreur_metier('INVALID_INPUT', 'Au plus 500 colis à la fois.');
-  end if;
+-- Le changement de statut (changer_statut_colis) et les statuts possibles
+-- (statuts_possibles) sont dans outils/supabase-evenements.sql : ils passent
+-- par le moteur d'événements, qui seul peut changer le statut d'un colis.
 
-  -- Verrous pris dans un ordre fixe : deux lots qui se chevauchent attendent
-  -- l'un l'autre au lieu de se bloquer mutuellement.
-  for c in select * from public.colis where id = any (v_ids) order by id for update loop
-    v_attendu := p_attendus ->> c.id::text;
-    if c.statut = p_statut then
-      if (v_attendu is not null and v_attendu <> p_statut)
-         or (c.lieu = v_lieu and c.note = v_note) then
-        v_inchanges := v_inchanges || to_jsonb(c.id);
-      else
-        v_a_changer := v_a_changer || c.id;   -- même étape, lieu ou message corrigé
-      end if;
-    elsif v_attendu is not null and v_attendu <> c.statut then
-      v_refus := v_refus || jsonb_build_object(
-        'id', c.id, 'numero', c.numero, 'code', 'STATUS_CONFLICT', 'statut', c.statut,
-        'detail', c.numero || ' est passé à « ' || public.texte_statut(c.statut) ||
-                  ' » entre-temps : rechargez la liste.');
-    elsif not public.transition_permise(c.statut, p_statut, public.statut_precedent(c.id, c.statut)) then
-      v_refus := v_refus || jsonb_build_object(
-        'id', c.id, 'numero', c.numero, 'code', 'INVALID_STATUS_TRANSITION', 'statut', c.statut,
-        'detail', c.numero || ' : ' || public.texte_statut(c.statut) || ' → ' ||
-                  public.texte_statut(p_statut) || ' interdit.');
-    else
-      v_a_changer := v_a_changer || c.id;
-    end if;
-  end loop;
-
-  select v_refus || coalesce(jsonb_agg(jsonb_build_object(
-           'id', i, 'numero', null, 'code', 'SHIPMENT_NOT_FOUND', 'statut', null,
-           'detail', 'Un colis choisi n''existe plus.')), '[]'::jsonb)
-    into v_refus
-    from unnest(v_ids) i
-   where not exists (select 1 from public.colis where id = i);
-
-  if jsonb_array_length(v_refus) > 0 then
-    raise log 'goship changer_statut refuse vers=% refus=%', p_statut, jsonb_array_length(v_refus);
-    return jsonb_build_object('modifies', 0, 'inchanges', 0, 'ids', '[]'::jsonb, 'refus', v_refus);
-  end if;
-
-  if array_length(v_a_changer, 1) > 0 then
-    update public.colis set statut = p_statut, lieu = v_lieu, note = v_note
-     where id = any (v_a_changer);
-  end if;
-
-  return jsonb_build_object('modifies', coalesce(array_length(v_a_changer, 1), 0),
-                            'inchanges', jsonb_array_length(v_inchanges),
-                            'ids', to_jsonb(v_a_changer),
-                            'refus', '[]'::jsonb);
-end;
-$$;
 
 -- TrackingService, côté équipe : un colis par son numéro GSE ou par le
 -- numéro de suivi du vendeur, avec tout son détail. Le suivi public reste
@@ -1116,7 +1004,10 @@ begin
     return null;
   end if;
   return public.colis_json(v_id) || jsonb_build_object('historique', coalesce((
-    select jsonb_agg(jsonb_build_object('statut', h.statut, 'lieu', h.lieu, 'note', h.note, 'cree_le', h.cree_le)
+    select jsonb_agg(jsonb_build_object('id', h.id, 'type_evenement', h.type_evenement,
+                                        'statut_precedent', h.statut_precedent, 'statut', h.statut,
+                                        'lieu', h.lieu, 'note', h.note, 'cree_le', h.cree_le,
+                                        'visibilite', h.visibilite, 'corrige_id', h.corrige_id)
                      order by h.id)
     from public.colis_historique h where h.colis_id = v_id), '[]'::jsonb));
 end;
@@ -1303,10 +1194,8 @@ revoke execute on function public.permissions_du_role(text) from public, anon;
 revoke execute on function public.peut(text, uuid) from public, anon;
 revoke execute on function public.transitions_statut() from public, anon;
 revoke execute on function public.transition_permise(text, text, text) from public, anon;
-revoke execute on function public.statuts_possibles(uuid) from public, anon;
 revoke execute on function public.creer_colis(jsonb, text, boolean) from public, anon;
 revoke execute on function public.modifier_colis(uuid, jsonb, timestamptz) from public, anon;
-revoke execute on function public.changer_statut_colis(uuid[], text, text, text, jsonb) from public, anon;
 revoke execute on function public.trouver_colis(text) from public, anon;
 revoke execute on function public.facturer_colis(uuid) from public, anon;
 revoke execute on function public.creer_facture(uuid, uuid[], jsonb, text) from public, anon;
@@ -1317,10 +1206,8 @@ grant execute on function public.permissions_du_role(text) to authenticated;
 grant execute on function public.peut(text, uuid) to authenticated;
 grant execute on function public.transitions_statut() to authenticated;
 grant execute on function public.transition_permise(text, text, text) to authenticated;
-grant execute on function public.statuts_possibles(uuid) to authenticated;
 grant execute on function public.creer_colis(jsonb, text, boolean) to authenticated;
 grant execute on function public.modifier_colis(uuid, jsonb, timestamptz) to authenticated;
-grant execute on function public.changer_statut_colis(uuid[], text, text, text, jsonb) to authenticated;
 grant execute on function public.trouver_colis(text) to authenticated;
 grant execute on function public.facturer_colis(uuid) to authenticated;
 grant execute on function public.creer_facture(uuid, uuid[], jsonb, text) to authenticated;
@@ -1364,8 +1251,8 @@ grant select on public.colis_details to authenticated, service_role;
 -- Contrôle ---------------------------------------------------------------------
 select (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public'
-          and p.proname in ('creer_colis', 'modifier_colis', 'changer_statut_colis', 'facturer_colis',
-                            'creer_facture', 'trouver_colis', 'statuts_possibles'))            as services_sur_7,
+          and p.proname in ('creer_colis', 'modifier_colis', 'facturer_colis',
+                            'creer_facture', 'trouver_colis'))                                 as services_sur_5,
        (select count(*) from pg_trigger
         where tgname in ('regles_colis', 'regles_facture', 'regles_facture_ligne',
                          'journaliser_colis', 'journaliser_client', 'journaliser_facture')) as regles_sur_6,

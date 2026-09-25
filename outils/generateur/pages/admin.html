@@ -428,6 +428,11 @@
           <label for="st-note">Message pour le client <span class="gs-facultatif">(facultatif)</span></label>
           <textarea id="st-note" name="note" rows="2" maxlength="300" placeholder="Ex. Retrait possible à partir de demain 10 h"></textarea>
         </div>
+        <div class="gs-champ gs-champ--large" data-bloc-motif hidden>
+          <label for="st-motif">Motif de la correction <span class="gs-facultatif">(interne, obligatoire)</span></label>
+          <textarea id="st-motif" name="motif" rows="2" maxlength="300" placeholder="Ex. Marqué livré par erreur : le client n'est pas encore venu"></textarea>
+          <p class="gs-champ__aide">Revenir à l'étape précédente est une correction : elle est notée au journal, avec ce motif et votre nom. L'étape annulée disparaît de ce que voit le client.</p>
+        </div>
       </div>
       <label class="gs-case" data-bloc-prevenir hidden>
         <input type="checkbox" name="prevenir" checked>

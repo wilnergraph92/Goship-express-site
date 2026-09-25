@@ -39,19 +39,41 @@ var API = global.window.GoshipAPI;
 global.setTimeout = attendre;
 
 function lireEntree() { return JSON.parse(fs.readFileSync(0, 'utf8')); }
+// Écriture immédiate : process.exit n'attend pas qu'un tuyau soit vidé, et
+// couperait une longue réponse à 64 Ko.
+function ecrire(texte) { fs.writeSync(1, texte); }
 
 if (process.argv[2] === '--regles') {
-  process.stdout.write(JSON.stringify({ transitions: API.regles.transitions, tarifs: API.tarifs, statuts: API.statuts }));
+  ecrire(JSON.stringify({ transitions: API.regles.transitions, tarifs: API.tarifs, statuts: API.statuts }));
   process.exit(0);
 }
 if (process.argv[2] === '--paires') {
-  process.stdout.write(JSON.stringify(lireEntree().map(function (p) {
+  ecrire(JSON.stringify(lireEntree().map(function (p) {
     return API.regles.transitionPermise(p[0], p[1], p[2]);
   })));
   process.exit(0);
 }
+if (process.argv[2] === '--catalogue') {
+  ecrire(JSON.stringify(API.regles.typesEvenement));
+  process.exit(0);
+}
+// [de, vers, précédent] → « nature/type », comme nature_transition et type_pour_statut
+if (process.argv[2] === '--nature') {
+  ecrire(JSON.stringify(lireEntree().map(function (p) {
+    return (API.regles.natureTransition(p[0], p[1], p[2]) || '-') + '/' + (API.regles.typePourStatut(p[0], p[1], p[2]) || '-');
+  })));
+  process.exit(0);
+}
+// [actuel, précédent, type, cible] → « code/cible », comme valider_operation
+if (process.argv[2] === '--operations') {
+  ecrire(JSON.stringify(lireEntree().map(function (p) {
+    var v = API.regles.validerOperation(p[0], p[1], p[2], p[3]);
+    return (v.code || 'ok') + '/' + (v.cible || '-');
+  })));
+  process.exit(0);
+}
 if (process.argv[2] === '--prix') {
-  process.stdout.write(JSON.stringify(lireEntree().map(function (p) { return API.regles.prixTransport(p[0], p[1]); })));
+  ecrire(JSON.stringify(lireEntree().map(function (p) { return API.regles.prixTransport(p[0], p[1]); })));
   process.exit(0);
 }
 
@@ -116,23 +138,43 @@ function code(promesse) {
 
   console.log('\n4. Transitions');
   var id = c.id;
-  function st(ids, vers, lieu, attendus) { return A.changerStatut(ids, { statut: vers, lieu: lieu || '' }, attendus); }
+  function st(ids, vers, lieu, attendus, motif) {
+    return A.changerStatut(ids, { statut: vers, lieu: lieu || '' }, attendus, motif);
+  }
   verifier('Reçu → Livré : interdit', (await st([id], 'livre')).refus[0].code, 'INVALID_STATUS_TRANSITION');
   verifier('Reçu → Embarqué', (await st([id], 'embarque', 'Miami')).modifies, 1);
   verifier('Embarqué → Action requise', (await st([id], 'incident', 'Douane')).modifies, 1);
   verifier('Action requise → Livré : interdit', (await st([id], 'livre')).refus[0].code, 'INVALID_STATUS_TRANSITION');
   verifier('Action requise → Embarqué', (await st([id], 'embarque', 'Port-au-Prince')).modifies, 1);
-  verifier('statuts possibles depuis Embarqué', (await A.statutsPossibles(id)).possibles.slice().sort(),
-           ['disponible', 'distribution', 'embarque', 'incident', 'recu', 'succursale']);
+  var poss = await A.statutsPossibles(id);
+  verifier('statuts possibles depuis Embarqué (Reçu seulement en correction)', [poss.possibles.slice().sort(), poss.correction],
+           [['disponible', 'distribution', 'embarque', 'incident', 'succursale'], 'recu']);
   verifier('Disponible sans agence', await code(st([id], 'disponible')), 'LOCATION_REQUIRED');
   verifier('Embarqué → Disponible → Livré',
            [(await st([id], 'disponible', 'Agence')).modifies, (await st([id], 'livre', 'Pétion-Ville')).modifies], [1, 1]);
-  verifier('Livré → Disponible : correction', (await st([id], 'disponible', 'Agence')).modifies, 1);
+  verifier('Livré → Disponible sans motif : refusé', (await st([id], 'disponible', 'Agence')).refus[0].code,
+           'INVALID_EVENT_DATA');
+  verifier('Livré → Disponible avec motif : correction', (await st([id], 'disponible', 'Agence', null, 'Erreur')).modifies, 1);
   var h = (await A.historique(id)).length;
   var rep = await st([id], 'disponible', 'Agence', { [id]: 'livre' });
   verifier('double clic : rien de réécrit', [rep.modifies, rep.inchanges, (await A.historique(id)).length], [0, 1, h]);
   verifier('conflit : la page affichait un autre statut',
            (await st([id], 'livre', 'X', { [id]: 'embarque' })).refus[0].code, 'STATUS_CONFLICT');
+
+  var evts = await A.historique(id);
+  var livre = evts.filter(function (e) { return e.type_evenement === 'COLIS_LIVRE'; })[0];
+  var corr = evts.filter(function (e) { return e.type_evenement === 'CORRECTION'; })[0];
+  verifier('historique : chaque étape a son type, son statut d\'avant, son auteur',
+           evts.map(function (e) { return e.type_evenement + ':' + e.statut_precedent; }).slice(0, 3),
+           ['COLIS_RECU:null', 'COLIS_EXPEDIE:recu', 'ACTION_REQUISE:embarque']);
+  verifier('la correction désigne la livraison erronée, gardée et marquée', [corr.corrige_id === livre.id, livre.corrige],
+           [true, true]);
+  verifier('le suivi public ne montre plus la livraison annulée',
+           (await API.suivre(c.numero)).historique.some(function (e) { return e.statut === 'livre'; }), false);
+  var k = (await A.creerColis(avec({ description: 'Clé' }))).colis.id;
+  var k1 = await A.changerStatut([k], { statut: 'embarque', lieu: 'Miami' }, { [k]: 'recu' }, null, 'lot-1');
+  var k2 = await A.changerStatut([k], { statut: 'embarque', lieu: 'Miami' }, { [k]: 'recu' }, null, 'lot-1');
+  verifier('même lot renvoyé avec la même clé : rien de refait', [k1.modifies, k2.modifies, k2.inchanges], [1, 0, 1]);
 
   console.log('\n5. Lot tout ou rien');
   var a = (await A.creerColis(avec({ description: 'Lot A' }))).colis.id;

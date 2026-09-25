@@ -475,7 +475,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer une fois** : Supabase > *SQL Editor* > *New query* > coller `outils/supabase-services.sql` > *Run*. Sans risque, relançable ; sur une base neuve, après `supabase.sql` et `supabase-facturation.sql`. **Lancez-le avant de mettre en ligne la nouvelle version du site** : sans lui, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. La dernière ligne affichée doit indiquer `services_sur_7 = 7` et `regles_sur_6 = 6`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, puis `outils/supabase-evenements.sql`. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 
@@ -487,13 +487,41 @@ Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut f
   Reçu → (Emballé) → Embarqué → (Centre de distribution) → (Transféré à la succursale) → Disponible → Livré
   ```
 
-  Les étapes entre parenthèses peuvent être sautées ; les autres non. En particulier, « Livré » exige « Disponible » : c'est à ce moment que le client est prévenu. « Action requise » peut interrompre tout colis non livré ; il en sort en revenant à son étape, ou en passant à une étape qui l'aurait suivie. Et une erreur de saisie se corrige toujours en revenant à l'étape précédente du colis (« Livré » par erreur redevient « Disponible »). « Disponible » exige le nom de l'agence.
+  Les étapes entre parenthèses peuvent être sautées ; les autres non. En particulier, « Livré » exige « Disponible » : c'est à ce moment que le client est prévenu. « Action requise » peut interrompre tout colis non livré ; il en sort en revenant à son étape, ou en passant à une étape qui l'aurait suivie. « Disponible » exige le nom de l'agence. **« Livré » est final.** Une erreur de saisie se corrige en revenant à l'étape précédente du colis (« Livré » par erreur redevient « Disponible »), mais seulement comme **correction** : le tableau de bord demande alors un motif, noté au journal avec le nom de celui qui corrige. Voir « Les événements ».
 - **Tout ou rien.** Le changement de statut et son étape dans l'historique sont écrits ensemble : jamais l'un sans l'autre. Un colis et sa facture aussi. Pour un lot, si un seul colis bloque, aucun ne change.
 - **Pas de doublon.** Un double clic, un envoi répété après une coupure, un scan répété : la base reconnaît la demande et ne refait rien (pas de second colis, pas de seconde facture, pas d'étape en double). Un colis ne figure que sur une facture active ; pour le refacturer, annulez d'abord l'ancienne.
 - **Deux personnes à la fois.** Si un collègue a changé le colis pendant que vous le regardiez, la base refuse votre modification au lieu d'écraser la sienne, et le dit.
 - **Une facture émise est arrêtée.** Ses frais de service, son client et, si elle porte des colis, son total ne se modifient plus. Les paiements, l'échéance, la note et le lien de paiement, si.
 - **Le journal.** Chaque création, modification, changement de statut, paiement et modification de client est noté dans la table `journal_audit` : qui, quoi, quand, avant, après. Pour un client, seul le nom des champs modifiés est noté, jamais son adresse ni son téléphone. Seule l'équipe le lit ; personne ne peut y écrire.
 - **Les permissions.** Chaque fonction vérifie la permission du compte connecté (`shipments.create`, `shipments.update_status`, `invoices.create`…), en plus des règles de sécurité des tables. Aujourd'hui, deux rôles : l'équipe peut tout, un client ne voit que ce qui est à lui. La liste est dans `permissions_du_role`, le seul endroit à changer quand viendront des rôles plus fins.
+
+### Les événements
+
+Le **statut** d'un colis dit où il en est, en un mot : c'est lui que voit le client. Son **historique** dit tout ce qui lui est arrivé. Chaque ligne de l'historique est un **événement** : son type, le statut avant et après, qui l'a fait (le compte connecté, jamais un nom envoyé par une page), où, quand (l'heure de la base), le message pour le client et des précisions (numéro de conteneur, raison d'une action requise…).
+
+Tous les événements ne changent pas le statut. Un colis peut être *inspecté*, *consolidé*, *chargé* dans un conteneur et rester « Reçu » : ces opérations internes sont notées pour l'équipe, jamais montrées au client ni au suivi public.
+
+| Événement | Statut après | Vu par le client |
+|---|---|---|
+| `COLIS_RECU` | Reçu (à la création) | oui |
+| `COLIS_INSPECTE`, `COLIS_CONSOLIDE`, `COLIS_CHARGE` | inchangé (Reçu ou Emballé seulement) | non |
+| `COLIS_EMBALLE` | Emballé | oui |
+| `COLIS_EXPEDIE` | Embarqué | oui |
+| `COLIS_ARRIVE` | Centre de distribution | oui |
+| `COLIS_TRANSFERE` | Transféré à la succursale | oui |
+| `COLIS_DISPONIBLE` | Disponible (agence obligatoire) | oui |
+| `COLIS_LIVRE` | Livré | oui |
+| `ACTION_REQUISE` | Action requise | oui |
+| `ACTION_RESOLUE` | l'étape d'avant, ou une suivante | oui |
+| `CORRECTION` | l'étape d'avant (motif obligatoire) | non ; l'étape annulée disparaît de sa vue |
+| `MISE_A_JOUR` | inchangé (lieu ou message corrigé) | oui |
+
+- **Le statut ne change que par un événement.** Une seule porte, `executer_operation` : elle verrouille le colis, vérifie la transition, écrit l'événement et change le statut dans la même transaction. Toute autre tentative de changer le statut — une ancienne page, une écriture directe, même le SQL Editor — est refusée.
+- **Un événement est un fait.** Il ne se modifie pas et ne s'efface pas. Une erreur se corrige par un nouvel événement, qui dit ce qu'il annule ; l'original reste lisible par l'équipe.
+- **Le même scan deux fois** ne fait qu'un événement : avec la même clé de requête, ou quand l'opération vient d'être faite à l'identique. Deux postes qui scannent le même colis en même temps : le second attend le premier, puis reçoit son résultat — ou un conflit, s'il voulait faire autre chose.
+- **Les colis d'avant** gardent leur historique tel quel. Aucun événement n'est inventé pour remplir le passé : leurs anciennes lignes restent simplement sans type.
+
+Pour le futur scanner, tout est prêt côté base : `executer_operation_par_reference` (le numéro scanné, GSE ou vendeur), `operations_possibles` (les boutons à proposer), `historique_colis`, `dernier_evenement`, `rechercher_evenements`.
 
 ### Les erreurs
 
@@ -509,12 +537,15 @@ Quand la base refuse, elle répond par un code et une phrase en français, que l
 | `TRACKING_ALREADY_EXISTS` | numéro de suivi vendeur déjà utilisé |
 | `DUPLICATE_OPERATION` | une demande déjà traitée, rejouée pour un autre client |
 | `INVOICE_ALREADY_EXISTS`, `INVOICE_CLIENT_MISMATCH`, `INVOICE_LOCKED` | colis déjà facturé, colis d'un autre client, facture arrêtée |
+| `EVENT_TYPE_INVALID`, `INVALID_EVENT_DATA`, `INVALID_LOCATION` | événement inconnu, précisions refusées (ou motif de correction manquant), lieu trop long |
+| `STATUS_ALREADY_SET` | le colis est déjà à ce statut |
+| `EVENT_IMMUTABLE` | tentative de modifier ou d'effacer un événement |
 
 Les refus de permission et les transitions interdites sont aussi notés dans les journaux de Supabase (*Logs* > *Postgres*, chercher « goship »), sans aucune donnée secrète.
 
 ### Pour les développeurs
 
-Les fonctions appelées par le site : `creer_colis`, `modifier_colis`, `changer_statut_colis`, `statuts_possibles`, `trouver_colis`, `facturer_colis`, `creer_facture`. Le suivi public reste `suivre_colis`. Côté site, rien ne change dans les noms : `API.admin.creerColis`, `changerStatut`… appellent ces fonctions. Le mode démonstration applique les mêmes règles dans le navigateur, et `outils/essais-services/` vérifie que les deux répondent pareil, cas par cas.
+Les fonctions appelées par le site : `creer_colis`, `modifier_colis`, `trouver_colis`, `facturer_colis`, `creer_facture` (`supabase-services.sql`) ; `changer_statut_colis`, `statuts_possibles`, `historique_colis` (`supabase-evenements.sql`). Le suivi public reste `suivre_colis`. Côté site, rien ne change dans les noms : `API.admin.creerColis`, `changerStatut`… appellent ces fonctions. Le mode démonstration applique les mêmes règles dans le navigateur, et `outils/essais-services/` vérifie que les deux répondent pareil, cas par cas.
 
 **Plus tard** : quand l'application mobile aura été vérifiée (elle ne doit pas écrire dans la table `colis`), la fin de `supabase-services.sql` contient, prêtes à l'emploi, les deux lignes qui ferment l'écriture directe dans les tables : il ne restera alors que les fonctions comme porte d'entrée.
 

@@ -128,6 +128,28 @@ create table if not exists public.colis_historique (
 
 create index if not exists colis_historique_colis_idx on public.colis_historique (colis_id, cree_le);
 
+-- Les événements (25/09/2026). Chaque ligne de l'historique est un événement :
+-- ce qui s'est passé (type_evenement), le statut avant et après, qui l'a fait,
+-- où, avec quelles précisions. Le moteur qui les écrit est dans
+-- outils/supabase-evenements.sql ; les colonnes sont déclarées ici parce que
+-- le suivi public et les règles de lecture, plus bas, s'en servent.
+--   visibilite  « publique » : vue par le client et par le suivi public ;
+--               « interne »  : réservée à l'équipe (inspection, correction…).
+--   corrige_id  sur un événement de correction, l'événement qu'il annule.
+--               L'événement annulé n'est jamais modifié ni effacé : il
+--               disparaît seulement de ce que voient le client et le public.
+-- Les lignes d'avant ce jour gardent leurs valeurs par défaut (type vide,
+-- statut précédent inconnu) : on n'invente pas un passé qui n'a pas été noté.
+alter table public.colis_historique add column if not exists type_evenement   text;
+alter table public.colis_historique add column if not exists statut_precedent text;
+alter table public.colis_historique add column if not exists auteur_id        uuid;
+alter table public.colis_historique add column if not exists auteur_role      text;
+alter table public.colis_historique add column if not exists metadonnees      jsonb not null default '{}'::jsonb;
+alter table public.colis_historique add column if not exists cle_idempotence  text;
+alter table public.colis_historique add column if not exists visibilite       text not null default 'publique'
+  check (visibilite in ('publique', 'interne'));
+alter table public.colis_historique add column if not exists corrige_id       bigint;
+
 
 -- 3. Automatismes -------------------------------------------------------------
 
@@ -234,6 +256,19 @@ as $$
   select exists (select 1 from public.clients where id = auth.uid() and role = 'admin')
 $$;
 
+-- Vrai si un événement de correction a annulé cet événement. « security
+-- definer » : la règle de lecture de colis_historique l'appelle, et une règle
+-- qui relirait sa propre table sous RLS tournerait en rond.
+create or replace function public.evenement_corrige(p_id bigint)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.colis_historique c where c.corrige_id = p_id)
+$$;
+
 alter table public.clients enable row level security;
 alter table public.colis enable row level security;
 alter table public.colis_historique enable row level security;
@@ -275,7 +310,9 @@ create policy historique_lecture on public.colis_historique
   for select to authenticated
   using (
     (select public.est_admin())
-    or exists (select 1 from public.colis c where c.id = colis_id and c.client_id = (select auth.uid()))
+    or (visibilite = 'publique'
+        and not public.evenement_corrige(id)
+        and exists (select 1 from public.colis c where c.id = colis_id and c.client_id = (select auth.uid())))
   );
 
 -- Droits d'accès aux tables. Depuis 2026, Supabase n'ouvre plus automatiquement
@@ -315,7 +352,8 @@ grant select on public.colis_details to authenticated, service_role;
 -- 5. Fonctions appelées par le site --------------------------------------------
 
 -- Suivi public (formulaire « Où est mon colis ? ») : statut et étapes
--- uniquement, sans nom, adresse, description ni note.
+-- uniquement, sans nom, adresse, description ni note. Ni les opérations
+-- internes (inspection, correction…), ni une étape annulée par une correction.
 create or replace function public.suivre_colis(p_numero text)
 returns jsonb
 language sql
@@ -330,9 +368,11 @@ as $$
     'pays_destination', c.pays_destination,
     'maj_le', c.maj_le,
     'historique', coalesce((
-      select jsonb_agg(jsonb_build_object('statut', h.statut, 'lieu', h.lieu, 'cree_le', h.cree_le) order by h.cree_le)
+      select jsonb_agg(jsonb_build_object('statut', h.statut, 'lieu', h.lieu, 'cree_le', h.cree_le) order by h.id)
       from public.colis_historique h
-      where h.colis_id = c.id), '[]'::jsonb))
+      where h.colis_id = c.id
+        and h.visibilite = 'publique'
+        and not public.evenement_corrige(h.id)), '[]'::jsonb))
   from public.colis c
   where length(trim(coalesce(p_numero, ''))) >= 4
     and (c.numero = upper(trim(p_numero))
@@ -389,6 +429,10 @@ revoke execute on function public.preparer_colis() from public, anon, authentica
 revoke execute on function public.historiser_colis() from public, anon, authenticated;
 revoke execute on function public.definir_admin(text) from public, anon, authenticated;
 revoke execute on function public.statistiques_admin() from public, anon;
+-- Appelée par la règle de lecture, donc avec les droits de celui qui lit :
+-- elle ne dit que « oui » ou « non » sur un événement qu'il voit déjà.
+revoke execute on function public.evenement_corrige(bigint) from public, anon;
+grant execute on function public.evenement_corrige(bigint) to authenticated;
 grant execute on function public.statistiques_admin() to authenticated;
 grant execute on function public.est_admin() to authenticated;
 grant execute on function public.suivre_colis(text) to anon, authenticated;
