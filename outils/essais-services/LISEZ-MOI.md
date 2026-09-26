@@ -295,6 +295,15 @@ EXECUTE sur toute nouvelle fonction) :
   contrôles verts, seconde restauration refusée, l'espace client et la création
   de colis fonctionnent après restauration.
 
+Depuis la finalisation, il éprouve aussi (sections H à K) : `controler.sh`
+(sortie sans e-mail ni numéro, détail chiffré, mot de passe jamais affiché),
+`essai-metier.sql` (le parcours métier passe, ne laisse rien, et échoue si un
+verrou est retiré), `appliquer-chaine.sh` (ordre, reprise, refus de la
+production, arrêt au premier échec) et la restauration d'épreuve
+(`RESTAURATION_ESSAI=1`, deux destinataires, colonnes réelles d'`auth.users`).
+`essai-mobile.py` (section Z) éprouve `sonder.sh` et `surveiller.sh` contre son
+vrai PostgREST.
+
 Il demande `age` et `age-keygen` (paquet `age`) en plus de pgserver.
 
     python3 outils/essais-services/essai-production.py

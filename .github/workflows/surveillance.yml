@@ -1,14 +1,26 @@
 # ==========================================================================
 #  Surveillance de la production
 # ==========================================================================
-#  Toutes les 30 minutes : le site répond-il, la base répond-elle, la file
-#  des notifications avance-t-elle ? (outils/production/surveiller.sh, lecture
-#  seule, clé publique du site seulement). Un échec fait échouer le workflow :
-#  GitHub envoie alors un e-mail au propriétaire du dépôt (réglable dans
-#  Settings > Notifications > Actions). Voir docs/production/monitoring.md.
+#  Toutes les 30 minutes : le site répond-il, la base répond-elle, les fonctions
+#  du site et de l'application sont-elles là (et fermées aux visiteurs), la file
+#  des notifications avance-t-elle, l'Auth confirme-t-elle les adresses ?
+#  (outils/production/surveiller.sh, lecture seule, clé publique seulement.)
 #
-#  GitHub suspend les workflows planifiés d'un dépôt sans activité pendant
-#  60 jours : il suffit alors de le réactiver (onglet Actions).
+#  Deux niveaux : CRITIQUE fait échouer le workflow ; ATTENTION est écrit au
+#  journal et dans le résumé, sans alerte.
+#
+#  Qui est prévenu d'un CRITIQUE :
+#    1. le propriétaire du dépôt, par l'e-mail de GitHub (Settings > Notifications
+#       > Actions) ;
+#    2. une seconde personne ou un canal d'équipe, si le secret ALERTE_WEBHOOK est
+#       posé (Settings > Secrets and variables > Actions) : un sujet ntfy.sh (push
+#       sur téléphone), un webhook Slack ou Discord. Le message ne contient que
+#       « CRITIQUE » et le lien du journal, jamais de donnée.
+#  Et si GitHub Actions lui-même ne tourne plus (panne, suspension après 60 jours
+#  sans activité du dépôt) ? Le secret HEARTBEAT_URL (Healthchecks.io, gratuit) :
+#  chaque passage réussi l'appelle, chaque échec appelle /fail ; sans nouvelles
+#  depuis 1 h, Healthchecks prévient lui-même (e-mail, SMS, plusieurs personnes).
+#  Voir docs/production/monitoring.md.
 # ==========================================================================
 
 name: Surveillance de la production
@@ -35,15 +47,53 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: |
             assets/js/config.js
             outils/production
           sparse-checkout-cone-mode: false
+
       - name: Contrôler la production
         env:
           # Sur une pull request, la nouvelle version n'est pas encore publiée : ce
           # qui en dépend (fichiers retirés, sante()) n'est qu'un avertissement
           SURVEILLANCE_TOLERANTE: ${{ github.event_name == 'pull_request' && '1' || '' }}
-        run: bash outils/production/surveiller.sh
+        run: |
+          set +e
+          bash outils/production/surveiller.sh | tee resultat.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### Surveillance : $( [ "$code" = 0 ] && echo 'rien de critique' || echo 'CRITIQUE' )"
+            echo '```'
+            grep -E '^(CRITIQUE|ATTENTION)' resultat.txt || echo "aucun critique, aucune attention"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+      - name: Battement de cœur (surveillance externe)
+        if: always() && github.event_name != 'pull_request'
+        env:
+          HEARTBEAT_URL: ${{ secrets.HEARTBEAT_URL }}
+          ETAT: ${{ job.status }}
+        run: |
+          [ -n "$HEARTBEAT_URL" ] || { echo "HEARTBEAT_URL non posé : aucune surveillance externe de GitHub Actions."; exit 0; }
+          if [ "$ETAT" = success ]; then curl -fsS -m 10 --retry 3 "$HEARTBEAT_URL" > /dev/null
+          else curl -fsS -m 10 --retry 3 "${HEARTBEAT_URL%/}/fail" > /dev/null; fi
+
+      - name: Alerte à la seconde personne
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          ALERTE_WEBHOOK: ${{ secrets.ALERTE_WEBHOOK }}
+          LIEN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [ -n "$ALERTE_WEBHOOK" ] || { echo "ALERTE_WEBHOOK non posé : seul le propriétaire du dépôt est prévenu."; exit 0; }
+          texte="GoShip Express — surveillance : CRITIQUE. Journal : $LIEN"
+          case "$ALERTE_WEBHOOK" in
+            *hooks.slack.com*) curl -fsS -m 10 -H 'Content-Type: application/json' \
+                                 -d "$(python3 -c 'import json,sys; print(json.dumps({"text": sys.argv[1]}))' "$texte")" "$ALERTE_WEBHOOK" ;;
+            *discord.com*)     curl -fsS -m 10 -H 'Content-Type: application/json' \
+                                 -d "$(python3 -c 'import json,sys; print(json.dumps({"content": sys.argv[1]}))' "$texte")" "$ALERTE_WEBHOOK" ;;
+            *)                 curl -fsS -m 10 -H 'Title: GoShip Express' -H 'Priority: urgent' -d "$texte" "$ALERTE_WEBHOOK" ;;
+          esac

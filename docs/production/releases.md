@@ -12,8 +12,10 @@ Le site et la base vont ensemble : une étiquette `site-…` désigne à la fois
 pages et l'état de `outils/` à appliquer. La base n'a pas d'autre numéro : ce
 qui y est passé se lit dans `controle-securite.sql` (section « Migrations »).
 
-Aujourd'hui : **aucune étiquette, aucune release** dans les deux dépôts. La
-première sera posée à la première mise en production après GO (go-no-go.md).
+Aujourd'hui : **aucune étiquette, aucune release** dans les deux dépôts.
+`site-2026.09.26` (commit `645e08a`, outillage de production) est à créer sur
+GitHub (Releases > *Draft a new release*) : l'environnement de travail ne peut pas
+pousser d'étiquette.
 
 ## Candidat (RC)
 
@@ -22,10 +24,11 @@ Avant une mise en production :
 1. Geler `main` (plus de fusion sauf correctif du RC).
 2. Étiquette `site-AAAA.MM.JJ-rc1` ; `bureau-vX.Y.Z-rc1` et/ou
    `mobile-vX.Y.Z-rc1` si ces composants changent.
-3. La préproduction reçoit les migrations du RC ; tests de production
-   (checklist-release.md) sur la préproduction ; mobile en test interne
-   (TestFlight, Play *Internal testing*) branché sur… la production — il n'existe
-   pas encore de profil EAS `staging` (go-no-go.md, recommandation R2).
+3. La préproduction reçoit les migrations du RC (**Préproduction** > Run
+   workflow) ; tests de production (checklist-release.md) sur la préproduction ;
+   mobile construit avec le profil EAS `staging`, installé sur un téléphone de
+   test ; puis la version `production` en test interne (TestFlight, Play
+   *Internal testing*).
 4. Un défaut → correctif → `rc2`.
 
 ## Ordre de mise en ligne

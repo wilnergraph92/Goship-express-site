@@ -15,15 +15,19 @@ bloquant)* et qu'un risque accepté est écrit à côté.
 - [ ] `CHANGELOG.md` à jour ; étiquette RC posée
 
 ### Base
-- [ ] Sauvegarde du jour faite **et restaurée** avec succès dans un projet vide
-- [ ] `controle-securite.sql` et `controle-integrite.sql` lancés en production :
+- [ ] **Préproduction** verte sur la version à publier (chaîne, contrôles, essai
+      métier, sonde)
+- [ ] **Sauvegarde de la base** du jour : les deux jobs verts (sauvegarde +
+      restauration d'épreuve) ; RPO/RTO notés
+- [ ] Une restauration dans un vrai projet Supabase a réussi ce trimestre
+- [ ] **Contrôles de la base de production** et **Audit de la base de production** lancés :
       résultats gardés (état de départ), aucune ALERTE inexpliquée
-- [ ] Migrations passées d'abord en **préproduction**, contrôles verts
 - [ ] Fenêtre choisie, équipe prévenue
 
 ### Réglages
 - [ ] Supabase Auth : *Site URL* et *Redirect URLs* = l'adresse de production
-      (aucun `localhost`) ; confirmation d'e-mail activée ; mot de passe ≥ 6
+      (aucun `localhost`) ; confirmation d'e-mail activée (la surveillance le
+      vérifie : « confirmation des adresses e-mail active ») ; mot de passe ≥ 6
 - [ ] Aucun compte de démonstration ou d'essai en production (contrôle de sécurité,
       « Comptes de démonstration »)
 - [ ] Au moins un administrateur, mots de passe longs et uniques pour l'équipe
@@ -32,7 +36,9 @@ bloquant)* et qu'un risque accepté est écrit à côté.
 
 ## Pendant
 
-- [ ] Migrations en production, dans l'ordre, dernière ligne de chaque fichier lue
+- [ ] Migrations en production par `appliquer-chaine.sh` (ou SQL Editor), dans
+      l'ordre, arrêt au premier échec
+- [ ] **Audit de la base de production** : 11/11
 - [ ] `select public.sante();` → `status ok`, `pret true`
 - [ ] Contrôles relancés : pas de nouvelle ALERTE, mêmes nombres
 - [ ] Fusion sur `main` → `deploy.yml` vert, **y compris** le contrôle après publication
@@ -53,10 +59,13 @@ Avec un compte client **de l'équipe** (jamais le compte d'un vrai client) :
 - [ ] Notification de l'étape d'essai visible dans « Mon compte » ; un envoi par
       canal en service, reçu
 - [ ] Bureau : ouverture, impression d'une étiquette
-- [ ] Mobile (version de test) : connexion, colis, pré-alerte, notifications
+- [ ] Mobile, profil `staging` puis version de test interne (TestFlight, Play
+      Internal) : connexion, colis, pré-alerte, notifications, déconnexion, réseau
+      coupé ; paquet contrôlé (`controle-paquet.mjs`)
 
 ## Après
 
-- [ ] `surveillance.yml` vert à l'exécution suivante
+- [ ] `surveillance.yml` vert à l'exécution **planifiée** suivante (rien de
+      critique) ; Healthchecks « up » si `HEARTBEAT_URL` est posé
 - [ ] Supabase > Logs : pas d'erreur nouvelle après 1 h
 - [ ] Décision et résultat notés dans go-no-go.md

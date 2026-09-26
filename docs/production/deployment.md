@@ -28,35 +28,42 @@ des pages de la Phase 11 dans la foulée.
 
 Avant :
 
-1. **Sauvegarde vérifiée** — lancer `sauvegarde.yml` à la main (Actions >
-   Sauvegarde de la base > Run workflow), télécharger l'artefact, et le restaurer
-   dans un projet vide (backup.md § Restaurer). Sans restauration réussie de la
-   sauvegarde du jour, on ne migre pas.
-2. **État de départ** — dans le SQL Editor de production, exécuter
-   `outils/production/controle-securite.sql` puis `controle-integrite.sql`
-   (lecture seule, rien n'est modifié) et garder les deux résultats (export CSV).
-   Les lignes « Migrations » de `controle-securite.sql` disent quels fichiers de la
-   chaîne sont déjà passés.
-3. **Fenêtre** — en dehors des heures de scan de l'entrepôt ; prévenir l'équipe.
+1. **Préproduction verte** — Actions > **Préproduction** > Run workflow, sur la
+   version à publier : chaîne, contrôles, essai métier, sonde.
+2. **Sauvegarde vérifiée** — Actions > **Sauvegarde de la base** > Run workflow :
+   les deux jobs verts (le second restaure la sauvegarde du jour et compare
+   chaque table). Sans restauration réussie de la sauvegarde du jour, on ne
+   migre pas.
+3. **État de départ** — Actions > **Contrôles de la base de production** > Run
+   workflow (lecture seule) ; et **Audit de la base de production** : quelles
+   migrations sont déjà passées.
+4. **Fenêtre** — en dehors des heures de scan de l'entrepôt ; prévenir l'équipe.
 
-Pendant, pour chaque fichier de `outils/migrations.txt`, **dans l'ordre**, à
-partir du premier qui a changé (relancer l'un impose de relancer ceux qui le
-suivent) :
+Pendant — deux façons, au choix :
 
-1. GitHub > le fichier > **Copy raw file** (un aperçu copié à la main est tronqué :
-   « unterminated dollar-quoted string »).
-2. SQL Editor > New query > coller > Run.
-3. Lire la dernière ligne de résultat (chaque fichier finit par un contrôle). Une
-   erreur : **s'arrêter**, ne pas lancer le fichier suivant (troubleshooting.md).
+- **Depuis un ordinateur de confiance** (psql 17), la chaîne à partir du premier
+  fichier qui a changé, arrêt au premier échec, chaque fichier dans sa propre
+  transaction :
+  ```
+  CIBLE_DB_URL='…production…' CONFIRMER_PRODUCTION=gpfdyslysqjmojgzggib \
+    bash outils/production/appliquer-chaine.sh supabase-notifications.sql
+  ```
+  Sans `CONFIRMER_PRODUCTION`, le script refuse l'adresse de production.
+- **Depuis le SQL Editor**, pour chaque fichier de `outils/migrations.txt`, dans
+  l'ordre : GitHub > le fichier > **Copy raw file** (un aperçu copié à la main est
+  tronqué : « unterminated dollar-quoted string ») ; New query > coller > Run ;
+  lire la dernière ligne (chaque fichier finit par un contrôle). Une erreur :
+  **s'arrêter**, ne pas lancer le fichier suivant (troubleshooting.md).
+
+Aucun workflow ne migre la production : c'est volontaire.
 
 Après :
 
 1. `select public.sante();` → `status = ok`, `pret = true`. `notifications` vaut
    `ok` (ou `inactives` si `supabase-notifications.sql` n'a pas encore été passé).
-2. Relancer les deux contrôles, comparer avec l'état de départ : aucune nouvelle
-   ligne `ALERTE`, mêmes nombres de lignes côté intégrité.
-3. `bash outils/production/surveiller.sh` (ou Actions > Surveillance > Run
-   workflow).
+2. Relancer **Contrôles de la base de production** : aucune nouvelle ALERTE.
+3. **Audit de la base de production** : la chaîne complète (11/11).
+4. **Surveillance de la production** > Run workflow : rien de critique.
 
 ### Premier passage de `supabase-notifications.sql` en production
 
@@ -114,14 +121,33 @@ le bureau sans rien faire. Une nouvelle coquille (fenêtre, pont, impression) :
    `admin.js`, dans une PR à part.
 
 Aujourd'hui : Windows non signé (SmartScreen avertit à l'installation), macOS
-signé *ad hoc* sans notarisation (Gatekeeper demande une ouverture manuelle).
-Ne jamais faire désactiver SmartScreen ou Gatekeeper sur un poste : signer
-(go-no-go.md, B7).
+signé *ad hoc* sans notarisation (Gatekeeper demande une ouverture manuelle) —
+**pour l'équipe seulement**. Ne jamais faire désactiver SmartScreen ou
+Gatekeeper sur un poste.
+
+**Distribution signée** (prête, certificats à fournir — go-no-go.md, A10) : dès
+que ces secrets de dépôt sont posés, `bureau.yml` construit hors pull request
+avec `bureau/electron-builder.distribution.js` :
+
+| Secret | Pour |
+|---|---|
+| `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | certificat *Developer ID Application* (.p12 en base64) et son mot de passe |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | notarisation automatique par electron-builder |
+| `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | certificat de signature de code Windows (.pfx en base64) |
+
+Le job échoue si l'application signée n'est pas acceptée : macOS `spctl
+--assess` et `xcrun stapler validate` ; Windows `Get-AuthenticodeSignature`
+= `Valid`. À essayer ensuite à la main sur un Mac Intel, un Mac Apple Silicon et
+un PC Windows (SmartScreen : la réputation d'un nouveau certificat s'acquiert ;
+un certificat EV l'a d'emblée).
 
 ## 4. Le mobile
 
 Dans le dépôt `goship-express-app` :
 
+0. Préproduction : `eas build --profile staging` (goship-staging), installé sur
+   un téléphone de test ; parcours de fumée (checklist-release.md) ; le paquet
+   passe `node essais/controle-paquet.mjs <paquet> staging`.
 1. PR → `mobile.yml` : essais, APK/AAB de production, application iOS de
    production (non signée), parcours Maestro sur émulateur Android et simulateur
    iOS, contrôle des paquets (adresse de production, aucune adresse d'essai,

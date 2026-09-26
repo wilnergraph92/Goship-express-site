@@ -2,13 +2,19 @@
 
 ## Objectifs
 
-| | Aujourd'hui | Une fois `sauvegarde.yml` en service | Avec Supabase Pro + PITR |
-|---|---|---|---|
-| **RPO** (données qu'on accepte de perdre) | **inconnu** : aucune sauvegarde vérifiée (backup.md) | 24 h (une sauvegarde par nuit) | quelques minutes |
-| **RTO** (temps pour revenir en service) | **inconnu** : aucune restauration réelle faite | estimé 2 à 4 h pour la base et le site ; **1 à 3 jours pour le mobile** si l'adresse Supabase change | idem, sauf restauration sur place (sans changement d'adresse) : moins d'1 h |
+**L'offre Supabase du projet n'est pas connue** (go-no-go.md, A1) : rien, dans ce
+dossier, ne suppose qu'elle comprend des sauvegardes ou le PITR. La dernière
+colonne ci-dessous est une **option à souscrire** (recommandation R1), pas l'état
+actuel.
 
-Les estimations de RTO ne sont **pas mesurées** : les remplacer par la durée
-réelle de la première restauration (backup.md, « Tester »).
+| | Aujourd'hui (constaté) | Avec `sauvegarde.yml` en service (prévu) | Option : Supabase Pro + PITR (non souscrite à ce jour) |
+|---|---|---|---|
+| **RPO** (données qu'on accepte de perdre) | **inconnu** : aucune sauvegarde vérifiée | ≤ 24 h — **mesuré** chaque nuit par le job « Restauration d'épreuve » (âge de la sauvegarde) | quelques minutes |
+| **RTO** de la base | **inconnu** | **mesuré** chaque nuit sur un PostgreSQL jetable (durée restauration + chaîne) ; dans un vrai projet : mesure trimestrielle (backup.md) | restauration sur place, sans changement d'adresse |
+| **RTO** du mobile si l'adresse Supabase change | 1 à 3 jours (revue des boutiques) — **estimation** | idem | sans objet (même adresse) |
+
+Tant qu'une durée n'a pas été mesurée, elle reste marquée « estimation ». Les
+mesures se reportent dans backup.md, « Tester ».
 
 Perte de 24 h, concrètement : les colis reçus, les scans, les paiements et les
 comptes créés depuis la dernière nuit. Ils se reconstituent depuis les étiquettes

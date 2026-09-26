@@ -1,0 +1,83 @@
+# ==========================================================================
+#  Contrôles de sécurité et d'intégrité de la base de production
+# ==========================================================================
+#  outils/production/controler.sh : controle-securite.sql et controle-integrite.sql,
+#  dans des transactions EN LECTURE SEULE (la base ne peut rien écrire).
+#
+#  Le journal (public : le dépôt l'est) ne montre que les contrôles, leurs
+#  verdicts et des nombres, adresses e-mail masquées, jamais d'exemple. Le
+#  résultat complet est déposé en artefact CHIFFRÉ pour la clé publique
+#  SAUVEGARDE_DESTINATAIRE (docs/production/backup.md).
+#
+#  Le job échoue s'il y a au moins une ALERTE : c'est voulu, l'e-mail de GitHub
+#  prévient. Chaque lundi, et à la demande (Actions > Run workflow).
+#
+#  Secrets (environnement « production ») : SUPABASE_DB_URL, SAUVEGARDE_DESTINATAIRE.
+# ==========================================================================
+
+name: Contrôles de la base de production
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '53 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: controles-production
+  cancel-in-progress: false
+
+jobs:
+  controler:
+    name: Sécurité et intégrité (lecture seule)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      CIBLE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
+    steps:
+      - name: Secrets posés ?
+        id: pret
+        run: |
+          if [ -z "$CIBLE_DB_URL" ]; then
+            if [ "${{ github.event_name }}" = schedule ]; then
+              echo "::notice::Contrôle non configuré : SUPABASE_DB_URL absent (docs/production/backup.md, « Mettre en service »)."
+              echo "pret=non" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "::error::SUPABASE_DB_URL absent de l'environnement production : contrôle impossible (docs/production/backup.md, « Mettre en service »)."
+            exit 1
+          fi
+          echo "pret=oui" >> "$GITHUB_OUTPUT"
+          [ -n "$SAUVEGARDE_DESTINATAIRE" ] || echo "::warning::SAUVEGARDE_DESTINATAIRE absent : le détail complet ne sera pas conservé."
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.pret.outputs.pret == 'oui'
+        with:
+          sparse-checkout: outils/production
+          sparse-checkout-cone-mode: false
+
+      - name: Outils (psql 17, age)
+        if: steps.pret.outputs.pret == 'oui'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 age
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Contrôler (lecture seule)
+        if: steps.pret.outputs.pret == 'oui'
+        run: bash outils/production/controler.sh resultat
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always() && steps.pret.outputs.pret == 'oui'
+        with:
+          name: controle-production-${{ github.run_number }}
+          path: resultat/*.age
+          retention-days: 90
+          if-no-files-found: ignore

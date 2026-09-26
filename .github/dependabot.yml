@@ -1,0 +1,10 @@
+# Les actions de GitHub sont épinglées par empreinte (une étiquette peut être
+# déplacée, une empreinte non). Dependabot propose chaque mois une pull request
+# qui met ces empreintes à jour : on la relit, la CI la passe, puis on fusionne.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5

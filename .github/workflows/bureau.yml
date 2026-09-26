@@ -60,10 +60,10 @@ jobs:
         shell: bash
     steps:
       - name: Récupérer le dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -75,13 +75,33 @@ jobs:
       - name: Essai de l'application
         run: npm run essai
 
+      # Signature de DISTRIBUTION si les certificats sont posés (jamais sur une pull
+      # request) : Developer ID + notarisation (macOS), Authenticode (Windows), par
+      # electron-builder.distribution.js. Sinon : ad hoc (macOS) / non signé
+      # (Windows), pour l'équipe seulement. docs/production/deployment.md, § 3.
       - name: Construire l'installateur
-        run: ${{ matrix.construire }}
+        shell: bash
+        run: |
+          if [ "$SIGNER" = oui ]; then
+            echo "Signature de distribution ($RUNNER_OS)"
+            ${{ matrix.construire }} --config electron-builder.distribution.js
+          else
+            echo "Sans certificat : installateur pour l'équipe seulement (ni signé pour le public, ni notarisé)"
+            ${{ matrix.construire }}
+          fi
         env:
           # macOS : la signature ad hoc (identity "-") ne demande aucun secret ;
           # sans cette variable, electron-builder ne signe pas du tout sur une
           # pull request, et l'application passe pour « endommagée ».
           CSC_FOR_PULL_REQUEST: 'true'
+          SIGNER: ${{ github.event_name != 'pull_request' && ((runner.os == 'macOS' && secrets.MAC_CSC_LINK != '') || (runner.os == 'Windows' && secrets.WIN_CSC_LINK != '')) && 'oui' || 'non' }}
+          CSC_LINK: ${{ github.event_name != 'pull_request' && runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ github.event_name != 'pull_request' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ github.event_name != 'pull_request' && secrets.APPLE_TEAM_ID || '' }}
+          WIN_CSC_LINK: ${{ github.event_name != 'pull_request' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ github.event_name != 'pull_request' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
 
       - name: Verrous de sécurité de l'exécutable (fuses)
         run: |
@@ -92,9 +112,14 @@ jobs:
       - name: Windows — installer, lancer, désinstaller
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          SIGNE: ${{ github.event_name != 'pull_request' && secrets.WIN_CSC_LINK != '' && 'oui' || 'non' }}
         run: |
           $installateur = Get-ChildItem dist -Filter 'GoShip-Express-Setup-*-windows-x64.exe' | Select-Object -First 1
           Write-Host "Installateur : $($installateur.Name) ($([math]::Round($installateur.Length / 1MB)) Mo)"
+          $signature = Get-AuthenticodeSignature $installateur.FullName
+          Write-Host "Signature Authenticode : $($signature.Status)"
+          if ($env:SIGNE -eq 'oui' -and $signature.Status -ne 'Valid') { throw "Installateur de distribution sans signature valide" }
           Start-Process -FilePath $installateur.FullName -ArgumentList '/S' -Wait
           $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'GoShip Express.exe' | Select-Object -First 1
           if (-not $exe) { throw "Application non installée" }
@@ -114,6 +139,8 @@ jobs:
       # ---- macOS : ouvrir l'image disque, lancer, vérifier la signature --------
       - name: macOS — ouvrir l'image disque et lancer
         if: runner.os == 'macOS'
+        env:
+          SIGNE: ${{ github.event_name != 'pull_request' && secrets.MAC_CSC_LINK != '' && 'oui' || 'non' }}
         run: |
           dmg=$(ls dist/GoShip-Express-*-macos-*.dmg | head -1)
           echo "Image disque : $dmg ($(du -h "$dmg" | cut -f1))"
@@ -123,14 +150,22 @@ jobs:
           app="$RUNNER_TEMP/GoShip Express.app"
           echo "Architecture : $(lipo -archs "$app/Contents/MacOS/GoShip Express")"
           codesign --verify --deep --strict "$app"
-          echo "Signature ad hoc : valide"
-          codesign -dv "$app" 2>&1 | grep -E "^(Signature|Identifier|Format)=" || true
-          spctl --assess --type execute -vv "$app" 2>&1 || echo "Gatekeeper : refusée (application non notarisée — attendu tant qu'aucun certificat Apple n'est configuré)"
+          codesign -dv "$app" 2>&1 | grep -E "^(Signature|Identifier|Format|Authority|TeamIdentifier)=" || true
+          if [ "$SIGNE" = oui ]; then
+            # Distribution : Gatekeeper doit accepter l'application, et le ticket de
+            # notarisation doit être agrafé — sinon, pas de distribution publique
+            spctl --assess --type execute -vv "$app"
+            xcrun stapler validate "$app"
+            echo "Signature Developer ID et notarisation : acceptées par Gatekeeper"
+          else
+            echo "Signature ad hoc : valide"
+            spctl --assess --type execute -vv "$app" 2>&1 || echo "Gatekeeper : refusée (application non notarisée — attendu tant qu'aucun certificat Apple n'est configuré)"
+          fi
           node essais/essai-paquet.js "$app/Contents/MacOS/GoShip Express"
           rm -rf "$app" && echo "Désinstallation (supprimer l'application) : faite"
 
       - name: Déposer l'installateur
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artefact }}
           path: |

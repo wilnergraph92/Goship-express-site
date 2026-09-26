@@ -55,7 +55,22 @@
 | Dépendance | Si elle tombe | Détection | Voir |
 |---|---|---|---|
 | GitHub Pages | site, tableau de bord et bureau inaccessibles ; le mobile continue (il parle directement à Supabase) | `surveillance.yml` | incident-response.md |
+| GitHub Actions | plus de surveillance, de sauvegarde ni de publication ; le service continue | Healthchecks (`HEARTBEAT_URL`) | monitoring.md |
 | Supabase (base, Auth, API) | plus rien ne fonctionne, sauf les pages vitrines | `surveillance.yml` (auth, `sante()`, suivi) | disaster-recovery.md |
 | pg_cron | les notifications restent « en attente » : rien ne se perd, rien ne part | `sante()` → `notifications: en_retard` | troubleshooting.md |
 | Brevo / Resend / Meta / Expo | l'envoi échoue, est réessayé (30 s, 2 min, 10 min), puis marqué « échec » avec son code ; la notification reste lisible dans l'espace client | onglet Notifications, `controle-integrite.sql` | docs/notifications.md |
 | Boutiques d'applications | pas de nouvelle version mobile ; les installées continuent | — | rollback.md |
+
+## Le chemin d'une modification
+
+```text
+développement (démo locale, bancs d'essai)
+   → pull request : essais.yml, bureau.yml, preproduction.yml (goship-staging)
+   → sauvegarde du jour restaurée (sauvegarde.yml)
+   → contrôles de la production (controles-production.yml, lecture seule)
+   → migrations en production (appliquer-chaine.sh, à la main)
+   → audit (audit-production.yml) : chaîne complète
+   → fusion sur main : deploy.yml publie et vérifie
+   → surveillance.yml toutes les 30 minutes
+```
+

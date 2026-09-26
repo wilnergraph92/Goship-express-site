@@ -6,7 +6,9 @@
 |---|---|---|
 | Sauvegardes automatiques de Supabase | **inconnu** — dépend de l'offre du projet (l'offre gratuite n'en garde aucune téléchargeable ; Pro : quotidiennes, 7 jours ; PITR en option) | à relever dans Supabase > Database > Backups et à noter ici |
 | `sauvegarde.yml` (copie logique chiffrée, chaque jour) | **écrite et éprouvée sur une base d'essai, pas encore en service** : les secrets `SUPABASE_DB_URL` et `SAUVEGARDE_DESTINATAIRE` ne sont pas posés | tant qu'ils manquent, le workflow s'arrête sur l'avis « Sauvegarde non configurée » |
-| Restauration d'une vraie sauvegarde de production | **jamais faite** | go-no-go.md, bloqueur B3 |
+| Restauration d'épreuve automatique (job « restaurer » de `sauvegarde.yml`) | **prête, jamais exécutée sur une vraie sauvegarde** : `RESTAURATION_DESTINATAIRE` et `RESTAURATION_CLE` non posés | éprouvée par `essai-production.py`, section K |
+| Restauration dans un vrai projet Supabase | **jamais faite** | go-no-go.md, A3b |
+| RPO, RTO | **non mesurés** : aucune sauvegarde de production n'existe | le résumé du job « restaurer » les donnera à chaque passage |
 
 Personne ne doit dire « on a des sauvegardes » avant que les deux premières lignes
 soient vérifiées et qu'une restauration ait réussi.
@@ -18,9 +20,14 @@ soient vérifiées et qu'une restauration ait réussi.
 
 1. `pg_dump` du schéma `public` complet (tables, données, fonctions, règles RLS,
    déclencheurs, droits) ;
-2. `pg_dump` des **données** des comptes (`auth.users`, `auth.identities`) ;
+2. `pg_dump` des comptes (`auth.users`, `auth.identities`) : données **et**
+   définition des deux tables. Une restauration dans un vrai projet n'en lit que
+   les données ; la définition sert à la restauration d'épreuve (le vrai
+   `auth.users` a bien plus de colonnes que la doublure des essais) ;
 3. vérifie que les archives se relisent et contiennent les tables principales ;
-4. chiffre les trois fichiers avec la clé **publique** age et efface le clair :
+4. chiffre les trois fichiers pour une ou deux clés **publiques** age
+   (`SAUVEGARDE_DESTINATAIRE` : le propriétaire ; `RESTAURATION_DESTINATAIRE` :
+   l'épreuve automatique — chacune relit seule la sauvegarde) et efface le clair :
    - `goship-<date>.public.dump.age`
    - `goship-<date>.comptes.dump.age`
    - `goship-<date>.manifeste.json.age` (empreintes sha256, nombre de lignes par
@@ -43,8 +50,9 @@ GitHub.
 
 ## Mettre en service (une fois)
 
-1. Sur un ordinateur de confiance : `age-keygen -o goship-sauvegarde.key`. La
-   ligne `# public key: age1…` est la clé publique.
+1. Sur un ordinateur de confiance : `age-keygen -o goship-sauvegarde.key` (la clé
+   du propriétaire) et `age-keygen -o goship-epreuve.key` (la clé de l'épreuve
+   automatique). La ligne `# public key: age1…` de chacune est sa clé publique.
 2. Ranger `goship-sauvegarde.key` (la clé **privée**) en deux endroits hors ligne
    : gestionnaire de mots de passe **et** support physique. Jamais dans GitHub,
    jamais dans le dépôt, jamais dans un message.
@@ -53,14 +61,39 @@ GitHub.
    branche ne peut alors pas lire ces secrets. (Pas de *Required reviewers* : la
    sauvegarde de la nuit attendrait une approbation chaque jour.)
 4. Environment secrets :
-   - `SAUVEGARDE_DESTINATAIRE` = la clé publique `age1…` ;
+   - `SAUVEGARDE_DESTINATAIRE` = la clé publique `age1…` du propriétaire ;
+   - `RESTAURATION_DESTINATAIRE` = la clé publique de l'épreuve ;
+   - `RESTAURATION_CLE` = **tout le contenu** de `goship-epreuve.key` (la clé
+     privée de l'épreuve ; puis supprimer ce fichier de l'ordinateur). Pourquoi
+     l'accepter dans GitHub : quiconque peut lire les secrets de cet environnement
+     lit déjà `SUPABASE_DB_URL`, donc la base elle-même — la clé d'épreuve n'ouvre
+     rien de plus. La clé du **propriétaire**, elle, ne va jamais dans GitHub ;
    - `SUPABASE_DB_URL` = Supabase > Connect > *Session pooler* (port 5432), avec
      le mot de passe de la base. Un rôle dédié en lecture seule serait préférable ;
      non éprouvé sur Supabase (il doit lire `public`, `auth.users` et
      `auth.identities`) — à essayer d'abord sur la préproduction.
-5. Actions > Sauvegarde de la base > Run workflow. Vérifier l'artefact.
-6. **Restaurer cette première sauvegarde** (ci-dessous) dans un projet vide.
-   Noter la date et la durée ici.
+5. Actions > Sauvegarde de la base > Run workflow. Les deux jobs doivent être
+   verts ; le résumé du job « Restauration d'épreuve » donne l'âge de la
+   sauvegarde (RPO) et la durée de restauration (RTO de la base). Les noter
+   ci-dessous.
+6. **Restaurer cette première sauvegarde dans un vrai projet Supabase vide**
+   (ci-dessous), puis supprimer ce projet. Noter la date et la durée ici.
+
+## La restauration d'épreuve (chaque nuit, automatique)
+
+Après chaque sauvegarde, `sauvegarde.yml` la restaure dans un PostgreSQL 17
+jetable, habillé en projet Supabase (rôles, publication `supabase_realtime`,
+doublures `doublures-supabase.py`), avec `RESTAURATION_ESSAI=1` : empreintes,
+lignes comparées table par table au manifeste, chaîne rejouée
+(`appliquer-chaine.sh`), contrôles (détail chiffré). Aucune donnée dans le
+journal. Ce n'est pas un vrai projet Supabase : la restauration trimestrielle
+dans un projet neuf reste nécessaire.
+
+**Une base qui porte des lignes orphelines ne se restaure pas** : les clés
+étrangères sont recréées après les données et refusent l'orphelin (éprouvé par
+`essai-production.py`). `controle-integrite.sql` vert est donc une condition
+pour qu'une sauvegarde soit utilisable ; une restauration d'épreuve rouge sur
+des clés étrangères signale une intégrité à corriger.
 
 ## Restaurer
 
@@ -112,5 +145,6 @@ Une sauvegarde qui n'a jamais été restaurée n'est pas une sauvegarde.
 
 | Date | Sauvegarde | Durée | Résultat | Par |
 |---|---|---|---|---|
-| 26/09/2026 | base d'essai (`essai-production.py`) | < 1 min | réussie, 46/46 | CI |
-| — | première sauvegarde de production | — | **à faire** | — |
+| 26/09/2026 | base d'essai (`essai-production.py`, sections F et K) | ~1 s (base d'essai de 27 colis) | réussie, 70/70 | CI |
+| — | première sauvegarde de production, épreuve automatique | — | **à faire** (A3) | — |
+| — | première sauvegarde de production, vrai projet Supabase | — | **à faire** (A3b) | — |

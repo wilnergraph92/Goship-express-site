@@ -70,9 +70,24 @@ for partie in comptes public; do
 done
 echo "Déchiffrement et empreintes : conformes au manifeste."
 
-# 1. Les comptes (données seulement)
+# 1. Les comptes (données seulement). En restauration d'épreuve sur un PostgreSQL
+# ordinaire (RESTAURATION_ESSAI=1 : sauvegarde.yml), les deux tables sont d'abord
+# recréées telles qu'elles sont en production (définition sans index ni
+# déclencheurs), à la place des doublures d'essai. Jamais dans un vrai projet.
+if [ "${RESTAURATION_ESSAI:-}" = 1 ]; then
+  "$PSQL" "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1 -c 'drop table if exists auth.identities, auth.users cascade;'
+  "$PG_RESTORE" --no-owner --no-privileges --section=pre-data --single-transaction \
+    --dbname "$CIBLE_DB_URL" "$travail/comptes.dump"
+fi
 "$PG_RESTORE" --no-owner --no-privileges --data-only --single-transaction \
   --dbname "$CIBLE_DB_URL" "$travail/comptes.dump"
+if [ "${RESTAURATION_ESSAI:-}" = 1 ]; then
+  # Clés primaires et index des comptes (le schéma public y rattache ses clés
+  # étrangères) ; sans leurs déclencheurs, que la chaîne de migrations recrée
+  "$PG_RESTORE" --section=post-data -l "$travail/comptes.dump" | grep -v ' TRIGGER ' > "$travail/comptes.liste"
+  "$PG_RESTORE" --no-owner --no-privileges --single-transaction -L "$travail/comptes.liste" \
+    --dbname "$CIBLE_DB_URL" "$travail/comptes.dump"
+fi
 
 # 2. Le schéma public. Dans un projet Supabase neuf, « schema public already exists »
 # est la seule erreur attendue : on la tolère, et aucune autre.

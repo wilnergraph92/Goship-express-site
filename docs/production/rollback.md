@@ -34,6 +34,11 @@ Pas de « down migration ». Selon le cas :
 | Des données ont été abîmées | disaster-recovery.md, scénario 1 |
 | Tout est perdu | disaster-recovery.md, scénario 2 |
 
+Validé : la restauration (outils éprouvés par `essai-production.py` F et K, et
+chaque nuit par la restauration d'épreuve une fois ses secrets posés). **Pas
+encore validé en conditions réelles** : un retour arrière de fonction SQL en
+production, et une restauration dans un vrai projet Supabase (go-no-go.md, A3b).
+
 Une colonne ou une table ajoutée n'est jamais retirée en urgence : elle ne gêne
 pas les anciennes versions.
 

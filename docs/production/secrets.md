@@ -17,6 +17,11 @@ pour être publique : elle ne donne que ce que la RLS autorise.
 | Clé privée de sauvegarde (age) | **hors ligne** : deux copies (gestionnaire de mots de passe + support hors ligne) | propriétaire | nouvelle paire `age-keygen`, nouveau secret `SAUVEGARDE_DESTINATAIRE` ; garder l'ancienne clé tant que des sauvegardes chiffrées pour elle existent |
 | Signature Android (keystore de production) | serveurs Expo (EAS credentials) | compte Expo de GoShip Express | ne se change pas sans procédure Google Play (App Signing) |
 | Certificats Apple | serveurs Expo (EAS credentials) / compte Apple Developer | propriétaire | EAS gère le renouvellement |
+| Clé privée d'**épreuve** (age) | secret `RESTAURATION_CLE` (environnement `production`) ; clé publique : `RESTAURATION_DESTINATAIRE` | job « restaurer » de `sauvegarde.yml` | nouvelle paire ; n'ouvre rien de plus que `SUPABASE_DB_URL` du même environnement |
+| Chaîne de connexion de la **préproduction** | secret `STAGING_DB_URL` (environnement `staging`) ; `STAGING_SUPABASE_URL` / `_CLE` sont des variables (publiques par conception) | `preproduction.yml` | Supabase (goship-staging) > Database > Reset password |
+| Alerte à la seconde personne | secret `ALERTE_WEBHOOK` (dépôt) | `surveillance.yml` | nouveau sujet ntfy / nouveau webhook |
+| Battement de cœur | secret `HEARTBEAT_URL` (dépôt) | `surveillance.yml` | Healthchecks.io > régénérer |
+| Signature du bureau | secrets `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`, `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` (dépôt) | `bureau.yml`, **jamais sur une pull request** | Apple Developer / autorité de certification ; mot de passe d'application révocable sur appleid.apple.com |
 | Comptes GitHub, Supabase, Expo, Apple, Google, Hostinger | propriétaire ; double authentification recommandée partout | propriétaire | — |
 
 ## Audit du 26/09/2026 (Phase 12)
@@ -48,7 +53,19 @@ mobile : 18). Script : voir le rapport de phase.
 - L'application mobile : `essais/controle-paquet.mjs` (paquet construit) et les
   contrôles de l'APK et de l'app iOS dans `mobile.yml`.
 - GitHub : activer *Secret scanning* et *Push protection* (Settings > Code
-  security) — gratuit sur un dépôt public.
+  security) — gratuit sur un dépôt public. **État non vérifiable depuis
+  l'environnement de travail** (26/09/2026 : l'outil de scan exige GitHub
+  Advanced Security) : à constater dans les réglages (go-no-go.md, A11).
+- Actions de GitHub **épinglées par empreinte** dans les deux dépôts (une étiquette
+  peut être déplacée par qui contrôle l'action) ; `.github/dependabot.yml` propose
+  les mises à jour chaque mois.
+- Aucun workflow ne lit un secret sur une pull request venant d'une branche
+  quelconque : les secrets de base sont dans l'environnement `production`
+  (branches : `main`) ; la signature du bureau est coupée sur les pull requests.
+- Le journal d'un workflow est public : `controler.sh` masque les adresses
+  e-mail et n'affiche aucun exemple ; `appliquer-chaine.sh` et `controler.sh`
+  masquent toute chaîne de connexion dans leurs messages d'erreur (éprouvé :
+  `essai-production.py`, H).
 
 ## Si un secret fuit
 
