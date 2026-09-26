@@ -7,7 +7,7 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — finalisation de la mise en production (26/09/2026)
+## site-2026.09.26.2 — finalisation de la mise en production (publié le 26/09/2026)
 
 Aucune page ne change, aucune donnée n'est modifiée. **Verdict : NO-GO**
 (docs/production/go-no-go.md) — preuves nouvelles : 9 migrations sur 11 en
