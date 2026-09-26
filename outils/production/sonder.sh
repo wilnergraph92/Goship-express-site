@@ -114,5 +114,8 @@ fi
 
 echo
 echo "== Résumé : $passe migration(s) présente(s), $manque absente(s) ou partielle(s) ; $ouvertes fonction(s) ouverte(s) aux visiteurs sans raison ; $inattendus réponse(s) inattendue(s)"
-# Code de sortie : 0 = chaîne complète et aucune exposition ; 1 = écart (le journal dit lequel)
+# Code de sortie : 0 = chaîne complète et aucune exposition ; 1 = écart (le journal dit
+# lequel). SONDE_RAPPORT_SEUL=1 (pull request : la PR n'est pas responsable de l'état
+# de la production) : le rapport, toujours code 0.
+[ "${SONDE_RAPPORT_SEUL:-}" = 1 ] && exit 0
 [ "$manque" = 0 ] && [ "$ouvertes" = 0 ] && [ "$inattendus" = 0 ]

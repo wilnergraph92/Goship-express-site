@@ -41,4 +41,8 @@ jobs:
             outils/migrations.txt
           sparse-checkout-cone-mode: false
       - name: Sonder la production
+        env:
+          # Sur une pull request : le rapport seul (la PR ne fait pas l'état de la
+          # production). Planifié ou à la demande : échoue au moindre écart.
+          SONDE_RAPPORT_SEUL: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: bash outils/production/sonder.sh
