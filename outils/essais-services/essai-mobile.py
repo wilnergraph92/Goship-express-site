@@ -54,7 +54,8 @@ verifier, jsonq, creer, un = S.verifier, S.jsonq, S.creer, S.un
 
 FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
-            'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql')
+            'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql',
+            'supabase-production.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -298,6 +299,8 @@ def fabriquer_gestionnaire(etat):
         # -- Doublure de l'authentification Supabase (GoTrue)
         def auth(self, methode, action, params, donnees):
             d = json.loads(donnees or b'{}')
+            if action == 'health':                      # comme GoTrue : la surveillance l'interroge
+                return self.repondre(200, {'name': 'GoTrue (doublure d\'essai)', 'description': 'ok'})
             if action == 'token':
                 genre = (params.get('grant_type') or [''])[0]
                 with etat.verrou:

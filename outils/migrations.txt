@@ -1,0 +1,20 @@
+# La chaîne officielle des migrations Supabase, dans l'ordre d'exécution.
+# Une ligne = un fichier de outils/. Relancer l'un impose de relancer tous ceux
+# qui le suivent. Tous sont rejouables sans risque.
+# Aucun autre fichier SQL de outils/ n'est à exécuter : les anciens
+# (supabase-application, -bienvenue, -code-client, -factures, -numero-facture,
+# -securite) sont gardés pour l'historique et refusent de s'exécuter sur une
+# base à jour.
+# outils/essais-services/essai-production.py vérifie que README.md, CLAUDE.md et
+# les bancs d'essai suivent cette liste.
+supabase.sql
+supabase-facturation.sql
+supabase-services.sql
+supabase-evenements.sql
+supabase-scanner.sql
+supabase-finances.sql
+supabase-tableau-de-bord.sql
+supabase-analytics.sql
+supabase-mobile.sql
+supabase-notifications.sql
+supabase-production.sql

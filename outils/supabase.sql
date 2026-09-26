@@ -1133,10 +1133,13 @@ revoke all on public.appareils from anon;
 grant select, insert, update, delete on public.appareils to authenticated;
 grant select, insert, update, delete on public.appareils to service_role;
 
--- La colonne « canal » accepte désormais les notifications du téléphone
+-- La colonne « canal » accepte désormais les notifications du téléphone. « app »
+-- (la notification elle-même, lue dans l'espace client) vient de
+-- supabase-notifications.sql : l'accepter ici aussi garde ce fichier rejouable
+-- sur une base qui a déjà des notifications de la Phase 11.
 alter table public.notifications drop constraint if exists notifications_canal_check;
 alter table public.notifications add constraint notifications_canal_check
-  check (canal in ('email', 'whatsapp', 'push'));
+  check (canal in ('email', 'whatsapp', 'push', 'app'));
 
 -- Libellé d'un statut dans la langue du client
 create or replace function public.texte_statut(p_statut text, p_langue text default 'fr')

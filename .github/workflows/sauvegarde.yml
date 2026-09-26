@@ -1,0 +1,85 @@
+# ==========================================================================
+#  Sauvegarde chiffrée de la base de production
+# ==========================================================================
+#  Chaque jour à 5 h 23 UTC (et à la demande) : outils/production/sauvegarder.sh
+#  fait une copie logique de la base (schéma public complet + comptes), la
+#  chiffre avec la clé PUBLIQUE age de GoShip Express, et la garde 90 jours
+#  dans les artefacts du workflow (perte maximale : 24 h). Sans la clé PRIVÉE
+#  (jamais dans GitHub), personne ne peut la lire — pas même quelqu'un qui
+#  téléchargerait l'artefact.
+#
+#  Ne fait rien tant que les deux secrets ne sont pas posés dans l'environnement
+#  « production » (Settings > Environments > production > Environment secrets) :
+#    SUPABASE_DB_URL          chaîne de connexion de la base (Supabase > Connect >
+#                             Session pooler), avec son mot de passe
+#    SAUVEGARDE_DESTINATAIRE  clé publique age (age1…) ; la clé privée reste hors ligne
+#  Procédure, restauration, conservation : docs/production/backup.md.
+#
+#  C'est un filet de sécurité EN PLUS des sauvegardes de Supabase (selon l'offre
+#  du projet), pas à leur place.
+# ==========================================================================
+
+name: Sauvegarde de la base
+
+on:
+  schedule:
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sauvegarde
+  cancel-in-progress: false
+
+jobs:
+  sauvegarder:
+    name: Copie chiffrée de la base
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
+    steps:
+      - name: Secrets posés ?
+        id: pret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$SAUVEGARDE_DESTINATAIRE" ]; then
+            echo "::notice::Sauvegarde non configurée : poser SUPABASE_DB_URL et SAUVEGARDE_DESTINATAIRE (docs/production/backup.md)."
+            echo "pret=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.pret.outputs.pret == 'oui'
+        with:
+          sparse-checkout: outils/production
+          sparse-checkout-cone-mode: false
+
+      # pg_dump doit être au moins de la version du serveur : le client 17 lit les
+      # serveurs 15, 16 et 17 (Supabase)
+      - name: Outils (pg_dump 17, age)
+        if: steps.pret.outputs.pret == 'oui'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 age
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Sauvegarder
+        if: steps.pret.outputs.pret == 'oui'
+        run: bash outils/production/sauvegarder.sh sauvegarde
+
+      - uses: actions/upload-artifact@v4
+        if: steps.pret.outputs.pret == 'oui'
+        with:
+          name: goship-sauvegarde-${{ github.run_number }}
+          path: sauvegarde/
+          retention-days: 90
+          if-no-files-found: error

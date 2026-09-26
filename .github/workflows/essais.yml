@@ -1,0 +1,84 @@
+# ==========================================================================
+#  Essais du site : règles métier, sécurité, sauvegarde, mode démonstration
+# ==========================================================================
+#  À chaque pull request et à chaque push sur main : les bancs d'essai de
+#  outils/ (voir outils/essais-services/LISEZ-MOI.md), chacun sur une base
+#  PostgreSQL jetable créée pour l'occasion. Aucun ne touche la vraie base :
+#  aucun secret n'est donné à ce workflow.
+#
+#  Une pull request dont un essai échoue ne doit pas être fusionnée : la
+#  mise en ligne (deploy.yml) part de main.
+# ==========================================================================
+
+name: Essais du site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: essais-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  POSTGREST_VERSION: v12.2.3
+
+jobs:
+  base:
+    name: Base — ${{ matrix.banc }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
+               notifications, mobile, production]
+    steps:
+      - uses: actions/checkout@v4
+      # pgserver 0.1.4 n'a de paquets que jusqu'à Python 3.12
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: PostgreSQL jetable
+        run: pip install pgserver==0.1.4
+      - name: PostgREST (API réelle, banc mobile)
+        if: matrix.banc == 'mobile'
+        run: |
+          curl -sSL "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
+          echo "POSTGREST=$RUNNER_TEMP/postgrest" >> "$GITHUB_ENV"
+      - name: age (sauvegarde chiffrée, banc production)
+        if: matrix.banc == 'production'
+        run: sudo apt-get install -y -qq age
+      - name: essai-${{ matrix.banc }}.py
+        run: python3 outils/essais-services/essai-${{ matrix.banc }}.py
+
+  demonstration:
+    name: Démonstration, e-mails, codes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: pip install pgserver==0.1.4
+      - name: Le mode démonstration (api.js), hors navigateur
+        run: |
+          for f in demo scanner finances permissions tableau analytics notifications; do
+            echo "== essai-$f.js"; node "outils/essais-services/essai-$f.js"
+          done
+      - name: E-mails et factures client (outils/essais-sql)
+        run: python3 outils/essais-sql/essai-base.py
+      - name: QR codes et Code128 (outils/essais-codes), comparés aux bibliothèques de référence
+        run: |
+          pip install qrcode python-barcode
+          python3 outils/essais-codes/essai-codes.py
+      - name: Scripts shell (syntaxe)
+        run: for f in outils/production/*.sh; do bash -n "$f" && echo "ok $f"; done

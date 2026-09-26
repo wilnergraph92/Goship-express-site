@@ -15,10 +15,9 @@ on:
     branches: [main]
   workflow_dispatch:        # permet aussi de lancer la mise en ligne à la main
 
+# Par défaut, lecture seule ; seul le job « publier » reçoit le droit d'écrire sur Pages
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -44,6 +43,12 @@ jobs:
             --exclude 'bureau' \
             --exclude 'docs' \
             --exclude 'README.md' \
+            --exclude 'CLAUDE.md' \
+            --exclude 'CHANGELOG.md' \
+            --exclude '.gitignore' \
+            --exclude '.htaccess' \
+            --exclude '_headers' \
+            --exclude '_redirects' \
             --exclude '.DS_Store' \
             --exclude '*.command' \
             --exclude '*.py' \
@@ -54,6 +59,28 @@ jobs:
           echo "--- Fichiers publiés ---"
           ls _site
 
+      # Garde-fou : rien de ce qui ne doit jamais partir en ligne (docs/production/secrets.md)
+      - name: Contrôler ce qui part en ligne
+        run: |
+          interdits="$(cd _site && find . -type f \( -name '*.md' -o -name '*.sql' -o -name '*.py' -o -name '*.env' \
+                       -o -name '.env*' -o -name '*.pem' -o -name '*.key' -o -name '*.p12' -o -name '*.jks' \
+                       -o -name '*.keystore' -o -name '*.age' -o -name '*.dump' \) | head -20)"
+          if [ -n "$interdits" ]; then echo "Fichiers de travail dans le site publié :"; echo "$interdits"; exit 1; fi
+          if grep -rEl 'sb_secret_[A-Za-z0-9_-]{8,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' _site; then
+            echo "Une clé secrète est dans le site publié : publication arrêtée."; exit 1
+          fi
+          python3 - <<'PY'
+          import base64, json, re, pathlib, sys
+          for f in pathlib.Path('_site').rglob('*.js'):
+              for j in re.findall(r'eyJ[A-Za-z0-9_-]{8,}\.(eyJ[A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{8,}', f.read_text(errors='ignore')):
+                  try:
+                      if json.loads(base64.urlsafe_b64decode(j + '=' * (-len(j) % 4))).get('role') == 'service_role':
+                          sys.exit('Clé service_role dans %s : publication arrêtée.' % f)
+                  except ValueError:
+                      pass
+          print('Aucun fichier de travail, aucune clé secrète dans le site publié.')
+          PY
+
       - name: Envoyer le site
         uses: actions/upload-pages-artifact@v3
         with:
@@ -62,6 +89,11 @@ jobs:
   publier:
     needs: construire
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    outputs:
+      adresse: ${{ steps.deploiement.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deploiement.outputs.page_url }}
@@ -69,3 +101,20 @@ jobs:
       - name: Publier sur GitHub Pages
         id: deploiement
         uses: actions/deploy-pages@v4
+
+  # Juste après la mise en ligne : le site et la base répondent-ils ? En cas d'échec,
+  # le workflow échoue (e-mail au propriétaire) : revenir à la version précédente
+  # (docs/production/rollback.md).
+  verifier:
+    needs: publier
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            assets/js/config.js
+            outils/production
+          sparse-checkout-cone-mode: false
+      - name: Contrôle après publication
+        run: bash outils/production/surveiller.sh "${{ needs.publier.outputs.adresse }}"

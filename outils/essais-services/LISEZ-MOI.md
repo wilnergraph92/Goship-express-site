@@ -15,6 +15,8 @@ python3 outils/essais-services/essai-permissions.py  # rôles, permissions, isol
 python3 outils/essais-services/essai-tableau.py      # le tableau de bord : chiffres, rôles, périodes (Phase 7)
 python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes, délais, créances, volume (Phase 8)
 python3 outils/essais-services/essai-mobile.py       # l'application mobile par l'API réelle : isolation, pré-alertes (Phase 10)
+python3 outils/essais-services/essai-notifications.py # les notifications : règles, file, envois (Phase 11)
+python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
@@ -25,7 +27,7 @@ node outils/essais-services/essai-analytics.js       # les Analytics en démonst
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `outils/production/` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`
@@ -271,3 +273,28 @@ envois, quatre travailleurs en parallèle).
 
     python3 outils/essais-services/essai-notifications.py
     node outils/essais-services/essai-notifications.js
+
+## essai-production.py (Phase 12)
+
+Tout ce qui sert à mettre la base en production, éprouvé sur une base jetable
+avec les droits par défaut de Supabase (`anon` et `authenticated` reçoivent
+EXECUTE sur toute nouvelle fonction) :
+
+- la chaîne `outils/migrations.txt` est la même que celle des bancs d'essai, de
+  README.md et de CLAUDE.md ; les six anciens fichiers refusent de s'exécuter ;
+- la chaîne s'installe deux fois de suite, puis se rejoue sur une base peuplée
+  sans changer une donnée ;
+- `controle-securite.sql` et `controle-integrite.sql` passent en lecture seule
+  (`default_transaction_read_only`), sont verts sur une base saine et
+  signalent chaque défaut injecté (RLS coupée, fonction ouverte aux visiteurs,
+  verrou retiré, colis orphelin, paiement d'un autre client, file bloquée…),
+  sans jamais afficher un nom ;
+- `sante()` : forme exacte de la réponse, `en_retard` quand la file est bloquée ;
+- `sauvegarder.sh` puis `restaurer.sh` : mauvaise clé refusée, restauration dans
+  une base neuve, chaîne rejouée, empreintes md5 identiques table par table,
+  contrôles verts, seconde restauration refusée, l'espace client et la création
+  de colis fonctionnent après restauration.
+
+Il demande `age` et `age-keygen` (paquet `age`) en plus de pgserver.
+
+    python3 outils/essais-services/essai-production.py

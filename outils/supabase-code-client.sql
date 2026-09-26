@@ -1,3 +1,16 @@
+-- ⚠ Fichier ancien, gardé pour l'historique. Son contenu est dans
+-- outils/supabase.sql, à jour, et des fichiers plus récents de la chaîne
+-- officielle (outils/migrations.txt) ont redéfini ses fonctions : le relancer
+-- remettrait en place une version dépassée. La garde ci-dessous l'arrête sur une
+-- base déjà passée en Phase 6.
+do $garde$
+begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'mes_permissions') then
+    raise exception 'Fichier obsolète : relancez plutôt outils/supabase.sql puis les fichiers qui le suivent (voir outils/migrations.txt).';
+  end if;
+end $garde$;
+
 -- =============================================================================
 -- Goship Express — format des codes clients : « GSE- » + 4 chiffres (21/09/2026)
 --
