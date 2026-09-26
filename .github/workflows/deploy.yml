@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Récupérer le dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Préparer le site (sans les fichiers de travail)
         run: |
@@ -82,7 +82,7 @@ jobs:
           PY
 
       - name: Envoyer le site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: _site
 
@@ -100,7 +100,7 @@ jobs:
     steps:
       - name: Publier sur GitHub Pages
         id: deploiement
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
   # Juste après la mise en ligne : le site et la base répondent-ils ? En cas d'échec,
   # le workflow échoue (e-mail au propriétaire) : revenir à la version précédente
@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           sparse-checkout: |
             assets/js/config.js
