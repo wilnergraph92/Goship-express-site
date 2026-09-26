@@ -1,0 +1,134 @@
+# ==========================================================================
+#  Application de bureau GoShip Express (Windows, macOS)
+# ==========================================================================
+#  À chaque changement de l'application (bureau/) ou du tableau de bord
+#  qu'elle ouvre, sur de vraies machines Windows et macOS :
+#    1. essai de l'application (essais/essai-bureau.js) : démarrage, pont,
+#       session, sécurité, raccourcis, scanner, impression, réseau, rôles ;
+#    2. construction de l'installateur ;
+#    3. essai de l'installateur : installation, lancement, désinstallation
+#       (Windows) ; ouverture de l'image disque et lancement (macOS) ;
+#    4. installateurs déposés dans l'onglet Actions (« Artifacts »).
+#  Les essais chargent le site en mode démonstration (config.js vide, servi
+#  par essais/serveur-essai.js) : jamais la base de production, aucun secret.
+#  Ce workflow ne publie rien et ne touche pas à la mise en ligne du site.
+# ==========================================================================
+
+name: Application de bureau
+
+on:
+  push:
+    branches: [main]
+    paths: ['bureau/**', 'assets/**', 'admin.html', '.github/workflows/bureau.yml']
+  pull_request:
+    paths: ['bureau/**', 'assets/**', 'admin.html', '.github/workflows/bureau.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bureau-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    name: ${{ matrix.nom }}
+    runs-on: ${{ matrix.machine }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - nom: Windows x64
+            machine: windows-latest
+            construire: npx electron-builder --win nsis --x64 --publish never
+            artefact: GoShip-Express-Setup-Windows-x64
+          - nom: macOS arm64 (Apple Silicon)
+            machine: macos-latest
+            construire: npx electron-builder --mac dmg zip --arm64 --publish never
+            artefact: GoShip-Express-macOS-arm64
+            dossier: mac-arm64
+          - nom: macOS x64 (Intel)
+            machine: macos-15-intel
+            construire: npx electron-builder --mac dmg zip --x64 --publish never
+            artefact: GoShip-Express-macOS-x64
+            dossier: mac
+    defaults:
+      run:
+        working-directory: bureau
+        shell: bash
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: bureau/package-lock.json
+
+      - name: Dépendances (versions figées de package-lock.json)
+        run: npm ci
+
+      - name: Essai de l'application
+        run: npm run essai
+
+      - name: Construire l'installateur
+        run: ${{ matrix.construire }}
+
+      - name: Verrous de sécurité de l'exécutable (fuses)
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then exe="dist/win-unpacked/GoShip Express.exe"; else exe="dist/${{ matrix.dossier }}/GoShip Express.app"; fi
+          npx --yes @electron/fuses read --app "$exe"
+
+      # ---- Windows : installer, lancer, désinstaller ---------------------------
+      - name: Windows — installer, lancer, désinstaller
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installateur = Get-ChildItem dist -Filter 'GoShip-Express-Setup-*-windows-x64.exe' | Select-Object -First 1
+          Write-Host "Installateur : $($installateur.Name) ($([math]::Round($installateur.Length / 1MB)) Mo)"
+          Start-Process -FilePath $installateur.FullName -ArgumentList '/S' -Wait
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'GoShip Express.exe' | Select-Object -First 1
+          if (-not $exe) { throw "Application non installée" }
+          Write-Host "Installée : $($exe.FullName)"
+          $raccourci = Join-Path ([Environment]::GetFolderPath('Desktop')) 'GoShip Express.lnk'
+          if (-not (Test-Path $raccourci)) { throw "Raccourci du bureau absent" }
+          node essais/essai-paquet.js $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Essai de l'application installée : échec" }
+          $desinstallateur = Get-ChildItem $exe.DirectoryName -Filter 'Uninstall*.exe' | Select-Object -First 1
+          Start-Process -FilePath $desinstallateur.FullName -ArgumentList '/S' -Wait
+          Start-Sleep -Seconds 10
+          if (Test-Path $exe.FullName) { throw "Désinstallation incomplète" }
+          if (Test-Path $raccourci) { throw "Raccourci resté après désinstallation" }
+          if (-not (Test-Path "$env:APPDATA\GoShip Express\journaux\bureau.log")) { throw "Données locales effacées" }
+          Write-Host "Désinstallée ; données locales (journal, préférences) conservées, comme prévu."
+
+      # ---- macOS : ouvrir l'image disque, lancer, vérifier la signature --------
+      - name: macOS — ouvrir l'image disque et lancer
+        if: runner.os == 'macOS'
+        run: |
+          dmg=$(ls dist/GoShip-Express-*-macos-*.dmg | head -1)
+          echo "Image disque : $dmg ($(du -h "$dmg" | cut -f1))"
+          hdiutil attach "$dmg" -nobrowse -mountpoint /Volumes/goship-essai
+          cp -R "/Volumes/goship-essai/GoShip Express.app" "$RUNNER_TEMP/"
+          hdiutil detach /Volumes/goship-essai
+          app="$RUNNER_TEMP/GoShip Express.app"
+          echo "Architecture : $(lipo -archs "$app/Contents/MacOS/GoShip Express")"
+          codesign --verify --deep --strict "$app" && echo "Signature ad hoc : valide"
+          spctl --assess --type execute -vv "$app" 2>&1 || echo "Gatekeeper : refusée (application non notarisée — attendu tant qu'aucun certificat Apple n'est configuré)"
+          node essais/essai-paquet.js "$app/Contents/MacOS/GoShip Express"
+          rm -rf "$app" && echo "Désinstallation (supprimer l'application) : faite"
+
+      - name: Déposer l'installateur
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artefact }}
+          path: |
+            bureau/dist/*.exe
+            bureau/dist/*.dmg
+            bureau/dist/*.zip
+          if-no-files-found: error
+          retention-days: 30

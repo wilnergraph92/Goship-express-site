@@ -23,6 +23,7 @@ Site statique (HTML, CSS, JavaScript) en quatre langues — français, anglais, 
 | `assets/img/` | Logos, photos, icônes et drapeaux (`drapeaux/`) |
 | `outils/generateur/` | **Le générateur des pages** (`build.py`), la maquette d'origine (`export/`) et les pages écrites à la main (`pages/`). C'est la source du site — voir « Modifier le site » |
 | `outils/` | Outil de traduction, dictionnaires, scripts de la base de données (`supabase*.sql`), dessin des écrans de l'application (`ecrans-app/`) et bancs d'essai (`essais-sql/`, `essais-services/`, `essais-codes/`) — **inutile de le mettre en ligne** |
+| `bureau/` | **Application de bureau** Windows et macOS de l'équipe (Electron) — voir `bureau/LISEZ-MOI.md` — **jamais mise en ligne** |
 | `Voir le site en local.command` | Lanceur à double-cliquer pour voir le site sur votre Mac — **inutile de le mettre en ligne** |
 
 ## Voir le site sur votre ordinateur
@@ -775,6 +776,18 @@ Le tableau de bord dit **ce qui se passe maintenant** ; l'onglet **Analytics** (
 **Export** : « CSV / Excel » enregistre les tableaux de la rubrique (point-virgule, virgule décimale : Excel l'ouvre tel quel) ; « Imprimer / PDF » passe par l'impression A4 des factures (« Enregistrer au format PDF »). Rien de plus que ce que la page montre.
 
 **Volume** : essayé sur 10 000 colis, 100 000 événements et 5 000 factures, chaque fonction répond en moins de 1,5 seconde.
+
+## Application de bureau (Windows, macOS)
+
+`bureau/` (Phase 9) : le tableau de bord de l'équipe dans une application à lui, pour Windows et macOS. Tout est dans **`bureau/LISEZ-MOI.md`** (installer, raccourcis, scanner, impression, sécurité, dépannage).
+
+- **Même plateforme, pas un second logiciel** : l'application ouvre `admin.html` du site. Mêmes comptes, mêmes permissions, même base ; aucune donnée métier sur le poste. Une mise en ligne du site la met aussi à jour.
+- **Ce qu'elle ajoute** : impression des étiquettes et des factures avec aperçu et choix de l'imprimante (retenu par format), PDF ; raccourcis (Ctrl/⌘ + K recherche, Ctrl/⌘ + Maj + S poste de scan) ; menu ; notifications du système pour les alertes ; session chiffrée par le système ; « Connexion perdue » clairement affichée ; journal local.
+- **Installateurs** : construits et essayés par GitHub Actions (workflow « Application de bureau ») sur Windows x64, macOS Apple Silicon et macOS Intel — onglet *Actions*, *Artifacts*. Pas encore signés : SmartScreen et Gatekeeper avertissent au premier lancement (marche à suivre dans le LISEZ-MOI).
+- **Adresse du site** : `bureau/config/environnements.json`. À changer (puis reconstruire) le jour où le site passe sur son nom de domaine.
+- Le dossier `bureau/` n'est jamais publié sur GitHub Pages.
+
+Côté site, les ajouts servent aussi dans le navigateur : raccourcis clavier, bandeau « Connexion perdue » quand le réseau tombe, retour à la connexion avec un message quand la session expire, dernière lecture du scanner affichée au poste de scan.
 
 ## À compléter
 

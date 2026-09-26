@@ -28,6 +28,7 @@ assets/css/site.css                 styles du site (et de l'espace client)
 assets/css/tableau.css              habillage du tableau de bord seul (admin.html)
 outils/*.sql                        migrations Supabase
 application-mobile/                 app Expo — DÉPÔT SÉPARÉ, ignoré par git
+bureau/                             app de bureau Windows/macOS (Electron) — jamais publiée
 ```
 
 ### Les fichiers JavaScript
@@ -200,6 +201,31 @@ zéro. Aucune prévision, aucun classement du personnel. Copie démo dans
 `api.js` (`analyticsDemo`, `bornesAnalytics`, `comparerValeurs`…),
 comparée par `essai-analytics.js --formes` / `--periodes`. La page garde une
 réponse une minute (`lireAnalytics`), pas de temps réel.
+
+### L'application de bureau (`bureau/`)
+
+Une coquille Electron autour de `admin.html` **du site** (chargé en ligne,
+pas copié) : ni données métier, ni règles, ni permissions à elle. C'est la
+seule partie du dépôt avec des dépendances npm (`bureau/node_modules`, ignoré)
+et une construction (GitHub Actions, `.github/workflows/bureau.yml`) ; le site
+reste sans build. `deploy.yml` exclut `bureau/` de GitHub Pages.
+
+- Le site ne connaît que `window.GoshipBureau` (`bureau/src/pont.js`) :
+  `contrat`, `version`, `plateforme`, `stockageSession`, `imprimer`,
+  `journal`, `surCommande`, `sessionChiffree`. Toujours tester sa présence
+  (`api.js` : `BUREAU` ; `admin.js` : `BUREAU`, `BUREAU_CONTRAT_MIN`) : dans un
+  navigateur il n'existe pas, et rien ne doit changer.
+- Une fonction de plus dans le pont → `contrat` + 1, nouveaux installateurs,
+  **puis** `BUREAU_CONTRAT_MIN` dans `admin.js`.
+- Chaque message IPC est revérifié (`securite.expediteurSite`) ; jamais de
+  commande générique (shell, fichiers). Pages locales par `goship-app://`,
+  pas `file://`.
+- Un scan fait depuis l'application porte `poste`, `plateforme`,
+  `version_bureau` dans ses métadonnées (`avecPoste`, `api.js`, des deux côtés).
+- Adresse du site : `bureau/config/environnements.json`, nulle part ailleurs.
+- Essais : `bureau/essais/essai-bureau.js` (Playwright + Electron, jamais en
+  root) et `essai-paquet.js` ; le site d'essai (`serveur-essai.js`) sert un
+  `config.js` vide. Voir `bureau/LISEZ-MOI.md`.
 
 ## Base de données
 

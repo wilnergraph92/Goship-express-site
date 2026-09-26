@@ -207,6 +207,14 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
   .gs-tableau--analytics .gs-nombre{text-align:left}
 }
 
+/* ---- Le poste de travail : bandeaux (réseau coupé, application à mettre à jour),
+   lecteur du scanner, raccourcis clavier ------------------------------------------- */
+.gs-td__bandeau{margin:14px 24px 0;padding:12px 16px;border:1px solid #cfd8e8;border-radius:14px;background:#eef3fd;color:#1a3a7a;font-size:14.5px;line-height:1.5}
+.gs-td__bandeau--erreur{border-color:#f7caca;background:#fef3f2;color:#b42318}
+.gs-scan__lecteur{margin:8px 0 0;font-size:13.5px;color:#6b7690}
+.gs-scan__lecteur.is-actif{color:#15803d;font-weight:600}
+.gs-reglages__infos kbd{display:inline-block;min-width:1.6em;padding:0 5px;border:1px solid #cfd8e8;border-bottom-width:2px;border-radius:6px;background:#f7f9fd;font:600 12.5px/1.6 inherit;text-align:center}
+
 /* ---- Les réglages ------------------------------------------------------------------ */
 .gs-reglages{width:min(860px,calc(100vw - 24px))}
 .gs-reglages__corps{display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;align-items:start}
@@ -271,6 +279,7 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
   .gs-td__compte{padding:0 4px}
   .gs-td .gs-admin{padding:16px 14px 80px}
   .gs-td__principal>.gs-rapide__resultats{margin:12px 14px 0}
+  .gs-td__bandeau{margin:12px 14px 0}
   .gs-reglages__corps{grid-template-columns:minmax(0,1fr)}
   .gs-reglages__nav{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none}
   .gs-reglages__nav::-webkit-scrollbar{display:none}

@@ -19,6 +19,12 @@ application-mobile/.expo/
 application-mobile/dist/
 application-mobile/web-build/
 
+# --- Application de bureau : dépendances et installateurs construits ----
+#  Réinstallables avec « npm install » dans bureau ; les installateurs
+#  sortent de GitHub Actions (onglet Actions, « Application de bureau »).
+bureau/node_modules/
+bureau/dist/
+
 # --- Journaux et fichiers temporaires ------------------------------------
 *.log
 npm-debug.log*

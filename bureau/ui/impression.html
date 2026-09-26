@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; frame-src blob:">
+<title>Imprimer</title>
+<link rel="stylesheet" href="commun.css">
+<link rel="stylesheet" href="impression.css">
+</head>
+<body>
+<div class="imp">
+  <section class="imp__apercu" aria-label="Aperçu">
+    <p class="imp__attente" data-attente>Préparation de l’aperçu…</p>
+    <iframe title="Aperçu du document" data-apercu hidden></iframe>
+  </section>
+  <form class="imp__reglages" data-form>
+    <h1 data-titre>Imprimer</h1>
+    <p class="imp__format">Format : <strong data-format>—</strong></p>
+    <label class="imp__champ">
+      <span>Imprimante</span>
+      <select data-imprimante required></select>
+    </label>
+    <label class="imp__champ imp__champ--court">
+      <span>Exemplaires</span>
+      <input type="number" data-copies min="1" max="50" value="1" required>
+    </label>
+    <p class="message" data-etat role="status" hidden></p>
+    <div class="imp__actions">
+      <button type="submit" class="bouton" data-imprimer>Imprimer</button>
+      <button type="button" class="bouton bouton--contour" data-pdf>Enregistrer en PDF</button>
+      <button type="button" class="bouton bouton--contour" data-fermer>Annuler</button>
+    </div>
+    <p class="imp__aide">L’imprimante choisie est retenue pour ce format. L’aperçu est exactement ce qui sera imprimé.</p>
+  </form>
+</div>
+<script src="impression.js"></script>
+</body>
+</html>

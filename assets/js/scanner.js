@@ -489,9 +489,22 @@
   var lecteur = new SCAN.Lecteur();
   var minuteurSilence = null;
 
+  // Un scanner en mode clavier (USB ou Bluetooth) ne se déclare pas : le
+  // système le voit comme un clavier. On ne peut donc pas dire « branché »
+  // ou « débranché » ; on dit la dernière lecture reçue au rythme d'un scanner.
+  var etatLecteur = $('[data-scan-lecteur]', vue);
+  function noterLecture() {
+    if (!etatLecteur) return;
+    var t = new Date();
+    var h = [t.getHours(), t.getMinutes(), t.getSeconds()].map(function (n) { return (n < 10 ? '0' : '') + n; }).join(':');
+    etatLecteur.textContent = 'Scanner : dernière lecture reçue à ' + h + '.';
+    etatLecteur.classList.add('is-actif');
+  }
+
   function envoyerChamp() {
     clearTimeout(minuteurSilence);
     var v = champ.value;
+    if (v.trim() && lecteur.estScanner()) noterLecture();
     champ.value = '';
     lecteur.oublier();
     recevoir(v);

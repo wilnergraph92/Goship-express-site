@@ -225,8 +225,10 @@
     });
   });
 
+  var deconnexionVoulue = false;
   $$('[data-action="deconnexion"]').forEach(function (b) {
     b.addEventListener('click', function () {
+      deconnexionVoulue = true;
       API.deconnecter().then(function () { location.reload(); });
     });
   });
@@ -257,18 +259,25 @@
     if (peut('invoices.view')) chargerFactures();
     if (peut('users.view')) chargerEquipe();
     installerLogoEmail();
-    var prevu = null;
-    API.surveiller(function (quoi) {
-      clearTimeout(prevu);
-      prevu = setTimeout(function () {
-        chargerStatistiques();
-        chargerColis(true);
-        if (peut('clients.view') && (quoi === 'clients' || etat.vue === 'clients')) chargerClients();
-        if (peut('invoices.view') && (quoi === 'factures' || etat.vue === 'factures')) chargerFactures();
-        if (peut('users.view') && (quoi === 'clients' || etat.vue === 'equipe')) chargerEquipe();
-        if (etat.vue === 'apercu') rafraichirApercu();
-      }, 350);
+    arreterSurveillance();
+    arreterSurveillance = API.surveiller(function (quoi) {
+      clearTimeout(rechargementPrevu);
+      rechargementPrevu = setTimeout(function () { toutRecharger(quoi); }, 350);
     }, { tout: true, etat: function (actif) { $('[data-direct]').hidden = !actif; } });
+  }
+
+  // Un changement signalé en direct (ou le retour du réseau) : les listes
+  // ouvertes se rechargent. La vue générale, au plus toutes les 15 secondes ;
+  // elle porte aussi les alertes des notifications du poste de travail.
+  var rechargementPrevu = null;
+  var arreterSurveillance = function () {};
+  function toutRecharger(quoi) {
+    chargerStatistiques();
+    chargerColis(true);
+    if (peut('clients.view') && (quoi === 'clients' || etat.vue === 'clients')) chargerClients();
+    if (peut('invoices.view') && (quoi === 'factures' || etat.vue === 'factures')) chargerFactures();
+    if (peut('users.view') && (quoi === 'clients' || etat.vue === 'equipe')) chargerEquipe();
+    if (etat.vue === 'apercu' || notificationsActives()) rafraichirApercu();
   }
 
   function chargerStatistiques() {
@@ -2694,7 +2703,7 @@
     var attente = Math.max(0, 15000 - (Date.now() - etatApercu.charge));
     etatApercu.prevu = setTimeout(function () {
       etatApercu.prevu = null;
-      if (etat.vue === 'apercu') chargerApercu();
+      if (etat.vue === 'apercu' || notificationsActives()) chargerApercu();
     }, attente);
   }
 
@@ -3197,7 +3206,7 @@
 
   // Les préférences d'affichage, gardées sur cet appareil seulement
   var CLE_REGLAGES = 'gse-tableau-reglages';
-  var REGLAGES_DEFAUT = { periode: '30j', parPage: 25, jours: 7, menuReduit: false, secondes: false };
+  var REGLAGES_DEFAUT = { periode: '30j', parPage: 25, jours: 7, menuReduit: false, secondes: false, notifications: true };
   var PERIODES_REGLAGES = ['aujourdhui', '7j', '30j', 'mois', 'mois_precedent', 'annee'];
   function lireReglages() {
     var r = Object.assign({}, REGLAGES_DEFAUT), lu = {};
@@ -3207,6 +3216,7 @@
     if ([3, 7, 14, 30].indexOf(Number(lu.jours)) >= 0) r.jours = Number(lu.jours);
     r.menuReduit = lu.menuReduit === true;
     r.secondes = lu.secondes === true;
+    r.notifications = lu.notifications !== false;
     return r;
   }
   function ecrireReglages() {
@@ -3306,6 +3316,7 @@
   }
 
   function majCloche(alertes) {
+    annoncerAlertes(alertes);
     var compteur = $('[data-alertes-nombre]');
     compteur.textContent = String(alertes.length);
     compteur.hidden = !alertes.length;
@@ -3378,6 +3389,8 @@
       if (controle) controle.checked = valeur;
     } else if (cle === 'secondes') {
       majHorloge();
+    } else if (cle === 'notifications' && valeur) {
+      demanderNotifications();
     }
   }
 
@@ -3419,6 +3432,15 @@
     $('[data-reglages-permissions]', dlgReglages).textContent = pluriel(droits.permissions.length, 'permission', 'permissions');
     $('[data-reglages-mode]', dlgReglages).textContent = API.mode === 'demo'
       ? 'Démonstration : données enregistrées dans ce navigateur seulement' : 'Base de données en ligne (Supabase)';
+    if (BUREAU) {
+      $('[data-bureau-info]', dlgReglages).textContent = 'GoShip Express ' + BUREAU.version + ' pour ' +
+        ({ windows: 'Windows', macos: 'macOS', linux: 'Linux' }[BUREAU.plateforme] || BUREAU.plateforme) + ' — chargement…';
+      BUREAU.sessionChiffree().then(function (oui) {
+        $('[data-bureau-info]', dlgReglages).textContent = 'GoShip Express ' + BUREAU.version + ' pour ' +
+          ({ windows: 'Windows', macos: 'macOS', linux: 'Linux' }[BUREAU.plateforme] || BUREAU.plateforme) +
+          (oui ? ' · session chiffrée par le système' : ' · session gardée en mémoire (reconnexion à chaque lancement)');
+      }).catch(function () { /* l'information reste générale */ });
+    }
     $('[data-reglages-direct]', dlgReglages).textContent = $('[data-direct]').hidden
       ? 'Inactives : les listes se mettent à jour à chaque action et avec « Actualiser »' : 'Actives';
     var mode = reglageScanner('mode', '');
@@ -3462,6 +3484,109 @@
     dlgReglages.close();
     $('[data-onglet-vue="scanner"]').click();
   });
+
+  /* ---- Le poste de travail : raccourcis, réseau, session, application de bureau --
+     Les raccourcis marchent aussi dans un navigateur. Le reste ne sert que dans
+     l'application GoShip Express pour Windows et macOS (bureau/), qui donne
+     window.GoshipBureau : commandes du menu, notifications du système. Tout
+     passe par les mêmes fonctions que les boutons : rien de métier ici. */
+  var POSTE = window.GoshipBureau || null;
+  var BUREAU_CONTRAT_MIN = 1;      // le pont dont ce tableau de bord a besoin (bureau/src/pont.js)
+  var BUREAU = POSTE && POSTE.contrat >= BUREAU_CONTRAT_MIN ? POSTE : null;
+  function tableauOuvert() { return !$('[data-ecran="tableau"]').hidden; }
+
+  function ouvrirRecherche() {
+    if (!tableauOuvert()) return;
+    fermerPanneaux(null);
+    fermerMenu();
+    champRapide.focus();
+    champRapide.select();
+  }
+  function ouvrirScanner() {
+    if (!tableauOuvert()) return;
+    var onglet = $('[data-onglet-vue="scanner"]');
+    if (!onglet || onglet.hasAttribute('data-interdit')) {
+      toast('Vous n’avez pas la permission d’utiliser le poste de scan.', true);
+      return;
+    }
+    onglet.click();
+  }
+  // Ctrl+K (⌘K) : recherche rapide ; Ctrl+Maj+S (⌘⇧S) : poste de scan. La lettre
+  // tapée d'abord (AZERTY comme QWERTY), la position de la touche sinon.
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('dialog[open]')) return;
+    var touche = String(e.key || '').toLowerCase();
+    if (!/^[a-z]$/.test(touche)) touche = { KeyK: 'k', KeyS: 's' }[e.code] || touche;
+    if (touche === 'k' && !e.shiftKey) { e.preventDefault(); ouvrirRecherche(); }
+    else if (touche === 's' && e.shiftKey) { e.preventDefault(); ouvrirScanner(); }
+  });
+
+  // Réseau coupé : le dire, et ne rien laisser croire enregistré ; au retour, tout recharger
+  var bandeauHorsLigne = $('[data-hors-ligne]');
+  function majConnexion() {
+    var coupe = navigator.onLine === false;
+    var etaitCoupe = !bandeauHorsLigne.hidden;
+    bandeauHorsLigne.hidden = !coupe;
+    if (etaitCoupe && !coupe && tableauOuvert()) {
+      toast('Connexion rétablie : les données sont actualisées.');
+      toutRecharger('connexion');
+    }
+  }
+  window.addEventListener('online', majConnexion);
+  window.addEventListener('offline', majConnexion);
+  majConnexion();
+
+  // Session terminée sans « Déconnexion » (jeton expiré ou révoqué) : retour à la
+  // connexion, avec la raison. Rien n'est effacé côté serveur.
+  API.surSessionPerdue(function () {
+    if (deconnexionVoulue || !tableauOuvert()) return;
+    arreterSurveillance();
+    arreterSurveillance = function () {};
+    $$('dialog[open]').forEach(function (d) { d.close(); });
+    $('[data-barre-connecte]').hidden = true;
+    ecran('connexion');
+    erreurFormulaire(formConnexion, 'Votre session a expiré : reconnectez-vous. Rien n’a été perdu, les données sont sur le serveur.');
+    notificationSysteme('Session expirée', 'Reconnectez-vous pour continuer.', 'session');
+  });
+
+  // Notifications du système, dans l'application de bureau : une alerte qui
+  // apparaît ou grossit (les alertes de la vue générale, rien d'autre) pendant
+  // que la fenêtre n'est pas au premier plan. Jamais à la première lecture.
+  var alertesConnues = null;
+  function notificationsActives() { return !!(BUREAU && reglages.notifications && 'Notification' in window); }
+  function demanderNotifications() {
+    if (notificationsActives() && Notification.permission === 'default') Notification.requestPermission();
+  }
+  function notificationSysteme(titre, texte, etiquette, action) {
+    if (!notificationsActives() || Notification.permission !== 'granted') return;
+    try {
+      var n = new Notification(titre, { body: texte, tag: etiquette });
+      n.onclick = function () { window.focus(); if (action) action(); };
+    } catch (e) { BUREAU.journal('erreur', 'notification impossible : ' + e.message); }
+  }
+  function annoncerAlertes(alertes) {
+    var avant = alertesConnues;
+    alertesConnues = {};
+    alertes.forEach(function (a) { alertesConnues[a.code] = Number(a.nombre) || 1; });
+    if (!avant || document.hasFocus()) return;
+    alertes.forEach(function (a) {
+      if (a.gravite === 'info' || (avant[a.code] || 0) >= (Number(a.nombre) || 1)) return;
+      notificationSysteme(a.gravite === 'critique' ? 'GoShip Express — action requise' : 'GoShip Express', a.message,
+               'alerte-' + a.code, actionAlerte(a.code));
+    });
+  }
+
+  if (BUREAU) {
+    BUREAU.surCommande(function (nom) {
+      if (nom === 'recherche') ouvrirRecherche();
+      else if (nom === 'scanner') ouvrirScanner();
+      else if (nom === 'reglages' && tableauOuvert()) ouvrirReglages();
+    });
+    $$('[data-bureau-seulement]').forEach(function (n) { n.hidden = false; });
+    demanderNotifications();
+  } else if (POSTE) {
+    $('[data-bureau-ancien]').hidden = false;
+  }
 
   /* ---- Analytics ------------------------------------------------------------------
      Ce qui s'est passé et comment cela évolue (outils/supabase-analytics.sql).

@@ -69,7 +69,7 @@
            la base cherche par ses index ; un scanner en mode clavier y tape
            aussi un code-barres ou le lien du QR d'une étiquette. -->
       <form class="gs-rapide" data-form="recherche-rapide" role="search" novalidate>
-        <label class="gs-recherche gs-rapide__champ"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" name="texte" data-rapide-texte maxlength="200" placeholder="Colis, facture, suivi, code-barres, nom, téléphone…" aria-label="Recherche rapide : colis, clients, factures" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <label class="gs-recherche gs-rapide__champ"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" name="texte" data-rapide-texte maxlength="200" placeholder="Colis, facture, suivi, code-barres, nom, téléphone…" aria-label="Recherche rapide : colis, clients, factures" aria-keyshortcuts="Control+K Meta+K" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
         <button type="submit" class="gs-bouton gs-bouton--sombre gs-rapide__bouton">Chercher</button>
       </form>
       <div class="gs-td__outils" data-barre-connecte hidden>
@@ -98,6 +98,10 @@
         </div>
       </div>
     </header>
+    <!-- Réseau coupé (événement « offline » du navigateur) : rien ne part, rien
+         n'est affiché comme enregistré tant que le serveur n'a pas répondu. -->
+    <p class="gs-td__bandeau gs-td__bandeau--erreur" data-hors-ligne role="alert" hidden><strong>Connexion perdue.</strong> Certaines fonctionnalités sont indisponibles : aucune opération n'est enregistrée tant que la connexion n'est pas revenue.</p>
+    <p class="gs-td__bandeau" data-bureau-ancien role="status" hidden><strong>Mettez à jour l'application GoShip Express.</strong> Cette version du poste de travail est trop ancienne pour certaines fonctions du tableau de bord.</p>
     <section class="gs-rapide__resultats" data-rapide-resultats aria-label="Résultats de la recherche rapide" aria-live="polite" hidden></section>
 
 <main id="contenu-principal" tabindex="-1" class="gs-admin">
@@ -410,9 +414,10 @@
       <form class="gs-scan__saisie" data-scan-form novalidate>
         <label for="scan-code">Scannez un colis — ou tapez son numéro</label>
         <div class="gs-scan__ligne">
-          <input id="scan-code" data-scan-code maxlength="500" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="GSE-1001-HT, QR de l'étiquette ou suivi du vendeur">
+          <input id="scan-code" data-scan-code aria-describedby="scan-lecteur" maxlength="500" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="GSE-1001-HT, QR de l'étiquette ou suivi du vendeur">
           <button type="submit" class="gs-bouton gs-bouton--plein">Rechercher</button>
         </div>
+        <p class="gs-scan__lecteur" id="scan-lecteur" data-scan-lecteur role="status">Un scanner USB ou Bluetooth (mode clavier) n'a rien à installer : scannez un code pour le vérifier.</p>
       </form>
       <div class="gs-scan__reglages">
         <label class="gs-champ">
@@ -1067,6 +1072,10 @@
           <span class="gs-reglage__texte"><strong>Secondes dans l'horloge</strong><small>L'heure en haut de l'écran, à la seconde près.</small></span>
           <input type="checkbox" class="gs-interrupteur" role="switch" data-reglage="secondes">
         </label>
+        <label class="gs-reglage gs-reglage--case" data-bureau-seulement hidden>
+          <span class="gs-reglage__texte"><strong>Notifications du poste de travail</strong><small>Une notification du système quand une alerte apparaît (action requise, facture en retard…) et que la fenêtre n'est pas au premier plan.</small></span>
+          <input type="checkbox" class="gs-interrupteur" role="switch" data-reglage="notifications">
+        </label>
       </section>
       <section class="gs-reglages__section" data-reglages-section="compte" role="tabpanel" aria-label="Mon compte" hidden>
         <h3>Mon compte</h3>
@@ -1100,6 +1109,8 @@
           <div><dt>Mises à jour en direct</dt><dd data-reglages-direct></dd></div>
           <div><dt>Périodes</dt><dd>Comptées en jours de Santo Domingo</dd></div>
           <div><dt>Date et heure affichées</dt><dd>Celles de cet appareil</dd></div>
+          <div data-bureau-seulement hidden><dt>Application</dt><dd data-bureau-info></dd></div>
+          <div><dt>Raccourcis</dt><dd><kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>K</kbd> recherche rapide · <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Maj</kbd> + <kbd>S</kbd> poste de scan · <kbd>Échap</kbd> fermer</dd></div>
         </dl>
         <p class="gs-reglages__aide">Tarif, frais de service, statuts, permissions : ces règles vivent dans la base de données et ne se changent pas depuis cet écran.</p>
       </section>
