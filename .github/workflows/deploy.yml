@@ -2,8 +2,8 @@
 #  Mise en ligne automatique du site sur GitHub Pages
 # ==========================================================================
 #  À chaque « push » sur la branche main, GitHub reconstruit le site et le
-#  publie. Les fichiers de travail (SQL, application mobile, README, outils)
-#  sont retirés avant publication : ils restent dans le dépôt, mais ne sont
+#  publie. Les fichiers de travail (SQL, applications mobile et de bureau,
+#  README, outils) sont retirés avant publication : ils restent dans le dépôt, mais ne sont
 #  jamais servis aux visiteurs — c'est ce que faisaient _redirects et
 #  .htaccess, que GitHub Pages ne sait pas lire.
 # ==========================================================================
@@ -41,6 +41,7 @@ jobs:
             --exclude '_site' \
             --exclude 'outils' \
             --exclude 'application-mobile' \
+            --exclude 'bureau' \
             --exclude 'README.md' \
             --exclude '.DS_Store' \
             --exclude '*.command' \

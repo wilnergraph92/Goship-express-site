@@ -601,10 +601,35 @@
     ]);
   }
 
+  // Dans l'application de bureau (bureau/), le même document part dans sa
+  // fenêtre « Imprimer » : aperçu exact, choix de l'imprimante retenu par
+  // format (thermique pour l'étiquette, bureau pour la facture), PDF, et un
+  // vrai message si l'imprimante refuse. Même HTML, même impression.css,
+  // même @page : aucun second format de facture ni d'étiquette.
+  function texteHtml(t) {
+    return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function imprimerBureau(bureau, liste, options) {
+    var papier = /^[\w .]{1,20}$/.test(options.papier || '') ? options.papier : 'A4';
+    var marge = /^[\w .]{1,12}$/.test(options.marge || '') ? options.marge : '0';
+    var html = '<!doctype html><html lang="' + texteHtml(options.langue || 'fr') + '"><head><meta charset="utf-8">' +
+      '<base href="' + texteHtml(BASE) + '"><title>' + texteHtml(options.titre || 'Goship Express') + '</title>' +
+      '<link rel="stylesheet" href="' + texteHtml(BASE + 'assets/css/impression.css') + '">' +
+      '<style>@page{size:' + papier + ';margin:' + marge + '}</style></head><body>' +
+      liste.map(function (n) { return n.outerHTML; }).join('') + '</body></html>';
+    return bureau.imprimer({ html: html, titre: options.titre || 'Goship Express', papier: papier }).then(function (r) {
+      return !!r && (r.etat === 'imprime' || r.etat === 'pdf');
+    });
+  }
+
   function imprimer(noeuds, options) {
     options = options || {};
     var liste = noeuds && noeuds.length === undefined ? [noeuds] : Array.prototype.slice.call(noeuds || []);
     if (!liste.length) return Promise.resolve(false);
+    var bureau = window.GoshipBureau;
+    if (bureau && bureau.contrat >= 1 && typeof bureau.imprimer === 'function') return imprimerBureau(bureau, liste, options);
 
     var cadre = document.createElement('iframe');
     cadre.className = 'gs-cadre-impression';

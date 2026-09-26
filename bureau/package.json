@@ -1,0 +1,91 @@
+{
+  "name": "goship-express-bureau",
+  "productName": "GoShip Express",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Poste de travail GoShip Express (Windows, macOS) : le tableau de bord de l'équipe dans une fenêtre dédiée, avec impression, scanner et raccourcis.",
+  "author": "GoShip Express",
+  "license": "UNLICENSED",
+  "main": "src/principal.js",
+  "scripts": {
+    "demarrer": "electron .",
+    "demarrer:local": "electron . --env=local",
+    "essai": "node essais/essai-bureau.js",
+    "construire:windows": "electron-builder --win nsis --x64 --publish never",
+    "construire:macos": "electron-builder --mac dmg zip --x64 --arm64 --publish never",
+    "construire:linux": "electron-builder --linux dir --publish never",
+    "essai:paquet": "node essais/essai-paquet.js"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
+    "playwright-core": "1.63.0"
+  },
+  "build": {
+    "appId": "com.goshipexpress.bureau",
+    "productName": "GoShip Express",
+    "copyright": "© GoShip Express",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**",
+      "ui/**",
+      "config/**",
+      "package.json"
+    ],
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icone.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "GoShip Express",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "GoShip-Express-Setup-${version}-windows-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.business",
+      "icon": "build/icone.png",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "artifactName": "GoShip-Express-${version}-macos-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "GoShip-Express-${version}-macos-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Office"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wilnergraph92/Goship-express-site.git",
+    "directory": "bureau"
+  }
+}

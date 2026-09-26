@@ -1,0 +1,5 @@
+{
+  "_lisez_moi": "L'adresse du site que charge l'application, par environnement. Aucune clé ici : la connexion à Supabase est celle du site (assets/js/config.js, clé publique protégée par les règles de la base). Une installation n'utilise que « production » ; « local » sert au développement et aux essais (python3 -m http.server 8765).",
+  "production": { "site": "https://wilnergraph92.github.io/Goship-express-site/" },
+  "local": { "site": "http://localhost:8765/" }
+}

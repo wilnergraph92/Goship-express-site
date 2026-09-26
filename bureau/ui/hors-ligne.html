@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+<title>GoShip Express — connexion impossible</title>
+<link rel="stylesheet" href="commun.css">
+<link rel="stylesheet" href="hors-ligne.css">
+</head>
+<body>
+<main class="carte" aria-labelledby="titre">
+  <img src="logo.png" alt="GoShip Express" class="logo" width="180" height="60">
+  <h1 id="titre" data-titre>Connexion au serveur impossible</h1>
+  <p data-texte>Le tableau de bord n’a pas pu être chargé. Aucune donnée n’est affichée tant que le serveur n’a pas répondu : rien de ce que vous voyez ici n’est enregistré ni ancien.</p>
+  <p class="message" data-etat role="status">Nouvel essai automatique dès que la connexion revient.</p>
+  <button type="button" class="bouton" data-reessayer>Réessayer</button>
+  <p class="detail" data-detail></p>
+</main>
+<script src="hors-ligne.js"></script>
+</body>
+</html>

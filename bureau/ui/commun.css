@@ -1,0 +1,19 @@
+/* GoShip Express (bureau) — les deux pages locales : « Connexion impossible » et « Imprimer ».
+   Mêmes couleurs que le tableau de bord (assets/css/tableau.css). */
+:root{
+  --ink:#061a3f;--ink2:#0d2b6b;--accent:#f4600d;--accent2:#1f5fe0;
+  --fond:#f3f6fb;--carte:#fff;--bord:#e6ebf3;--texte:#2d3850;--doux:#5b6782;--erreur:#b42318;--erreur-fond:#fef3f2;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--fond);color:var(--texte);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+h1{margin:0;color:var(--ink);font-size:22px;line-height:1.25}
+p{margin:0}
+button,select,input{font:inherit}
+.bouton{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;border:1px solid transparent;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+.bouton:hover{filter:brightness(1.05)}
+.bouton:disabled{opacity:.55;cursor:default;filter:none}
+.bouton--contour{border-color:#cfd8e8;background:#fff;color:var(--ink)}
+.bouton:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.message{padding:12px 14px;border-radius:12px;background:#eef2f8;color:var(--texte)}
+.message--erreur{background:var(--erreur-fond);color:var(--erreur)}

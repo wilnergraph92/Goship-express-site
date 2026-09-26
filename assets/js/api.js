@@ -27,6 +27,17 @@
     /^(localhost|127(\.\d+){3}|\[::1\]|10(\.\d+){3}|192\.168(\.\d+){2}|172\.(1[6-9]|2\d|3[01])(\.\d+){2}|[\w-]+\.local)$/.test(location.hostname);
   var MODE = CFG.supabaseUrl && CFG.supabaseKey ? 'supabase' : (LOCAL ? 'demo' : 'off');
   var LANGUE = (document.documentElement.lang || 'fr').slice(0, 2).toLowerCase();
+  // L'application GoShip Express pour Windows et macOS (bureau/) ouvre ces mêmes
+  // pages et donne window.GoshipBureau : la session y est chiffrée par le
+  // système plutôt que laissée dans le localStorage, et un scan y dit de quel
+  // poste il vient. Dans un navigateur, BUREAU est null et rien ne change.
+  var BUREAU = window.GoshipBureau && window.GoshipBureau.contrat >= 1 ? window.GoshipBureau : null;
+  // Les précisions d'une opération, avec le poste qui l'a faite (application de bureau)
+  function avecPoste(meta) {
+    var m = Object.assign({}, meta || {});
+    if (BUREAU) { m.poste = 'bureau'; m.plateforme = BUREAU.plateforme; m.version_bureau = BUREAU.version; }
+    return m;
+  }
 
   var STATUTS = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre', 'incident'];
   var CHAMPS_PROFIL = ['nom_complet', 'pays', 'region', 'ville', 'adresse', 'telephone', 'langue'];
@@ -453,9 +464,9 @@
           // flowType « implicit » : le lien reçu par e-mail fonctionne même ouvert sur
           // un autre appareil que celui qui l'a demandé (téléphone → ordinateur).
           // Les jetons qu'il dépose dans l'adresse sont effacés aussitôt (nettoyerAdresse).
-          return window.supabase.createClient(String(CFG.supabaseUrl).replace(/\/+$/, ''), CFG.supabaseKey, {
-            auth: { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-          });
+          var auth = { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true };
+          if (BUREAU && BUREAU.stockageSession) auth.storage = BUREAU.stockageSession;
+          return window.supabase.createClient(String(CFG.supabaseUrl).replace(/\/+$/, ''), CFG.supabaseKey, { auth: auth });
         });
       promesseClient.catch(function () { promesseClient = null; });
     }
@@ -561,6 +572,19 @@
 
     deconnecter: function () {
       return sb().then(function (c) { return c.auth.signOut({ scope: 'local' }); });
+    },
+
+    // rappel() quand la session se termine sans que la page l'ait demandé :
+    // jeton de renouvellement expiré ou révoqué. Rend de quoi arrêter d'écouter.
+    surSessionPerdue: function (rappel) {
+      var abonnement = null, arrete = false;
+      sb().then(function (c) {
+        if (arrete) return;
+        abonnement = c.auth.onAuthStateChange(function (evenement) {
+          if (evenement === 'SIGNED_OUT') rappel();
+        }).data.subscription;
+      }).catch(function () { /* sans client, pas de session à perdre */ });
+      return function () { arrete = true; if (abonnement) abonnement.unsubscribe(); };
     },
 
     envoyerLienMotDePasse: function (email) {
@@ -816,7 +840,7 @@
         return sb().then(function (c) {
           return c.rpc('scanner_operation', {
             p_reference: String(reference || ''), p_type: type, p_lieu: o.lieu == null ? null : o.lieu,
-            p_note: o.note == null ? null : o.note, p_metadonnees: o.metadonnees || {}, p_cle: o.cle || null,
+            p_note: o.note == null ? null : o.note, p_metadonnees: avecPoste(o.metadonnees), p_cle: o.cle || null,
             p_statut_attendu: o.attendu || null, p_cible: o.cible || null
           });
         }).then(resultat);
@@ -2499,6 +2523,14 @@
       return plusTard(true);
     },
 
+    // En démonstration, une session ne se termine que si un autre onglet se
+    // déconnecte : on écoute le stockage du navigateur.
+    surSessionPerdue: function (rappel) {
+      var ecoute = function (e) { if (e.key === CLE_SESSION && !e.newValue) rappel(); };
+      window.addEventListener('storage', ecoute);
+      return function () { window.removeEventListener('storage', ecoute); };
+    },
+
     // En démonstration, aucun e-mail n'est envoyé : le lien est affiché à l'écran.
     envoyerLienMotDePasse: function (email) {
       var compte = trouverCompte(lireDonnees(), email);
@@ -2889,7 +2921,7 @@
           var c = colisParReference(d, r);
           if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis ne porte le numéro ' + r.toUpperCase() + '.');
           var res = operationDemo(d, moi, c.id, v, {
-            lieu: o.lieu, note: o.note, metadonnees: Object.assign({}, o.metadonnees || {}, { source: 'scanner' }),
+            lieu: o.lieu, note: o.note, metadonnees: Object.assign(avecPoste(o.metadonnees), { source: 'scanner' }),
             cle: o.cle, attendu: o.attendu, cible: o.cible
           });
           if (!res.deja) ecrireDonnees(d);
@@ -3913,6 +3945,7 @@
     session: function () { return Promise.resolve(null); },
     profil: function () { return Promise.resolve(null); },
     inscrire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    surSessionPerdue: function () { return function () {}; },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
     changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme, monResume: ferme,
     surveiller: function () { return function () {}; },
