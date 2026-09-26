@@ -77,6 +77,11 @@ jobs:
 
       - name: Construire l'installateur
         run: ${{ matrix.construire }}
+        env:
+          # macOS : la signature ad hoc (identity "-") ne demande aucun secret ;
+          # sans cette variable, electron-builder ne signe pas du tout sur une
+          # pull request, et l'application passe pour « endommagée ».
+          CSC_FOR_PULL_REQUEST: 'true'
 
       - name: Verrous de sécurité de l'exécutable (fuses)
         run: |
@@ -117,7 +122,9 @@ jobs:
           hdiutil detach /Volumes/goship-essai
           app="$RUNNER_TEMP/GoShip Express.app"
           echo "Architecture : $(lipo -archs "$app/Contents/MacOS/GoShip Express")"
-          codesign --verify --deep --strict "$app" && echo "Signature ad hoc : valide"
+          codesign --verify --deep --strict "$app"
+          echo "Signature ad hoc : valide"
+          codesign -dv "$app" 2>&1 | grep -E "^(Signature|Identifier|Format)=" || true
           spctl --assess --type execute -vv "$app" 2>&1 || echo "Gatekeeper : refusée (application non notarisée — attendu tant qu'aucun certificat Apple n'est configuré)"
           node essais/essai-paquet.js "$app/Contents/MacOS/GoShip Express"
           rm -rf "$app" && echo "Désinstallation (supprimer l'application) : faite"
