@@ -747,6 +747,52 @@
       });
     };
 
+    // Mon solde et mes messages : les chiffres de la base (mon_resume), les
+    // mêmes que ceux des factures ci-dessous. Si la base n'a pas encore cette
+    // fonction, les deux cadres restent cachés : rien d'inventé.
+    var chargerResume = function () {
+      return API.monResume().then(function (r) {
+        var f = r && r.factures;
+        var solde = $('[data-solde]');
+        var note = $('[data-solde-note]');
+        solde.hidden = !(f && f.nombre);
+        note.hidden = true;
+        if (f && f.nombre) {
+          $('[data-solde-champ="facture"]').textContent = O.argent(f.facture_usd);
+          $('[data-solde-champ="paye"]').textContent = O.argent(f.paye_usd);
+          $('[data-solde-champ="solde"]').textContent = O.argent(f.solde_usd);
+          solde.classList.toggle('is-a-jour', !(Number(f.solde_usd) > 0));
+          var phrases = [];
+          if (Number(f.montant_en_retard) > 0) phrases.push(t('solde-retard', { montant: O.argent(f.montant_en_retard) }));
+          if (f.prochaine_echeance) phrases.push(t('solde-echeance', { date: O.date(f.prochaine_echeance + 'T12:00:00') }));
+          note.textContent = phrases.join(' ');
+          note.hidden = !phrases.length;
+        }
+        var panneau = $('[data-panneau-messages]');
+        var messages = (r && r.notifications) || null;
+        panneau.hidden = !messages;
+        if (!messages) return;
+        var liste = $('[data-messages]');
+        liste.textContent = '';
+        messages.forEach(function (m) {
+          var li = document.createElement('li');
+          li.className = 'gs-messages__ligne';
+          var quoi = document.createElement('strong');
+          quoi.textContent = t('message-' + m.evenement) || t('statut-' + m.evenement) || t('message-autre');
+          li.appendChild(quoi);
+          var details = document.createElement('span');
+          details.textContent = [t('canal-' + m.canal) || m.canal, m.numero, O.date(m.envoye_le, true)].filter(Boolean).join(' · ');
+          li.appendChild(details);
+          liste.appendChild(li);
+        });
+        $('[data-messages-vide]').hidden = messages.length > 0;
+      }).catch(function () {
+        $('[data-solde]').hidden = true;
+        $('[data-solde-note]').hidden = true;
+        $('[data-panneau-messages]').hidden = true;
+      });
+    };
+
     // Onglets « En cours » / « Livrés » (flèches du clavier comprises)
     var onglets = $$('[data-onglet]');
     var choisirOnglet = function (bouton) {
@@ -854,12 +900,14 @@
       }
       chargerColis();
       chargerFactures();
+      chargerResume();
       var direct = $('[data-direct]');
       var prevu = null;
       API.surveiller(function (quoi) {
         clearTimeout(prevu);
         prevu = setTimeout(function () {
           if (quoi === 'factures') chargerFactures(); else chargerColis();
+          chargerResume();
         }, 250);
       }, { etat: function (actif) { direct.hidden = !actif; } });
     }).catch(function (err) {

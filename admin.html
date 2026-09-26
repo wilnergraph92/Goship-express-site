@@ -99,6 +99,15 @@
       <button type="button" class="gs-bouton gs-bouton--plein" data-action="nouveau-colis" data-permission="shipments.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un colis</button>
     </div>
 
+    <!-- Recherche rapide (recherche_rapide, outils/supabase-tableau-de-bord.sql) :
+         la base cherche par ses index ; un scanner en mode clavier y tape
+         aussi un code-barres ou le lien du QR d'une étiquette. -->
+    <form class="gs-rapide" data-form="recherche-rapide" role="search" novalidate>
+      <label class="gs-recherche gs-rapide__champ"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" name="texte" data-rapide-texte maxlength="200" placeholder="Recherche rapide : n° de colis ou de facture, suivi, code-barres, nom, téléphone, e-mail…" aria-label="Recherche rapide : colis, clients, factures" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <button type="submit" class="gs-bouton gs-bouton--sombre">Chercher</button>
+    </form>
+    <section class="gs-rapide__resultats" data-rapide-resultats aria-label="Résultats de la recherche rapide" aria-live="polite" hidden></section>
+
     <div class="gs-stats">
       <button type="button" class="gs-stat" data-filtre-statut="recu"><span class="gs-stat__nombre" data-stat="recu">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--recu"></i>Reçus</span></button>
       <button type="button" class="gs-stat" data-filtre-statut="emballe"><span class="gs-stat__nombre" data-stat="emballe">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--emballe"></i>Emballés</span></button>
@@ -112,14 +121,152 @@
     </div>
 
     <div class="gs-admin-onglets" role="tablist" aria-label="Affichage">
-      <button type="button" role="tab" aria-selected="true" data-onglet-vue="colis">Colis<span class="gs-admin-onglets__total" data-total="colis"></span></button>
+      <button type="button" role="tab" aria-selected="true" data-onglet-vue="apercu" data-permission="shipments.view">Vue générale</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1">Colis<span class="gs-admin-onglets__total" data-total="colis"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1">Clients<span class="gs-admin-onglets__total" data-total="clients"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1">Factures<span class="gs-admin-onglets__total" data-total="factures"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1">Scanner</button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1">Équipe</button>
     </div>
 
-    <div class="gs-admin-vue" data-vue="colis" role="tabpanel">
+    <!-- La vue générale (vue_generale, colis_a_traiter). Chaque chiffre vient
+         de la base ; une partie que le rôle ne peut pas voir n'est pas dans la
+         réponse, et ne s'affiche donc pas. -->
+    <div class="gs-admin-vue gs-apercu" data-vue="apercu" role="tabpanel">
+      <div class="gs-apercu__barre">
+        <label class="gs-apercu__choix">
+          <span>Période</span>
+          <select class="gs-admin-filtre" data-apercu-periode>
+            <option value="aujourdhui">Aujourd'hui</option>
+            <option value="7j">7 derniers jours</option>
+            <option value="30j" selected>30 derniers jours</option>
+            <option value="mois">Ce mois-ci</option>
+            <option value="mois_precedent">Mois précédent</option>
+            <option value="annee">Cette année</option>
+            <option value="personnalise">Personnalisée…</option>
+          </select>
+        </label>
+        <div class="gs-apercu__dates" data-apercu-dates hidden>
+          <label class="gs-apercu__choix"><span>Du</span><input type="date" class="gs-admin-date" data-apercu-debut></label>
+          <label class="gs-apercu__choix"><span>Au</span><input type="date" class="gs-admin-date" data-apercu-fin></label>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--sombre" data-action="apercu-appliquer">Appliquer</button>
+        </div>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="apercu-actualiser"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>Actualiser</button>
+        <p class="gs-apercu__etat" data-apercu-etat role="status"></p>
+      </div>
+      <p class="gs-apercu__message" data-apercu-message role="alert" hidden></p>
+      <div class="gs-apercu__corps" data-apercu-corps aria-busy="true">
+        <section class="gs-apercu__bloc" aria-labelledby="apercu-colis-titre">
+          <h2 class="gs-apercu__titre" id="apercu-colis-titre">Colis</h2>
+          <div class="gs-kpis" data-kpis="colis"></div>
+        </section>
+        <section class="gs-apercu__bloc" data-apercu-partie="clients" aria-labelledby="apercu-clients-titre" hidden>
+          <h2 class="gs-apercu__titre" id="apercu-clients-titre">Clients</h2>
+          <div class="gs-kpis" data-kpis="clients"></div>
+        </section>
+        <section class="gs-apercu__bloc" data-apercu-partie="facturation" aria-labelledby="apercu-factures-titre" hidden>
+          <h2 class="gs-apercu__titre" id="apercu-factures-titre">Facturation</h2>
+          <div class="gs-kpis" data-kpis="facturation"></div>
+          <p class="gs-apercu__note">Facturé : les factures émises pendant la période, hors annulées — et ce qui en a été payé ou reste dû. Encaissé : l'argent reçu pendant la période, quelle que soit la facture. Les dépenses et les dettes ne sont pas suivies par le tableau de bord.</p>
+        </section>
+        <div class="gs-apercu__graphes">
+          <figure class="gs-graphe" data-graphe="colis">
+            <figcaption class="gs-graphe__titre">Colis reçus et livrés, par jour</figcaption>
+            <div class="gs-graphe__zone" data-graphe-zone></div>
+          </figure>
+          <figure class="gs-graphe" data-graphe="statuts">
+            <figcaption class="gs-graphe__titre">Colis par statut, maintenant</figcaption>
+            <div class="gs-graphe__zone" data-graphe-zone></div>
+          </figure>
+          <figure class="gs-graphe" data-graphe="argent" data-apercu-partie="facturation" hidden>
+            <figcaption class="gs-graphe__titre">Facturé et encaissé, par jour</figcaption>
+            <div class="gs-graphe__zone" data-graphe-zone></div>
+          </figure>
+        </div>
+        <div class="gs-apercu__deux">
+          <section class="gs-apercu__bloc gs-apercu__panneau" aria-labelledby="apercu-alertes-titre">
+            <h2 class="gs-apercu__titre" id="apercu-alertes-titre">Alertes</h2>
+            <ul class="gs-alertes" data-alertes></ul>
+          </section>
+          <section class="gs-apercu__bloc gs-apercu__panneau" data-apercu-partie="activite" aria-labelledby="apercu-activite-titre" hidden>
+            <h2 class="gs-apercu__titre" id="apercu-activite-titre">Activité récente</h2>
+            <ol class="gs-activite" data-activite></ol>
+          </section>
+        </div>
+        <section class="gs-apercu__bloc" aria-labelledby="apercu-traiter-titre">
+          <div class="gs-apercu__tete">
+            <h2 class="gs-apercu__titre" id="apercu-traiter-titre">Colis à traiter</h2>
+            <div class="gs-apercu__choix gs-apercu__choix--ligne" role="radiogroup" aria-label="Liste">
+              <label class="gs-case"><input type="radio" name="traiter" value="action_requise" data-traiter-liste checked><span>Action requise</span></label>
+              <label class="gs-case"><input type="radio" name="traiter" value="sans_mouvement" data-traiter-liste><span>Sans mouvement depuis</span></label>
+              <select class="gs-admin-filtre gs-admin-filtre--petit" data-traiter-jours aria-label="Nombre de jours sans mouvement">
+                <option value="3">3 jours</option>
+                <option value="7" selected>7 jours</option>
+                <option value="14">14 jours</option>
+                <option value="30">30 jours</option>
+              </select>
+            </div>
+          </div>
+          <p class="gs-apercu__note" data-traiter-definition></p>
+          <div class="gs-tableau-cadre">
+            <table class="gs-tableau gs-tableau--traiter">
+              <thead>
+                <tr>
+                  <th scope="col">Colis</th>
+                  <th scope="col">Client</th>
+                  <th scope="col">Statut</th>
+                  <th scope="col">Dernier événement</th>
+                  <th scope="col">Depuis</th>
+                  <th scope="col"><span class="gs-invisible">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody data-lignes="traiter"></tbody>
+            </table>
+          </div>
+          <p class="gs-admin-vide" data-vide="traiter" hidden></p>
+          <div class="gs-pagination" data-pagination="traiter" hidden></div>
+        </section>
+        <section class="gs-apercu__bloc" data-apercu-partie="scanner" aria-labelledby="apercu-scanner-titre" hidden>
+          <h2 class="gs-apercu__titre" id="apercu-scanner-titre">Poste de scan</h2>
+          <div class="gs-kpis" data-kpis="scanner"></div>
+          <div class="gs-apercu__trois">
+            <div class="gs-apercu__panneau">
+              <h3 class="gs-apercu__sous-titre">Par employé</h3>
+              <ul class="gs-repartition" data-scan-employes></ul>
+            </div>
+            <div class="gs-apercu__panneau">
+              <h3 class="gs-apercu__sous-titre">Par opération</h3>
+              <ul class="gs-repartition" data-scan-operations></ul>
+            </div>
+            <figure class="gs-graphe gs-apercu__panneau" data-graphe="scans">
+              <figcaption class="gs-apercu__sous-titre">Opérations par jour</figcaption>
+              <div class="gs-graphe__zone" data-graphe-zone></div>
+            </figure>
+          </div>
+          <p class="gs-apercu__note">Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.</p>
+        </section>
+        <section class="gs-apercu__bloc" data-apercu-partie="paiements_recents" aria-labelledby="apercu-paiements-titre" hidden>
+          <h2 class="gs-apercu__titre" id="apercu-paiements-titre">Derniers paiements reçus</h2>
+          <div class="gs-tableau-cadre">
+            <table class="gs-tableau gs-tableau--paiements">
+              <thead>
+                <tr>
+                  <th scope="col">Reçu le</th>
+                  <th scope="col">Client</th>
+                  <th scope="col">Facture</th>
+                  <th scope="col">Moyen</th>
+                  <th scope="col">Montant</th>
+                </tr>
+              </thead>
+              <tbody data-lignes="paiements-recents"></tbody>
+            </table>
+          </div>
+          <p class="gs-admin-vide" data-vide="paiements-recents" hidden>Aucun paiement reçu pour l'instant.</p>
+        </section>
+      </div>
+    </div>
+
+    <div class="gs-admin-vue" data-vue="colis" role="tabpanel" hidden>
       <div class="gs-admin-outils">
         <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche="colis" placeholder="N° de colis, code client, nom, suivi vendeur…" aria-label="Rechercher un colis" autocomplete="off" spellcheck="false"></label>
         <select class="gs-admin-filtre" data-filtre-colis aria-label="Filtrer par statut">
@@ -134,6 +281,21 @@
           <option value="incident">Action requise</option>
           <option value="livre">Livrés</option>
         </select>
+        <select class="gs-admin-filtre" data-filtre-service aria-label="Filtrer par service">
+          <option value="">Tous les services</option>
+          <option value="aerien">Aérien</option>
+          <option value="maritime">Maritime</option>
+          <option value="terrestre">Terrestre</option>
+        </select>
+        <select class="gs-admin-filtre" data-filtre-pays aria-label="Filtrer par pays de destination">
+          <option value="">Toutes les destinations</option>
+          <option value="HT">Haïti</option>
+          <option value="DO">République dominicaine</option>
+          <option value="US">États-Unis</option>
+        </select>
+        <label class="gs-admin-periode"><span>Reçus du</span><input type="date" class="gs-admin-date" data-filtre-depuis aria-label="Reçus à partir du"></label>
+        <label class="gs-admin-periode"><span>au</span><input type="date" class="gs-admin-date" data-filtre-jusqua aria-label="Reçus jusqu'au"></label>
+        <button type="button" class="gs-lien-bouton" data-action="reinitialiser-colis" hidden>Réinitialiser les filtres</button>
       </div>
       <div class="gs-admin-filtre-client" data-filtre-client hidden>
         <span>Colis du client <b data-filtre-client-nom></b></span>
@@ -165,12 +327,24 @@
         </table>
       </div>
       <p class="gs-admin-vide" data-vide="colis" hidden></p>
-      <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="colis" hidden>Afficher plus de colis</button>
+      <div class="gs-pagination" data-pagination="colis" hidden></div>
     </div>
 
     <div class="gs-admin-vue" data-vue="clients" role="tabpanel" hidden>
       <div class="gs-admin-outils">
         <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche="clients" placeholder="Code client, nom, téléphone, e-mail, ville…" aria-label="Rechercher un client" autocomplete="off" spellcheck="false"></label>
+        <select class="gs-admin-filtre" data-filtre-clients aria-label="Filtrer les clients">
+          <option value="tous">Tous les clients</option>
+          <option value="avec_colis">Avec des colis en cours</option>
+          <option value="avec_solde" data-permission="invoices.view">Avec un solde à payer</option>
+        </select>
+        <select class="gs-admin-filtre" data-tri-clients aria-label="Trier les clients">
+          <option value="recent">Inscrits récemment</option>
+          <option value="activite">Activité récente</option>
+          <option value="solde" data-permission="invoices.view">Solde le plus élevé</option>
+          <option value="colis">Le plus de colis en cours</option>
+          <option value="nom">Nom (A → Z)</option>
+        </select>
       </div>
       <div class="gs-tableau-cadre">
         <table class="gs-tableau gs-tableau--clients">
@@ -179,11 +353,11 @@
               <th scope="col">Identifiant</th>
               <th scope="col">Client</th>
               <th scope="col">Colis en cours</th>
-              <th scope="col">Statut des colis</th>
-              <th scope="col">Poids total</th>
-              <th scope="col">Montant total</th>
-              <th scope="col">Balance</th>
-              <th scope="col">Dernière mise à jour</th>
+              <th scope="col">Poids en cours</th>
+              <th scope="col" data-permission="invoices.view">Facturé</th>
+              <th scope="col" data-permission="invoices.view">Payé</th>
+              <th scope="col" data-permission="invoices.view">Solde</th>
+              <th scope="col">Dernière activité</th>
               <th scope="col"><span class="gs-invisible">Actions</span></th>
             </tr>
           </thead>
@@ -191,7 +365,7 @@
         </table>
       </div>
       <p class="gs-admin-vide" data-vide="clients" hidden></p>
-      <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="clients" hidden>Afficher plus de clients</button>
+      <div class="gs-pagination" data-pagination="clients" hidden></div>
     </div>
 
     <!-- Le poste de scan (assets/js/scanner.js). Un scanner USB ou Bluetooth

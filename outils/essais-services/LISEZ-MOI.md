@@ -12,15 +12,17 @@ python3 outils/essais-services/essai-evenements.py   # le moteur d'événements 
 python3 outils/essais-services/essai-scanner.py      # le poste de scan, côté base (Phase 4)
 python3 outils/essais-services/essai-finances.py     # paiements, soldes, annulations (Phase 5)
 python3 outils/essais-services/essai-permissions.py  # rôles, permissions, isolation des clients (Phase 6)
+python3 outils/essais-services/essai-tableau.py      # le tableau de bord : chiffres, rôles, périodes (Phase 7)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
 node outils/essais-services/essai-permissions.js     # les rôles en démonstration
+node outils/essais-services/essai-tableau.js         # le tableau de bord en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,
-`supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`
-ou des règles dans `api.js`.**
+`supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
+`supabase-tableau-de-bord.sql` ou des règles dans `api.js`.**
 
 ## Ce que prouve `essai-services.py`
 
@@ -148,6 +150,31 @@ règles de sécurité des tables s'appliquent donc pour de bon.
   la base.
 
 `essai-permissions.js` rejoue les mêmes cas sur le mode démonstration.
+
+## Ce que prouve `essai-tableau.py`
+
+Le tableau de bord (`supabase-tableau-de-bord.sql`), installé par-dessus la
+version publiée sans qu'une donnée bouge :
+
+- **Base vide** : des zéros partout, aucune alerte, aucune valeur vide.
+- **Rôles** : administrateur et gérant voient tout, l'employée tout sauf la
+  facturation ; un client et un visiteur sont refusés ; les parties internes
+  ne s'appellent jamais seules ; « Mon résumé » ne montre que son compte.
+- **Périodes** : aujourd'hui, 7 et 30 jours, mois, mois précédent, année,
+  personnalisée ; un paiement à 23 h 30 à Santo Domingo compte pour son jour.
+- **Finances** : 75 $ → payé 25 → payé 50 : solde 75, 50, 0 et facturé =
+  payé + solde à chaque étape, dans la vue générale, l'onglet Clients,
+  l'espace client et la recherche.
+- **Scan → tableau de bord** : un scan se voit aussitôt (compteurs, statuts,
+  activité, dernier scan) ; deux scans simultanés n'en comptent qu'un ; une
+  livraison corrigée ne compte plus.
+- **Recherche** : numéro, début, QR, suivi, code, nom, téléphone, e-mail,
+  facture — et « % » ne liste jamais tout.
+- **Volume** : 1, 100, 1 000 puis 6 000 colis, chaque chiffre égal au
+  `count(*)` de la table, la vue générale en moins d'une demi-seconde, et
+  chaque recherche servie par un index.
+- **Les deux côtés d'accord** : même forme de réponse et mêmes jours de
+  période en démonstration (`essai-tableau.js --formes`, `--periodes`).
 
 ## Ce que prouve `essai-demo.js`
 

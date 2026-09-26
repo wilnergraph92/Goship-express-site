@@ -156,6 +156,13 @@
             <h2>Fakti mwen yo</h2>
             <span class="gs-panneau__total" data-total-factures hidden></span>
           </div>
+          <!-- Mon solde : calculé par la base (mon_resume), comme chaque facture -->
+          <dl class="gs-solde" data-solde hidden>
+            <div><dt>Total faktire</dt><dd data-solde-champ="facture" translate="no"></dd></div>
+            <div><dt>Deja peye</dt><dd data-solde-champ="paye" translate="no"></dd></div>
+            <div class="gs-solde__reste"><dt>Rès pou peye</dt><dd data-solde-champ="solde" translate="no"></dd></div>
+          </dl>
+          <p class="gs-solde__note" data-solde-note hidden></p>
           <div class="gs-factures" data-liste-factures aria-busy="true">
             <div class="gs-squelette" aria-hidden="true"></div>
           </div>
@@ -189,6 +196,15 @@
             <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Kopye adrès la</button>
             <span class="gs-copie-ok" data-copy-feedback hidden role="status">Adrès la kopye ✓</span>
           </div>
+        </div>
+
+        <div class="gs-panneau" data-panneau-messages hidden>
+          <div class="gs-panneau__tete">
+            <h2>Mesaj mwen yo</h2>
+          </div>
+          <p class="gs-panneau__intro">Dènye imèl ak mesaj Goship Express voye ba ou.</p>
+          <ul class="gs-messages" data-messages></ul>
+          <p class="gs-panneau__intro" data-messages-vide hidden>Poko gen mesaj pou kounye a.</p>
         </div>
 
         <div class="gs-panneau" data-profil>
@@ -415,6 +431,16 @@
   <p data-t="moyen-transfert">Transfè lajan</p>
   <p data-t="moyen-autre">Lòt mwayen</p>
   <p data-t="factures-total">{n} pou peye</p>
+  <p data-t="solde-retard">Ladan l, {montant} an reta.</p>
+  <p data-t="solde-echeance">Pwochen dat pou peye : {date}.</p>
+  <p data-t="canal-email">Imèl</p>
+  <p data-t="canal-whatsapp">WhatsApp</p>
+  <p data-t="canal-push">Notifikasyon sou telefòn</p>
+  <p data-t="message-recu">Koli resevwa Miami</p>
+  <p data-t="message-disponible">Koli disponib</p>
+  <p data-t="message-bienvenue">Byenveni lakay Goship Express</p>
+  <p data-t="message-maj">Swivi koli a mete ajou</p>
+  <p data-t="message-autre">Mesaj Goship Express</p>
   <p data-t="admin-avis">Sa a se yon kont ekip Goship Express.</p>
   <p data-t="admin-lien">Louvri tablo bò a</p>
 </template>
