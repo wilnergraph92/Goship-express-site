@@ -234,13 +234,33 @@
     </div>
 
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>
+      <div class="gs-finances" data-resume-factures hidden>
+        <div class="gs-finances__case">
+          <span class="gs-finances__libelle">À encaisser</span>
+          <strong class="gs-finances__montant" data-resume="a_encaisser"></strong>
+          <span class="gs-finances__sous" data-resume="ouvertes"></span>
+        </div>
+        <div class="gs-finances__case gs-finances__case--retard">
+          <span class="gs-finances__libelle">En retard</span>
+          <strong class="gs-finances__montant" data-resume="montant_en_retard"></strong>
+          <span class="gs-finances__sous" data-resume="en_retard"></span>
+        </div>
+        <div class="gs-finances__case gs-finances__case--entre">
+          <span class="gs-finances__libelle">Encaissé ce mois-ci</span>
+          <strong class="gs-finances__montant" data-resume="encaisse_mois"></strong>
+          <span class="gs-finances__sous" data-resume="partielles"></span>
+        </div>
+      </div>
       <div class="gs-admin-outils">
         <select class="gs-admin-filtre" data-filtre-factures aria-label="Filtrer les factures">
           <option value="a_payer">À payer</option>
+          <option value="partielle">Payées en partie</option>
+          <option value="en_retard">En retard</option>
           <option value="">Toutes les factures</option>
           <option value="payee">Payées</option>
           <option value="annulee">Annulées</option>
         </select>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="controler-factures"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Contrôler</button>
         <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="nouvelle-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Nouvelle facture</button>
       </div>
       <div class="gs-tableau-cadre">
@@ -250,7 +270,7 @@
               <th scope="col">Facture</th>
               <th scope="col">Client</th>
               <th scope="col">Montant</th>
-              <th scope="col">Statut</th>
+              <th scope="col">État</th>
               <th scope="col">Créée le</th>
               <th scope="col"><span class="gs-invisible">Actions</span></th>
             </tr>
@@ -383,19 +403,14 @@
         <div class="gs-recap__ligne"><span>Total colis</span><strong data-recap="colis">0,00 $</strong></div>
         <div class="gs-recap__ligne"><span>Frais de service</span><strong data-recap="frais">10,00 $</strong></div>
         <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Grand total</span><strong data-recap="grand">0,00 $</strong></div>
-        <div class="gs-recap__ligne"><span>Déjà payé</span><strong data-recap="paye">0,00 $</strong></div>
-        <div class="gs-recap__ligne gs-recap__ligne--balance"><span>Balance</span><strong data-recap="balance">0,00 $</strong></div>
+        <div class="gs-recap__ligne" data-recap-emise><span>Déjà payé</span><strong data-recap="paye">0,00 $</strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--balance" data-recap-emise><span>Reste à payer</span><strong data-recap="balance">0,00 $</strong></div>
       </div>
       <div class="gs-form__grille">
         <div class="gs-champ">
           <label for="fac-montant">Montant total (US $)</label>
           <input id="fac-montant" name="montant_usd" type="number" min="0" step="0.01" required placeholder="45.00">
           <p class="gs-champ__aide" data-aide-montant>Calculé à partir des colis cochés, frais de service compris.</p>
-        </div>
-        <div class="gs-champ">
-          <label for="fac-paye">Déjà payé (US $)</label>
-          <input id="fac-paye" name="montant_paye_usd" type="number" min="0" step="0.01" placeholder="0.00">
-          <p class="gs-champ__aide">Laissez à zéro tant que rien n'est encaissé : la balance vaut alors le grand total.</p>
         </div>
         <div class="gs-champ">
           <label for="fac-echeance">À payer avant le</label>
@@ -411,35 +426,157 @@
         <label for="fac-note">Note pour le client (facultatif)</label>
         <textarea id="fac-note" name="note" rows="2" maxlength="300"></textarea>
       </div>
-      <div class="gs-form__grille" data-bloc-paiement hidden>
+      <p class="gs-facture-annulee" data-facture-annulee hidden></p>
+      <section class="gs-paiements" data-bloc-paiements hidden aria-labelledby="fac-paiements-titre">
+        <div class="gs-paiements__tete">
+          <h3 id="fac-paiements-titre">Paiements</h3>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="encaisser-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>Encaisser un paiement</button>
+        </div>
+        <ul class="gs-paiements__liste" data-liste-paiements></ul>
+        <p class="gs-champ__aide" data-paiements-vide>Aucun paiement reçu pour l'instant.</p>
+      </section>
+      <div class="gs-dialogue__actions-colis" data-bloc-actions-facture hidden>
+        <button type="button" class="gs-lien-bouton" data-action="regrouper-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>Regrouper avec d'autres factures de ce client</button>
+        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="annuler-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>Annuler cette facture</button>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Fermer</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="paiement" aria-labelledby="dlg-paiement-titre">
+  <form class="gs-form" data-form="paiement" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-paiement-titre">Encaisser un paiement</h2>
+        <p class="gs-dialogue__sous-titre" data-paiement-facture></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <div class="gs-recap">
+        <div class="gs-recap__ligne"><span>Total de la facture</span><strong data-paiement-recap="total"></strong></div>
+        <div class="gs-recap__ligne"><span>Déjà payé</span><strong data-paiement-recap="paye"></strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--balance"><span>Reste à payer</span><strong data-paiement-recap="solde"></strong></div>
+      </div>
+      <div class="gs-form__grille">
         <div class="gs-champ">
-          <label for="fac-statut">Statut</label>
-          <select id="fac-statut" name="statut">
-            <option value="a_payer">À payer</option>
-            <option value="payee">Payée</option>
-            <option value="annulee">Annulée</option>
-          </select>
+          <label for="pai-montant">Montant reçu (US $)</label>
+          <input id="pai-montant" name="montant_usd" type="number" min="0.01" step="0.01" required inputmode="decimal">
+          <p class="gs-champ__aide">Un acompte suffit : la facture reste à payer pour le reste.</p>
         </div>
         <div class="gs-champ">
-          <label for="fac-moyen">Payée par</label>
-          <select id="fac-moyen" name="moyen">
-            <option value="">—</option>
-            <option value="paypal">PayPal</option>
-            <option value="banque">Compte bancaire</option>
-            <option value="azul">Azul</option>
+          <label for="pai-moyen">Payé par</label>
+          <select id="pai-moyen" name="moyen" required>
+            <option value="">Choisir…</option>
+            <option value="especes">Espèces</option>
             <option value="moncash">MonCash</option>
             <option value="natcash">NatCash</option>
-            <option value="especes">Espèces</option>
+            <option value="banque">Virement bancaire</option>
+            <option value="paypal">PayPal</option>
+            <option value="azul">Azul (carte)</option>
+            <option value="transfert">Transfert d'argent (Western Union, Ria…)</option>
+            <option value="autre">Autre</option>
           </select>
         </div>
+        <div class="gs-champ">
+          <label for="pai-date">Reçu le</label>
+          <input id="pai-date" name="paye_le" type="date" required>
+        </div>
+        <div class="gs-champ">
+          <label for="pai-reference">Référence <span class="gs-facultatif">(facultatif)</span></label>
+          <input id="pai-reference" name="reference" maxlength="100" autocomplete="off" spellcheck="false" placeholder="N° de reçu, de transaction…">
+        </div>
+      </div>
+      <div class="gs-champ">
+        <label for="pai-note">Note interne <span class="gs-facultatif">(facultatif)</span></label>
+        <textarea id="pai-note" name="note" rows="2" maxlength="300"></textarea>
+      </div>
+      <p class="gs-dialogue__aide">Un paiement enregistré ne se modifie plus. En cas d'erreur, annulez-le avec son motif, puis saisissez le bon : les deux restent visibles.</p>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer le paiement</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="motif" aria-labelledby="dlg-motif-titre">
+  <form class="gs-form" data-form="motif" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-motif-titre" data-motif-titre>Annuler</h2>
+        <p class="gs-dialogue__sous-titre" data-motif-sous-titre></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide" data-motif-aide></p>
+      <div class="gs-champ">
+        <label for="motif-texte">Motif <span class="gs-facultatif">(obligatoire, gardé au journal)</span></label>
+        <textarea id="motif-texte" name="motif" rows="3" maxlength="300" required></textarea>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Retour</button>
+      <button type="submit" class="gs-bouton gs-bouton--danger" data-motif-valider>Annuler</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="regroupement" aria-labelledby="dlg-regroupement-titre">
+  <form class="gs-form" data-form="regroupement" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-regroupement-titre">Regrouper des factures</h2>
+        <p class="gs-dialogue__sous-titre" data-regroupement-client></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Les factures cochées sont annulées et remplacées par une seule, qui reprend tous leurs colis au prix déjà arrêté — les frais de service n'y comptent qu'une fois. Seules les factures de colis sans aucun paiement se regroupent.</p>
+      <fieldset class="gs-choix-colis">
+        <legend>Factures à regrouper</legend>
+        <div class="gs-regroupement" data-liste-regroupement></div>
+      </fieldset>
+      <div class="gs-recap" data-recap-regroupement hidden>
+        <div class="gs-recap__ligne"><span data-regroupement-avant></span><strong data-regroupement="avant"></strong></div>
+        <div class="gs-recap__ligne"><span>Colis</span><strong data-regroupement="colis"></strong></div>
+        <div class="gs-recap__ligne"><span>Frais de service (une fois)</span><strong data-regroupement="frais"></strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Nouvelle facture</span><strong data-regroupement="total"></strong></div>
       </div>
       <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
     </div>
     <div class="gs-dialogue__pied">
       <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
-      <button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-regroupement-valider>Regrouper</button>
     </div>
   </form>
+</dialog>
+
+<dialog class="gs-dialogue gs-dialogue--large" data-dialogue="controle" aria-labelledby="dlg-controle-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-controle-titre">Contrôle de la facturation</h2>
+        <p class="gs-dialogue__sous-titre" data-controle-resume></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Ce rapport signale ce qui paraît incohérent ; il ne corrige rien. Une facture remise à un client ne se réécrit pas : annulez-la, refacturez, ou annulez un paiement — chaque geste reste au journal.</p>
+      <ul class="gs-anomalies" data-liste-anomalies aria-live="polite"></ul>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Fermer</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="gs-dialogue" data-dialogue="statut" aria-labelledby="dlg-statut-titre">

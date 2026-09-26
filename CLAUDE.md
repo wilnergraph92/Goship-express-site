@@ -111,9 +111,26 @@ admin ; les frais, jamais.
 recalculé à l'affichage : changer le tarif ne doit pas modifier une
 facture déjà remise à un client.
 
-Les quatre montants d'une facture viennent tous de
+Les montants d'une facture viennent tous de
 `API.outils.totauxFacture()` — écran et papier doivent afficher la même
-chose. Ne recalcule jamais à la main ailleurs.
+chose. Ne recalcule jamais à la main ailleurs. Le grand total est
+`montant_usd`, arrêté à la création ; le payé, le solde et l'état
+(`paye_usd`, `solde_usd`, `etat_paiement`) sont calculés par la base et
+`totauxFacture` les reprend tels quels.
+
+**Les paiements** (`outils/supabase-finances.sql`) : une ligne par
+encaissement dans `paiements`, écrite seulement par
+`enregistrer_paiement` (verrou sur la facture, trop-payé refusé, clé
+d'idempotence). Un paiement ne se modifie ni ne se supprime : il s'annule
+(`annuler_paiement`, motif obligatoire). `factures.montant_paye_usd`,
+`statut`, `moyen` et `payee_le` suivent les paiements (déclencheur
+`garde_facture` : aucune page ne les écrit). Une facture ne se supprime
+pas : `annuler_facture` (motif, refusée si elle a reçu de l'argent).
+Regrouper : `regrouper_factures` (annule les anciennes, `remplacee_par`).
+Les trois statuts stockés ne changent pas ; « partielle » et « en_retard »
+sont des états déduits. Même copie démo que le reste (`ajouterPaiementDemo`,
+`recalculerFactureDemo`…), comparée par `essai-finances.py` /
+`essai-finances.js`.
 
 Le prix d'un colis se calcule dans la base (`prix_transport`, appelé par
 `regles_colis`) : celui qu'envoie une page est ignoré. Le champ prix du
@@ -127,14 +144,16 @@ volontairement : leur total ne devait pas changer rétroactivement.
 ## Base de données
 
 Tables : `clients`, `colis`, `colis_historique`, `notifications`,
-`prealertes`, `factures`, `facture_lignes`, `appareils`, `journal_audit`. Vue
+`prealertes`, `factures`, `facture_lignes`, `paiements`, `factures_numeros`,
+`evenements_facturation`, `appareils`, `journal_audit`. Vue
 `colis_details` (colis + client). RLS activé partout, ~35 policies.
 
 Les migrations sont dans `outils/*.sql`, à exécuter dans Supabase >
 SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
 donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
-`supabase-evenements.sql`, `supabase-scanner.sql` — relancer l'un impose
+`supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`
+— relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.

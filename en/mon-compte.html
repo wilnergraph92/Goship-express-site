@@ -309,6 +309,8 @@
       </div>
     </div>
     <ul class="gs-facture__lignes" data-champ="lignes"></ul>
+    <p class="gs-facture__soldes" data-champ="soldes" hidden></p>
+    <ul class="gs-facture__paiements" data-champ="paiements" hidden></ul>
     <p class="gs-facture__note" data-champ="note" translate="no" hidden></p>
     <div class="gs-facture__actions">
       <a class="gs-bouton gs-bouton--petit gs-bouton--plein" data-champ="payer" target="_blank" rel="noopener" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>Pay by card</a>
@@ -386,6 +388,12 @@
   <p data-t="facture-a_payer">Unpaid</p>
   <p data-t="facture-payee">Paid</p>
   <p data-t="facture-annulee">Cancelled</p>
+  <p data-t="facture-partielle">Partly paid</p>
+  <p data-t="facture-en_retard">Overdue</p>
+  <p data-t="facture-total">Total {montant}</p>
+  <p data-t="facture-paye">Paid {montant}</p>
+  <p data-t="facture-reste">Balance due {montant}</p>
+  <p data-t="facture-paiement">{montant} received on {date}</p>
   <p data-t="facture-etablie">Issued on {date}</p>
   <p data-t="facture-echeance">due by {date}</p>
   <p data-t="facture-payee-le">paid on {date}</p>
@@ -397,6 +405,15 @@
   <p data-t="facture-moyen-moncash">Paid with MonCash</p>
   <p data-t="facture-moyen-natcash">Paid with NatCash</p>
   <p data-t="facture-moyen-especes">Paid in cash</p>
+  <p data-t="facture-moyen-transfert">Paid by money transfer</p>
+  <p data-t="moyen-paypal">PayPal</p>
+  <p data-t="moyen-banque">Bank transfer</p>
+  <p data-t="moyen-azul">Azul</p>
+  <p data-t="moyen-moncash">MonCash</p>
+  <p data-t="moyen-natcash">NatCash</p>
+  <p data-t="moyen-especes">Cash</p>
+  <p data-t="moyen-transfert">Money transfer</p>
+  <p data-t="moyen-autre">Other method</p>
   <p data-t="factures-total">{n} to pay</p>
   <p data-t="admin-avis">This is an administrator account.</p>
   <p data-t="admin-lien">Open the dashboard</p>

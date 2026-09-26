@@ -605,19 +605,23 @@
       var article = fragment.querySelector('.gs-facture');
       article.setAttribute('data-id', f.id);
       champ(article, 'numero').textContent = f.numero || '';
+      // Le payé, le solde et l'état viennent de la base (mes_factures) : on
+      // les affiche, on ne les refait pas.
+      var totaux = O.totauxFacture(f);
+      var ouverte = totaux.etat === 'a_payer' || totaux.etat === 'partielle' || totaux.etat === 'en_retard';
 
       var dates = [t('facture-etablie', { date: O.date(f.cree_le) })];
-      if (f.statut === 'a_payer' && f.echeance_le) {
+      if (ouverte && f.echeance_le) {
         dates.push(t('facture-echeance', { date: O.date(f.echeance_le) }));
-      } else if (f.statut === 'payee' && f.payee_le) {
+      } else if (totaux.etat === 'payee' && f.payee_le) {
         dates.push(t('facture-payee-le', { date: O.date(f.payee_le) }));
       }
       champ(article, 'date').textContent = dates.join(' · ');
-      champ(article, 'montant').textContent = O.argent(f.montant_usd);
+      champ(article, 'montant').textContent = O.argent(totaux.grandTotal);
 
       var badge = champ(article, 'statut');
-      badge.textContent = t('facture-' + f.statut);
-      badge.className = 'gs-badge gs-badge--facture-' + f.statut;
+      badge.textContent = t('facture-' + totaux.etat);
+      badge.className = 'gs-badge gs-badge--facture-' + totaux.etat;
 
       var lignes = champ(article, 'lignes');
       (f.lignes || []).forEach(function (l) {
@@ -632,6 +636,14 @@
           numero.textContent = t('facture-colis', { numero: l.colis });
           li.appendChild(numero);
         }
+        // Le poids et le tarif du jour de la facture, recopiés sur la ligne
+        if (l.poids_lb != null && l.tarif_lb_usd != null) {
+          var calcul = document.createElement('span');
+          calcul.className = 'gs-facture__colis';
+          calcul.setAttribute('translate', 'no');
+          calcul.textContent = O.nombre(Number(l.poids_lb)) + ' lb × ' + O.argent(l.tarif_lb_usd) + '/lb';
+          li.appendChild(calcul);
+        }
         var montant = document.createElement('span');
         montant.className = 'gs-facture__ligne-montant';
         montant.textContent = O.argent(l.montant_usd);
@@ -640,10 +652,45 @@
       });
       lignes.hidden = !(f.lignes || []).length;
 
+      // Payé et reste à payer, dès qu'un premier paiement est arrivé
+      var soldes = champ(article, 'soldes');
+      if (totaux.paye > 0 && totaux.etat !== 'annulee') {
+        [['facture-total', totaux.grandTotal, ''], ['facture-paye', totaux.paye, ''],
+         ['facture-reste', totaux.balance, 'gs-facture__reste']].forEach(function (x) {
+          if (x[0] === 'facture-reste' && x[1] <= 0) return;
+          var morceau = document.createElement('span');
+          if (x[2]) morceau.className = x[2];
+          var gras = document.createElement('strong');
+          gras.setAttribute('translate', 'no');
+          gras.textContent = O.argent(x[1]);
+          var modele = t(x[0], { montant: '\u0000' }).split('\u0000');
+          morceau.appendChild(document.createTextNode(modele[0] || ''));
+          morceau.appendChild(gras);
+          morceau.appendChild(document.createTextNode(modele[1] || ''));
+          soldes.appendChild(morceau);
+        });
+        soldes.hidden = false;
+      }
+
+      // L'historique des paiements reçus
+      var liste = champ(article, 'paiements');
+      (f.paiements || []).forEach(function (p) {
+        var li = document.createElement('li');
+        var modele = t('facture-paiement', { montant: '\u0000', date: O.date(p.paye_le) }).split('\u0000');
+        var gras = document.createElement('strong');
+        gras.setAttribute('translate', 'no');
+        gras.textContent = O.argent(p.montant_usd);
+        li.appendChild(document.createTextNode(modele[0] || ''));
+        li.appendChild(gras);
+        li.appendChild(document.createTextNode((modele[1] || '') + (t('moyen-' + p.moyen) ? ' · ' + t('moyen-' + p.moyen) : '')));
+        liste.appendChild(li);
+      });
+      liste.hidden = !(f.paiements || []).length || totaux.etat === 'payee' && (f.paiements || []).length < 2;
+
       // « Payée par PayPal » vaut mieux, sur une facture réglée, que la note
       // de relance qui l'accompagnait.
       var note = champ(article, 'note');
-      var moyen = f.statut === 'payee' && f.moyen ? t('facture-moyen-' + f.moyen) : '';
+      var moyen = totaux.etat === 'payee' && f.moyen ? t('facture-moyen-' + f.moyen) : '';
       if (moyen || f.note) {
         note.textContent = moyen || f.note;
         note.hidden = false;
@@ -652,7 +699,7 @@
       var payer = champ(article, 'payer');
       // Seules les adresses web deviennent un lien. Un « javascript: » glissé
       // dans le champ du tableau de bord ne doit pas s'exécuter ici.
-      if (f.statut === 'a_payer' && /^https?:\/\//i.test(f.lien_paiement || '')) {
+      if (ouverte && /^https?:\/\//i.test(f.lien_paiement || '')) {
         payer.href = f.lien_paiement;
         payer.hidden = false;
       }
@@ -671,7 +718,8 @@
       listeFactures.removeAttribute('aria-busy');
       factures.forEach(function (f) { listeFactures.appendChild(carteFacture(f)); });
       $('[data-vide="factures"]').hidden = factures.length > 0;
-      var aPayer = factures.filter(function (f) { return f.statut === 'a_payer'; }).length;
+      // « 2 à payer » : les factures qui ont encore un solde, d'après la base
+      var aPayer = factures.filter(function (f) { return O.totauxFacture(f).balance > 0; }).length;
       var total = $('[data-total-factures]');
       total.textContent = aPayer ? t('factures-total', { n: aPayer }) : '';
       total.hidden = !aPayer;

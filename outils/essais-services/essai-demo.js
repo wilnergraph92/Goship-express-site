@@ -196,7 +196,7 @@ function code(promesse) {
   verifier('creer_facture avec lui : refusé', await code(A.creerFacture({ client_id: marie }, [id])), 'INVOICE_ALREADY_EXISTS');
   // Le tableau de bord facture chaque colis à son enregistrement : on annule
   // ces deux factures-là pour regrouper les colis sur une seule.
-  for (var k of [a, b]) await A.modifierFacture((await A.factureDuColis(k)).id, { statut: 'annulee' });
+  for (var k of [a, b]) await A.annulerFacture((await A.factureDuColis(k)).id, 'Regroupées sur une seule');
   var fa = (await A.creerFacture({ client_id: marie, montant_usd: 1 }, [a, b], 'fac-1')).facture;
   verifier('deux colis : prix + 10 $ une fois', [fa.montant_usd, fa.frais_service_usd, fa.facture_lignes.length], [52, 10, 2]);
   verifier('même clé : même facture', (await A.creerFacture({ client_id: marie }, [a, b], 'fac-1')).facture.id, fa.id);
@@ -204,18 +204,19 @@ function code(promesse) {
   verifier('colis d\'un autre client', await code(A.creerFacture({ client_id: marie }, [j])), 'INVOICE_CLIENT_MISMATCH');
   verifier('facture libre sans colis : pas de frais',
            (await A.creerFacture({ client_id: jean, montant_usd: '12,5' }, [])).facture.frais_service_usd, 0);
-  verifier('frais modifiés après coup', await code(A.modifierFacture(fa.id, { frais_service_usd: 0 })), 'INVOICE_LOCKED');
+  verifier('frais modifiés après coup : ignorés', (await A.modifierFacture(fa.id, { frais_service_usd: 0 })).frais_service_usd, 10);
   verifier('total d\'une facture de colis modifié', await code(A.modifierFacture(fa.id, { montant_usd: 5 })), 'INVOICE_LOCKED');
-  verifier('payé plus que le total', await code(A.modifierFacture(fa.id, { montant_paye_usd: 99 })), 'INVALID_AMOUNT');
-  await A.modifierFacture(fa.id, { statut: 'annulee' });
+  verifier('payé plus que le total', await code(A.enregistrerPaiement(fa.id, { montant_usd: 99, moyen: 'especes' })),
+           'OVERPAYMENT');
+  await A.annulerFacture(fa.id, 'Erreur de client');
   verifier('facture annulée : le colis se refacture', (await A.facturerColis(a)).deja, false);
-  verifier('réactiver l\'ancienne doublerait', await code(A.modifierFacture(fa.id, { statut: 'a_payer' })),
-           'INVOICE_ALREADY_EXISTS');
+  verifier('une facture annulée ne se modifie plus', await code(A.modifierFacture(fa.id, { note: 'x' })),
+           'INVOICE_LOCKED');
 
   console.log('\n8. Journal et permissions');
   var actions = (await A.journal({ parPage: 500 })).lignes.map(function (l) { return l.action; });
   verifier('créations, statuts, modifications, paiements journalisés',
-           ['colis.creation', 'colis.statut', 'colis.modification', 'facture.creation', 'facture.paiement']
+           ['colis.creation', 'colis.statut', 'colis.modification', 'facture.creation', 'facture.annulation']
              .every(function (x) { return actions.indexOf(x) >= 0; }), true);
   await API.deconnecter();
   await API.connecter('marie-ange@exemple.com', 'demo1234');

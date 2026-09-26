@@ -105,7 +105,7 @@ Pour savoir où vous en êtes, la requête de contrôle est à la fin de `outils
 
 - **Créer un compte** (bouton orange de l'en-tête) : nom complet, pays, région, ville, adresse, téléphone, e-mail et mot de passe. Chaque compte reçoit automatiquement un **code client unique**, tiré au hasard : « GSE- » suivi de 4 chiffres (ex. GSE-4323). Le client reçoit aussitôt **deux e-mails** : son code, puis son adresse en Floride (voir « Les deux e-mails de bienvenue »).
 - **Mon compte** : son code client, son **adresse en Floride** à utiliser pour ses achats en ligne (avec son nom et son code, prête à copier), ses colis en cours et livrés, l'historique de chaque colis et ses coordonnées modifiables. La page se met à jour **en direct** dès que l'équipe change un statut.
-- **Mes factures** (dans « Mon compte », sous les colis) : chaque facture avec son montant, son état (À payer, Payée, Annulée), la date limite, le détail ligne par ligne — un colis par ligne — et la note de l'équipe. Un bouton **« Payer par carte »** quand un lien de paiement est prêt, et un bouton **« Imprimer ou enregistrer »** qui sort la facture sur une page A4, dans la langue du client. Comme les colis, la liste se met à jour **en direct** : une facture marquée payée dans le tableau de bord change d'état chez le client dans la seconde.
+- **Mes factures** (dans « Mon compte », sous les colis) : chaque facture avec son montant, son état (À payer, Payée en partie, En retard, Payée, Annulée), ce qui est déjà payé et ce qui reste, les paiements reçus, la date limite, le détail ligne par ligne — un colis par ligne — et la note de l'équipe. Un bouton **« Payer par carte »** quand un lien de paiement est prêt, et un bouton **« Imprimer ou enregistrer »** qui sort la facture sur une page A4, dans la langue du client. Comme les colis, la liste se met à jour **en direct** : une facture marquée payée dans le tableau de bord change d'état chez le client dans la seconde.
 - **Suivi de colis** (accueil) : n'importe qui peut suivre un colis avec son numéro (GSE-1001-HT…) ou le numéro de suivi du vendeur. Seuls le statut et les étapes sont affichés, jamais le nom, l'adresse ni le contenu.
 
 Statuts disponibles : Reçu → Emballé → Embarqué → Centre de distribution → Transféré à la succursale → Disponible → Livré, plus « Action requise » en cas de problème (le message joint s'affiche chez le client).
@@ -115,7 +115,7 @@ Statuts disponibles : Reçu → Emballé → Embarqué → Centre de distributio
 - **Enregistrer un colis** à sa réception : code client (le nom du client s'affiche pour vérification), date et heure de réception (remplies automatiquement, modifiables), contenu, expéditeur (Amazon, SHEIN…), numéro de suivi du vendeur, poids, service, destination. Le numéro de colis (GSE-1001-HT, GSE-1002-DO…) est attribué automatiquement, le colis naît au statut « Reçu », et son **prix** (poids × tarif) et sa **facture** sont créés par la base dans le même mouvement. Voir « Les règles métier ».
 - **Mettre à jour** le statut d'un colis, avec un lieu et un message pour le client ; ou cocher plusieurs colis et **changer leur statut en une fois** (un conteneur qui part, par exemple). Les statuts impossibles depuis l'étape actuelle sont grisés ; pour un lot, si un seul colis ne peut pas suivre, aucun ne change et le tableau de bord dit lequel.
 - **Imprimer l'étiquette d'expédition** d'un colis (bouton « Étiquette » sur sa ligne, ou depuis sa fiche) ; ou cocher plusieurs colis et **imprimer toutes leurs étiquettes en une fois**, ce qu'on veut après avoir enregistré l'arrivée d'un lot. Voir « Étiquettes, QR codes et codes-barres ».
-- **Facturer** (onglet Factures) : créer une facture, la marquer payée, l'envoyer sur WhatsApp, et l'**imprimer** sur une page A4 (bouton « Imprimer »), dans la langue du client.
+- **Facturer** (onglet Factures) : créer une facture, **encaisser** un paiement (acompte ou solde, avec son moyen et sa référence), l'**annuler** avec son motif (jamais la supprimer), **regrouper** plusieurs factures d'un client en une seule, l'envoyer sur WhatsApp, et l'**imprimer** sur une page A4, dans la langue du client. En haut de l'onglet : ce qui reste à encaisser, les factures en retard, ce qui est entré ce mois-ci ; le bouton **« Contrôler »** liste les incohérences de facturation sans rien corriger. Voir « Les finances ».
 - Rechercher un colis ou un client, filtrer par statut, voir les colis d'un client, corriger ou supprimer un colis.
 
 ### Prévenir les clients (e-mail et WhatsApp)
@@ -475,7 +475,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, puis `outils/supabase-scanner.sql`. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, puis `outils/supabase-finances.sql`. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 
@@ -491,7 +491,7 @@ Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut f
 - **Tout ou rien.** Le changement de statut et son étape dans l'historique sont écrits ensemble : jamais l'un sans l'autre. Un colis et sa facture aussi. Pour un lot, si un seul colis bloque, aucun ne change.
 - **Pas de doublon.** Un double clic, un envoi répété après une coupure, un scan répété : la base reconnaît la demande et ne refait rien (pas de second colis, pas de seconde facture, pas d'étape en double). Un colis ne figure que sur une facture active ; pour le refacturer, annulez d'abord l'ancienne.
 - **Deux personnes à la fois.** Si un collègue a changé le colis pendant que vous le regardiez, la base refuse votre modification au lieu d'écraser la sienne, et le dit.
-- **Une facture émise est arrêtée.** Ses frais de service, son client et, si elle porte des colis, son total ne se modifient plus. Les paiements, l'échéance, la note et le lien de paiement, si.
+- **Une facture émise est arrêtée.** Ses frais de service, son client, son numéro, ses lignes et, si elle porte des colis, son total ne se modifient plus. L'échéance, la note et le lien de paiement, si. Son payé et son statut suivent ses paiements (voir « Les finances »).
 - **Le journal.** Chaque création, modification, changement de statut, paiement et modification de client est noté dans la table `journal_audit` : qui, quoi, quand, avant, après. Pour un client, seul le nom des champs modifiés est noté, jamais son adresse ni son téléphone. Seule l'équipe le lit ; personne ne peut y écrire.
 - **Les permissions.** Chaque fonction vérifie la permission du compte connecté (`shipments.create`, `shipments.update_status`, `invoices.create`…), en plus des règles de sécurité des tables. Aujourd'hui, deux rôles : l'équipe peut tout, un client ne voit que ce qui est à lui. La liste est dans `permissions_du_role`, le seul endroit à changer quand viendront des rôles plus fins.
 
@@ -555,12 +555,17 @@ Quand la base refuse, elle répond par un code et une phrase en français, que l
 | `STATUS_ALREADY_SET` | le colis est déjà à ce statut |
 | `EVENT_IMMUTABLE` | tentative de modifier ou d'effacer un événement |
 | `INVALID_SCAN_FORMAT` | code scanné illisible (refusé par la page avant même d'interroger la base) |
+| `OVERPAYMENT`, `INVOICE_ALREADY_PAID`, `INVOICE_CANCELLED` | paiement plus grand que le reste, facture déjà soldée, facture annulée |
+| `INVALID_PAYMENT_METHOD`, `DUPLICATE_PAYMENT` | moyen inconnu, même référence déjà saisie sur la facture |
+| `PAYMENT_LOCKED`, `PAYMENT_REQUIRED` | un paiement ne se modifie ni ne s'efface ; le payé d'une facture ne s'écrit pas à la main |
+| `REASON_REQUIRED`, `INVOICE_HAS_PAYMENTS`, `INVOICE_NOT_GROUPABLE` | motif d'annulation manquant ; facture qui a reçu de l'argent ; facture qui ne se regroupe pas |
+| `INVOICE_DELETE_FORBIDDEN`, `INVOICE_NUMBER_USED`, `INVOICE_NOT_FOUND`, `PAYMENT_NOT_FOUND` | une facture s'annule au lieu de se supprimer ; numéro déjà attribué ; facture ou paiement introuvable |
 
 Les refus de permission et les transitions interdites sont aussi notés dans les journaux de Supabase (*Logs* > *Postgres*, chercher « goship »), sans aucune donnée secrète.
 
 ### Pour les développeurs
 
-Les fonctions appelées par le site : `creer_colis`, `modifier_colis`, `trouver_colis`, `facturer_colis`, `creer_facture` (`supabase-services.sql`) ; `changer_statut_colis`, `statuts_possibles`, `historique_colis` (`supabase-evenements.sql`). Le suivi public reste `suivre_colis`. Côté site, rien ne change dans les noms : `API.admin.creerColis`, `changerStatut`… appellent ces fonctions. Le mode démonstration applique les mêmes règles dans le navigateur, et `outils/essais-services/` vérifie que les deux répondent pareil, cas par cas.
+Les fonctions appelées par le site : `creer_colis`, `modifier_colis`, `trouver_colis`, `facturer_colis`, `creer_facture` (`supabase-services.sql`) ; `changer_statut_colis`, `statuts_possibles`, `historique_colis` (`supabase-evenements.sql`) ; `enregistrer_paiement`, `annuler_paiement`, `annuler_facture`, `regrouper_factures`, `calculer_facture`, `resume_facturation`, `rapport_anomalies_facturation`, `mes_factures`, et les colonnes calculées `paye_usd`, `solde_usd`, `etat_paiement` (`supabase-finances.sql`). Le suivi public reste `suivre_colis`. Côté site, rien ne change dans les noms : `API.admin.creerColis`, `changerStatut`… appellent ces fonctions. Le mode démonstration applique les mêmes règles dans le navigateur, et `outils/essais-services/` vérifie que les deux répondent pareil, cas par cas.
 
 **Plus tard** : quand l'application mobile aura été vérifiée (elle ne doit pas écrire dans la table `colis`), la fin de `supabase-services.sql` contient, prêtes à l'emploi, les deux lignes qui ferment l'écriture directe dans les tables : il ne restera alors que les fonctions comme porte d'entrée.
 
@@ -580,8 +585,51 @@ Le lien de paiement vient de `assets/js/config.js` :
 
 Dans l'application, les mêmes réglages sont dans `application-mobile/config.js` (`paiement`), avec
 les autres moyens affichés au client : compte bancaire, Azul, MonCash, NatCash — leurs numéros
-restent à renseigner. Après son paiement, le client envoie son reçu sur WhatsApp et vous marquez la
-facture payée dans le tableau de bord (bouton « Marquer payée »).
+restent à renseigner. Après son paiement, le client envoie son reçu sur WhatsApp et vous
+l'**encaissez** dans le tableau de bord (bouton « Encaisser ») : montant reçu, moyen, date,
+référence du reçu. Un acompte laisse la facture « Payée en partie » ; elle devient « Payée »
+quand le reste est encaissé. Après un acompte, le lien PayPal fabriqué par le tableau de bord
+demande le reste, plus le total.
+
+## Les finances
+
+Depuis `outils/supabase-finances.sql` (Phase 5), **chaque paiement est une ligne** de la table
+`paiements` — montant, moyen, référence, date, qui l'a saisi — et c'est la base qui fait les
+comptes :
+
+- **Payé = somme des paiements valides ; reste à payer (solde) = total − payé.** Calculés par la
+  base (`paye_usd`, `solde_usd`), jamais par une page. Le statut stocké reste l'un des trois
+  d'avant (à payer, payée, annulée) et suit les paiements ; l'**état** affiché en ajoute deux,
+  déduits : **payée en partie** et **en retard** (échéance dépassée — date de Santo Domingo — et
+  solde > 0).
+- **Pas de trop-payé, pas de double paiement.** Un paiement supérieur au reste est refusé ; deux
+  paiements envoyés au même instant passent l'un après l'autre (la facture est verrouillée) et le
+  second voit le premier ; un double clic ou un renvoi après coupure ne crée rien de plus (clé de
+  la demande) ; la même référence ne se saisit pas deux fois sur une facture.
+- **Rien ne s'efface.** Un paiement ne se modifie ni ne se supprime : une erreur s'**annule**,
+  avec son motif, et reste visible, barrée. Une facture ne se supprime plus : elle s'annule avec
+  son motif, garde son numéro, et ses colis redeviennent facturables. Une facture qui a reçu de
+  l'argent ne s'annule qu'après l'annulation de ses paiements.
+- **Un numéro ne sert qu'une fois** (registre `factures_numeros`), même si la facture disparaît
+  avec le compte de son client.
+- **Regrouper** : plusieurs factures de colis d'un même client, à payer et sans paiement, en une
+  seule. Les anciennes sont annulées (motif et renvoi vers la nouvelle) ; la nouvelle reprend les
+  colis au prix déjà arrêté, avec les 10 $ de frais une seule fois.
+- **Le tarif est gardé** sur chaque ligne (`tarif_lb_usd`), en plus du colis : une facture dit
+  toujours à quel prix la livre elle a été faite, même après un changement de tarif.
+- **Le journal** note chaque paiement, annulation et regroupement (qui, quand, motif) ; la file
+  `evenements_facturation` prépare de futures notifications (FACTURE_CREEE, PAIEMENT_ENREGISTRE,
+  PAIEMENT_ANNULE, FACTURE_PAYEE, FACTURE_ANNULEE) — rien ne les envoie encore.
+- **Le client** ne voit que ses factures et ses paiements (règles de sécurité), et n'en écrit
+  aucun.
+- **Le contrôle** (`rapport_anomalies_facturation`, bouton « Contrôler ») signale les colis
+  facturés deux fois, les totaux faux, le payé différent des paiements, l'argent sur une facture
+  annulée, les colis repesés après leur facture… Il ne corrige **rien** : une facture remise à un
+  client ne se réécrit pas en silence.
+
+Les anciennes factures ne changent pas : leur montant payé devient un paiement « repris », daté
+du jour où elles avaient été marquées payées, et leur total, leur payé et leur statut restent au
+centime près ce qu'ils étaient.
 
 **Attention, PayPal** : le paiement par carte sans compte PayPal exige un compte **Business** avec
 l'option « PayPal account optional » activée. Avec un compte personnel, la page demande au client
@@ -599,7 +647,12 @@ de se connecter ou de créer un compte.
   (`FAC-2026-0003`) : c'est celui que le client a sous les yeux.
 - **Une ligne par colis** : quantité, poids en livres, description, numéro du colis et total. Le
   poids est celui recopié sur la ligne au moment de la facture ; pour les factures d'avant cette
-  recopie, celui du colis prend le relais.
+  recopie, celui du colis prend le relais. Sous le numéro du colis, le **tarif à la livre** du
+  jour de la facture, quand il est connu.
+- **Les totaux** : total colis, frais de service, grand total, **déjà payé** (dès qu'un premier
+  paiement est arrivé) et balance. Ce sont les chiffres de la base, les mêmes qu'à l'écran. Une
+  facture payée en partie liste aussi les **paiements reçus** (date, moyen, montant) et porte
+  l'état « Payée en partie » ou « En retard ».
 - **Les trois moyens de paiement**, uniquement sur une facture à payer (les rappeler sur une
   facture réglée n'aiderait personne) : virement Banco BHD León, PayPal, et transfert Western
   Union / Unitransfer / Ria. Ils s'écrivent **en texte simple** — un titre, sa valeur, puis une
