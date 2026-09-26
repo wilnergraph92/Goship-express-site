@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 sys.dont_write_bytecode = True
@@ -302,6 +303,62 @@ def main():
     shutil.rmtree(travail)
     psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % RESTAUREE)
 
+    print('\nK. Restauration d\'épreuve (RESTAURATION_ESSAI=1) : le vrai auth.users a plus de colonnes que la doublure')
+    # Comme en production : auth.users a des colonnes que la doublure n'a pas, et auth.identities existe
+    psql_dans(db, S.BASE, """alter table auth.users add column if not exists aud varchar(255) default 'authenticated';
+                             alter table auth.users add column if not exists instance_id uuid;
+                             create table if not exists auth.identities (id text primary key, user_id uuid,
+                                    provider text, identity_data jsonb, cree_le timestamptz default now());
+                             insert into auth.identities (id, user_id, provider, identity_data)
+                               select id::text, id, 'email', jsonb_build_object('sub', id) from auth.users
+                             on conflict do nothing;""")
+    travail = tempfile.mkdtemp(prefix='goship-epreuve-')
+    cle = os.path.join(travail, 'cle.txt')
+    subprocess.run(['age-keygen', '-o', cle], capture_output=True, check=True)
+    cle2 = os.path.join(travail, 'cle-restauration.txt')
+    subprocess.run(['age-keygen', '-o', cle2], capture_output=True, check=True)
+    pub = lambda f: [l.split(': ')[1].strip() for l in open(f) if l.startswith('# public key')][0]
+    source = 'postgresql://%s@/%s?host=%s' % (db.su, S.BASE, db.socket)
+    r = subprocess.run(['bash', os.path.join(PRODUCTION, 'sauvegarder.sh'), os.path.join(travail, 'sortie')],
+                       env=dict(env_pg(source), SUPABASE_DB_URL=source, SAUVEGARDE_DESTINATAIRE=pub(cle),
+                                RESTAURATION_DESTINATAIRE=pub(cle2)),
+                       capture_output=True, text=True)
+    verifier('sauvegarde chiffrée pour deux destinataires (propriétaire + épreuve)',
+             (r.returncode, '2 destinataire(s)' in r.stdout), (0, True))
+    nom = sorted(os.listdir(os.path.join(travail, 'sortie')))[0].split('.')[0]
+    EPREUVE = 'goship_epreuve'
+
+    def cible_neuve():
+        psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % EPREUVE)
+        psql_dans(db, 'postgres', 'create database %s;' % EPREUVE)
+        psql_dans(db, EPREUVE, subprocess.run([sys.executable, os.path.join(PRODUCTION, 'doublures-supabase.py')],
+                                              capture_output=True, text=True, check=True).stdout)
+        return 'postgresql://%s@/%s?host=%s' % (db.su, EPREUVE, db.socket)
+    restaurer = lambda cible, cle_privee, **e: subprocess.run(
+        ['bash', os.path.join(PRODUCTION, 'restaurer.sh'), os.path.join(travail, 'sortie'), nom, cle_privee],
+        env=dict(env_pg(cible), CIBLE_DB_URL=cible, **e), capture_output=True, text=True)
+    r = restaurer(cible_neuve(), cle)
+    verifier('sans le mode d\'épreuve, les comptes ne rentrent pas dans la doublure (refus net, rien d\'écrit)',
+             (r.returncode != 0, psql_dans(db, EPREUVE, 'select count(*) from auth.users;').strip()), (True, '0'))
+    cible = cible_neuve()
+    t0 = time.time()
+    r = restaurer(cible, cle2, RESTAURATION_ESSAI='1')
+    verifier('mode d\'épreuve, avec la seule clé de restauration : lignes identiques au manifeste',
+             (r.returncode, 'identiques au manifeste' in r.stdout), (0, True))
+    if r.returncode:
+        print(r.stdout[-600:], r.stderr[-600:])
+    verifier('auth.users et auth.identities restaurés avec leurs vraies colonnes',
+             psql_dans(db, EPREUVE, """select (select count(*) from information_schema.columns
+                                                where table_schema = 'auth' and table_name = 'users' and column_name = 'aud')
+                                       || ':' || (select count(*) from auth.identities)""").strip(),
+             '1:' + psql_dans(db, S.BASE, 'select count(*) from auth.identities;').strip())
+    r = subprocess.run(['bash', os.path.join(PRODUCTION, 'appliquer-chaine.sh')],
+                       env=dict(env_pg(cible), CIBLE_DB_URL=cible, SANS_PG_NET='1'), capture_output=True, text=True)
+    verifier('la chaîne se rejoue sur la base restaurée', r.returncode, 0)
+    verifier('durée mesurée de la restauration + chaîne : %.0f s' % (time.time() - t0), time.time() - t0 < 600, True)
+    shutil.rmtree(travail)
+    psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % EPREUVE)
+
     print('\nG. Contrôle d\'intégrité (outils/production/controle-integrite.sql)')
     lignes = lignes_controle(db, S.BASE, 'controle-integrite.sql')
     verifier('%d contrôles, tous verts sur des données saines' % len(lignes), sorted({v for _c, v, _n, _e in lignes}), ['OK'])
@@ -332,8 +389,93 @@ def main():
     verifier('les exemples ne montrent que des numéros, jamais un nom ou une adresse',
              any(re.search(r'[a-z]+@|Marie|Jean|Pétion', e) for e in exemples.values()), False)
 
+    print('\nH. controler.sh : les deux contrôles en lecture seule, sortie publiable, détail chiffré')
+    travail = tempfile.mkdtemp(prefix='goship-controle-')
+    cle = os.path.join(travail, 'cle.txt')
+    subprocess.run(['age-keygen', '-o', cle], capture_output=True, check=True)
+    publique = [l.split(': ')[1].strip() for l in open(cle) if l.startswith('# public key')][0]
+    url = 'postgresql://%s@/%s?host=%s' % (db.su, S.BASE, db.socket)
+    r = subprocess.run(['bash', os.path.join(PRODUCTION, 'controler.sh'), os.path.join(travail, 'sortie')],
+                       env=dict(env_pg(url), CIBLE_DB_URL=url, SAUVEGARDE_DESTINATAIRE=publique),
+                       capture_output=True, text=True)
+    verifier('les anomalies de G et les comptes d\'essai donnent le code 1 (ALERTE)', r.returncode, 1)
+    verifier('la sortie visible cite chaque contrôle d\'intégrité en alerte',
+             all(c in r.stdout for c in ('Colis sans client', 'Payé ≠ somme des paiements')), True)
+    verifier('aucune adresse e-mail en clair dans la sortie visible (masquées)',
+             (re.search(r'[a-z0-9._-]+@goship\.test', r.stdout) is not None, '•••@goship.test' in r.stdout), (False, True))
+    verifier('aucun numéro de colis ni de facture dans la sortie visible', re.search(r'GSE-\d|\d{4}-\d{2}-\d{4}', r.stdout), None)
+    fichiers = os.listdir(os.path.join(travail, 'sortie'))
+    verifier('le détail complet n\'est écrit que chiffré (un seul fichier .tar.age)',
+             [f.endswith('.tar.age') for f in fichiers], [True])
+    detail = subprocess.run('age -d -i %s %s | tar -xOf - integrite.tsv' % (cle, os.path.join(travail, 'sortie', fichiers[0])),
+                            shell=True, capture_output=True, text=True).stdout
+    verifier('déchiffré avec la clé privée, il contient les exemples', 'Colis sans client' in detail and 'GSE-' in detail, True)
+    r = subprocess.run(['bash', os.path.join(PRODUCTION, 'controler.sh'), os.path.join(travail, 'sortie2')],
+                       env=dict(env_pg(url), CIBLE_DB_URL='postgresql://%s:mot-de-passe-secret@/base_inexistante?host=%s'
+                                % (db.su, db.socket)),
+                       capture_output=True, text=True)
+    verifier('base injoignable : code 2, jamais le mot de passe dans le message',
+             (r.returncode, 'mot-de-passe-secret' in r.stdout + r.stderr), (2, False))
+    shutil.rmtree(travail)
+
+    print('\nI. essai-metier.sql : le parcours métier complet, dans une transaction annulée')
+    def essai_metier():
+        return subprocess.run([str(S.PSQL), '-U', db.su, '-h', db.socket, '-d', S.BASE, '-v', 'ON_ERROR_STOP=1',
+                               '-X', '-q', '-f', os.path.join(PRODUCTION, 'essai-metier.sql')],
+                              capture_output=True, text=True)
+    avant = empreintes(db, S.BASE)
+    r = essai_metier()
+    oks = [l.split('OK ', 1)[1] for l in r.stderr.splitlines() if 'NOTICE:  OK ' in l]
+    if r.returncode:
+        print('\n'.join(l for l in r.stderr.splitlines() if 'NOTICE:  OK' not in l)[-1500:])
+    verifier('le parcours passe (code 0)', (r.returncode, [l for l in r.stderr.splitlines() if 'ÉCHEC' in l or 'ERROR' in l]), (0, []))
+    verifier('%d étapes réussies, dont notifications, sante() et l\'annulation finale' % len(oks),
+             (len(oks) >= 11, any(o.startswith('notifications') for o in oks), any(o.startswith('sante()') for o in oks),
+              any(o.startswith('transaction annulée') for o in oks)), (True, True, True, True))
+    verifier('rien n\'est resté : chaque table identique, ligne pour ligne', empreintes(db, S.BASE), avant)
+    db.sql('alter table public.colis disable trigger verrou_statut;')
+    r = essai_metier()
+    db.sql('alter table public.colis enable trigger verrou_statut;')
+    verifier('verrou_statut retiré : l\'essai échoue et le dit', (r.returncode != 0, 'verrou_statut' in r.stderr), (True, True))
+    verifier('même en échec, rien n\'est resté', empreintes(db, S.BASE), avant)
+
+    print('\nJ. appliquer-chaine.sh et doublures-supabase.py : la chaîne sur un PostgreSQL neuf')
+    NEUVE = 'goship_chaine'
+    psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % NEUVE)
+    psql_dans(db, 'postgres', 'create database %s;' % NEUVE)
+    doublures = subprocess.run([sys.executable, os.path.join(PRODUCTION, 'doublures-supabase.py')],
+                               capture_output=True, text=True, check=True).stdout
+    psql_dans(db, NEUVE, doublures)
+    cible = 'postgresql://%s@/%s?host=%s' % (db.su, NEUVE, db.socket)
+    chaine = lambda *a, **e: subprocess.run(['bash', os.path.join(PRODUCTION, 'appliquer-chaine.sh')] + list(a),
+                                           env=dict(env_pg(cible), CIBLE_DB_URL=e.get('url', cible), SANS_PG_NET='1'),
+                                           capture_output=True, text=True)
+    r = chaine()
+    verifier('les %d migrations passent dans l\'ordre, une par une' % len(CHAINE),
+             (r.returncode, r.stdout.count('OK     ')), (0, len(CHAINE)))
+    verifier('sante() répond sur la base ainsi migrée', jsonq_su(db, NEUVE, 'select public.sante() ->> \'status\';'), 'ok')
+    r = chaine()
+    verifier('rejouée une seconde fois : toujours sans erreur', r.returncode, 0)
+    r = chaine('supabase-notifications.sql')
+    verifier('à partir d\'un fichier : lui et ceux qui le suivent seulement', (r.returncode, r.stdout.count('OK     ')), (0, 2))
+    r = chaine(url='postgresql://postgres:x@db.gpfdyslysqjmojgzggib.supabase.co:5432/postgres')
+    verifier('adresse de la production : refus (code 3) avant toute connexion',
+             (r.returncode, 'REFUS' in r.stdout), (3, True))
+    psql_dans(db, NEUVE, 'drop function public.peut(text, uuid) cascade;')
+    r = chaine('supabase-evenements.sql')
+    en_echec = re.search(r'ÉCHEC  (\S+)', r.stdout)
+    suivants = CHAINE[CHAINE.index(en_echec.group(1)) + 1:] if en_echec else []
+    verifier('une migration en erreur arrête la chaîne (%s) : aucun fichier suivant n\'est lancé'
+             % (en_echec.group(1) if en_echec else '?'),
+             (r.returncode, bool(suivants), [f for f in suivants if 'OK     ' + f in r.stdout]), (1, True, []))
+    psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % NEUVE)
+
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), sum(S.RESULTATS)))
     sys.exit(0 if all(S.RESULTATS) else 1)
+
+
+def jsonq_su(db, base, sql):
+    return psql_dans(db, base, sql).strip()
 
 
 if __name__ == '__main__':

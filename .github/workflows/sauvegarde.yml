@@ -1,22 +1,26 @@
 # ==========================================================================
-#  Sauvegarde chiffrée de la base de production
+#  Sauvegarde chiffrée de la base de production, puis restauration d'épreuve
 # ==========================================================================
-#  Chaque jour à 5 h 23 UTC (et à la demande) : outils/production/sauvegarder.sh
-#  fait une copie logique de la base (schéma public complet + comptes), la
-#  chiffre avec la clé PUBLIQUE age de GoShip Express, et la garde 90 jours
-#  dans les artefacts du workflow (perte maximale : 24 h). Sans la clé PRIVÉE
-#  (jamais dans GitHub), personne ne peut la lire — pas même quelqu'un qui
-#  téléchargerait l'artefact.
+#  Chaque jour à 5 h 23 UTC (et à la demande) :
 #
-#  Ne fait rien tant que les deux secrets ne sont pas posés dans l'environnement
-#  « production » (Settings > Environments > production > Environment secrets) :
-#    SUPABASE_DB_URL          chaîne de connexion de la base (Supabase > Connect >
-#                             Session pooler), avec son mot de passe
-#    SAUVEGARDE_DESTINATAIRE  clé publique age (age1…) ; la clé privée reste hors ligne
-#  Procédure, restauration, conservation : docs/production/backup.md.
+#  1. « sauvegarder » — outils/production/sauvegarder.sh : copie logique (schéma
+#     public complet + comptes), chiffrée avec age pour deux destinataires :
+#       SAUVEGARDE_DESTINATAIRE    la clé du propriétaire (clé privée HORS LIGNE)
+#       RESTAURATION_DESTINATAIRE  la clé de l'épreuve ci-dessous (facultative)
+#     Gardée 90 jours en artefact. Sans clé privée, elle ne vaut rien.
 #
-#  C'est un filet de sécurité EN PLUS des sauvegardes de Supabase (selon l'offre
-#  du projet), pas à leur place.
+#  2. « restaurer » — la sauvegarde qu'on vient de faire est RESTAURÉE dans un
+#     PostgreSQL 17 jetable (doublures des schémas Supabase), avec la clé privée
+#     RESTAURATION_CLE : empreintes vérifiées, lignes comparées table par table au
+#     manifeste, chaîne de migrations rejouée, contrôles de sécurité et d'intégrité.
+#     Le résumé du job donne l'âge de la sauvegarde (RPO réel) et la durée de la
+#     restauration (RTO de la base, mesuré). Aucune donnée dans le journal.
+#     Ce n'est pas un vrai projet Supabase : la restauration dans un projet neuf
+#     reste à répéter à la main chaque trimestre (docs/production/backup.md).
+#
+#  Environnement « production » : SUPABASE_DB_URL, SAUVEGARDE_DESTINATAIRE,
+#  RESTAURATION_DESTINATAIRE, RESTAURATION_CLE. Sans les deux premiers, rien ne
+#  se fait (avis) ; sans les deux derniers, pas d'épreuve (avis).
 # ==========================================================================
 
 name: Sauvegarde de la base
@@ -39,9 +43,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
+    outputs:
+      pret: ${{ steps.pret.outputs.pret }}
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
+      RESTAURATION_DESTINATAIRE: ${{ secrets.RESTAURATION_DESTINATAIRE }}
     steps:
       - name: Secrets posés ?
         id: pret
@@ -83,3 +90,115 @@ jobs:
           path: sauvegarde/
           retention-days: 90
           if-no-files-found: error
+
+  restaurer:
+    name: Restauration d'épreuve (RPO, RTO mesurés)
+    needs: sauvegarder
+    if: needs.sauvegarder.outputs.pret == 'oui'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: epreuve-jetable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      RESTAURATION_CLE: ${{ secrets.RESTAURATION_CLE }}
+      SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
+      CIBLE_DB_URL: postgresql://postgres:epreuve-jetable@localhost:5432/postgres
+    steps:
+      - name: Clé de restauration posée ?
+        id: pret
+        run: |
+          if [ -z "$RESTAURATION_CLE" ]; then
+            echo "::warning::Restauration d'épreuve non configurée : poser RESTAURATION_CLE et RESTAURATION_DESTINATAIRE (docs/production/backup.md). La sauvegarde du jour n'a PAS été vérifiée."
+            echo "pret=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.pret.outputs.pret == 'oui'
+        with:
+          sparse-checkout: |
+            outils
+          sparse-checkout-cone-mode: false
+
+      - name: Outils (pg_restore 17, age)
+        if: steps.pret.outputs.pret == 'oui'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 age
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/download-artifact@v4
+        if: steps.pret.outputs.pret == 'oui'
+        with:
+          name: goship-sauvegarde-${{ github.run_number }}
+          path: sauvegarde
+
+      - name: Une base comme un projet Supabase neuf
+        if: steps.pret.outputs.pret == 'oui'
+        run: |
+          # Les rôles de Supabase que citent les droits sauvegardés, et la publication
+          # du temps réel, avant les doublures des schémas auth / vault / net / storage
+          psql "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1 <<'SQL'
+          do $$ declare r text; begin
+            foreach r in array array['supabase_admin', 'supabase_auth_admin', 'supabase_storage_admin',
+                                     'dashboard_user', 'pgbouncer', 'supabase_realtime_admin',
+                                     'supabase_replication_admin', 'supabase_read_only_user'] loop
+              if not exists (select 1 from pg_roles where rolname = r) then
+                execute format('create role %I nologin', r);
+              end if;
+            end loop;
+          end $$;
+          create publication supabase_realtime;
+          SQL
+          python3 outils/production/doublures-supabase.py | psql "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1
+
+      - name: Restaurer, comparer, rejouer la chaîne
+        if: steps.pret.outputs.pret == 'oui'
+        run: |
+          umask 077
+          printf '%s\n' "$RESTAURATION_CLE" > "$RUNNER_TEMP/cle-restauration.txt"
+          nom="$(ls sauvegarde | sed -n 's/\.public\.dump\.age$//p' | head -1)"
+          debut=$(date +%s)
+          RESTAURATION_ESSAI=1 bash outils/production/restaurer.sh sauvegarde "$nom" "$RUNNER_TEMP/cle-restauration.txt"
+          SANS_PG_NET=1 bash outils/production/appliquer-chaine.sh
+          fin=$(date +%s)
+          rm -f "$RUNNER_TEMP/cle-restauration.txt"
+          # RPO : âge de la sauvegarde restaurée ; RTO (base) : restauration + chaîne
+          prise="$(echo "$nom" | sed -E 's/^goship-([0-9-]+)T([0-9]{2})([0-9]{2})Z$/\1 \2:\3 UTC/')"
+          age_min=$(( ( fin - $(date -u -d "$prise" +%s) ) / 60 ))
+          {
+            echo "### Restauration d'épreuve : réussie"
+            echo "| Mesure | Valeur |"
+            echo "|---|---|"
+            echo "| Sauvegarde | \`$nom\` |"
+            echo "| Âge au moment de la restauration | $age_min min |"
+            echo "| Durée restauration + chaîne (RTO de la base, mesuré) | $(( fin - debut )) s |"
+            echo "| Lignes | identiques au manifeste, table par table |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Contrôles sur la base restaurée
+        if: steps.pret.outputs.pret == 'oui'
+        # pg_cron / pg_net n'existent pas dans ce PostgreSQL : l'alerte « Extensions »
+        # y est attendue. Le détail chiffré dit s'il y a autre chose.
+        continue-on-error: true
+        run: bash outils/production/controler.sh controle
+
+      - uses: actions/upload-artifact@v4
+        if: steps.pret.outputs.pret == 'oui' && always()
+        with:
+          name: controle-restauration-${{ github.run_number }}
+          path: controle/*.age
+          retention-days: 30
+          if-no-files-found: ignore

@@ -28,7 +28,13 @@ set -euo pipefail
 sortie="${1:?Usage : sauvegarder.sh <dossier de sortie>}"
 : "${SUPABASE_DB_URL:?SUPABASE_DB_URL manquante (chaîne de connexion de la base, jamais dans le dépôt)}"
 : "${SAUVEGARDE_DESTINATAIRE:?SAUVEGARDE_DESTINATAIRE manquante (clé publique age1…)}"
-case "$SAUVEGARDE_DESTINATAIRE" in age1*) ;; *) echo "SAUVEGARDE_DESTINATAIRE doit être une clé publique age (age1…)"; exit 1 ;; esac
+# Un ou plusieurs destinataires (séparés par des virgules ou des espaces) : la clé
+# hors ligne du propriétaire, et, pour la restauration d'épreuve quotidienne de
+# sauvegarde.yml, RESTAURATION_DESTINATAIRE. Chacun peut relire la sauvegarde seul.
+destinataires=()
+for r in $(echo "$SAUVEGARDE_DESTINATAIRE ${RESTAURATION_DESTINATAIRE:-}" | tr ',' ' '); do
+  case "$r" in age1*) destinataires+=(-r "$r") ;; *) echo "Destinataire invalide : une clé publique age commence par age1"; exit 1 ;; esac
+done
 PG_DUMP="${PG_DUMP:-pg_dump}"
 PG_RESTORE="${PG_RESTORE:-pg_restore}"
 PSQL="${PSQL:-psql}"
@@ -59,9 +65,12 @@ trap 'rm -rf "$travail"' EXIT
 "$PG_DUMP" --format=custom --no-owner --schema=public \
   --file "$travail/public.dump" "$SUPABASE_DB_URL"
 
-# 2. Les comptes : données seulement. Le schéma auth appartient à Supabase, qui le
-# recrée dans tout projet neuf.
-"$PG_DUMP" --format=custom --no-owner --no-privileges --data-only \
+# 2. Les comptes : données ET définition des deux tables. Une restauration dans un
+# projet Supabase neuf n'en lit que les données (le schéma auth appartient à
+# Supabase, qui le recrée) ; la définition sert à la restauration d'épreuve sur un
+# PostgreSQL ordinaire (restaurer.sh, RESTAURATION_ESSAI=1), où les colonnes du
+# vrai auth.users doivent exister.
+"$PG_DUMP" --format=custom --no-owner --no-privileges \
   --table=auth.users --table=auth.identities \
   --file "$travail/comptes.dump" "$SUPABASE_DB_URL"
 
@@ -83,7 +92,7 @@ empreinte() { sha256sum "$1" | cut -d' ' -f1; }
 
 # 5. Chiffrer, puis effacer le clair
 for partie in public comptes; do
-  age -r "$SAUVEGARDE_DESTINATAIRE" -o "$sortie/$nom.$partie.dump.age" "$travail/$partie.dump"
+  age "${destinataires[@]}" -o "$sortie/$nom.$partie.dump.age" "$travail/$partie.dump"
 done
 python3 - "$travail/manifeste.json" <<PY
 import json, sys
@@ -101,5 +110,5 @@ json.dump({
   "lignes_par_table": json.loads('''$lignes''')
 }, open(sys.argv[1], 'w'), ensure_ascii=False, indent=2)
 PY
-age -r "$SAUVEGARDE_DESTINATAIRE" -o "$sortie/$nom.manifeste.json.age" "$travail/manifeste.json"
-echo "Sauvegarde $nom : $(du -h "$sortie/$nom.public.dump.age" | cut -f1) (public), $(du -h "$sortie/$nom.comptes.dump.age" | cut -f1) (comptes), chiffrée pour ${SAUVEGARDE_DESTINATAIRE:0:12}…"
+age "${destinataires[@]}" -o "$sortie/$nom.manifeste.json.age" "$travail/manifeste.json"
+echo "Sauvegarde $nom : $(du -h "$sortie/$nom.public.dump.age" | cut -f1) (public), $(du -h "$sortie/$nom.comptes.dump.age" | cut -f1) (comptes), chiffrée pour $(( ${#destinataires[@]} / 2 )) destinataire(s)"
