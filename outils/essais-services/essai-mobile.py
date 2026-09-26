@@ -54,7 +54,7 @@ verifier, jsonq, creer, un = S.verifier, S.jsonq, S.creer, S.un
 
 FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
-            'supabase-analytics.sql', 'supabase-mobile.sql')
+            'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -151,8 +151,13 @@ def b64(b):
 def jeton(sub, email, duree=3600):
     h = b64(json.dumps({'alg': 'HS256', 'typ': 'JWT'}).encode())
     maintenant = int(time.time())
+    # « iat » antidaté d'une heure : sur le Mac de la CI, PostgREST 16 a refusé des jetons
+    # tout frais (« JWT issued at future », PGRST303) après les minutes de démarrage du
+    # simulateur, son horloge restant en retard sur celle de ce script. La vraie base
+    # n'a pas ce décalage ; l'essai, lui, ne doit pas dépendre de l'horloge de la machine.
     p = b64(json.dumps({'role': 'authenticated', 'aud': 'authenticated', 'sub': sub, 'email': email,
-                        'iat': maintenant, 'exp': maintenant + duree, 'session_id': str(uuid.uuid4())}).encode())
+                        'iat': maintenant - 3600, 'exp': maintenant + duree,
+                        'session_id': str(uuid.uuid4())}).encode())
     return h + '.' + p + '.' + b64(hmac.new(SECRET.encode(), (h + '.' + p).encode(), hashlib.sha256).digest())
 
 
@@ -367,6 +372,11 @@ def fabriquer_gestionnaire(etat):
             except urllib.error.HTTPError as e:
                 code, corps, hs = e.code, e.read(), e.headers
             garder = {k: v for k, v in hs.items() if k.lower() in ('content-type', 'content-range', 'preference-applied')}
+            if code >= 400:
+                # Le journal de la base d'essai (base.log en CI) : chaque refus, pour comprendre un
+                # parcours qui échoue sur un émulateur. Ni jeton ni mot de passe : la réponse d'erreur.
+                print('REST %s %s → %d %s (jeton : %s)' % (methode, chemin[:140], code, corps[:200].decode('utf-8', 'replace'),
+                      'oui' if auth.startswith('Bearer ey') else ('clé publique' if auth else 'aucun')), flush=True)
             self.repondre(code, corps, garder)
 
     return Gestionnaire
@@ -479,7 +489,7 @@ def essais(db, d):
                           ('ses pré-alertes', '/prealertes?select=id&client_id=eq.%s' % JEAN),
                           ('son profil', '/clients?select=id,email&id=eq.%s' % JEAN),
                           ('ses téléphones', '/appareils?select=id&client_id=eq.%s' % JEAN),
-                          ('ses notifications', '/notifications?select=id')):
+                          ('ses notifications', '/notifications?select=id&client_id=eq.%s' % JEAN)):
         c, v, _ = appel('GET', chemin, MARIE)
         if titre == 'ses paiements':
             # Marie voit les siens (2) et jamais celui de Jean

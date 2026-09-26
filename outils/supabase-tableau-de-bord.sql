@@ -758,6 +758,32 @@ end;
 $$;
 
 
+-- Les dix derniers messages envoyés à un client (e-mail, WhatsApp, téléphone), pour
+-- « Mon compte » et l'accueil de l'application. À part de mon_resume parce que
+-- outils/supabase-notifications.sql la redéfinit (les envois de son moteur) : la
+-- réponse de mon_resume ne change pas de forme pour les applications installées.
+create or replace function public.messages_recents(p_client uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object('canal', n.canal, 'evenement', n.evenement,
+                                               'envoye_le', n.envoye_le, 'numero', n.numero)
+                            order by n.envoye_le desc), '[]'::jsonb)
+  from (select x.canal, x.evenement, x.envoye_le, x.numero from (
+          select n1.canal, n1.evenement, n1.envoye_le, co.numero
+          from public.notifications n1 left join public.colis co on co.id = n1.colis_id
+          where n1.client_id = p_client
+          union all
+          select n2.canal, n2.evenement, n2.envoye_le, co.numero
+          from public.colis co join public.notifications n2 on n2.colis_id = co.id
+          where co.client_id = p_client and n2.client_id is distinct from p_client) x
+        order by x.envoye_le desc limit 10) n
+$$;
+revoke execute on function public.messages_recents(uuid) from public, anon, authenticated;
+
 -- 7. L'espace client : mon résumé -------------------------------------------------
 -- Le compte connecté, sur ses propres données et rien d'autre : ses colis
 -- comptés par état, le total de ses factures, ce qu'il a payé, ce qu'il doit
@@ -801,19 +827,7 @@ begin
         'montant_en_retard', coalesce(sum(solde) filter (where etat = 'en_retard'), 0),
         'prochaine_echeance', min(echeance_le) filter (where solde > 0 and echeance_le >= public.aujourdhui()))
       from f) end,
-    'notifications', case when public.peut('shipments.view', v_moi) then (
-      select coalesce(jsonb_agg(jsonb_build_object('canal', n.canal, 'evenement', n.evenement,
-                                                   'envoye_le', n.envoye_le, 'numero', n.numero)
-                                order by n.envoye_le desc), '[]'::jsonb)
-      from (select x.canal, x.evenement, x.envoye_le, x.numero from (
-              select n1.canal, n1.evenement, n1.envoye_le, co.numero
-              from public.notifications n1 left join public.colis co on co.id = n1.colis_id
-              where n1.client_id = v_moi
-              union all
-              select n2.canal, n2.evenement, n2.envoye_le, co.numero
-              from public.colis co join public.notifications n2 on n2.colis_id = co.id
-              where co.client_id = v_moi and n2.client_id is distinct from v_moi) x
-            order by x.envoye_le desc limit 10) n) end);
+    'notifications', case when public.peut('shipments.view', v_moi) then public.messages_recents(v_moi) end);
 end;
 $$;
 

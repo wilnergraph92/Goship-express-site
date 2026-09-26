@@ -227,6 +227,23 @@ reste sans build. `deploy.yml` exclut `bureau/` de GitHub Pages.
   root) et `essai-paquet.js` ; le site d'essai (`serveur-essai.js`) sert un
   `config.js` vide. Voir `bureau/LISEZ-MOI.md`.
 
+### Les notifications (`outils/supabase-notifications.sql`, `docs/notifications.md`)
+
+Événement → règle → notification → envois → statut, tout dans la base. Les
+déclencheurs sur `colis_historique` (étapes publiques) et `evenements_facturation`
+créent, dans la même transaction, la notification (table `notifications`, canal
+`app`, clé unique `cle`) et un envoi par canal (`notification_envois`) ; le
+travailleur `traiter_notifications()` (pg_cron, chaque minute) les envoie par
+pg_net et lit les réponses (3 essais au plus, erreurs définitives jamais
+réessayées). **Aucune page n'envoie de message** : ni e-mail, ni WhatsApp, ni
+push depuis admin.js, compte.js ou l'application — elles lisent
+`mes_notifications`, `centre_notifications`, `envois_colis`, `regles_notifications`.
+Un nouveau type de notification = une ligne dans `notification_regles` + ses
+textes dans `notification_textes()` (quatre langues) + la même chose dans la
+copie démo (`REGLES_NOTIFICATIONS`, `TEXTES_NOTIFICATIONS` dans `api.js`) :
+`essai-notifications.py` compare les deux. Ne jamais marquer un envoi
+« envoye » ou « livre » sans réponse du fournisseur.
+
 ### L'application mobile (dépôt `goship-express-app`)
 
 L'espace client sur téléphone (Expo), cloné dans `application-mobile/` (ignoré ici).
@@ -253,7 +270,8 @@ SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
 donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql` — relancer l'un impose
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
+`supabase-notifications.sql` — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.

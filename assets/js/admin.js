@@ -1709,7 +1709,7 @@
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
-                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics' };
+                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', notifications: 'Notifications' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
@@ -1729,6 +1729,7 @@
     if (vue === 'factures') chargerFactures();
     if (vue === 'apercu' && Date.now() - etatApercu.charge > 60000) chargerApercu();
     if (vue === 'analytics') afficherAnalytics();
+    if (vue === 'notifications') chargerNotifications();
   }
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
@@ -2341,15 +2342,29 @@
     }).catch(function (err) { erreurFormulaire(formStatut, messageErreur(err)); });
   });
 
-  /* ---- Notifications aux clients (e-mail et WhatsApp) ----------------------------
-     À l'enregistrement d'un colis (« reçu à Miami ») et quand il passe à
-     « Disponible en agence ». L'e-mail part automatiquement ; WhatsApp aussi si
-     l'API WhatsApp est configurée, sinon en un clic depuis votre WhatsApp. */
+  /* ---- Messages au client ----------------------------------------------------------
+     La base prévient le client elle-même, à chaque étape, selon ses règles
+     (outils/supabase-notifications.sql) : ce tableau de bord n'envoie plus rien.
+     Il montre ce qui est parti — ou pourquoi rien n'est parti — et garde l'envoi
+     WhatsApp « à la main » depuis votre propre WhatsApp quand l'API n'est pas
+     configurée : c'est vous qui envoyez, pas la base. */
   var EVENEMENTS = ['recu', 'disponible'];
   var N = window.GoshipNotifications;
   var dlgNotif = $('[data-dialogue="notification"]');
-  var dlgApercu = $('[data-dialogue="apercu"]');
   var EVENEMENT_LIBELLE = { recu: 'Colis reçu', disponible: 'Colis disponible' };
+  var TYPE_EVENEMENT = { recu: 'shipment_received', disponible: 'shipment_available' };
+  var CANAUX = { push: 'Téléphone', email: 'E-mail', whatsapp: 'WhatsApp', sms: 'SMS' };
+  var ETATS_ENVOI = { attente: 'en file d’envoi', envoi: 'remis au fournisseur', envoye: 'envoyé', livre: 'livré',
+                      echec: 'échec', annule: 'non envoyé' };
+  var RAISONS = {
+    NON_CONFIGURE: 'canal non configuré', PREFERENCE: 'coupé par le client', SANS_APPAREIL: 'aucun téléphone enregistré',
+    SANS_DESTINATAIRE: 'pas d’adresse ou de numéro', SANS_MODELE: 'pas de modèle WhatsApp pour ce message',
+    APPAREIL_INCONNU: 'téléphone oublié', DeviceNotRegistered: 'application désinstallée',
+    RESEAU: 'fournisseur injoignable', ERREUR_INTERNE: 'erreur interne'
+  };
+  var TYPES_NOTIF = {};
+  (API.regles.notifications ? API.regles.notifications.regles : []).forEach(function (r) { TYPES_NOTIF[r.type] = r.libelle; });
+  TYPES_NOTIF.test = 'Essai';
 
   function clientDe(ligne) {
     return {
@@ -2358,19 +2373,16 @@
     };
   }
 
-  function apercu(message) {
-    $('[data-apercu-sujet]', dlgApercu).textContent = message.email.sujet;
-    // Aperçu sans script ; les liens s'ouvrent dans un nouvel onglet
-    $('[data-apercu]', dlgApercu).srcdoc = message.email.html.replace('<head>', '<head><base target="_blank">');
-    dlgApercu.showModal();
+  // « E-mail : non envoyé (canal non configuré) », « Téléphone : envoyé »…
+  function etatEnvoi(e) {
+    var texte = ETATS_ENVOI[e.statut] || e.statut;
+    var raison = e.code_erreur ? (RAISONS[e.code_erreur] || e.code_erreur) : '';
+    if (e.statut === 'attente' && e.tentative > 0) texte = 'nouvel essai prévu';
+    return (CANAUX[e.canal] || e.canal) + ' : ' + texte + (raison ? ' (' + raison + ')' : '');
   }
-
-  function etatEmail(resultat, client) {
-    if (resultat === 'envoye') return { ok: true, texte: 'E-mail envoyé à ' + (client.email || 'l’adresse du client') };
-    if (resultat === 'demo') return { ok: null, texte: 'Démonstration : e-mail préparé mais non envoyé (voir l’aperçu)' };
-    if (resultat === 'non-configure') return { ok: false, texte: 'E-mail non configuré : voir le README, partie « Notifications »' };
-    if (resultat === 'sans-destinataire') return { ok: false, texte: 'Pas d’adresse e-mail pour ce client' };
-    return { ok: false, texte: 'Échec de l’envoi de l’e-mail : ' + resultat };
+  function classeEnvoi(e) {
+    return e.statut === 'envoye' || e.statut === 'livre' ? 'gs-envoi__ligne--ok'
+      : e.statut === 'echec' ? 'gs-envoi__ligne--alerte' : '';
   }
 
   function notifier(entrees, evenement, options) {
@@ -2379,77 +2391,69 @@
     liste.textContent = '';
     var premier = entrees[0];
     $('[data-notif-titre]', dlgNotif).textContent = options.apresEnregistrement ? 'Colis enregistré'
-      : (entrees.length > 1 ? entrees.length + ' clients prévenus' : 'Client prévenu');
+      : (entrees.length > 1 ? entrees.length + ' clients prévenus' : 'Messages au client');
     $('[data-notif-sous-titre]', dlgNotif).textContent = entrees.length === 1
       ? premier.colis.numero + ' · ' + (premier.client.nom_complet || '') + (premier.client.code ? ' (' + premier.client.code + ')' : '')
-      : EVENEMENT_LIBELLE[evenement] + ' : un e-mail et un message WhatsApp par client.';
+      : (EVENEMENT_LIBELLE[evenement] || '') + ' : chaque client est prévenu par la base.';
     $('[data-action="autre-colis"]', dlgNotif).hidden = !options.apresEnregistrement;
     var aide = $('[data-notif-aide]', dlgNotif);
     aide.hidden = true;
 
-    var sansApiWhatsApp = false;
-    var envois = entrees.map(function (entree) {
+    var aLaMain = false;
+    var chargements = entrees.map(function (entree) {
       var colis = entree.colis, client = entree.client || {};
-      var message = N.preparer(evenement, colis, client);
       var li = el('li', 'gs-envoi');
       var tete = el('div', 'gs-envoi__tete');
       tete.appendChild(el('strong', '', client.nom_complet || client.code || 'Client'));
       tete.appendChild(el('span', 'gs-envoi__num', colis.numero));
       li.appendChild(tete);
-      var ligneEmail = el('p', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Envoi de l’e-mail…');
-      var ligneWa = el('div', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Message WhatsApp…');
-      li.appendChild(ligneEmail);
-      li.appendChild(ligneWa);
-      var actions = el('div', 'gs-envoi__actions');
-      var voir = el('button', 'gs-lien-bouton', 'Aperçu de l’e-mail');
-      voir.type = 'button';
-      voir.addEventListener('click', function () { apercu(message); });
-      actions.appendChild(voir);
-      li.appendChild(actions);
+      var lignes = el('div', '');
+      lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Lecture des envois…'));
+      li.appendChild(lignes);
       liste.appendChild(li);
 
-      var email = API.admin.envoyerEmail(colis.id, evenement, message.email).then(function (r) {
-        var e = etatEmail(r, client);
-        ligneEmail.textContent = (e.ok ? '✓ ' : '') + e.texte;
-        ligneEmail.className = 'gs-envoi__ligne ' + (e.ok ? 'gs-envoi__ligne--ok' : e.ok === false ? 'gs-envoi__ligne--alerte' : '');
-      }, function (err) {
-        ligneEmail.textContent = 'Échec de l’envoi de l’e-mail : ' + messageErreur(err);
-        ligneEmail.className = 'gs-envoi__ligne gs-envoi__ligne--alerte';
-      });
-
-      var whatsapp = API.admin.envoyerWhatsApp(colis.id, evenement, message.modele).then(function (r) {
-        return r;
-      }, function () { return 'erreur'; }).then(function (r) {
-        ligneWa.textContent = '';
-        if (r === 'envoye') {
-          ligneWa.textContent = '✓ Message WhatsApp envoyé automatiquement';
-          ligneWa.className = 'gs-envoi__ligne gs-envoi__ligne--ok';
+      return API.admin.envoisColis(colis.id).then(function (envois) {
+        // La notification de l'événement demandé, sinon la plus récente du colis
+        var voulu = TYPE_EVENEMENT[evenement];
+        var cible = envois.filter(function (e) { return e.type === voulu; })[0] || envois[0];
+        var siens = cible ? envois.filter(function (e) { return e.notification_id === cible.notification_id; }) : [];
+        lignes.textContent = '';
+        if (!cible) {
+          lignes.appendChild(el('p', 'gs-envoi__ligne', 'Aucune notification pour ce colis (règle coupée, ou colis sans client).'));
           return;
         }
-        sansApiWhatsApp = true;
-        ligneWa.className = 'gs-envoi__ligne';
-        if (!message.lienWhatsApp) {
-          ligneWa.textContent = 'Pas de numéro de téléphone pour ce client';
-          ligneWa.className = 'gs-envoi__ligne gs-envoi__ligne--alerte';
-          return;
+        lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--ok',
+                              '✓ ' + (TYPES_NOTIF[cible.type] || cible.type) + ' : visible dans l’espace du client (site et application)'));
+        siens.forEach(function (e) { lignes.appendChild(el('p', 'gs-envoi__ligne ' + classeEnvoi(e), etatEnvoi(e))); });
+        // WhatsApp sans API : l'équipe peut l'envoyer elle-même, message déjà rédigé
+        var wa = siens.filter(function (e) { return e.canal === 'whatsapp'; })[0];
+        if (N && EVENEMENTS.indexOf(evenement) >= 0 && wa && wa.statut === 'annule' &&
+            (wa.code_erreur === 'NON_CONFIGURE' || wa.code_erreur === 'SANS_MODELE')) {
+          var message = N.preparer(evenement, colis, client);
+          if (message.lienWhatsApp) {
+            aLaMain = true;
+            var lien = el('a', 'gs-bouton gs-bouton--petit gs-bouton--wa', 'Envoyer depuis mon WhatsApp');
+            lien.href = message.lienWhatsApp;
+            lien.target = '_blank';
+            lien.rel = 'noopener';
+            lien.addEventListener('click', function () {
+              lien.textContent = '✓ WhatsApp ouvert';
+              lien.classList.add('is-fait');
+            });
+            var actions = el('div', 'gs-envoi__actions');
+            actions.appendChild(lien);
+            lignes.appendChild(actions);
+          }
         }
-        var lien = el('a', 'gs-bouton gs-bouton--petit gs-bouton--wa', 'Envoyer sur WhatsApp');
-        lien.href = message.lienWhatsApp;
-        lien.target = '_blank';
-        lien.rel = 'noopener';
-        lien.addEventListener('click', function () {
-          lien.textContent = '✓ WhatsApp ouvert';
-          lien.classList.add('is-fait');
-        });
-        ligneWa.appendChild(lien);
-        ligneWa.appendChild(el('span', 'gs-envoi__detail', client.telephone || ''));
+      }).catch(function (err) {
+        lignes.textContent = '';
+        lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--alerte', 'Envois illisibles : ' + messageErreur(err)));
       });
-      return Promise.all([email, whatsapp]);
     });
 
-    Promise.all(envois).then(function () {
-      if (sansApiWhatsApp) {
-        aide.textContent = 'WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour un envoi automatique, configurez l’API WhatsApp (README, partie « Notifications »).';
+    Promise.all(chargements).then(function () {
+      if (aLaMain) {
+        aide.textContent = 'WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour que la base l’envoie elle-même, configurez l’API WhatsApp (docs/notifications.md).';
         aide.hidden = false;
       }
     });
@@ -2461,25 +2465,228 @@
     ouvrirColis();
   });
 
-  // Messages déjà envoyés pour un colis (fenêtre « Mettre à jour »)
+  // Messages au client pour un colis (fenêtre « Mettre à jour »)
   function afficherNotificationsEnvoyees(id) {
     var bloc = $('[data-bloc-notifications]', dlgStatut);
     var liste = $('[data-notifications]', dlgStatut);
     liste.textContent = '';
-    API.admin.notifications(id).then(function (lignes) {
-      if (!cibleStatut.colis || cibleStatut.colis.id !== id || !lignes || !lignes.length) return;
-      lignes.forEach(function (n) {
-        var reussite = n.code_http ? n.code_http < 300 : null;
-        var resultat = API.mode === 'demo' ? 'démonstration, non envoyé'
-          : reussite === true ? 'envoyé' : reussite === false ? 'échec (' + (n.erreur || 'code ' + n.code_http) + ')' : 'envoyé';
-        var li = el('li', reussite === false ? 'is-echec' : '');
-        li.appendChild(el('strong', '', (n.canal === 'email' ? 'E-mail' : 'WhatsApp') + ' · ' + (EVENEMENT_LIBELLE[n.evenement] || n.evenement)));
-        li.appendChild(el('span', '', O.date(n.envoye_le, true) + ' · ' + (n.destinataire || '') + ' · ' + resultat));
+    API.admin.envoisColis(id).then(function (envois) {
+      if (!cibleStatut.colis || cibleStatut.colis.id !== id || !envois || !envois.length) return;
+      var parNotif = [];
+      envois.forEach(function (e) {
+        var g = parNotif.filter(function (x) { return x.id === e.notification_id; })[0];
+        if (!g) parNotif.push(g = { id: e.notification_id, type: e.type, cree_le: e.cree_le, envois: [] });
+        g.envois.push(e);
+      });
+      parNotif.forEach(function (g) {
+        var echec = g.envois.some(function (e) { return e.statut === 'echec'; });
+        var li = el('li', echec ? 'is-echec' : '');
+        li.appendChild(el('strong', '', (TYPES_NOTIF[g.type] || g.type) + ' · ' + O.date(g.cree_le, true)));
+        li.appendChild(el('span', '', ['Espace client'].concat(g.envois.map(etatEnvoi)).join(' · ')));
         liste.appendChild(li);
       });
       bloc.hidden = false;
     }).catch(function () { /* liste facultative */ });
   }
+
+  /* ---- Vue « Notifications » : envois, canaux, règles ------------------------------ */
+  var vueNotifs = $('[data-vue="notifications"]');
+  var etatNotifs = { page: 0, parPage: 25 };
+  function filtreNotifs(nom) { return $('[data-notifs-filtre="' + nom + '"]', vueNotifs).value; }
+
+  function chargerNotifications() {
+    var jours = Number(filtreNotifs('periode')) || 7;
+    var erreur = $('[data-notifs-erreur]', vueNotifs);
+    erreur.hidden = true;
+    return Promise.all([
+      API.admin.centreNotifications({
+        debut: new Date(Date.now() - jours * 864e5).toISOString(), type: filtreNotifs('type') || null,
+        canal: filtreNotifs('canal') || null, statut: filtreNotifs('statut') || null,
+        page: etatNotifs.page, parPage: etatNotifs.parPage
+      }),
+      API.admin.reglesNotifications()
+    ]).then(function (r) {
+      afficherCentreNotifications(r[0]);
+      afficherRegles(r[1]);
+    }).catch(function (err) {
+      erreur.textContent = messageErreur(err);
+      erreur.hidden = false;
+    });
+  }
+
+  function afficherCentreNotifications(c) {
+    var st = c.par_statut || {};
+    var envoyes = (st.envoye || 0) + (st.livre || 0);
+    var echecs = st.echec || 0;
+    kpis('notifications', [
+      { libelle: 'Notifications', valeur: entier(c.notifications), sous: entier(c.non_lues) + ' non lues', picto: 'cloche' },
+      { libelle: 'Envoyés', valeur: entier(envoyes), sous: 'acceptés par le fournisseur', ton: '' },
+      { libelle: 'Échecs', valeur: entier(echecs),
+        sous: envoyes + echecs ? (Math.round(1000 * echecs / (envoyes + echecs)) / 10 + ' % des envois tentés') : 'aucun envoi tenté',
+        ton: echecs ? 'critique' : '' },
+      { libelle: 'En file', valeur: entier((st.attente || 0) + (st.envoi || 0)) },
+      { libelle: 'Non envoyés', valeur: entier(st.annule || 0), sous: 'canal non configuré, préférence…' },
+      { libelle: 'Délai moyen', valeur: c.delai_moyen_s == null ? '—' : entier(c.delai_moyen_s) + ' s', sous: 'création → envoi' }
+    ]);
+    var alertes = $('[data-notifs-alertes]', vueNotifs);
+    alertes.textContent = '';
+    (c.alertes || []).forEach(function (a) {
+      alertes.appendChild(el('li', 'gs-alerte gs-alerte--erreur',
+        a.code === 'FILE_BLOQUEE' ? entier(a.nombre) + ' envois attendent depuis plus de 15 minutes : le travailleur (pg_cron) tourne-t-il ?'
+        : a.code === 'ECHECS_ANORMAUX' ? (CANAUX[a.canal] || a.canal) + ' : ' + a.taux + ' % d’échecs sur 24 heures.'
+        : a.code === 'APPAREILS_OUBLIES' ? entier(a.nombre) + ' téléphones inconnus d’Expo en 24 heures.' : a.code));
+    });
+    alertes.hidden = !(c.alertes || []).length;
+
+    var corps = $('[data-lignes="envois"]', vueNotifs);
+    corps.textContent = '';
+    (c.elements || []).forEach(function (e) {
+      var tr = el('tr', '');
+      tr.appendChild(el('td', '', O.date(e.cree_le, true)));
+      tr.appendChild(el('td', '', TYPES_NOTIF[e.type] || e.type));
+      tr.appendChild(el('td', '', e.client_code || '—'));
+      tr.appendChild(el('td', '', e.numero || e.facture || '—'));
+      tr.appendChild(el('td', '', CANAUX[e.canal] || e.canal));
+      var statut = el('td', classeEnvoi(e) ? 'gs-envois__statut ' + classeEnvoi(e) : 'gs-envois__statut',
+                      (ETATS_ENVOI[e.statut] || e.statut) + (e.code_erreur ? ' · ' + (RAISONS[e.code_erreur] || e.code_erreur) : ''));
+      tr.appendChild(statut);
+      tr.appendChild(el('td', '', entier(e.tentative)));
+      var td = el('td', '');
+      var b = el('button', 'gs-lien-bouton', 'Suivi');
+      b.type = 'button';
+      b.addEventListener('click', function () { ouvrirSuiviNotification(e.notification_id); });
+      td.appendChild(b);
+      tr.appendChild(td);
+      corps.appendChild(tr);
+    });
+    if (!(c.elements || []).length) {
+      var vide = el('tr', '');
+      var td0 = el('td', 'gs-tableau__vide', 'Aucun envoi pour ces filtres.');
+      td0.colSpan = 8;
+      vide.appendChild(td0);
+      corps.appendChild(vide);
+    }
+    paginer('envois', etatNotifs, c.total, chargerNotifications);
+  }
+
+  function afficherRegles(r) {
+    var types = $('[data-notifs-filtre="type"]', vueNotifs);
+    if (types.options.length === 1) {
+      r.regles.forEach(function (x) { types.add(new Option(x.libelle || x.type, x.type)); });
+    }
+    var canaux = $('[data-notifs-canaux]', vueNotifs);
+    canaux.textContent = '';
+    Object.keys(CANAUX).forEach(function (k) {
+      var li = el('li', 'gs-notifs-canaux__canal' + (r.canaux[k] ? ' is-configure' : ''));
+      li.appendChild(el('strong', '', CANAUX[k]));
+      li.appendChild(el('span', '', r.canaux[k] ? 'configuré' : 'non configuré'));
+      if (r.modifiable && r.canaux[k]) {
+        var essai = el('button', 'gs-lien-bouton', 'Essai vers mon compte');
+        essai.type = 'button';
+        essai.addEventListener('click', function () {
+          attente(essai, '…');
+          API.admin.testerNotification(k).then(function (s) {
+            toast('Essai ' + CANAUX[k] + ' : ' + (s.envois[0] ? etatEnvoi(s.envois[0]) : 'créé') + '.');
+            chargerNotifications();
+          }).catch(function (err) { toast(messageErreur(err), true); }).then(function () { attente(essai); });
+        });
+        li.appendChild(essai);
+      }
+      canaux.appendChild(li);
+    });
+
+    var corps = $('[data-lignes="regles"]', vueNotifs);
+    corps.textContent = '';
+    r.regles.forEach(function (x) {
+      var tr = el('tr', x.actif ? '' : 'is-inactif');
+      var nom = el('td', '');
+      nom.appendChild(el('strong', '', x.libelle || x.type));
+      if (x.priorite === 'haute') nom.appendChild(el('span', 'gs-regle__priorite', 'prioritaire'));
+      if (x.sensible) nom.appendChild(el('span', 'gs-regle__sensible', 'texte neutre sur l’écran verrouillé'));
+      tr.appendChild(nom);
+      tr.appendChild(el('td', 'gs-regle__evenement', x.evenement));
+      var tdCanaux = el('td', 'gs-regle__canaux');
+      var cases = {};
+      Object.keys(CANAUX).forEach(function (k) {
+        var lab = el('label', 'gs-case gs-case--petite');
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = x.canaux.indexOf(k) >= 0;
+        cb.disabled = !r.modifiable;
+        cases[k] = cb;
+        lab.appendChild(cb);
+        lab.appendChild(el('span', '', CANAUX[k] + (r.canaux[k] ? '' : ' (non configuré)')));
+        tdCanaux.appendChild(lab);
+      });
+      tr.appendChild(tdCanaux);
+      var tdActif = el('td', '');
+      var labA = el('label', 'gs-case gs-case--petite');
+      var actif = document.createElement('input');
+      actif.type = 'checkbox';
+      actif.checked = x.actif;
+      actif.disabled = !r.modifiable;
+      labA.appendChild(actif);
+      labA.appendChild(el('span', '', 'active'));
+      tdActif.appendChild(labA);
+      tr.appendChild(tdActif);
+      var tdAction = el('td', '');
+      if (r.modifiable) {
+        var b = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Enregistrer');
+        b.type = 'button';
+        b.addEventListener('click', function () {
+          attente(b, '…');
+          var choisis = Object.keys(cases).filter(function (k) { return cases[k].checked; });
+          API.admin.modifierRegleNotification(x.type, actif.checked, choisis).then(function () {
+            toast('Règle « ' + (x.libelle || x.type) + ' » enregistrée.');
+            return chargerNotifications();
+          }).catch(function (err) { toast(messageErreur(err), true); }).then(function () { attente(b); });
+        });
+        tdAction.appendChild(b);
+      }
+      tr.appendChild(tdAction);
+      corps.appendChild(tr);
+    });
+    $('[data-notifs-regles-aide]', vueNotifs).hidden = false;
+  }
+
+  var dlgSuivi = $('[data-dialogue="suivi-notification"]');
+  function ouvrirSuiviNotification(id) {
+    var etapes = $('[data-suivi-etapes]', dlgSuivi);
+    etapes.textContent = '';
+    etapes.appendChild(el('li', '', 'Lecture…'));
+    dlgSuivi.showModal();
+    API.admin.suiviNotification(id).then(function (s) {
+      var n = s.notification;
+      $('[data-suivi-sous-titre]', dlgSuivi).textContent = (TYPES_NOTIF[n.type] || n.type) + ' · client ' +
+        (n.client_code || '—') + (n.numero || n.facture ? ' · ' + (n.numero || n.facture) : '');
+      etapes.textContent = '';
+      var etape = function (titre, texte, classe) {
+        var li = el('li', classe || '');
+        li.appendChild(el('strong', '', titre));
+        li.appendChild(el('span', '', texte));
+        etapes.appendChild(li);
+      };
+      etape('Événement', s.evenement ? s.evenement.type + ' · ' + O.date(s.evenement.date, true) : 'essai ou rappel planifié');
+      etape('Règle', s.regle ? (s.regle.actif ? 'active' : 'coupée') + ' · canaux : ' +
+            (s.regle.canaux.map(function (k) { return CANAUX[k] || k; }).join(', ') || 'espace client seulement') : 'essai');
+      etape('Notification', 'créée le ' + O.date(n.cree_le, true) + (n.lu_le ? ' · lue le ' + O.date(n.lu_le, true) : ' · pas encore lue'));
+      (s.envois || []).forEach(function (e) {
+        etape('Envoi ' + (CANAUX[e.canal] || e.canal), etatEnvoi(e) + (e.tentative ? ' · ' + e.tentative + ' essai' + (e.tentative > 1 ? 's' : '') : '') +
+              (e.envoye_le ? ' · ' + O.date(e.envoye_le, true) : '') + (e.prochain_essai_le ? ' · prochain essai ' + O.date(e.prochain_essai_le, true) : '') +
+              (e.erreur ? ' · « ' + e.erreur + ' »' : ''), classeEnvoi(e));
+      });
+    }).catch(function (err) {
+      etapes.textContent = '';
+      etapes.appendChild(el('li', 'gs-envoi__ligne--alerte', messageErreur(err)));
+    });
+  }
+
+  ['periode', 'type', 'canal', 'statut'].forEach(function (nom) {
+    $('[data-notifs-filtre="' + nom + '"]', vueNotifs).addEventListener('change', function () {
+      etatNotifs.page = 0;
+      chargerNotifications();
+    });
+  });
 
   /* ---- Pagination -------------------------------------------------------------
      La même barre pour les colis, les clients et les colis à traiter :
@@ -2712,6 +2919,7 @@
     colis: '<path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
     livre: '<circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 5-5.5"/>',
     route: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+    cloche: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     alerte: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
     horloge: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
     clients: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',

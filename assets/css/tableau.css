@@ -318,3 +318,26 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
 @media (prefers-reduced-motion:reduce){
   .is-app .gs-td__menu,.gs-td__panneau{transition:none;animation:none}
 }
+
+/* ---- Vue « Notifications » (outils/supabase-notifications.sql) ------------------------------ */
+.gs-notifs-centre__filtres{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 16px}
+.gs-notifs-centre__alertes{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.gs-tableau--envois{margin-top:16px}
+.gs-envois__statut.gs-envoi__ligne--ok{color:#0e7a55;font-weight:700}
+.gs-envois__statut.gs-envoi__ligne--alerte{color:#b42318;font-weight:700}
+.gs-notifs-canaux{list-style:none;margin:0 0 8px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.gs-notifs-canaux__canal{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid #e3e8f2;border-radius:14px;background:#fff;color:#5b6782}
+.gs-notifs-canaux__canal strong{color:var(--ink)}
+.gs-notifs-canaux__canal.is-configure span{color:#0e7a55;font-weight:700}
+.gs-notifs-canaux__canal .gs-lien-bouton{align-self:flex-start}
+.gs-tableau--regles tr.is-inactif td{color:#8a93ac}
+.gs-regle__priorite,.gs-regle__sensible{display:block;font-size:12px;color:#5b6782}
+.gs-regle__priorite{color:#b45309;font-weight:700}
+.gs-regle__evenement{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px}
+.gs-regle__canaux{display:flex;flex-wrap:wrap;gap:6px 14px}
+.gs-case--petite{font-size:13px;gap:6px}
+.gs-suivi-notif{margin:0;padding:0 0 0 20px;display:grid;gap:10px}
+.gs-suivi-notif li{display:flex;flex-direction:column;gap:2px}
+.gs-suivi-notif li span{color:#5b6782}
+.gs-suivi-notif li.gs-envoi__ligne--ok strong{color:#0e7a55}
+.gs-suivi-notif li.gs-envoi__ligne--alerte strong{color:#b42318}

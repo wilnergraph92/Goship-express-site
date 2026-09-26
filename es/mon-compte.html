@@ -198,13 +198,30 @@
           </div>
         </div>
 
-        <div class="gs-panneau" data-panneau-messages hidden>
+        <!-- Mes notifications : écrites, traduites et comptées par la base (mes_notifications,
+             outils/supabase-notifications.sql) — les mêmes que dans l'application -->
+        <div class="gs-panneau" data-panneau-notifications hidden>
           <div class="gs-panneau__tete">
-            <h2>Mis mensajes</h2>
+            <h2>Mis notificaciones <span class="gs-notifs-badge" data-notifs-badge hidden></span></h2>
+            <button type="button" class="gs-lien-bouton" data-action="notifs-tout-lu" hidden>Marcar todo como leído</button>
           </div>
-          <p class="gs-panneau__intro">Los últimos correos y mensajes que Goship Express le ha enviado.</p>
-          <ul class="gs-messages" data-messages></ul>
-          <p class="gs-panneau__intro" data-messages-vide hidden>Aún no hay mensajes.</p>
+          <div class="gs-filtres-notifs" role="group" aria-label="Filtrar mis notificaciones">
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="toutes" aria-pressed="true">Todas</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="non_lues" aria-pressed="false">Sin leer</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="colis" aria-pressed="false">Paquetes</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="factures" aria-pressed="false">Facturas</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="paiements" aria-pressed="false">Pagos</button>
+          </div>
+          <ul class="gs-messages gs-notifs" data-notifications aria-live="polite"></ul>
+          <p class="gs-panneau__intro" data-notifications-vide hidden>Aún no hay notificaciones.</p>
+          <p class="gs-form__erreur" data-notifications-erreur role="alert" hidden></p>
+          <button type="button" class="gs-lien-bouton" data-action="notifs-plus" hidden>Ver más</button>
+          <details class="gs-notifs-reglages" data-notifs-reglages>
+            <summary>Elegir cómo avisarle</summary>
+            <p class="gs-panneau__intro">Sus notificaciones siempre quedan aquí, en el sitio y en la aplicación. Elija los canales adicionales por los que le avisamos.</p>
+            <div class="gs-notifs-reglages__table" data-preferences></div>
+            <p class="gs-copie-ok" data-preferences-ok role="status" hidden></p>
+          </details>
         </div>
 
         <div class="gs-panneau" data-profil>
@@ -441,6 +458,15 @@
   <p data-t="message-bienvenue">Bienvenido a Goship Express</p>
   <p data-t="message-maj">Seguimiento del paquete actualizado</p>
   <p data-t="message-autre">Mensaje de Goship Express</p>
+  <p data-t="canal-sms">SMS</p>
+  <p data-t="categorie-colis">Paquetes</p>
+  <p data-t="categorie-factures">Facturas</p>
+  <p data-t="categorie-paiements">Pagos</p>
+  <p data-t="notifs-non-lues">{n} sin leer</p>
+  <p data-t="notifs-reglage-ok">Ajuste guardado.</p>
+  <p data-t="notifs-indisponible">aún no disponible</p>
+  <p data-t="notifs-erreur">No se pueden cargar sus notificaciones por ahora.</p>
+  <p data-t="notifs-nouvelle">Nueva</p>
   <p data-t="admin-avis">Esta es una cuenta del equipo de Goship Express.</p>
   <p data-t="admin-lien">Abrir el panel de control</p>
 </template>
