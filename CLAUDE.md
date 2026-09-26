@@ -99,6 +99,24 @@ change aussi dans la copie démo**, et `essai-services.py` /
 forme `message = CODE`, `detail = phrase`, `hint = 'goship'` ;
 `erreurSupabase` les reconnaît et `admin.js` affiche la phrase.
 
+### Rôles et permissions
+
+Un rôle par compte (`clients.role`) : `client`, `employe`, `gerant`,
+`admin`. Un rôle ne sert qu'à lire sa liste de permissions
+(`permissions_du_role`, `supabase.sql` partie 4, avec `peut` et
+`exiger_permission`) : **aucune règle ne teste un nom de rôle**. Toute
+nouvelle fonction ou règle RLS demande une permission (`clients.*`,
+`shipments.*`, `invoices.*`, `payments.*`, `reports.view`, `users.view`,
+`roles.manage`, `settings.manage`, `audit_logs.view`) ; une fonction qui
+n'existe pas n'a pas de permission. `est_admin()` n'est gardée que pour
+l'application mobile et les anciennes pages. Le rôle ne change que par
+`changer_role` (`roles.manage`, journalisé) ; le déclencheur `verrou_role`
+refuse tout autre chemin. Côté pages, `API.permissions()` et
+`data-permission` sur les éléments de `admin.html` ne font que masquer :
+la base refuse d'elle-même. La matrice a une copie démo
+(`PERMISSIONS_DES_ROLES` dans `api.js`), comparée par
+`essai-permissions.py` ; les méthodes démo appellent `exiger(d, 'perm')`.
+
 ## Facturation
 
 Transport facturé **5 $/lb**, plus **10 $ de frais de service** une seule

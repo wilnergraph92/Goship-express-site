@@ -58,6 +58,47 @@
   var TARIF_LB_DEFAUT = 5;
   var FRAIS_SERVICE = 10;
 
+  /* ---- Les rôles et leurs permissions ---------------------------------------
+     La copie de public.permissions_du_role (outils/supabase.sql, partie 4),
+     pour le mode démonstration et pour que les pages sachent quels menus
+     montrer. Elle ne protège rien : en ligne, c'est la base qui refuse.
+     outils/essais-services/essai-permissions.py vérifie que les deux listes
+     sont identiques.
+     -------------------------------------------------------------------------- */
+  var PERMISSIONS_DES_ROLES = {
+    admin: ['clients.view', 'clients.create', 'clients.edit',
+            'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
+            'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+            'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+            'payments.view', 'payments.create', 'payments.cancel',
+            'reports.view',
+            'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view'],
+    gerant: ['clients.view', 'clients.create', 'clients.edit',
+             'shipments.view', 'shipments.create', 'shipments.edit',
+             'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+             'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+             'payments.view', 'payments.create', 'payments.cancel',
+             'reports.view',
+             'users.view'],
+    employe: ['clients.view', 'clients.create',
+              'shipments.view', 'shipments.create', 'shipments.edit',
+              'shipments.scan', 'shipments.change_status', 'shipments.view_history',
+              'invoices.view', 'payments.view'],
+    client: ['clients.view:own', 'clients.edit:own',
+             'shipments.view:own', 'shipments.view_history:own',
+             'invoices.view:own', 'payments.view:own']
+  };
+  Object.keys(PERMISSIONS_DES_ROLES).forEach(function (r) { Object.freeze(PERMISSIONS_DES_ROLES[r]); });
+  var ROLES_EQUIPE = ['employe', 'gerant', 'admin'];
+
+  // peut() de la base : la permission, ou sa forme « :own » sur ses propres données
+  function peutCompte(compte, action, proprietaire) {
+    if (!compte) return false;
+    var liste = PERMISSIONS_DES_ROLES[compte.role] || [];
+    return liste.indexOf(action) >= 0 ||
+           (proprietaire != null && proprietaire === compte.id && liste.indexOf(action + ':own') >= 0);
+  }
+
   // Les moyens de paiement acceptés : même liste que public.moyens_paiement()
   // dans la base (outils/supabase-finances.sql), qui refuse tout autre.
   var MOYENS_PAIEMENT = ['paypal', 'banque', 'azul', 'moncash', 'natcash', 'especes', 'transfert', 'autre'];
@@ -151,7 +192,7 @@
       return { libelle: libelle, statut: statut, depuis: depuis, visibilite: visibilite, permission: permission,
                special: special, lieu_requis: lieuRequis };
     }
-    var maj = 'shipments.update_status', scan = 'shipments.scan', entrepot = ['recu', 'emballe'];
+    var maj = 'shipments.change_status', scan = 'shipments.scan', entrepot = ['recu', 'emballe'];
     return {
       COLIS_RECU: t("Reçu à l'entrepôt", 'recu', null, 'publique', 'shipments.create', null, false),
       COLIS_INSPECTE: t('Inspecté', null, entrepot, 'interne', scan, null, false),
@@ -650,9 +691,30 @@
       return sb().then(function (c) { return c.rpc('est_admin'); }).then(resultat).then(Boolean);
     },
 
+    // { role, equipe, permissions } du compte connecté, lus dans la base
+    // (mes_permissions) : de quoi montrer les bons menus. Chaque action reste
+    // revérifiée par la base.
+    permissions: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) return { role: null, equipe: false, permissions: [] };
+        return sb().then(function (c) { return c.rpc('mes_permissions'); }).then(resultat);
+      });
+    },
+
     admin: {
       statistiques: function () {
         return sb().then(function (c) { return c.rpc('statistiques_admin'); }).then(resultat);
+      },
+
+      // L'équipe et ses rôles (users.view)
+      equipe: function () {
+        return sb().then(function (c) { return c.rpc('equipe'); }).then(resultat).then(function (r) { return r || []; });
+      },
+
+      // Donner un rôle à un compte, retrouvé par son e-mail (roles.manage)
+      changerRole: function (compte, role) {
+        return sb().then(function (c) { return c.rpc('changer_role', { p_compte: compte, p_role: role }); })
+          .then(resultat);
       },
 
       colis: function (o) {
@@ -944,6 +1006,13 @@
         }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
       },
 
+      // Le lien de paiement d'une facture : invoices.edit, ou le premier lien
+      // d'une facture neuve pour qui enregistre les colis
+      poserLienPaiement: function (id, lien) {
+        return sb().then(function (c) { return c.rpc('definir_lien_paiement', { p_facture: id, p_lien: lien }); })
+          .then(resultat);
+      },
+
       // Un paiement saisi par erreur, un chèque rejeté : il reste, barré, avec son motif
       annulerPaiement: function (id, motif) {
         return sb().then(function (c) {
@@ -1014,6 +1083,12 @@
   var CLE_SESSION = 'gse-demo-session';
   var CLE_RECUP = 'gse-demo-recuperation';
   var ADMIN_DEMO = { email: 'admin@goship.demo', motDePasse: 'demo1234' };
+  // Un compte de démonstration par rôle de l'équipe, même mot de passe
+  var EQUIPE_DEMO = [
+    { id: 'admin-demo', email: ADMIN_DEMO.email, role: 'admin', nom: 'Équipe Goship Express' },
+    { id: 'gerant-demo', email: 'gerant@goship.demo', role: 'gerant', nom: 'Gérant (démonstration)' },
+    { id: 'employe-demo', email: 'employe@goship.demo', role: 'employe', nom: 'Employé (démonstration)' }
+  ];
   var abonnes = [];
 
   // Stockage du navigateur ; s'il est bloqué (fichier ouvert directement dans Safari,
@@ -1054,23 +1129,28 @@
 
   function maintenant() { return new Date().toISOString(); }
 
-  function nouvellesDonnees() {
+  function compteEquipeDemo(e) {
     return {
-      v: 1, seqColis: 1000,
-      comptes: [{
-        id: 'admin-demo', email: ADMIN_DEMO.email, mdp: empreinte(ADMIN_DEMO.motDePasse), role: 'admin', code: null,
-        nom_complet: 'Équipe Goship Express', pays: 'US', region: 'Florida', ville: 'Medley',
-        adresse: '8140 NW 74th Ave, Unit 3', telephone: '+1 849 538-6262', langue: 'fr', cree_le: maintenant()
-      }],
-      colis: [],
-      historique: []
+      id: e.id, email: e.email, mdp: empreinte(ADMIN_DEMO.motDePasse), role: e.role, code: null,
+      nom_complet: e.nom, pays: 'US', region: 'Florida', ville: 'Medley',
+      adresse: '8140 NW 74th Ave, Unit 3', telephone: '+1 849 538-6262', langue: 'fr', cree_le: maintenant()
     };
+  }
+
+  function nouvellesDonnees() {
+    return { v: 1, seqColis: 1000, comptes: EQUIPE_DEMO.map(compteEquipeDemo), colis: [], historique: [] };
   }
 
   function lireDonnees() {
     try {
       var d = JSON.parse(stockage('lire', CLE_DONNEES));
-      if (d && d.v === 1) return d;
+      if (d && d.v === 1) {
+        // Données d'avant la Phase 6 : on ajoute le gérant et l'employé de démonstration
+        EQUIPE_DEMO.forEach(function (e) {
+          if (!d.comptes.some(function (c) { return c.id === e.id; })) d.comptes.push(compteEquipeDemo(e));
+        });
+        return d;
+      }
     } catch (e) { /* données illisibles : on repart de zéro */ }
     return nouvellesDonnees();
   }
@@ -1248,6 +1328,10 @@
     var v = String(type || '').trim().toUpperCase();
     var t = TYPES_EVENEMENT[v];
     if (!t) throw Erreur('EVENT_TYPE_INVALID', 'Type d\u2019événement inconnu : ' + (type || '(vide)') + '.');
+    // Chaque type a sa permission : scanner, changer le statut, corriger
+    if (!peutCompte(moi, t.permission)) {
+      throw Erreur('non-autorise', 'Action « ' + t.permission + ' » réservée : reconnectez-vous avec un compte autorisé.');
+    }
     var meta = o.metadonnees == null ? {} : o.metadonnees;
     if (typeof meta !== 'object' || Array.isArray(meta)) {
       throw Erreur('INVALID_EVENT_DATA', 'Les précisions d\u2019un événement sont un objet JSON.');
@@ -1350,9 +1434,11 @@
     return resultatOperation(d, c.id, e, false);
   }
 
-  function exigerAdmin(d) {
+  // exiger_permission de la base : le compte connecté a-t-il cette permission ?
+  // Le refus a le code que le site reçoit en ligne (« non-autorise »).
+  function exiger(d, action) {
     var moi = compteConnecte(d);
-    if (!moi || moi.role !== 'admin') throw Erreur('non-autorise');
+    if (!peutCompte(moi, action)) throw Erreur('non-autorise');
     return moi;
   }
 
@@ -1451,6 +1537,12 @@
     if (c.tarif_lb_usd == null) c.tarif_lb_usd = nouveau || avant.tarif_lb_usd == null ? TARIF_LB_DEFAUT : avant.tarif_lb_usd;
     if (change('tarif_lb_usd') && (c.tarif_lb_usd < 0 || c.tarif_lb_usd > 1000)) {
       throw Erreur('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
+    }
+    // Un tarif autre que celui de la maison est un geste de facturation
+    var auteur = compteConnecte(d);
+    if (auteur && !peutCompte(auteur, 'invoices.edit') &&
+        ((nouveau && c.tarif_lb_usd !== TARIF_LB_DEFAUT) || (!nouveau && c.tarif_lb_usd !== avant.tarif_lb_usd))) {
+      throw Erreur('non-autorise', 'Un tarif particulier est réservé à qui peut modifier les factures.');
     }
     if (nouveau || change('poids_lb') || change('tarif_lb_usd') || avant.prix_usd == null) {
       c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
@@ -1824,10 +1916,18 @@
       return plusTard(!!(moi && moi.role === 'admin'));
     },
 
+    // mes_permissions de la base
+    permissions: function () {
+      var moi = compteConnecte(lireDonnees());
+      return plusTard(moi ? { role: moi.role, equipe: moi.role !== 'client',
+                              permissions: (PERMISSIONS_DES_ROLES[moi.role] || []).slice() }
+                          : { role: null, equipe: false, permissions: [] });
+    },
+
     admin: {
       statistiques: function () {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
         var statuts = {}, livres30 = 0, limite = Date.now() - 30 * 864e5;
         d.colis.forEach(function (c) {
           statuts[c.statut] = (statuts[c.statut] || 0) + 1;
@@ -1840,7 +1940,7 @@
       colis: function (o) {
         o = o || {};
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
         var t = nettoyer(o.recherche);
         var lignes = d.colis.map(function (c) { return detailsColis(d, c); }).filter(function (c) {
           if (o.statut === 'actifs' && c.statut === 'livre') return false;
@@ -1860,13 +1960,13 @@
       // historique_colis : tous les événements, dans l'ordre d'écriture
       historique: function (id) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'shipments.view_history'); } catch (e) { return echec(e.code); }
         return plusTard(historiqueDe(d, id).map(function (h) { return evenementJson(d, h); }));
       },
 
       chercherClient: function (code) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
         var n = normaliserCode(code);
         var c = d.comptes.filter(function (x) { return n && x.code === n; })[0];
         return plusTard(c ? choisir(publicProfil(c), ['id', 'code', 'nom_complet', 'pays', 'region', 'ville', 'telephone', 'email', 'langue']) : null);
@@ -1875,7 +1975,7 @@
       clients: function (o) {
         o = o || {};
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
         var t = nettoyer(o.recherche);
         var lignes = d.comptes.filter(function (c) {
           return c.role === 'client' && (!t || contient([c.code, c.nom_complet, c.telephone, c.email, c.ville, c.region], t));
@@ -1887,7 +1987,7 @@
       creerColis: function (x, cle) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'shipments.create');
           var existant = cle ? d.colis.filter(function (c) { return c.cle_idempotence === cle; })[0] : null;
           if (existant) {
             if (existant.client_id !== x.client_id) {
@@ -1924,7 +2024,7 @@
       modifierColis: function (id, champs, majLe) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'shipments.edit');
           var c = trouverColisDemo(d, id);
           if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Ce colis n’existe plus.');
           if (majLe && c.maj_le !== majLe) {
@@ -1950,7 +2050,7 @@
       changerStatut: function (ids, etape, attendus, motif, cle) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'shipments.change_status');
           var statut = etape.statut, lieu = String(etape.lieu || '').trim(), note = String(etape.note || '').trim();
           if (!TRANSITIONS[statut]) throw Erreur('INVALID_STATUS', 'Statut inconnu : ' + (statut || '(vide)') + '.');
           if (lieu.length > 80) throw Erreur('INVALID_LOCATION', 'Lieu trop long (80 caractères au plus).');
@@ -2007,7 +2107,7 @@
       statutsPossibles: function (id) {
         var d = lireDonnees();
         try {
-          exigerAdmin(d);
+          exiger(d, 'shipments.change_status');
           var c = trouverColisDemo(d, id);
           if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
           var precedent = statutPrecedent(historiqueDe(d, id), c.statut);
@@ -2024,7 +2124,7 @@
       scannerColis: function (reference) {
         var d = lireDonnees();
         try {
-          exigerAdmin(d);
+          exiger(d, 'shipments.scan');
           var r = String(reference || '').trim();
           if (r.length < 4 || r.length > 60) throw Erreur('INVALID_SCAN_FORMAT', 'Code illisible : ' + r.slice(0, 60) + '.');
           var c = colisParReference(d, r);
@@ -2036,7 +2136,7 @@
         o = o || {};
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'shipments.scan');
           var v = String(type || '').trim().toUpperCase();
           if (OPERATIONS_SCANNER.indexOf(v) < 0) {
             throw Erreur('EVENT_TYPE_INVALID', 'Opération impossible depuis le scanner : ' + (type || '(vide)') + '.');
@@ -2061,7 +2161,7 @@
 
       trouverColis: function (reference) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return rejeter(e); }
+        try { exiger(d, 'shipments.view'); } catch (e) { return rejeter(e); }
         var n = String(reference || '').trim().toUpperCase();
         if (n.length < 4) return plusTard(null);
         var c = d.colis.filter(function (x) { return x.numero === n || (x.suivi_transporteur && x.suivi_transporteur === n); })
@@ -2073,7 +2173,7 @@
       journal: function (o) {
         o = o || {};
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return rejeter(e); }
+        try { exiger(d, 'audit_logs.view'); } catch (e) { return rejeter(e); }
         var lignes = (d.journal || []).filter(function (j) {
           return (!o.entite || j.entite === o.entite) && (!o.entiteId || j.entite_id === String(o.entiteId));
         }).slice().reverse();
@@ -2083,7 +2183,7 @@
       supprimerColis: function (id) {
         var d = lireDonnees();
         var moi;
-        try { moi = exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { moi = exiger(d, 'shipments.delete'); } catch (e) { return echec(e.code); }
         var parti = trouverColisDemo(d, id);
         if (parti) journaliser(d, moi, 'colis.suppression', 'colis', id, choisir(parti, RESUME_COLIS.slice(0, 9)), null);
         d.colis = d.colis.filter(function (c) { return c.id !== id; });
@@ -2097,7 +2197,7 @@
       // dans le tableau de bord) et WhatsApp passe par l'envoi en un clic.
       envoyerEmail: function (id, evenement) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'shipments.change_status'); } catch (e) { return echec(e.code); }
         var c = detailsColis(d, d.colis.filter(function (x) { return x.id === id; })[0] || {});
         d.notifications = d.notifications || [];
         d.notifications.push({ colis_id: id, canal: 'email', evenement: evenement, destinataire: c.email_client || '',
@@ -2107,7 +2207,76 @@
       },
 
       envoyerWhatsApp: function () {
+        try { exiger(lireDonnees(), 'shipments.change_status'); } catch (e) { return echec(e.code); }
         return plusTard('non-configure');
+      },
+
+      // L'équipe et ses rôles (equipe() de la base)
+      equipe: function () {
+        var d = lireDonnees();
+        var moi;
+        try { moi = exiger(d, 'users.view'); } catch (e) { return echec(e.code); }
+        var ordre = ['admin', 'gerant', 'employe'];
+        return plusTard(d.comptes.filter(function (c) { return ROLES_EQUIPE.indexOf(c.role) >= 0; })
+          .sort(function (a, b) {
+            return ordre.indexOf(a.role) - ordre.indexOf(b.role) || String(a.nom_complet).localeCompare(String(b.nom_complet));
+          })
+          .map(function (c) {
+            return { id: c.id, nom_complet: c.nom_complet, email: c.email, role: c.role, cree_le: c.cree_le, moi: c.id === moi.id };
+          }));
+      },
+
+      // changer_role de la base : mêmes refus, même journal
+      changerRole: function (compte, role) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'roles.manage');
+          role = String(role || '').trim().toLowerCase();
+          if (ROLES_EQUIPE.concat(['client']).indexOf(role) < 0) {
+            throw Erreur('INVALID_ROLE', 'Rôle inconnu : ' + (role || '(vide)') + '. Choisissez client, employe, gerant ou admin.');
+          }
+          var ref = String(compte || '').trim().toLowerCase();
+          var c = d.comptes.filter(function (x) { return x.id === compte || (ref && x.email === ref); })[0];
+          if (!c) {
+            throw Erreur('USER_NOT_FOUND', 'Aucun compte avec l\u2019adresse ' + compte +
+                         '. La personne doit d\u2019abord créer son compte sur le site.');
+          }
+          if (c.id === moi.id) {
+            throw Erreur('SELF_ROLE_CHANGE', 'On ne change pas son propre rôle : demandez-le à un autre administrateur.');
+          }
+          var resume = { id: c.id, email: c.email, nom_complet: c.nom_complet };
+          if (c.role === role) return plusTard({ compte: resume, ancien_role: c.role, nouveau_role: role, deja: true });
+          if (c.role === 'admin' && d.comptes.filter(function (x) { return x.role === 'admin'; }).length <= 1) {
+            throw Erreur('LAST_ADMIN', 'C\u2019est le dernier administrateur : nommez-en un autre d\u2019abord.');
+          }
+          var ancien = c.role;
+          c.role = role;
+          if (role === 'client' && !c.code) c.code = nouveauCode(d.comptes);
+          journaliser(d, moi, 'utilisateur.role', 'client', c.id, { role: ancien, email: c.email }, { role: role, email: c.email });
+          ecrireDonnees(d, 'clients');
+          return plusTard({ compte: resume, ancien_role: ancien, nouveau_role: role, deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // definir_lien_paiement de la base
+      poserLienPaiement: function (id, lien) {
+        var d = lireDonnees();
+        try {
+          var moi = compteConnecte(d);
+          var modifie = peutCompte(moi, 'invoices.edit');
+          if (!modifie && !peutCompte(moi, 'shipments.create')) throw Erreur('non-autorise');
+          lien = String(lien || '').trim();
+          if (!/^https:\/\/\S+$/i.test(lien) || lien.length > 500) {
+            throw Erreur('INVALID_INPUT', 'Le lien de paiement doit être une adresse https://.');
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          if (!modifie && f.lien_paiement) throw Erreur('non-autorise');
+          if (f.statut === 'annulee') throw Erreur('INVOICE_LOCKED', 'Une facture annulée ne se modifie plus.');
+          f.lien_paiement = lien;
+          ecrireDonnees(d, 'factures');
+          return plusTard({ id: f.id, numero: f.numero, lien_paiement: lien });
+        } catch (e) { return rejeter(e); }
       },
 
       preparerLogo: function () {
@@ -2119,7 +2288,7 @@
       factures: function (o) {
         o = o || {};
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'invoices.view'); } catch (e) { return echec(e.code); }
         var etat = o.etat || o.statut;
         var lignes = (d.factures || []).slice().sort(function (a, b) {
           return new Date(b.cree_le) - new Date(a.cree_le);
@@ -2137,7 +2306,7 @@
       creerFacture: function (champs, colisIds, cle) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'invoices.create');
           var clientId = champs.client_id;
           if (!d.comptes.some(function (c) { return c.id === clientId && c.role === 'client'; })) {
             throw Erreur('CLIENT_NOT_FOUND', 'Aucun client avec cet identifiant.');
@@ -2190,7 +2359,7 @@
       facturerColis: function (colisId) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'invoices.create');
           var c = trouverColisDemo(d, colisId);
           if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
           var r = facturerColisDemo(d, moi, c);
@@ -2202,7 +2371,7 @@
       // La facture d'un colis, pour le bouton « Voir la facture » de sa fiche.
       factureDuColis: function (colisId) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'invoices.view'); } catch (e) { return echec(e.code); }
         var trouvees = (d.factures || []).filter(function (f) {
           return (f.facture_lignes || []).some(function (l) { return l.colis_id === colisId; });
         }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
@@ -2212,7 +2381,7 @@
       // Une ligne par client ayant des colis en cours.
       resumeClients: function () {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
         var colis = d.colis.filter(function (c) { return c.statut !== 'livre'; })
           .map(function (c) { return detailsColis(d, c); });
         var factures = (d.factures || []).filter(function (f) { return f.statut !== 'annulee'; })
@@ -2226,7 +2395,7 @@
       modifierFacture: function (id, champs) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'invoices.edit');
           var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
           if (!f) return echec('inconnu');
           var n = Object.assign({}, f, choisir(champs, CHAMPS_FACTURE));
@@ -2254,7 +2423,7 @@
       enregistrerPaiement: function (factureId, v, cle) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'payments.create');
           v = v || {};
           if (cle) {
             var deja = null;
@@ -2287,7 +2456,7 @@
       annulerPaiement: function (id, motif) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'payments.cancel');
           var f = null, p = null;
           (d.factures || []).forEach(function (x) {
             (x.paiements || []).forEach(function (y) { if (y.id === id) { f = x; p = y; } });
@@ -2312,7 +2481,7 @@
       annulerFacture: function (id, motif) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'invoices.cancel');
           var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
           if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
           if (f.statut === 'annulee') return plusTard({ facture: factureComplete(d, f), deja: true });
@@ -2336,7 +2505,8 @@
       regrouperFactures: function (ids, cle) {
         var d = lireDonnees();
         try {
-          var moi = exigerAdmin(d);
+          var moi = exiger(d, 'invoices.create');
+          exiger(d, 'invoices.cancel');
           if (cle) {
             var existante = (d.factures || []).filter(function (f) { return f.cle_idempotence === cle; })[0];
             if (existante) {
@@ -2388,7 +2558,7 @@
 
       calculerFacture: function (colisIds) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'invoices.view'); } catch (e) { return echec(e.code); }
         var colis = (colisIds || []).map(function (i) { return trouverColisDemo(d, i); }).filter(Boolean)
           .sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); });
         var sousTotal = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0));
@@ -2404,7 +2574,7 @@
 
       resumeFacturation: function () {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
         var r = { a_encaisser: 0, ouvertes: 0, partielles: 0, en_retard: 0, montant_en_retard: 0, encaisse_mois: 0 };
         var mois = aujourdhui().slice(0, 7);
         (d.factures || []).forEach(function (f) {
@@ -2429,7 +2599,7 @@
       // Le même rapport que rapport_anomalies_facturation, sur les données du navigateur
       anomaliesFacturation: function () {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
         var sortie = [];
         function signaler(type, gravite, f, detail) {
           sortie.push({ type: type, gravite: gravite, facture_id: f ? f.id : null, numero: f ? f.numero : null,
@@ -2505,7 +2675,7 @@
 
       notifications: function (id) {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
         return plusTard((d.notifications || []).filter(function (n) { return n.colis_id === id; })
           .sort(function (a, b) { return new Date(b.envoye_le) - new Date(a.envoye_le); }));
       },
@@ -2513,7 +2683,7 @@
       // Clients et colis d'exemple, pour découvrir le tableau de bord
       exemples: function () {
         var d = lireDonnees();
-        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        try { exiger(d, 'settings.manage'); } catch (e) { return echec(e.code); }
         var jour = 864e5, t0 = Date.now();
         function date(joursAvant, heures) { return new Date(t0 - joursAvant * jour + (heures || 0) * 36e5).toISOString(); }
         var modeles = [
@@ -2602,6 +2772,7 @@
     changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme,
     surveiller: function () { return function () {}; },
     suivre: ferme, estAdmin: function () { return Promise.resolve(false); },
+    permissions: function () { return Promise.resolve({ role: null, equipe: false, permissions: [] }); },
     admin: {}
   };
 
@@ -2750,7 +2921,8 @@
     prixTransport: prixTransport, typesEvenement: TYPES_EVENEMENT, natureTransition: natureTransition,
     typePourStatut: typePourStatut, validerOperation: validerOperation,
     libellesStatut: Object.freeze(LIBELLES), operationsScanner: Object.freeze(OPERATIONS_SCANNER.slice()),
-    moyensPaiement: Object.freeze(MOYENS_PAIEMENT.slice())
+    moyensPaiement: Object.freeze(MOYENS_PAIEMENT.slice()),
+    permissionsDesRoles: Object.freeze(PERMISSIONS_DES_ROLES), rolesEquipe: Object.freeze(ROLES_EQUIPE.slice())
   });
   window.GoshipAPI = api;
 })();

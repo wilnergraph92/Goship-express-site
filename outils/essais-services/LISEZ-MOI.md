@@ -11,9 +11,11 @@ python3 outils/essais-services/essai-services.py     # les règles métier (Phas
 python3 outils/essais-services/essai-evenements.py   # le moteur d'événements (Phase 3)
 python3 outils/essais-services/essai-scanner.py      # le poste de scan, côté base (Phase 4)
 python3 outils/essais-services/essai-finances.py     # paiements, soldes, annulations (Phase 5)
+python3 outils/essais-services/essai-permissions.py  # rôles, permissions, isolation des clients (Phase 6)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
+node outils/essais-services/essai-permissions.js     # les rôles en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,
@@ -121,6 +123,31 @@ règles de sécurité des tables s'appliquent donc pour de bon.
   **volume** (3 000 factures), mêmes moyens de paiement que `api.js`.
 
 `essai-finances.js` rejoue les mêmes cas sur le mode démonstration.
+
+## Ce que prouve `essai-permissions.py`
+
+- **La migration** : la base publiée (`e2d2106`, variable `GOSHIP_AVANT`)
+  reçoit des comptes et des données, puis la nouvelle version s'installe par
+  dessus, trois fois dans le désordre : personne ne change de rôle, rien ne
+  bouge, et plus aucune règle de sécurité ne teste « administrateur ».
+- **Les rôles** : l'administrateur nomme un gérant et une employée ; le
+  journal garde qui, sur quel compte, ancien et nouveau rôle. Refus : rôle
+  inconnu, compte inconnu, son propre rôle, tout rôle donné par un gérant,
+  une employée ou un client ; deux administrateurs qui se rétrogradent au
+  même instant laissent toujours un administrateur.
+- **L'élévation de privilèges** : écrire « role », son identifiant ou son code
+  dans la table (refusé, même si le droit sur la colonne était rouvert),
+  modifier le profil d'un autre, s'inscrire avec « role: admin ».
+- **La matrice** : chaque action (colis, tarif, statut, scanner, correction,
+  historique, factures, paiements, annulations, regroupement, résumé,
+  rapport, e-mails, équipe, réglages) pour l'administrateur, le gérant,
+  l'employée et le client — par les fonctions et directement dans les tables.
+- **L'isolation des clients**, table par table, en lecture comme en
+  écriture ; le visiteur non connecté ; toute fonction « security definer »
+  ouverte au site vérifie une permission ; la matrice d'`api.js` est celle de
+  la base.
+
+`essai-permissions.js` rejoue les mêmes cas sur le mode démonstration.
 
 ## Ce que prouve `essai-demo.js`
 

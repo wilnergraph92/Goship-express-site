@@ -1,3 +1,15 @@
+-- ⚠ Fichier ancien, gardé pour l'historique. Depuis la Phase 6 (rôles et
+-- permissions), tout ce qu'il contient est dans outils/supabase.sql, à jour ;
+-- le relancer rouvrirait des règles d'accès « administrateur » d'avant. La
+-- garde ci-dessous l'arrête sur une base déjà passée en Phase 6.
+do $garde$
+begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.proname = 'mes_permissions') then
+    raise exception 'Fichier obsolète : relancez plutôt outils/supabase.sql puis les fichiers qui le suivent (voir README, « Les règles métier »).';
+  end if;
+end $garde$;
+
 -- =============================================================================
 -- Goship Express — renforcement de la sécurité (20/09/2026)
 --
