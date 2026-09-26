@@ -67,6 +67,12 @@ function taillePdf(octets) {
     await page.waitForSelector('#adm-email', { timeout: 30000 });
 
     // ---- 1. Démarrage et pont ---------------------------------------------------
+    var cadre = await app.evaluate(function (e) {
+      var w = e.BrowserWindow.getAllWindows()[0], b = w.getBounds(), z = e.screen.getDisplayMatching(b).workArea;
+      return { fenetre: b.width + '×' + b.height, ecran: z.width + '×' + z.height,
+               dedans: b.x >= z.x && b.y >= z.y && b.x + b.width <= z.x + z.width && b.y + b.height <= z.y + z.height };
+    });
+    ok('la fenêtre (' + cadre.fenetre + ') tient dans l\'écran (' + cadre.ecran + ')', cadre.dedans);
     ok('la fenêtre ouvre le tableau de bord du site : ' + page.url(), page.url() === 'http://localhost:8765/admin.html');
     var pont = await page.evaluate(function () {
       var b = window.GoshipBureau;

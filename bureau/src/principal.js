@@ -57,6 +57,28 @@ if (!app.requestSingleInstanceLock()) {
 
 var fenetre = null;
 
+// La fenêtre tient toujours dans l'écran : 1440 × 900 au plus (ou la taille
+// retenue), jamais plus grande que la zone utile de l'écran (un poste en
+// 1366 × 768 ou 1024 × 768 garde tout son tableau de bord visible), et une
+// position retenue n'est reprise que si elle est encore sur un écran branché.
+function cadreSurEcran(ecran, retenu) {
+  var zone = ecran.getPrimaryDisplay().workArea;
+  var cadre = {
+    width: Math.min(retenu.width || 1440, zone.width),
+    height: Math.min(retenu.height || 900, zone.height),
+    minWidth: Math.min(1024, zone.width),
+    minHeight: Math.min(640, zone.height)
+  };
+  if (typeof retenu.x === 'number' && typeof retenu.y === 'number') {
+    var visible = ecran.getAllDisplays().some(function (d) {
+      var a = d.workArea;
+      return retenu.x >= a.x && retenu.y >= a.y && retenu.x + cadre.width <= a.x + a.width + 1 && retenu.y + cadre.height <= a.y + a.height + 1;
+    });
+    if (visible) { cadre.x = retenu.x; cadre.y = retenu.y; }
+  }
+  return cadre;
+}
+
 function demarrer() {
   journal.initialiser(app.getPath('userData'));
   var config = configuration.charger();
@@ -70,10 +92,10 @@ function demarrer() {
   securite.installer(electron, config);
 
   // ---- La fenêtre -------------------------------------------------------------
-  var cadre = preferences.lire('fenetre', {});
+  var cadre = cadreSurEcran(electron.screen, preferences.lire('fenetre', {}));
   fenetre = new BrowserWindow({
-    width: cadre.width || 1440, height: cadre.height || 900, x: cadre.x, y: cadre.y,
-    minWidth: 1024, minHeight: 640, show: false, backgroundColor: '#f3f6fb', title: 'GoShip Express',
+    width: cadre.width, height: cadre.height, x: cadre.x, y: cadre.y,
+    minWidth: cadre.minWidth, minHeight: cadre.minHeight, show: false, backgroundColor: '#f3f6fb', title: 'GoShip Express',
     icon: path.join(__dirname, '..', 'build', 'icone.png'),
     webPreferences: {
       preload: path.join(__dirname, 'pont.js'),
