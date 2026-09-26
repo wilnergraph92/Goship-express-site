@@ -34,6 +34,7 @@
     <div class="gs-admin-barre__actions" data-barre-connecte hidden>
       <span class="gs-direct gs-direct--clair" data-direct hidden><span class="gs-direct__point" aria-hidden="true"></span>En direct</span>
       <span class="gs-admin-barre__email" data-email></span>
+      <span class="gs-admin-barre__role" data-role-compte hidden></span>
       <button type="button" class="gs-admin-barre__bouton" data-action="deconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Déconnexion</span></button>
     </div>
   </div>
@@ -43,7 +44,7 @@
   <div class="gs-admin-demo" data-demo hidden>
     <p><strong>Mode démonstration.</strong> Comptes et colis sont enregistrés uniquement dans ce navigateur. Une fois Supabase configuré (voir le fichier README.md), ce tableau de bord utilise la vraie base de données.</p>
     <div class="gs-admin-demo__actions" data-demo-actions hidden>
-      <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="exemples">Ajouter des exemples</button>
+      <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="exemples" data-permission="settings.manage">Ajouter des exemples</button>
       <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="effacer-demo">Effacer la démo</button>
     </div>
   </div>
@@ -63,7 +64,7 @@
       <span class="gs-admin-carte__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
       <h1>Connexion administrateur</h1>
       <p>Réservé à l'équipe Goship Express.</p>
-      <p class="gs-admin-carte__demo" data-demo-identifiants hidden>Démonstration : <b>admin@goship.demo</b> · mot de passe <b>demo1234</b></p>
+      <p class="gs-admin-carte__demo" data-demo-identifiants hidden>Démonstration : <b>admin@goship.demo</b>, <b>gerant@goship.demo</b> ou <b>employe@goship.demo</b> · mot de passe <b>demo1234</b></p>
       <form class="gs-form" data-form="admin-connexion" novalidate>
         <div class="gs-champ">
           <label for="adm-email">E-mail</label>
@@ -83,8 +84,8 @@
     <div class="gs-admin-carte">
       <span class="gs-admin-carte__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>
       <h1>Accès réservé</h1>
-      <p>Le compte <b data-email></b> n'est pas administrateur. Pour donner l'accès à un membre de l'équipe, suivez la section « Espace client » du fichier README.md.</p>
-      <p class="gs-admin-carte__demo" data-demo-identifiants hidden>Démonstration : déconnectez-vous, puis connectez-vous avec <b>admin@goship.demo</b> · mot de passe <b>demo1234</b></p>
+      <p>Le compte <b data-email></b> n'est pas un compte de l'équipe. Un administrateur peut lui donner un rôle depuis l'onglet « Équipe » du tableau de bord. Un client retrouve ses colis et ses factures dans <a href="mon-compte.html">Mon compte</a>.</p>
+      <p class="gs-admin-carte__demo" data-demo-identifiants hidden>Démonstration : déconnectez-vous, puis connectez-vous avec <b>admin@goship.demo</b>, <b>gerant@goship.demo</b> ou <b>employe@goship.demo</b> · mot de passe <b>demo1234</b></p>
       <button type="button" class="gs-bouton gs-bouton--contour" data-action="deconnexion">Se déconnecter</button>
     </div>
   </section>
@@ -95,7 +96,7 @@
         <h1>Colis et clients</h1>
         <p class="gs-admin-entete__date" data-date-jour></p>
       </div>
-      <button type="button" class="gs-bouton gs-bouton--plein" data-action="nouveau-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un colis</button>
+      <button type="button" class="gs-bouton gs-bouton--plein" data-action="nouveau-colis" data-permission="shipments.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un colis</button>
     </div>
 
     <div class="gs-stats">
@@ -112,9 +113,10 @@
 
     <div class="gs-admin-onglets" role="tablist" aria-label="Affichage">
       <button type="button" role="tab" aria-selected="true" data-onglet-vue="colis">Colis<span class="gs-admin-onglets__total" data-total="colis"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" tabindex="-1">Clients<span class="gs-admin-onglets__total" data-total="clients"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" tabindex="-1">Factures<span class="gs-admin-onglets__total" data-total="factures"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" tabindex="-1">Scanner</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1">Clients<span class="gs-admin-onglets__total" data-total="clients"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1">Factures<span class="gs-admin-onglets__total" data-total="factures"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1">Scanner</button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1">Équipe</button>
     </div>
 
     <div class="gs-admin-vue" data-vue="colis" role="tabpanel">
@@ -139,9 +141,9 @@
       </div>
       <div class="gs-admin-selection" data-selection hidden>
         <span data-selection-nombre></span>
-        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="statut-groupe">Changer le statut</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="statut-groupe" data-permission="shipments.change_status">Changer le statut</button>
         <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="etiquettes-groupe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Imprimer les étiquettes</button>
-        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-groupe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer</button>
+        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-groupe" data-permission="shipments.delete"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer</button>
         <button type="button" class="gs-lien-bouton" data-action="deselectionner">Annuler la sélection</button>
       </div>
       <div class="gs-tableau-cadre">
@@ -234,7 +236,7 @@
     </div>
 
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>
-      <div class="gs-finances" data-resume-factures hidden>
+      <div class="gs-finances" data-resume-factures data-permission="reports.view" hidden>
         <div class="gs-finances__case">
           <span class="gs-finances__libelle">À encaisser</span>
           <strong class="gs-finances__montant" data-resume="a_encaisser"></strong>
@@ -260,8 +262,8 @@
           <option value="payee">Payées</option>
           <option value="annulee">Annulées</option>
         </select>
-        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="controler-factures"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Contrôler</button>
-        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="nouvelle-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Nouvelle facture</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="controler-factures" data-permission="reports.view"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Contrôler</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="nouvelle-facture" data-permission="invoices.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Nouvelle facture</button>
       </div>
       <div class="gs-tableau-cadre">
         <table class="gs-tableau gs-tableau--factures">
@@ -280,6 +282,47 @@
       </div>
       <p class="gs-admin-vide" data-vide="factures" hidden></p>
       <button type="button" class="gs-bouton gs-bouton--contour gs-admin-plus" data-plus="factures" hidden>Afficher plus de factures</button>
+    </div>
+
+    <div class="gs-admin-vue" data-vue="equipe" data-permission="users.view" role="tabpanel" hidden>
+      <p class="gs-equipe__intro">Chaque membre de l'équipe a un rôle, et chaque rôle une liste de permissions. La base de données les vérifie à chaque action : un bouton masqué ici n'est qu'un confort, jamais la protection.</p>
+      <form class="gs-form gs-equipe__form" data-form="role" data-permission="roles.manage" novalidate>
+        <div class="gs-form__grille">
+          <div class="gs-champ">
+            <label for="role-compte">E-mail du compte</label>
+            <input id="role-compte" name="compte" type="email" required autocomplete="off" spellcheck="false" placeholder="prenom@exemple.com">
+          </div>
+          <div class="gs-champ">
+            <label for="role-role">Rôle</label>
+            <select id="role-role" name="role" required>
+              <option value="employe">Employé</option>
+              <option value="gerant">Gérant</option>
+              <option value="admin">Administrateur</option>
+              <option value="client">Client (retire l'accès au tableau de bord)</option>
+            </select>
+          </div>
+        </div>
+        <p class="gs-champ__aide">La personne crée d'abord son compte sur le site (« Créer un compte »), puis vous lui donnez son rôle ici. Chaque changement est noté au journal : qui, quand, ancien et nouveau rôle. Vous ne pouvez pas changer votre propre rôle.</p>
+        <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+        <div class="gs-equipe__pied"><button type="submit" class="gs-bouton gs-bouton--petit gs-bouton--plein">Donner ce rôle</button></div>
+      </form>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--equipe">
+          <thead>
+            <tr>
+              <th scope="col">Nom</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Rôle</th>
+              <th scope="col"><span class="gs-invisible">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody data-lignes="equipe"></tbody>
+        </table>
+      </div>
+      <details class="gs-roles">
+        <summary>Ce que chaque rôle peut faire</summary>
+        <div class="gs-tableau-cadre"><table class="gs-tableau gs-tableau--roles" data-matrice-roles></table></div>
+      </details>
     </div>
   </section>
 </main>
@@ -430,14 +473,14 @@
       <section class="gs-paiements" data-bloc-paiements hidden aria-labelledby="fac-paiements-titre">
         <div class="gs-paiements__tete">
           <h3 id="fac-paiements-titre">Paiements</h3>
-          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="encaisser-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>Encaisser un paiement</button>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="encaisser-facture" data-permission="payments.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>Encaisser un paiement</button>
         </div>
         <ul class="gs-paiements__liste" data-liste-paiements></ul>
         <p class="gs-champ__aide" data-paiements-vide>Aucun paiement reçu pour l'instant.</p>
       </section>
       <div class="gs-dialogue__actions-colis" data-bloc-actions-facture hidden>
-        <button type="button" class="gs-lien-bouton" data-action="regrouper-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>Regrouper avec d'autres factures de ce client</button>
-        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="annuler-facture"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>Annuler cette facture</button>
+        <button type="button" class="gs-lien-bouton" data-action="regrouper-facture" data-permission="invoices.create invoices.cancel"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>Regrouper avec d'autres factures de ce client</button>
+        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="annuler-facture" data-permission="invoices.cancel"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>Annuler cette facture</button>
       </div>
       <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
     </div>
@@ -628,10 +671,10 @@
         <ul class="gs-notifs" data-notifications></ul>
       </div>
       <div class="gs-dialogue__actions-colis" data-bloc-actions>
-        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg>Prévenir le client</button>
+        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" data-permission="shipments.change_status" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg>Prévenir le client</button>
         <button type="button" class="gs-lien-bouton" data-action="etiquette-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7" cy="7" r="1.2"/></svg>Imprimer l'étiquette d'expédition</button>
-        <button type="button" class="gs-lien-bouton" data-action="modifier-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Modifier les informations du colis</button>
-        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer ce colis</button>
+        <button type="button" class="gs-lien-bouton" data-action="modifier-colis" data-permission="shipments.edit"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Modifier les informations du colis</button>
+        <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis" data-permission="shipments.delete"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer ce colis</button>
       </div>
       <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
     </div>

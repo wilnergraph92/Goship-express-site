@@ -13,11 +13,15 @@
 --   notifications      les e-mails et messages WhatsApp envoyés aux clients
 --   factures           les factures, et leurs lignes (un colis par ligne)
 --
--- Sécurité : chaque client ne voit que son profil et ses colis ; seuls les
--- comptes administrateurs voient tout et peuvent enregistrer des colis.
--- Pour faire d'un compte un administrateur (après l'avoir créé dans
+-- Sécurité : chaque client ne voit que son profil et ses colis. L'équipe a
+-- trois rôles — employé, gérant, administrateur —, chacun avec sa liste de
+-- permissions (partie 4, permissions_du_role) ; les règles de sécurité des
+-- tables et les fonctions de service les vérifient, jamais la page seule.
+-- Pour faire d'un compte le premier administrateur (après l'avoir créé dans
 -- Authentication > Users > Add user, ou sur la page « Créer un compte » du site) :
 --   select public.definir_admin('votre-adresse@exemple.com');
+-- Les rôles suivants se donnent ensuite depuis le tableau de bord (onglet
+-- Équipe), par un administrateur.
 -- Réglages des notifications (e-mail, WhatsApp) : voir la partie 7.
 -- Logo des e-mails (dossier public « site » de Supabase) : voir la partie 8.
 -- =============================================================================
@@ -83,7 +87,7 @@ create table if not exists public.clients (
   telephone   text not null default '',
   email       text not null default '',
   langue      text not null default 'fr',
-  role        text not null default 'client' check (role in ('client', 'admin')),
+  role        text not null default 'client' check (role in ('client', 'employe', 'gerant', 'admin')),
   cree_le     timestamptz not null default now()
 );
 
@@ -245,7 +249,176 @@ create trigger historiser_colis
 
 
 -- 4. Droits d'accès -------------------------------------------------------------
+-- Quatre rôles, un seul par compte (clients.role) : « client », puis, pour
+-- l'équipe, « employe », « gerant » et « admin ». Un rôle ne sert qu'à lire la
+-- liste de ses permissions (permissions_du_role) ; tout le reste — règles de
+-- sécurité des tables, fonctions de service, pages — ne demande jamais « est-ce
+-- un administrateur ? » mais « ce compte a-t-il le droit de faire ceci ? ».
+-- Ajouter un rôle ou déplacer une permission ne touche donc qu'à cette liste.
 
+-- Les bases d'avant la Phase 6 ne connaissent que « client » et « admin » :
+-- la règle s'élargit, aucune ligne ne change.
+alter table public.clients drop constraint if exists clients_role_check;
+alter table public.clients add constraint clients_role_check
+  check (role in ('client', 'employe', 'gerant', 'admin'));
+
+-- Une seule façon de lever une erreur : le code dans le message, l'explication
+-- dans le détail. Le refus de permission garde le code SQL 42501, celui que le
+-- site traite comme « accès refusé » (et que Supabase renvoie en 403, ou en 401
+-- à un visiteur non connecté).
+create or replace function public.erreur_metier(p_code text, p_detail text default '')
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception using
+    errcode = case when p_code = 'PERMISSION_DENIED' then '42501' else 'P0001' end,
+    message = p_code,
+    detail  = coalesce(p_detail, ''),
+    hint    = 'goship';
+end;
+$$;
+
+-- Les permissions de chaque rôle. Une permission suivie de « :own » ne vaut
+-- que pour les données du compte lui-même (le client et SES colis). Les noms
+-- sont stables : ce sont eux que les pages, l'application et les essais
+-- utilisent ; les libellés affichés se traduisent à part.
+--
+--   clients.*          voir, créer, modifier les fiches clients
+--   shipments.*        colis : voir, créer, modifier, supprimer, scanner,
+--                      changer le statut, corriger une étape, voir l'historique
+--                      interne (view_history)
+--   invoices.*         factures : voir, créer, modifier, annuler
+--   payments.*         paiements : voir, encaisser, annuler
+--   reports.view       chiffres de la facturation et contrôle des anomalies
+--   users.view         voir l'équipe et ses rôles
+--   roles.manage       donner ou retirer un rôle
+--   settings.manage    réglages du site (logo des e-mails, renvoi des e-mails)
+--   audit_logs.view    journal d'audit et file des événements de facturation
+--
+-- assets/js/api.js en garde une copie (PERMISSIONS_DES_ROLES) pour le mode
+-- démonstration ; outils/essais-services/essai-permissions.py vérifie que les
+-- deux disent la même chose.
+create or replace function public.permissions_du_role(p_role text)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_role
+    when 'admin' then array[
+      'clients.view', 'clients.create', 'clients.edit',
+      'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
+      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+      'payments.view', 'payments.create', 'payments.cancel',
+      'reports.view',
+      'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view']
+    when 'gerant' then array[
+      'clients.view', 'clients.create', 'clients.edit',
+      'shipments.view', 'shipments.create', 'shipments.edit',
+      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+      'payments.view', 'payments.create', 'payments.cancel',
+      'reports.view',
+      'users.view']
+    when 'employe' then array[
+      'clients.view', 'clients.create',
+      'shipments.view', 'shipments.create', 'shipments.edit',
+      'shipments.scan', 'shipments.change_status', 'shipments.view_history',
+      'invoices.view', 'payments.view']
+    when 'client' then array[
+      'clients.view:own', 'clients.edit:own',
+      'shipments.view:own', 'shipments.view_history:own',
+      'invoices.view:own', 'payments.view:own']
+    else array[]::text[]
+  end
+$$;
+
+-- PermissionService.can(utilisateur, action, ressource). L'utilisateur est
+-- toujours le compte connecté, et son rôle est lu dans la base : on ne demande
+-- jamais à la page qui elle est. p_proprietaire est le client à qui appartient
+-- la ressource, pour les permissions « :own ».
+create or replace function public.peut(p_action text, p_proprietaire uuid default null)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce((
+    select p_action = any (public.permissions_du_role(c.role))
+           or (p_proprietaire is not null and p_proprietaire = c.id
+               and (p_action || ':own') = any (public.permissions_du_role(c.role)))
+    from public.clients c
+    where c.id = auth.uid()), false)
+$$;
+
+create or replace function public.exiger_permission(p_action text, p_proprietaire uuid default null)
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.peut(p_action, p_proprietaire) then
+    -- Dans les journaux de Supabase (Logs > Postgres), jamais dans une table :
+    -- l'erreur annule la transaction, une ligne écrite ici disparaîtrait avec.
+    raise log 'goship permission refusee action=% compte=%', p_action, coalesce(auth.uid()::text, 'aucun');
+    perform public.erreur_metier('PERMISSION_DENIED',
+      'Action « ' || p_action || ' » réservée : reconnectez-vous avec un compte autorisé.');
+  end if;
+end;
+$$;
+
+-- Le rôle et les permissions du compte connecté, pour que les pages montrent
+-- les bons menus. Ce n'est qu'un confort d'affichage : chaque action est
+-- revérifiée par la base.
+create or replace function public.mes_permissions()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    (select jsonb_build_object('role', c.role, 'equipe', c.role <> 'client',
+                               'permissions', to_jsonb(public.permissions_du_role(c.role)))
+     from public.clients c where c.id = auth.uid()),
+    jsonb_build_object('role', null, 'equipe', false, 'permissions', '[]'::jsonb))
+$$;
+
+-- Le rôle d'un compte ne se change que par changer_role (supabase-services.sql,
+-- permission roles.manage), ou depuis le SQL Editor. Les droits sur les
+-- colonnes interdisent déjà au site d'écrire « role » ; ce déclencheur est la
+-- seconde barrière, qui tient même si un droit est un jour rouvert par erreur.
+create or replace function public.verrou_role()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if (new.role is distinct from old.role or new.id is distinct from old.id)
+     and auth.uid() is not null
+     and coalesce(current_setting('goship.roles', true), '') <> 'on' then
+    raise log 'goship changement de role refuse compte=% cible=%', auth.uid(), old.id;
+    perform public.erreur_metier('PERMISSION_DENIED',
+      'Le rôle d''un compte ne se change que depuis l''onglet Équipe, par un administrateur.');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists verrou_role on public.clients;
+create trigger verrou_role
+  before update on public.clients
+  for each row execute function public.verrou_role();
+
+-- Vrai pour un administrateur. Gardée pour les anciennes pages et
+-- l'application : plus aucune règle de la base ne s'en sert.
 create or replace function public.est_admin()
 returns boolean
 language sql
@@ -273,43 +446,50 @@ alter table public.clients enable row level security;
 alter table public.colis enable row level security;
 alter table public.colis_historique enable row level security;
 
+-- Chaque règle : ses propres lignes pour tout compte connecté, et le reste
+-- selon la permission. « (select public.peut(…)) » est évalué une fois par
+-- requête, pas une fois par ligne.
+-- Un employé voit les fiches des clients ; celles de l'équipe, seulement avec
+-- users.view.
 drop policy if exists clients_lecture on public.clients;
 create policy clients_lecture on public.clients
   for select to authenticated
-  using (id = (select auth.uid()) or (select public.est_admin()));
+  using (id = (select auth.uid())
+         or (role = 'client' and (select public.peut('clients.view')))
+         or (select public.peut('users.view')));
 
 drop policy if exists clients_modification on public.clients;
 create policy clients_modification on public.clients
   for update to authenticated
-  using (id = (select auth.uid()) or (select public.est_admin()))
-  with check (id = (select auth.uid()) or (select public.est_admin()));
+  using (id = (select auth.uid()) or (role = 'client' and (select public.peut('clients.edit'))))
+  with check (id = (select auth.uid()) or (role = 'client' and (select public.peut('clients.edit'))));
 
 drop policy if exists colis_lecture on public.colis;
 create policy colis_lecture on public.colis
   for select to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('shipments.view')));
 
 drop policy if exists colis_ajout on public.colis;
 create policy colis_ajout on public.colis
   for insert to authenticated
-  with check ((select public.est_admin()));
+  with check ((select public.peut('shipments.create')));
 
 drop policy if exists colis_modification on public.colis;
 create policy colis_modification on public.colis
   for update to authenticated
-  using ((select public.est_admin()))
-  with check ((select public.est_admin()));
+  using ((select public.peut('shipments.edit')))
+  with check ((select public.peut('shipments.edit')));
 
 drop policy if exists colis_suppression on public.colis;
 create policy colis_suppression on public.colis
   for delete to authenticated
-  using ((select public.est_admin()));
+  using ((select public.peut('shipments.delete')));
 
 drop policy if exists historique_lecture on public.colis_historique;
 create policy historique_lecture on public.colis_historique
   for select to authenticated
   using (
-    (select public.est_admin())
+    (select public.peut('shipments.view_history'))
     or (visibilite = 'publique'
         and not public.evenement_corrige(id)
         and exists (select 1 from public.colis c where c.id = colis_id and c.client_id = (select auth.uid())))
@@ -390,9 +570,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not public.est_admin() then
-    raise exception 'Accès réservé aux administrateurs' using errcode = '42501';
-  end if;
+  perform public.exiger_permission('shipments.view');
   return jsonb_build_object(
     'clients', (select count(*) from public.clients where role = 'client'),
     'statuts', coalesce((select jsonb_object_agg(s.statut, s.n)
@@ -491,7 +669,7 @@ alter table public.notifications enable row level security;
 drop policy if exists notifications_lecture on public.notifications;
 create policy notifications_lecture on public.notifications
   for select to authenticated
-  using ((select public.est_admin()));
+  using ((select public.peut('shipments.view')));
 revoke all on public.notifications from anon;
 grant select on public.notifications to authenticated;
 grant select, insert, update, delete on public.notifications to service_role;
@@ -565,9 +743,8 @@ declare
   v_nom_expediteur text := coalesce(nullif(public.lire_reglage('email_nom'), ''), 'Goship Express');
   v_requete bigint;
 begin
-  if not public.est_admin() then
-    raise exception 'Accès réservé aux administrateurs' using errcode = '42501';
-  end if;
+  -- Prévenir le client fait partie du suivi de son colis
+  perform public.exiger_permission('shipments.change_status');
   if coalesce(v_cle, '') = '' or coalesce(v_expediteur, '') = '' then
     return 'non-configure';
   end if;
@@ -617,9 +794,7 @@ declare
   v_telephone text;
   v_requete bigint;
 begin
-  if not public.est_admin() then
-    raise exception 'Accès réservé aux administrateurs' using errcode = '42501';
-  end if;
+  perform public.exiger_permission('shipments.change_status');
   if coalesce(v_jeton, '') = '' or coalesce(v_numero_id, '') = '' then
     return 'non-configure';
   end if;
@@ -668,7 +843,7 @@ as $$
          coalesce(r.error_msg, case when r.status_code >= 300 then left(r.content, 300) end)
   from public.notifications n
   left join net._http_response r on r.id = n.requete
-  where n.colis_id = p_colis and public.est_admin()
+  where n.colis_id = p_colis and public.peut('shipments.view')
   order by n.envoye_le desc
 $$;
 
@@ -690,28 +865,28 @@ insert into storage.buckets (id, name, public)
 values ('site', 'site', true)
 on conflict (id) do update set public = true;
 
--- Seuls les administrateurs y déposent des fichiers ; tout le monde peut les voir
+-- Seuls les comptes qui ont settings.manage y déposent des fichiers ; tout le
+-- monde peut les voir. Une règle déjà là est mise à jour, pas recréée.
 do $$
+declare
+  r record;
 begin
-  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
-                 and policyname = 'site_lecture_admin') then
-    create policy site_lecture_admin on storage.objects
-      for select to authenticated
-      using (bucket_id = 'site' and (select public.est_admin()));
-  end if;
-  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
-                 and policyname = 'site_ajout_admin') then
-    create policy site_ajout_admin on storage.objects
-      for insert to authenticated
-      with check (bucket_id = 'site' and (select public.est_admin()));
-  end if;
-  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects'
-                 and policyname = 'site_modification_admin') then
-    create policy site_modification_admin on storage.objects
-      for update to authenticated
-      using (bucket_id = 'site' and (select public.est_admin()))
-      with check (bucket_id = 'site' and (select public.est_admin()));
-  end if;
+  for r in select * from (values
+      ('site_lecture_admin', 'select', 'using (bucket_id = ''site'' and (select public.peut(''settings.manage'')))'),
+      ('site_ajout_admin', 'insert', 'with check (bucket_id = ''site'' and (select public.peut(''settings.manage'')))'),
+      ('site_modification_admin', 'update',
+       'using (bucket_id = ''site'' and (select public.peut(''settings.manage''))) ' ||
+       'with check (bucket_id = ''site'' and (select public.peut(''settings.manage'')))')) v(nom, commande, regle)
+  loop
+    if exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = r.nom) then
+      execute format('alter policy %I on storage.objects %s', r.nom, r.regle);
+    else
+      execute format('create policy %I on storage.objects for %s to authenticated %s', r.nom, r.commande, r.regle);
+    end if;
+  end loop;
+exception
+  when insufficient_privilege then
+    raise notice 'Règles du dossier « site » non modifiées (droits insuffisants) : le logo reste géré comme avant.';
 end $$;
 
 
@@ -742,7 +917,7 @@ alter table public.prealertes enable row level security;
 drop policy if exists prealertes_lecture on public.prealertes;
 create policy prealertes_lecture on public.prealertes
   for select to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('shipments.view')));
 
 drop policy if exists prealertes_ajout on public.prealertes;
 create policy prealertes_ajout on public.prealertes
@@ -752,13 +927,13 @@ create policy prealertes_ajout on public.prealertes
 drop policy if exists prealertes_modification on public.prealertes;
 create policy prealertes_modification on public.prealertes
   for update to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()))
-  with check (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('shipments.edit')))
+  with check (client_id = (select auth.uid()) or (select public.peut('shipments.edit')));
 
 drop policy if exists prealertes_suppression on public.prealertes;
 create policy prealertes_suppression on public.prealertes
   for delete to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('shipments.edit')));
 
 revoke all on public.prealertes from anon;
 grant select, insert, update, delete on public.prealertes to authenticated;
@@ -869,33 +1044,50 @@ create trigger preparer_facture
 alter table public.factures enable row level security;
 alter table public.facture_lignes enable row level security;
 
+-- Lire : ses factures, ou toutes avec invoices.view. Écrire directement dans
+-- la table : créer avec invoices.create, modifier avec invoices.edit. Aucune
+-- règle de suppression : une facture s'annule (supabase-finances.sql).
 drop policy if exists factures_lecture on public.factures;
 create policy factures_lecture on public.factures
   for select to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('invoices.view')));
 
 drop policy if exists factures_admin on public.factures;
-create policy factures_admin on public.factures
-  for all to authenticated
-  using ((select public.est_admin()))
-  with check ((select public.est_admin()));
+drop policy if exists factures_ajout on public.factures;
+create policy factures_ajout on public.factures
+  for insert to authenticated
+  with check ((select public.peut('invoices.create')));
+
+drop policy if exists factures_modification on public.factures;
+create policy factures_modification on public.factures
+  for update to authenticated
+  using ((select public.peut('invoices.edit')))
+  with check ((select public.peut('invoices.edit')));
 
 drop policy if exists facture_lignes_lecture on public.facture_lignes;
 create policy facture_lignes_lecture on public.facture_lignes
   for select to authenticated
-  using (exists (select 1 from public.factures f
-                 where f.id = facture_id
-                   and (f.client_id = (select auth.uid()) or (select public.est_admin()))));
+  using ((select public.peut('invoices.view'))
+         or exists (select 1 from public.factures f
+                    where f.id = facture_id and f.client_id = (select auth.uid())));
 
 drop policy if exists facture_lignes_admin on public.facture_lignes;
-create policy facture_lignes_admin on public.facture_lignes
-  for all to authenticated
-  using ((select public.est_admin()))
-  with check ((select public.est_admin()));
+drop policy if exists facture_lignes_ajout on public.facture_lignes;
+create policy facture_lignes_ajout on public.facture_lignes
+  for insert to authenticated
+  with check ((select public.peut('invoices.create')));
+
+drop policy if exists facture_lignes_modification on public.facture_lignes;
+create policy facture_lignes_modification on public.facture_lignes
+  for update to authenticated
+  using ((select public.peut('invoices.edit')))
+  with check ((select public.peut('invoices.edit')));
 
 revoke all on public.factures, public.facture_lignes from anon;
-grant select, insert, update, delete on public.factures, public.facture_lignes to authenticated;
+grant select, insert, update on public.factures, public.facture_lignes to authenticated;
 grant select, insert, update, delete on public.factures, public.facture_lignes to service_role;
+-- Refus net plutôt que « zéro ligne supprimée » : une facture ne se supprime pas
+revoke delete on public.factures, public.facture_lignes from authenticated;
 
 
 -- 11. Notifications sur le téléphone (application mobile) --------------------------
@@ -919,7 +1111,7 @@ alter table public.appareils enable row level security;
 drop policy if exists appareils_lecture on public.appareils;
 create policy appareils_lecture on public.appareils
   for select to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('clients.edit')));
 
 drop policy if exists appareils_ajout on public.appareils;
 create policy appareils_ajout on public.appareils
@@ -935,7 +1127,7 @@ create policy appareils_modification on public.appareils
 drop policy if exists appareils_suppression on public.appareils;
 create policy appareils_suppression on public.appareils
   for delete to authenticated
-  using (client_id = (select auth.uid()) or (select public.est_admin()));
+  using (client_id = (select auth.uid()) or (select public.peut('clients.edit')));
 
 revoke all on public.appareils from anon;
 grant select, insert, update, delete on public.appareils to authenticated;
@@ -981,11 +1173,11 @@ declare
   v_requete  bigint;
   a          record;
 begin
-  -- Réservé au tableau de bord (et aux automatismes de la base, qui n'ont pas de
-  -- compte) : sans cela, n'importe quel client connecté pourrait faire sonner le
-  -- téléphone d'un autre client.
-  if auth.uid() is not null and not public.est_admin() then
-    raise exception 'Accès réservé aux administrateurs' using errcode = '42501';
+  -- Réservé à l'équipe qui suit les colis (et aux automatismes de la base, qui
+  -- n'ont pas de compte) : sans cela, n'importe quel client connecté pourrait
+  -- faire sonner le téléphone d'un autre client.
+  if auth.uid() is not null and not public.peut('shipments.change_status') then
+    perform public.erreur_metier('PERMISSION_DENIED', 'Action réservée à l''équipe.');
   end if;
   select * into v_colis from public.colis where id = p_colis;
   if not found or v_colis.client_id is null then
@@ -1209,6 +1401,15 @@ create trigger borner_prealerte
 -- on referme celles qui n'ont rien à faire dans les mains d'un visiteur.
 
 revoke execute on function public.est_admin() from public, anon;
+revoke execute on function public.erreur_metier(text, text) from public, anon, authenticated;
+revoke execute on function public.exiger_permission(text, uuid) from public, anon, authenticated;
+revoke execute on function public.verrou_role() from public, anon, authenticated;
+revoke execute on function public.permissions_du_role(text) from public, anon;
+revoke execute on function public.peut(text, uuid) from public, anon;
+revoke execute on function public.mes_permissions() from public, anon;
+grant execute on function public.permissions_du_role(text) to authenticated;
+grant execute on function public.peut(text, uuid) to authenticated;
+grant execute on function public.mes_permissions() to authenticated;
 revoke execute on function public.borner_profil_client() from public, anon, authenticated;
 revoke execute on function public.borner_prealerte() from public, anon, authenticated;
 revoke execute on function public.preparer_facture() from public, anon, authenticated;
@@ -1654,14 +1855,14 @@ as $fn$
 declare
   v_id uuid;
 begin
-  -- Par le site, seul un administrateur passe. Dans le SQL Editor de Supabase,
+  -- Par le site, il faut settings.manage. Dans le SQL Editor de Supabase,
   -- il n'y a pas de client connecté : c'est déjà un accès direct à la base, et
-  -- exiger un administrateur y interdirait justement le seul endroit d'où on
+  -- exiger une permission y interdirait justement le seul endroit d'où on
   -- peut renvoyer les e-mails à la main.
-  if not public.est_admin()
+  if not public.peut('settings.manage')
      and (session_user in ('anon', 'authenticated', 'authenticator')
           or coalesce(current_setting('request.jwt.claims', true), '') <> '') then
-    raise exception 'Accès réservé aux administrateurs' using errcode = '42501';
+    perform public.erreur_metier('PERMISSION_DENIED', 'Action réservée à l''équipe.');
   end if;
   select id into v_id from public.clients where upper(trim(code)) = upper(trim(p_code));
   if v_id is null then
@@ -1758,3 +1959,15 @@ end $$;
 -- Fin. Rien d'autre à faire ici : les réglages restants (confirmation des
 -- adresses e-mail, adresses de retour autorisées, longueur des mots de passe)
 -- se font dans les écrans de Supabase. Voir README.md, « Sécurité ».
+
+
+-- Contrôle des rôles (Phase 6) ---------------------------------------------------
+-- roles_sur_4 : 4 (client, employe, gerant, admin) ; regles_encore_admin : 0
+-- (plus aucune règle de sécurité ne dépend de « est-ce un administrateur ? »,
+-- toutes demandent une permission) ; administrateurs : au moins 1.
+select (select count(*) from unnest(array['client', 'employe', 'gerant', 'admin']) r
+        where pg_get_constraintdef((select oid from pg_constraint where conname = 'clients_role_check')) ~ r)
+                                                                                       as roles_sur_4,
+       (select count(*) from pg_policies
+        where coalesce(qual, '') ~ 'est_admin' or coalesce(with_check, '') ~ 'est_admin') as regles_encore_admin,
+       (select count(*) from public.clients where role = 'admin')                        as administrateurs;

@@ -353,10 +353,15 @@ def main():
             ('annuler sans motif, par la table', "update factures set statut = 'annulee' where id = '%s';", 'INVOICE_LOCKED'),
             ('changer son numéro', "update factures set numero = 'X-1' where id = '%s';", 'INVOICE_LOCKED'),
             ('changer son total (facture de colis)', "update factures set montant_usd = 1 where id = '%s';", 'INVOICE_LOCKED'),
-            ('la supprimer', "delete from factures where id = '%s';", 'INVOICE_DELETE_FORBIDDEN'),
-            ('lui retirer une ligne', "delete from facture_lignes where facture_id = '%s';", 'INVOICE_LOCKED'),
+            ('la supprimer', "delete from factures where id = '%s';", 'permission denied for table factures'),
+            ('lui retirer une ligne', "delete from facture_lignes where facture_id = '%s';",
+             'permission denied for table facture_lignes'),
             ('changer une ligne', "update facture_lignes set libelle = 'x' where facture_id = '%s';", 'INVOICE_LOCKED')):
         verifier('refusé : ' + titre, erreur(db, ADMIN, sql % v), code)
+    verifier('… ni depuis le SQL Editor : la garde tient seule',
+             (erreur(db, 'sql', "delete from factures where id = '%s';" % v),
+              erreur(db, 'sql', "delete from facture_lignes where facture_id = '%s';" % v)),
+             ('INVOICE_DELETE_FORBIDDEN', 'INVOICE_LOCKED'))
     autre = creer(db, ADMIN, dict(base, description='Intrus', poids_lb=1), facturer=False)['colis']['id']
     verifier('refusé : ajouter un colis à une facture déjà émise',
              erreur(db, ADMIN, "insert into facture_lignes (facture_id, colis_id) values ('%s', '%s');" % (v, autre)),

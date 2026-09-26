@@ -112,29 +112,29 @@ as $$
     'COLIS_INSPECTE',   jsonb_build_object('libelle', 'Inspecté', 'statut', null, 'depuis', jsonb_build_array('recu', 'emballe'),
                           'visibilite', 'interne', 'permission', 'shipments.scan', 'special', null, 'lieu_requis', false),
     'COLIS_EMBALLE',    jsonb_build_object('libelle', 'Emballé', 'statut', 'emballe', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', false),
     'COLIS_CONSOLIDE',  jsonb_build_object('libelle', 'Consolidé', 'statut', null, 'depuis', jsonb_build_array('recu', 'emballe'),
                           'visibilite', 'interne', 'permission', 'shipments.scan', 'special', null, 'lieu_requis', false),
     'COLIS_CHARGE',     jsonb_build_object('libelle', 'Chargé', 'statut', null, 'depuis', jsonb_build_array('recu', 'emballe'),
                           'visibilite', 'interne', 'permission', 'shipments.scan', 'special', null, 'lieu_requis', false),
     'COLIS_EXPEDIE',    jsonb_build_object('libelle', 'Expédié', 'statut', 'embarque', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', false),
     'COLIS_ARRIVE',     jsonb_build_object('libelle', 'Arrivé au centre de distribution', 'statut', 'distribution', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', false),
     'COLIS_TRANSFERE',  jsonb_build_object('libelle', 'Transféré à la succursale', 'statut', 'succursale', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', false),
     'COLIS_DISPONIBLE', jsonb_build_object('libelle', 'Disponible', 'statut', 'disponible', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', true),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', true),
     'COLIS_LIVRE',      jsonb_build_object('libelle', 'Livré', 'statut', 'livre', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', false),
     'ACTION_REQUISE',   jsonb_build_object('libelle', 'Action requise', 'statut', 'incident', 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', null, 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', null, 'lieu_requis', false),
     'ACTION_RESOLUE',   jsonb_build_object('libelle', 'Action résolue', 'statut', null, 'depuis', jsonb_build_array('incident'),
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', 'sortie', 'lieu_requis', false),
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', 'sortie', 'lieu_requis', false),
     'CORRECTION',       jsonb_build_object('libelle', 'Correction', 'statut', null, 'depuis', null,
                           'visibilite', 'interne', 'permission', 'shipments.correct', 'special', 'correction', 'lieu_requis', false),
     'MISE_A_JOUR',      jsonb_build_object('libelle', 'Étape mise à jour', 'statut', null, 'depuis', null,
-                          'visibilite', 'publique', 'permission', 'shipments.update_status', 'special', 'mise_a_jour', 'lieu_requis', false))
+                          'visibilite', 'publique', 'permission', 'shipments.change_status', 'special', 'mise_a_jour', 'lieu_requis', false))
 $$;
 
 
@@ -701,7 +701,7 @@ declare
   v_statut text;
   v_precedent text;
 begin
-  perform public.exiger_permission('shipments.update_status');
+  perform public.exiger_permission('shipments.change_status');
   select statut into v_statut from public.colis where id = p_colis;
   if not found then
     perform public.erreur_metier('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
@@ -753,7 +753,7 @@ declare
   v_modifies jsonb := '[]'::jsonb;
   v_evenements jsonb := '[]'::jsonb;
 begin
-  perform public.exiger_permission('shipments.update_status');
+  perform public.exiger_permission('shipments.change_status');
   if p_statut is null or not (public.transitions_statut() ? p_statut) then
     perform public.erreur_metier('INVALID_STATUS', 'Statut inconnu : ' || coalesce(p_statut, '(vide)') || '.');
   end if;
@@ -864,7 +864,7 @@ begin
   if not found then
     perform public.erreur_metier('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
   end if;
-  if public.peut('events.view') then
+  if public.peut('shipments.view_history') then
     return coalesce((select jsonb_agg(public.evenement_json(h.id) order by h.id)
                      from public.colis_historique h where h.colis_id = p_colis), '[]'::jsonb);
   end if;
@@ -889,7 +889,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  perform public.exiger_permission('events.view');
+  perform public.exiger_permission('shipments.view_history');
   return public.evenement_json((select max(id) from public.colis_historique where colis_id = p_colis));
 end;
 $$;
@@ -907,7 +907,7 @@ as $$
 declare
   v_limite int := least(greatest(coalesce(p_limite, 50), 1), 500);
 begin
-  perform public.exiger_permission('events.view');
+  perform public.exiger_permission('shipments.view_history');
   return jsonb_build_object(
     'total', (select count(*) from public.colis_historique h
               where (p_type is null or h.type_evenement = p_type)

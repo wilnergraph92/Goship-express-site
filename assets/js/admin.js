@@ -20,7 +20,7 @@
   var ERREURS = {
     identifiants: 'E-mail ou mot de passe incorrect.',
     reseau: 'Connexion impossible. Vérifiez la connexion Internet, puis réessayez.',
-    'non-autorise': 'Accès refusé : session expirée ou compte non administrateur. Reconnectez-vous.',
+    'non-autorise': 'Action réservée : votre rôle ne le permet pas, ou la session a expiré (reconnectez-vous).',
     'trop-de-tentatives': 'Trop de tentatives. Patientez quelques minutes.',
     'non-confirme': 'Adresse e-mail pas encore confirmée.',
     // Les refus de la base (outils/supabase-services.sql). Elle joint le plus
@@ -60,6 +60,11 @@
     INVOICE_NOT_GROUPABLE: 'Cette facture ne peut pas être regroupée.',
     INVOICE_DELETE_FORBIDDEN: 'Une facture ne se supprime pas : annulez-la.',
     INVOICE_NUMBER_USED: 'Ce numéro de facture a déjà servi.',
+    // Les rôles (onglet Équipe)
+    INVALID_ROLE: 'Rôle inconnu.',
+    USER_NOT_FOUND: 'Aucun compte avec cette adresse : la personne doit d’abord créer son compte sur le site.',
+    SELF_ROLE_CHANGE: 'On ne change pas son propre rôle : demandez-le à un autre administrateur.',
+    LAST_ADMIN: 'C’est le dernier administrateur : nommez-en un autre d’abord.',
     // La base n'a pas encore reçu l'un des fichiers outils/supabase-*.sql
     absent: 'La base n’est pas à jour : lancez dans Supabase (SQL Editor) les fichiers de outils/, dans l’ordre du README.',
     inconnu: 'Une erreur est survenue. Réessayez.'
@@ -70,6 +75,8 @@
   function $$(sel, scope) { return Array.prototype.slice.call((scope || document).querySelectorAll(sel)); }
   function messageErreur(err) {
     if (err && err.metier && err.detail) return err.detail;
+    // Un refus de la base dit souvent lequel (« Un tarif particulier est réservé… »)
+    if (err && err.code === 'non-autorise' && err.detail && !/^[a-z]/.test(err.detail)) return err.detail;
     return ERREURS[err && err.code] || ERREURS.inconnu;
   }
 
@@ -130,6 +137,30 @@
     zone.hidden = !message;
   }
 
+  /* ---- Les droits du compte connecté ----------------------------------------
+     Lus dans la base au démarrage (API.permissions → mes_permissions). Ils ne
+     servent qu'à montrer les bons menus et les bons boutons : chaque action
+     est revérifiée par la base, qui refuse d'elle-même ce que le rôle ne
+     permet pas. Un élément marqué data-permission="a b" n'apparaît que si le
+     compte a toutes ces permissions.
+     -------------------------------------------------------------------------- */
+  var droits = { role: null, equipe: false, permissions: [] };
+  var ROLES = { admin: 'Administrateur', gerant: 'Gérant', employe: 'Employé', client: 'Client' };
+
+  function peut(permission) {
+    return droits.permissions.indexOf(permission) >= 0;
+  }
+
+  function appliquerDroits() {
+    $$('[data-permission]').forEach(function (n) {
+      var permis = n.getAttribute('data-permission').split(/\s+/).every(peut);
+      if (permis) n.removeAttribute('data-interdit'); else n.setAttribute('data-interdit', '');
+    });
+    var badge = $('[data-role-compte]');
+    badge.textContent = ROLES[droits.role] || '';
+    badge.hidden = !droits.role;
+  }
+
   /* ---- État de l'affichage ------------------------------------------------ */
   var etat = {
     vue: 'colis',
@@ -152,8 +183,11 @@
       if (!s) { ecran('connexion'); return null; }
       $$('[data-email]').forEach(function (n) { n.textContent = s.email; });
       $('[data-barre-connecte]').hidden = false;
-      return API.estAdmin().then(function (admin) {
-        if (admin) ouvrirTableau(); else ecran('refuse');
+      // Un compte de l'équipe entre ; un client est renvoyé vers son espace
+      return API.permissions().then(function (p) {
+        droits = p || droits;
+        appliquerDroits();
+        if (droits.equipe) ouvrirTableau(); else ecran('refuse');
       });
     }).catch(function (err) {
       ecran('connexion');
@@ -195,6 +229,7 @@
   var logoVerifie = false;
   function installerLogoEmail() {
     if (logoVerifie || API.mode !== 'supabase' || !window.GoshipNotifications || !API.admin.preparerLogo) return;
+    if (!peut('settings.manage')) return;   // le dossier « site » n'est ouvert qu'à ce rôle
     logoVerifie = true;
     API.admin.preparerLogo(window.GoshipNotifications.logo).then(function (etat) {
       if (etat === 'envoye') toast('Logo des e-mails installé.');
@@ -212,8 +247,9 @@
     } catch (e) { /* date facultative */ }
     chargerStatistiques();
     chargerColis();
-    chargerClients();
-    chargerFactures();
+    if (peut('clients.view')) chargerClients();
+    if (peut('invoices.view')) chargerFactures();
+    if (peut('users.view')) chargerEquipe();
     installerLogoEmail();
     var prevu = null;
     API.surveiller(function (quoi) {
@@ -221,8 +257,9 @@
       prevu = setTimeout(function () {
         chargerStatistiques();
         chargerColis(true);
-        if (quoi === 'clients' || etat.vue === 'clients') chargerClients();
-        if (quoi === 'factures' || etat.vue === 'factures') chargerFactures();
+        if (peut('clients.view') && (quoi === 'clients' || etat.vue === 'clients')) chargerClients();
+        if (peut('invoices.view') && (quoi === 'factures' || etat.vue === 'factures')) chargerFactures();
+        if (peut('users.view') && (quoi === 'clients' || etat.vue === 'equipe')) chargerEquipe();
       }, 350);
     }, { tout: true, etat: function (actif) { $('[data-direct]').hidden = !actif; } });
   }
@@ -328,6 +365,7 @@
       var fin = attente(b, 'Ouverture…');
       API.admin.factureDuColis(colis.id).then(function (facture) {
         if (facture) { choisirVue('factures'); ouvrirFacture(facture); return; }
+        if (!peut('invoices.create')) { toast('Ce colis n\u2019a pas encore de facture.'); return; }
         if (!window.confirm('Ce colis n\u2019a pas encore de facture. En créer une maintenant ?')) return;
         if (!colis.client_id) { toast('Colis sans client : facture impossible.', true); return; }
         // La base crée la facture, ou rend celle qu'un collègue vient de créer
@@ -403,7 +441,7 @@
       bouton.setAttribute('data-maj', colis.id);
       bouton.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
       tdActions.appendChild(bouton);
-      tdActions.appendChild(boutonFactureDuColis(colis));
+      if (peut('invoices.view')) tdActions.appendChild(boutonFactureDuColis(colis));
       tdActions.appendChild(boutonEtiquette(colis, 'gs-bouton gs-bouton--petit gs-bouton--contour'));
       tr.appendChild(tdActions);
 
@@ -662,8 +700,8 @@
         champCodeFacture.dispatchEvent(new Event('input', { bubbles: true }));
       });
       tdActions.appendChild(voir);
-      tdActions.appendChild(sesFactures);
-      tdActions.appendChild(ajouter);
+      if (peut('invoices.create')) tdActions.appendChild(sesFactures);
+      if (peut('shipments.create')) tdActions.appendChild(ajouter);
       tr.appendChild(tdActions);
 
       corpsClients.appendChild(tr);
@@ -765,7 +803,7 @@
   function chargerFactures() {
     var f = etat.factures;
     var numero = ++demandeFactures;
-    chargerResumeFactures();
+    if (peut('reports.view')) chargerResumeFactures();
     return API.admin.factures({ etat: f.statut, page: 0, parPage: PAR_PAGE * f.pages }).then(function (r) {
       if (numero !== demandeFactures) return;
       f.lignes = r.lignes || [];
@@ -848,7 +886,7 @@
       tr.appendChild(tdDate);
 
       var tdActions = el('td', 'gs-cellule-actions');
-      if (t.etat !== 'annulee' && t.balance > 0) {
+      if (t.etat !== 'annulee' && t.balance > 0 && peut('payments.create')) {
         tdActions.appendChild(petitBouton('Encaisser', 'gs-bouton--plein', function () { ouvrirPaiement(facture); }));
       }
       var imprimerBouton = petitBouton('Imprimer', null, function () { imprimerFacture(facture); });
@@ -870,7 +908,7 @@
           window.open('https://wa.me/' + numero + '?text=' + encodeURIComponent(texte), '_blank', 'noopener');
         }));
       }
-      if (t.etat !== 'annulee' && t.paye === 0) {
+      if (t.etat !== 'annulee' && t.paye === 0 && peut('invoices.cancel')) {
         var annuler = petitBouton('Annuler', 'gs-bouton--danger', function () { demanderAnnulationFacture(facture); });
         annuler.setAttribute('aria-label', 'Annuler la facture ' + facture.numero);
         tdActions.appendChild(annuler);
@@ -1036,7 +1074,7 @@
       if (p.annule_le) notes.push('Annulé le ' + O.date(p.annule_le) + ' : ' + p.motif_annulation);
       if (notes.length) corps.appendChild(el('span', 'gs-paiement__note', notes.join(' — ')));
       li.appendChild(corps);
-      if (!p.annule_le) {
+      if (!p.annule_le && peut('payments.cancel')) {
         var annuler = el('button', 'gs-lien-bouton gs-lien-bouton--danger', 'Annuler');
         annuler.type = 'button';
         annuler.setAttribute('aria-label', 'Annuler le paiement de ' + argent(p.montant_usd));
@@ -1104,10 +1142,16 @@
         enregistrer.hidden = true;
         $$('input, textarea', formFacture).forEach(function (n) { n.disabled = true; });
       } else {
-        blocActionsFacture.hidden = false;
-        $('[data-action="regrouper-facture"]', formFacture).hidden = !regroupable(facture);
-        $('[data-action="annuler-facture"]', formFacture).hidden = t.paye > 0;
-        blocActionsFacture.hidden = !regroupable(facture) && t.paye > 0;
+        var regrouper = regroupable(facture) && peut('invoices.create') && peut('invoices.cancel');
+        var annulable = t.paye === 0 && peut('invoices.cancel');
+        $('[data-action="regrouper-facture"]', formFacture).hidden = !regrouper;
+        $('[data-action="annuler-facture"]', formFacture).hidden = !annulable;
+        blocActionsFacture.hidden = !regrouper && !annulable;
+        // Sans invoices.edit, la facture se consulte sans se modifier
+        if (!peut('invoices.edit')) {
+          enregistrer.hidden = true;
+          $$('input, textarea', formFacture).forEach(function (n) { n.disabled = true; });
+        }
       }
     } else {
       cleFacture = nouvelleCle();
@@ -1255,7 +1299,7 @@
     if (!/^https:\/\/www\.paypal\.com\/cgi-bin\/webscr\?cmd=_xclick&/.test(f.lien_paiement)) return Promise.resolve(f);
     var lien = lienCarte(f.numero, t.balance);
     if (!lien || lien === f.lien_paiement) return Promise.resolve(f);
-    return API.admin.modifierFacture(f.id, { lien_paiement: lien })
+    return API.admin.poserLienPaiement(f.id, lien)
       .then(function () { f.lien_paiement = lien; return f; })
       .catch(function () { return f; });
   }
@@ -1472,9 +1516,107 @@
     });
   });
 
+  /* ---- Équipe ------------------------------------------------------------------
+     Qui fait partie de l'équipe, avec quel rôle (users.view), et, pour qui a
+     roles.manage, le formulaire qui donne un rôle. La base refuse d'elle-même
+     tout le reste : changer son propre rôle, retirer le dernier
+     administrateur, donner un rôle sans en avoir le droit.
+     -------------------------------------------------------------------------- */
+  var corpsEquipe = $('[data-lignes="equipe"]');
+  var formRole = $('form[data-form="role"]');
+  var LIBELLES_PERMISSIONS = {
+    'clients.view': 'Voir les clients', 'clients.create': 'Créer un client', 'clients.edit': 'Modifier un client',
+    'shipments.view': 'Voir les colis', 'shipments.create': 'Enregistrer un colis', 'shipments.edit': 'Modifier un colis',
+    'shipments.delete': 'Supprimer un colis', 'shipments.scan': 'Scanner',
+    'shipments.change_status': 'Changer un statut', 'shipments.correct': 'Corriger une étape',
+    'shipments.view_history': 'Historique interne',
+    'invoices.view': 'Voir les factures', 'invoices.create': 'Créer une facture', 'invoices.edit': 'Modifier une facture',
+    'invoices.cancel': 'Annuler une facture',
+    'payments.view': 'Voir les paiements', 'payments.create': 'Encaisser', 'payments.cancel': 'Annuler un paiement',
+    'reports.view': 'Chiffres et contrôle de la facturation',
+    'users.view': 'Voir l’équipe', 'roles.manage': 'Donner un rôle', 'settings.manage': 'Réglages du site',
+    'audit_logs.view': 'Journal d’audit'
+  };
+
+  function chargerEquipe() {
+    return API.admin.equipe().then(afficherEquipe).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  function afficherEquipe(membres) {
+    corpsEquipe.textContent = '';
+    membres.forEach(function (m) {
+      var tr = el('tr');
+      var tdNom = cellule('Nom');
+      tdNom.appendChild(el('span', 'gs-cellule-principale', (m.nom_complet || '—') + (m.moi ? ' (vous)' : '')));
+      tr.appendChild(tdNom);
+      var tdEmail = cellule('E-mail');
+      tdEmail.textContent = m.email || '';
+      tr.appendChild(tdEmail);
+      var tdRole = cellule('Rôle');
+      tdRole.appendChild(el('span', 'gs-badge gs-badge--role-' + m.role, ROLES[m.role] || m.role));
+      tr.appendChild(tdRole);
+      var tdActions = el('td', 'gs-cellule-actions');
+      if (peut('roles.manage') && !m.moi) {
+        tdActions.appendChild(petitBouton('Changer le rôle', null, function () {
+          formRole.compte.value = m.email || '';
+          formRole.role.value = m.role;
+          formRole.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          formRole.role.focus();
+        }));
+      }
+      tr.appendChild(tdActions);
+      corpsEquipe.appendChild(tr);
+    });
+  }
+
+  // La matrice des rôles, pour que chacun sache ce que son rôle permet
+  (function () {
+    var table = $('[data-matrice-roles]');
+    var roles = ['admin', 'gerant', 'employe', 'client'];
+    var thead = el('thead'), ligne = el('tr');
+    ligne.appendChild(el('th', null, 'Permission'));
+    roles.forEach(function (r) { ligne.appendChild(el('th', 'gs-centre', ROLES[r])); });
+    thead.appendChild(ligne);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    Object.keys(LIBELLES_PERMISSIONS).forEach(function (perm) {
+      var tr = el('tr');
+      var th = el('th', null, LIBELLES_PERMISSIONS[perm]);
+      th.appendChild(el('span', 'gs-cellule-sous', perm));
+      tr.appendChild(th);
+      roles.forEach(function (r) {
+        var liste = API.regles.permissionsDesRoles[r] || [];
+        tr.appendChild(el('td', 'gs-centre', liste.indexOf(perm) >= 0 ? '✓'
+                                              : (liste.indexOf(perm + ':own') >= 0 ? 'les siens' : '—')));
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  })();
+
+  formRole.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formRole, '');
+    var compte = formRole.compte.value.trim().toLowerCase();
+    if (!compte) { erreurFormulaire(formRole, 'Indiquez l’e-mail du compte.'); return; }
+    var bouton = $('button[type="submit"]', formRole);
+    var fin = attente(bouton, 'Enregistrement…');
+    API.admin.changerRole(compte, formRole.role.value).then(function (r) {
+      toast(r.deja ? (r.compte.nom_complet || compte) + ' avait déjà ce rôle.'
+                   : (r.compte.nom_complet || compte) + ' : ' + (ROLES[r.ancien_role] || r.ancien_role) + ' → ' +
+                     (ROLES[r.nouveau_role] || r.nouveau_role) + '.');
+      formRole.reset();
+      return chargerEquipe();
+    }).catch(function (err) {
+      erreurFormulaire(formRole, messageErreur(err));
+    }).then(fin);
+  });
+
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
   function choisirVue(vue) {
+    var onglet = $('[data-onglet-vue="' + vue + '"]');
+    if (!onglet || onglet.hasAttribute('data-interdit')) vue = 'colis';
     etat.vue = vue;
     onglets.forEach(function (b) {
       var actif = b.getAttribute('data-onglet-vue') === vue;
@@ -1490,7 +1632,8 @@
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
     b.addEventListener('keydown', function (e) {
       if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-      var autre = onglets[(i + 1) % onglets.length];
+      var visibles = onglets.filter(function (o) { return !o.hasAttribute('data-interdit'); });
+      var autre = visibles[(visibles.indexOf(b) + 1) % visibles.length];
       autre.focus();
       choisirVue(autre.getAttribute('data-onglet-vue'));
     });
@@ -1648,6 +1791,8 @@
      l'arrête. Le champ n'en montre qu'un aperçu, fait avec la même règle.
      -------------------------------------------------------------------------- */
   var champTarif = $('[data-tarif-lb]', formColis);
+  // Le tarif à la livre change ce que paiera le client : réservé à qui peut
+  // modifier les factures (la base refuse de toute façon un autre tarif).
   var champPrix = $('[data-prix-colis]', formColis);
   var aidePrix = $('[data-calcul-prix]', formColis);
 
@@ -1741,8 +1886,8 @@
     if (!f || f.lien_paiement) return Promise.resolve(f);
     var lien = lienCarte(f.numero, Number(f.montant_usd));
     if (!lien) return Promise.resolve(f);
-    return API.admin.modifierFacture(f.id, { lien_paiement: lien })
-      .then(function () { return f; })
+    return API.admin.poserLienPaiement(f.id, lien)
+      .then(function () { f.lien_paiement = lien; return f; })
       .catch(function () { return f; });   // sans lien, la facture reste valable
   }
 
@@ -1784,6 +1929,8 @@
       champTarif.value = String(API.tarifs.parLivre);
       recalculerPrix();
     }
+    champTarif.readOnly = !peut('invoices.edit');
+    champTarif.title = champTarif.readOnly ? 'Tarif de la maison : un tarif particulier est réservé à qui peut modifier les factures' : '';
     dlgColis.showModal();
     if (f.code.value) chercherClient(!colisEdite);
     (f.code.value ? f.description : f.code).focus();
@@ -1937,7 +2084,7 @@
   // obligatoire), ou null.
   var statutCorrection = null;
   function griserStatuts(possibles, correction) {
-    statutCorrection = correction || null;
+    statutCorrection = peut('shipments.correct') ? correction || null : null;
     $$('input[name="statut"]', formStatut).forEach(function (r) {
       var permis = !possibles || possibles.indexOf(r.value) >= 0 || r.value === statutCorrection;
       r.disabled = !permis;

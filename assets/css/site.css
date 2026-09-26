@@ -579,6 +579,23 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-admin-barre__demo{padding:3px 9px;border-radius:999px;background:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
 .gs-admin-barre__actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-left:auto}
 .gs-admin-barre__email{font-size:14px;color:#c4d0ec}
+.gs-admin-barre__role{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap}
+/* Un menu ou un bouton que le rôle ne permet pas : masqué. Confort seulement,
+   la base refuse l'action de toute façon. */
+[data-interdit]{display:none!important}
+
+/* L'onglet Équipe */
+.gs-equipe__intro{margin:0 0 16px;font-size:14.5px;line-height:1.55;color:#5b6782}
+.gs-equipe__form{display:grid;gap:10px;margin-bottom:18px;padding:16px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
+.gs-equipe__pied{display:flex;justify-content:flex-end}
+.gs-badge--role-admin{background:#e0e7ff;color:#1e3a8a}
+.gs-badge--role-gerant{background:#fef3c7;color:#92400e}
+.gs-badge--role-employe{background:#dcfce7;color:#15803d}
+.gs-roles{margin-top:18px}
+.gs-roles summary{cursor:pointer;padding:8px 2px;font-weight:700;color:#2d3850}
+.gs-tableau--roles th,.gs-tableau--roles td{font-size:14px}
+.gs-tableau--roles th .gs-cellule-sous{display:block;font-family:'IBM Plex Mono',monospace;font-weight:500}
+.gs-centre{text-align:center}
 .gs-admin-barre__bouton{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background-color .2s ease,border-color .2s ease}
 .gs-admin-barre__bouton:hover{border-color:var(--accent);background:var(--accent)}
 .gs-admin-barre__bouton .gs-ico{width:17px;height:17px}

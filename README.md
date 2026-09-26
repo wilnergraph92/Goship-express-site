@@ -40,7 +40,7 @@ python3 -m http.server 8000
 
 Double-cliquer directement sur `index.html` ou `admin.html` fonctionne aussi, mais dans Safari les comptes et colis de démonstration ne sont alors pas conservés d'une page à l'autre : préférez le lanceur.
 
-Sur votre ordinateur, l'espace client fonctionne en **mode démonstration** tant que Supabase n'est pas configuré : les comptes et les colis sont enregistrés uniquement dans votre navigateur. Pour essayer le tableau de bord, ouvrez `admin.html`, connectez-vous avec `admin@goship.demo` / `demo1234`, puis cliquez sur « Ajouter des exemples ». Les clients d'exemple se connectent avec le mot de passe `demo1234` (par exemple `marie-ange@exemple.com`).
+Sur votre ordinateur, l'espace client fonctionne en **mode démonstration** tant que Supabase n'est pas configuré : les comptes et les colis sont enregistrés uniquement dans votre navigateur. Pour essayer le tableau de bord, ouvrez `admin.html`, connectez-vous avec `admin@goship.demo` / `demo1234`, puis cliquez sur « Ajouter des exemples ». Pour voir le tableau de bord d'un autre rôle : `gerant@goship.demo` ou `employe@goship.demo`, même mot de passe. Les clients d'exemple se connectent avec le mot de passe `demo1234` (par exemple `marie-ange@exemple.com`).
 
 ## Mettre le site en ligne
 
@@ -224,12 +224,7 @@ Les comptes et les colis sont enregistrés dans [Supabase](https://supabase.com)
    select public.definir_admin('votre-adresse@exemple.com');
    ```
 
-   Ce compte ouvre désormais `admin.html`. Il n'a pas de code client. Faites de même pour chaque membre de l'équipe (un compte créé sur la page *Créer un compte* du site convient aussi). Pour retirer l'accès :
-
-   ```sql
-   update public.clients set role = 'client', code = public.nouveau_code_client()
-   where email = 'adresse@exemple.com';
-   ```
+   Ce compte ouvre désormais `admin.html`. Il n'a pas de code client. Les autres membres de l'équipe créent leur compte sur la page *Créer un compte* du site, puis vous leur donnez leur rôle — employé, gérant ou administrateur — depuis l'onglet **Équipe** du tableau de bord. Pour retirer l'accès, donnez-leur le rôle « Client ». Voir « Les rôles et les permissions ».
 
 5. **Reliez le site** : l'adresse du projet (*Project URL*, ex. `https://abcdefgh.supabase.co`) figure sur la page d'accueil du projet (bouton *Copy*) ; la clé publique est dans *Project Settings* > *API Keys*, bloc *Publishable key*. Collez-les dans `assets/js/config.js` :
 
@@ -244,7 +239,7 @@ Les comptes et les colis sont enregistrés dans [Supabase](https://supabase.com)
 
 Bon à savoir :
 
-- La sécurité est assurée par la base elle-même : un client ne voit que ses propres colis, et seuls les administrateurs peuvent enregistrer ou modifier des colis, même en contournant le site.
+- La sécurité est assurée par la base elle-même : un client ne voit que ses propres colis, et seule l'équipe peut enregistrer ou modifier des colis — chacun selon les permissions de son rôle —, même en contournant le site.
 - Depuis 2026, Supabase n'ouvre plus automatiquement les nouvelles tables au site : le script accorde lui-même les droits nécessaires. Si un message « permission denied for table … » apparaît, relancez simplement le script.
 - Un client qui n'a pas Internet peut être inscrit par l'équipe : déconnectez-vous, créez son compte sur la page *Créer un compte* avec son e-mail, puis transmettez-lui son code.
 - Sur l'offre gratuite, Supabase met en pause un projet resté 7 jours sans aucune activité (il suffit de le réactiver depuis supabase.com). Avec une activité quotidienne, cela n'arrive pas ; l'offre Pro supprime cette limite.
@@ -475,7 +470,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, puis `outils/supabase-finances.sql`. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, puis `outils/supabase-finances.sql`. **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les six, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 
@@ -493,7 +488,7 @@ Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut f
 - **Deux personnes à la fois.** Si un collègue a changé le colis pendant que vous le regardiez, la base refuse votre modification au lieu d'écraser la sienne, et le dit.
 - **Une facture émise est arrêtée.** Ses frais de service, son client, son numéro, ses lignes et, si elle porte des colis, son total ne se modifient plus. L'échéance, la note et le lien de paiement, si. Son payé et son statut suivent ses paiements (voir « Les finances »).
 - **Le journal.** Chaque création, modification, changement de statut, paiement et modification de client est noté dans la table `journal_audit` : qui, quoi, quand, avant, après. Pour un client, seul le nom des champs modifiés est noté, jamais son adresse ni son téléphone. Seule l'équipe le lit ; personne ne peut y écrire.
-- **Les permissions.** Chaque fonction vérifie la permission du compte connecté (`shipments.create`, `shipments.update_status`, `invoices.create`…), en plus des règles de sécurité des tables. Aujourd'hui, deux rôles : l'équipe peut tout, un client ne voit que ce qui est à lui. La liste est dans `permissions_du_role`, le seul endroit à changer quand viendront des rôles plus fins.
+- **Les permissions.** Chaque fonction vérifie la permission du compte connecté (`shipments.create`, `shipments.change_status`, `invoices.create`…), en plus des règles de sécurité des tables. Quatre rôles : administrateur, gérant, employé, client — voir « Les rôles et les permissions ». La liste est dans `permissions_du_role` (`supabase.sql`), le seul endroit à changer pour déplacer une permission.
 
 ### Les événements
 
@@ -590,6 +585,56 @@ l'**encaissez** dans le tableau de bord (bouton « Encaisser ») : montant reçu
 référence du reçu. Un acompte laisse la facture « Payée en partie » ; elle devient « Payée »
 quand le reste est encaissé. Après un acompte, le lien PayPal fabriqué par le tableau de bord
 demande le reste, plus le total.
+
+## Les rôles et les permissions
+
+Depuis la Phase 6, chaque compte a **un rôle** (`clients.role`), et chaque rôle une **liste de
+permissions** (`permissions_du_role`, dans `outils/supabase.sql`, partie 4). Les règles de
+sécurité des tables et les fonctions de la base ne demandent jamais « est-ce un
+administrateur ? », mais « ce compte a-t-il le droit de faire ceci ? ». Le tableau de bord lit
+les mêmes permissions (`mes_permissions`) pour ne montrer que les menus et les boutons utiles :
+**c'est un confort, pas la protection** — un bouton masqué qu'on ferait réapparaître dans la
+console du navigateur mènerait à un refus de la base.
+
+| Permission | Administrateur | Gérant | Employé | Client |
+|---|:-:|:-:|:-:|:-:|
+| Voir les clients (`clients.view`) | ✓ | ✓ | ✓ | le sien |
+| Créer / modifier un client (`clients.create`, `clients.edit`) | ✓ | ✓ | créer | le sien |
+| Voir, enregistrer, modifier un colis (`shipments.view/create/edit`) | ✓ | ✓ | ✓ | voir les siens |
+| Supprimer un colis (`shipments.delete`) | ✓ | — | — | — |
+| Scanner, changer un statut (`shipments.scan`, `shipments.change_status`) | ✓ | ✓ | ✓ | — |
+| Corriger une étape (`shipments.correct`) | ✓ | ✓ | — | — |
+| Historique interne (`shipments.view_history`) | ✓ | ✓ | ✓ | le sien, public |
+| Voir les factures et les paiements (`invoices.view`, `payments.view`) | ✓ | ✓ | ✓ | les siens |
+| Créer, modifier, annuler une facture (`invoices.create/edit/cancel`) | ✓ | ✓ | — | — |
+| Encaisser, annuler un paiement (`payments.create/cancel`) | ✓ | ✓ | — | — |
+| Chiffres et contrôle de la facturation (`reports.view`) | ✓ | ✓ | — | — |
+| Voir l'équipe (`users.view`) | ✓ | ✓ | — | — |
+| Donner un rôle (`roles.manage`) | ✓ | — | — | — |
+| Réglages du site (`settings.manage`) | ✓ | — | — | — |
+| Journal d'audit (`audit_logs.view`) | ✓ | — | — | — |
+
+- **Un employé enregistre un colis** — et sa facture naît avec lui, comme toujours —, mais ne
+  crée pas d'autre facture, n'encaisse pas, n'annule rien. Un **tarif particulier** (autre que
+  5 $/lb) est réservé à qui peut modifier les factures : la base le refuse à un employé, par le
+  formulaire comme par la table.
+- **Donner un rôle** : onglet **Équipe**, par un administrateur. La personne crée d'abord son
+  compte sur le site. On ne change pas son propre rôle, et le dernier administrateur ne peut pas
+  être rétrogradé. Chaque changement est noté au journal (`utilisateur.role` : qui, sur quel
+  compte, ancien et nouveau rôle). Aucun autre chemin : le site n'a pas le droit d'écrire la
+  colonne `role`, et un déclencheur (`verrou_role`) refuse le changement même si ce droit était
+  rouvert par erreur. Seul le SQL Editor de Supabase garde la main (`definir_admin`).
+- **Un client** est renvoyé de `admin.html` vers son espace, et ne voit que ses propres
+  données, table par table (colis, historique, factures, lignes, paiements, pré-alertes,
+  téléphones, profil).
+- **Refus** : un compte connecté sans la permission reçoit un refus `403` (code
+  `PERMISSION_DENIED`, « Action … réservée »), un visiteur non connecté un `401`.
+- Ce qui n'existe pas encore (dépenses, dettes, exports, analytics) n'a pas de permission : elle
+  viendra avec la fonction.
+
+`outils/essais-services/essai-permissions.py` joue chaque rôle face à chaque action, directement
+dans les tables comme par les fonctions, et tente les élévations de privilèges (rôle, identifiant,
+client d'un autre).
 
 ## Les finances
 

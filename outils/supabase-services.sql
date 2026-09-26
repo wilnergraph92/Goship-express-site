@@ -9,6 +9,12 @@
 -- Ordre d'installation sur une base neuve : supabase.sql, puis
 -- supabase-facturation.sql, puis ce fichier.
 --
+-- Depuis la Phase 6, les erreurs métier et les permissions (erreur_metier,
+-- permissions_du_role, peut, exiger_permission) vivent dans supabase.sql,
+-- partie 4 : les règles de sécurité des tables de ce fichier-là s'en servent,
+-- et une règle ne peut appeler qu'une fonction qui existe déjà. Ce fichier
+-- garde la gestion des rôles de l'équipe (partie 4).
+--
 -- Pourquoi ce fichier. Jusqu'ici, les règles vivaient dans le navigateur de
 -- l'équipe (assets/js/admin.js) : le prix était calculé par la page et envoyé
 -- tel quel, n'importe quel statut pouvait suivre n'importe quel autre, et un
@@ -35,9 +41,9 @@
 --
 -- Contenu :
 --    1. colonnes et index
---    2. erreurs métier
+--    2. erreurs métier                         (déplacé dans supabase.sql)
 --    3. tarifs et prix                         (BillingService, côté calcul)
---    4. permissions                            (PermissionService)
+--    4. rôles de l'équipe                      (PermissionService)
 --    5. statuts et transitions                 (StatusService)
 --    6. journal d'audit                        (AuditService)
 --    7. règles des colis (déclencheur)         (validation + prix + transitions)
@@ -105,23 +111,7 @@ end $$;
 
 
 -- 2. Erreurs métier ------------------------------------------------------------
--- Une seule façon de lever une erreur : le code dans le message, l'explication
--- dans le détail. Le refus de permission garde le code SQL 42501, celui que le
--- site traite déjà comme « accès refusé ».
-
-create or replace function public.erreur_metier(p_code text, p_detail text default '')
-returns void
-language plpgsql
-set search_path = ''
-as $$
-begin
-  raise exception using
-    errcode = case when p_code = 'PERMISSION_DENIED' then '42501' else 'P0001' end,
-    message = p_code,
-    detail  = coalesce(p_detail, ''),
-    hint    = 'goship';
-end;
-$$;
+-- erreur_metier est définie dans supabase.sql, partie 4 (Phase 6).
 
 
 -- 3. Tarifs et prix ------------------------------------------------------------
@@ -152,71 +142,105 @@ as $$
 $$;
 
 
--- 4. Permissions ---------------------------------------------------------------
--- Aujourd'hui deux rôles (clients.role) : « admin » et « client ». Les noms
--- d'actions sont ceux du futur système de rôles (clients.view,
--- shipments.update_status…) : quand il arrivera, seule permissions_du_role
--- changera, pas les fonctions qui l'interrogent.
+-- 4. Rôles de l'équipe ----------------------------------------------------------
+-- Les permissions de chaque rôle et leur vérification (permissions_du_role,
+-- peut, exiger_permission) sont dans supabase.sql, partie 4. Ici : qui fait
+-- partie de l'équipe, et comment un rôle se donne.
 --
--- Une permission suivie de « :own » ne vaut que pour les données du compte
--- lui-même. Les règles de sécurité des tables (RLS) restent en place et disent
--- la même chose de leur côté : ce sont deux barrières, chacune doit tenir seule.
+-- Un rôle se change par changer_role, et seulement avec roles.manage (les
+-- administrateurs). Le déclencheur verrou_role (supabase.sql) refuse tout
+-- autre chemin. Un administrateur ne change pas son propre rôle, et le
+-- dernier administrateur ne peut pas être rétrogradé : personne ne peut se
+-- donner plus de droits, ni retirer à la maison sa dernière clé.
 
-create or replace function public.permissions_du_role(p_role text)
+create or replace function public.roles_equipe()
 returns text[]
 language sql
 immutable
 set search_path = ''
 as $$
-  select case p_role
-    when 'admin' then array[
-      'clients.view', 'clients.create', 'clients.edit',
-      'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
-      'shipments.scan', 'shipments.update_status', 'shipments.correct',
-      'events.view',
-      'invoices.view', 'invoices.create', 'invoices.edit',
-      'audit.view']
-    when 'client' then array[
-      'clients.view:own', 'clients.edit:own',
-      'shipments.view:own', 'invoices.view:own']
-    else array[]::text[]
-  end
+  select array['employe', 'gerant', 'admin']
 $$;
 
--- PermissionService.can(utilisateur, action, ressource). L'utilisateur est
--- toujours le compte connecté : on ne demande jamais à la base « et si
--- j'étais quelqu'un d'autre ? ». p_proprietaire est le client à qui
--- appartient la ressource, pour les permissions « :own ».
-create or replace function public.peut(p_action text, p_proprietaire uuid default null)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select coalesce((
-    select p_action = any (public.permissions_du_role(c.role))
-           or (p_proprietaire is not null and p_proprietaire = c.id
-               and (p_action || ':own') = any (public.permissions_du_role(c.role)))
-    from public.clients c
-    where c.id = auth.uid()), false)
-$$;
-
-create or replace function public.exiger_permission(p_action text, p_proprietaire uuid default null)
-returns void
+-- Les membres de l'équipe, pour l'onglet Équipe
+create or replace function public.equipe()
+returns jsonb
 language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
 begin
-  if not public.peut(p_action, p_proprietaire) then
-    -- Dans les journaux de Supabase (Logs > Postgres), jamais dans une table :
-    -- l'erreur annule la transaction, une ligne écrite ici disparaîtrait avec.
-    raise log 'goship permission refusee action=% compte=%', p_action, coalesce(auth.uid()::text, 'aucun');
-    perform public.erreur_metier('PERMISSION_DENIED',
-      'Action « ' || p_action || ' » réservée : reconnectez-vous avec un compte autorisé.');
+  perform public.exiger_permission('users.view');
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', c.id, 'nom_complet', c.nom_complet, 'email', c.email,
+                                        'role', c.role, 'cree_le', c.cree_le, 'moi', c.id = auth.uid())
+                     order by array_position(array['admin', 'gerant', 'employe'], c.role), c.nom_complet)
+    from public.clients c
+    where c.role = any (public.roles_equipe())), '[]'::jsonb);
+end;
+$$;
+
+-- Donner un rôle à un compte, retrouvé par son adresse e-mail (ou son
+-- identifiant). p_role : « client », « employe », « gerant » ou « admin ».
+-- Réponse : { compte, ancien_role, nouveau_role, deja }
+create or replace function public.changer_role(p_compte text, p_role text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c public.clients;
+  v_role text := lower(trim(coalesce(p_role, '')));
+  v_ref text := trim(coalesce(p_compte, ''));
+  v_admins integer;
+  v_avant text := coalesce(current_setting('goship.roles', true), '');
+begin
+  perform public.exiger_permission('roles.manage');
+  if not (v_role = any (public.roles_equipe() || array['client'])) then
+    perform public.erreur_metier('INVALID_ROLE', 'Rôle inconnu : ' || coalesce(nullif(v_role, ''), '(vide)') ||
+                                 '. Choisissez client, employe, gerant ou admin.');
   end if;
+  select * into c from public.clients
+   where (v_ref ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' and id::text = lower(v_ref))
+      or (v_ref <> '' and lower(email) = lower(v_ref))
+   for update;
+  if not found then
+    perform public.erreur_metier('USER_NOT_FOUND',
+      'Aucun compte avec l''adresse ' || v_ref || '. La personne doit d''abord créer son compte sur le site.');
+  end if;
+  if c.id = auth.uid() then
+    perform public.erreur_metier('SELF_ROLE_CHANGE',
+      'On ne change pas son propre rôle : demandez-le à un autre administrateur.');
+  end if;
+  if c.role = v_role then
+    return jsonb_build_object('compte', jsonb_build_object('id', c.id, 'email', c.email, 'nom_complet', c.nom_complet),
+                              'ancien_role', c.role, 'nouveau_role', v_role, 'deja', true);
+  end if;
+  if c.role = 'admin' then
+    -- Le verrou met en file deux rétrogradations simultanées : la seconde voit la première
+    perform pg_advisory_xact_lock(hashtextextended('goship-admins', 0));
+    select count(*) into v_admins from public.clients where role = 'admin';
+    if v_admins <= 1 then
+      perform public.erreur_metier('LAST_ADMIN', 'C''est le dernier administrateur : nommez-en un autre d''abord.');
+    end if;
+  end if;
+
+  perform set_config('goship.roles', 'on', true);
+  -- Un compte qui redevient client retrouve un code client s'il n'en a plus
+  update public.clients
+     set role = v_role,
+         code = case when v_role = 'client' and code is null then public.nouveau_code_client() else code end
+   where id = c.id;
+  perform set_config('goship.roles', v_avant, true);
+
+  perform public.auditer('utilisateur.role', 'client', c.id::text,
+                         jsonb_build_object('role', c.role, 'email', c.email),
+                         jsonb_build_object('role', v_role, 'email', c.email));
+  raise log 'goship role change compte=% de=% vers=% par=%', c.id, c.role, v_role, auth.uid();
+  return jsonb_build_object('compte', jsonb_build_object('id', c.id, 'email', c.email, 'nom_complet', c.nom_complet),
+                            'ancien_role', c.role, 'nouveau_role', v_role, 'deja', false);
 end;
 $$;
 
@@ -341,7 +365,7 @@ alter table public.journal_audit enable row level security;
 drop policy if exists journal_audit_lecture on public.journal_audit;
 create policy journal_audit_lecture on public.journal_audit
   for select to authenticated
-  using ((select public.peut('audit.view')));
+  using ((select public.peut('audit_logs.view')));
 revoke all on public.journal_audit from anon, authenticated;
 grant select on public.journal_audit to authenticated;
 grant select, insert on public.journal_audit to service_role;
@@ -589,6 +613,15 @@ begin
   if (v_nouveau or new.tarif_lb_usd is distinct from old.tarif_lb_usd)
      and (new.tarif_lb_usd < 0 or new.tarif_lb_usd > 1000) then
     perform public.erreur_metier('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
+  end if;
+  -- Un tarif autre que celui de la maison change ce que paiera le client :
+  -- c'est un geste de facturation (invoices.edit), pas d'entrepôt. Le SQL
+  -- Editor, sans compte connecté, reste libre.
+  if auth.uid() is not null and not public.peut('invoices.edit')
+     and ((v_nouveau and new.tarif_lb_usd is distinct from (t ->> 'par_livre')::numeric)
+          or (not v_nouveau and new.tarif_lb_usd is distinct from old.tarif_lb_usd)) then
+    perform public.erreur_metier('PERMISSION_DENIED',
+      'Un tarif particulier est réservé à qui peut modifier les factures.');
   end if;
   if v_nouveau
      or new.poids_lb is distinct from old.poids_lb
@@ -915,8 +948,11 @@ begin
           v_cle)
   returning id into v_id;
 
+  -- La facture naît avec le colis : c'est la règle de la maison, pas une
+  -- facturation à part. Elle ne demande donc pas invoices.create — un employé
+  -- qui enregistre un colis produit sa facture, sans pouvoir en faire d'autres.
   if p_facturer then
-    v_facture := public.facturer_colis(v_id) -> 'facture';
+    v_facture := public.facturer_colis_interne(v_id) -> 'facture';
   end if;
 
   return jsonb_build_object('colis', public.colis_json(v_id), 'facture', v_facture, 'deja', false);
@@ -1025,6 +1061,21 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+begin
+  perform public.exiger_permission('invoices.create');
+  return public.facturer_colis_interne(p_colis);
+end;
+$$;
+
+-- Le corps de facturer_colis, sans la vérification de permission : appelé par
+-- facturer_colis (invoices.create) et par creer_colis (shipments.create).
+-- Fermé au site.
+create or replace function public.facturer_colis_interne(p_colis uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
   c public.colis;
   v_existante uuid;
@@ -1032,7 +1083,6 @@ declare
   v_frais numeric := (public.tarifs() ->> 'frais_service')::numeric;
   v_prix numeric;
 begin
-  perform public.exiger_permission('invoices.create');
   select * into c from public.colis where id = p_colis for update;
   if not found then
     perform public.erreur_metier('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
@@ -1172,7 +1222,6 @@ $$;
 -- on n'ouvre aux comptes connectés que les fonctions de service. Chacune
 -- vérifie elle-même la permission.
 
-revoke execute on function public.erreur_metier(text, text) from public, anon, authenticated;
 revoke execute on function public.auditer(text, text, text, jsonb, jsonb) from public, anon, authenticated;
 revoke execute on function public.difference(jsonb, jsonb, text[]) from public, anon, authenticated;
 revoke execute on function public.journaliser_colis() from public, anon, authenticated;
@@ -1186,12 +1235,13 @@ revoke execute on function public.lire_uuid(jsonb, text, text) from public, anon
 revoke execute on function public.colis_json(uuid) from public, anon, authenticated;
 revoke execute on function public.facture_json(uuid) from public, anon, authenticated;
 revoke execute on function public.statut_precedent(uuid, text) from public, anon, authenticated;
-revoke execute on function public.exiger_permission(text, uuid) from public, anon, authenticated;
+revoke execute on function public.facturer_colis_interne(uuid) from public, anon, authenticated;
 
 revoke execute on function public.tarifs() from public, anon;
 revoke execute on function public.prix_transport(numeric, numeric) from public, anon;
-revoke execute on function public.permissions_du_role(text) from public, anon;
-revoke execute on function public.peut(text, uuid) from public, anon;
+revoke execute on function public.roles_equipe() from public, anon;
+revoke execute on function public.equipe() from public, anon;
+revoke execute on function public.changer_role(text, text) from public, anon;
 revoke execute on function public.transitions_statut() from public, anon;
 revoke execute on function public.transition_permise(text, text, text) from public, anon;
 revoke execute on function public.creer_colis(jsonb, text, boolean) from public, anon;
@@ -1202,8 +1252,9 @@ revoke execute on function public.creer_facture(uuid, uuid[], jsonb, text) from 
 
 grant execute on function public.tarifs() to authenticated;
 grant execute on function public.prix_transport(numeric, numeric) to authenticated;
-grant execute on function public.permissions_du_role(text) to authenticated;
-grant execute on function public.peut(text, uuid) to authenticated;
+grant execute on function public.roles_equipe() to authenticated;
+grant execute on function public.equipe() to authenticated;
+grant execute on function public.changer_role(text, text) to authenticated;
 grant execute on function public.transitions_statut() to authenticated;
 grant execute on function public.transition_permise(text, text, text) to authenticated;
 grant execute on function public.creer_colis(jsonb, text, boolean) to authenticated;

@@ -412,7 +412,8 @@
       API.connecter(formConnexion.elements.email.value.trim().toLowerCase(), formConnexion.elements.mot_de_passe.value)
         .then(function (profil) {
           annoncerSession();
-          var admin = profil && profil.role === 'admin';
+          // Un compte de l'équipe (employé, gérant, administrateur) va au tableau de bord
+          var admin = !!profil && API.regles.rolesEquipe.indexOf(profil.role) >= 0;
           location.href = admin && !/[?&]retour=/.test(location.search) ? 'admin.html' : destination('mon-compte.html');
         })
         .catch(function (err) {
@@ -510,7 +511,7 @@
         if (dd) dd.textContent = infos[k] || '—';
       });
       $$('[data-lien-wa="wa-aide"]').forEach(function (a) { a.href = waUrl(t('wa-aide', { code: profil.code || '' })); });
-      if (profil.role === 'admin' && !$('[data-avis-admin]')) {
+      if (API.regles.rolesEquipe.indexOf(profil.role) >= 0 && !$('[data-avis-admin]')) {
         var avis = document.createElement('p');
         avis.className = 'gs-alerte gs-alerte--info';
         avis.setAttribute('data-avis-admin', '');

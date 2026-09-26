@@ -678,7 +678,7 @@ alter table public.paiements enable row level security;
 drop policy if exists paiements_lecture on public.paiements;
 create policy paiements_lecture on public.paiements
   for select to authenticated
-  using (public.peut('invoices.view', client_id));
+  using (client_id = (select auth.uid()) or (select public.peut('payments.view')));
 revoke all on public.paiements from anon, authenticated;
 grant select on public.paiements to authenticated;
 grant all on public.paiements to service_role;
@@ -696,7 +696,7 @@ alter table public.evenements_facturation enable row level security;
 drop policy if exists evenements_facturation_lecture on public.evenements_facturation;
 create policy evenements_facturation_lecture on public.evenements_facturation
   for select to authenticated
-  using ((select public.peut('audit.view')));
+  using ((select public.peut('audit_logs.view')));
 revoke all on public.evenements_facturation from anon, authenticated;
 grant select on public.evenements_facturation to authenticated;
 grant all on public.evenements_facturation to service_role;
@@ -744,7 +744,7 @@ declare
   v_montant numeric;
   v_date timestamptz;
 begin
-  perform public.exiger_permission('invoices.edit');
+  perform public.exiger_permission('payments.create');
   if v_cle is not null then
     perform pg_advisory_xact_lock(hashtextextended('goship-paiement:' || v_cle, 0));
     select * into p from public.paiements where cle_idempotence = v_cle;
@@ -792,7 +792,7 @@ declare
   p public.paiements;
   v_avant text := coalesce(current_setting('goship.finances', true), '');
 begin
-  perform public.exiger_permission('invoices.edit');
+  perform public.exiger_permission('payments.cancel');
   select facture_id into v_facture from public.paiements where id = p_paiement;
   if not found then
     perform public.erreur_metier('PAYMENT_NOT_FOUND', 'Aucun paiement avec cet identifiant.');
@@ -834,7 +834,7 @@ declare
   v_paye numeric;
   v_avant text := coalesce(current_setting('goship.finances', true), '');
 begin
-  perform public.exiger_permission('invoices.edit');
+  perform public.exiger_permission('invoices.cancel');
   select * into f from public.factures where id = p_facture for update;
   if not found then
     perform public.erreur_metier('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
@@ -863,6 +863,39 @@ begin
                          jsonb_build_object('statut', f.statut),
                          jsonb_build_object('statut', 'annulee', 'motif', v_motif));
   return jsonb_build_object('facture', public.facture_complete(f.id), 'deja', false);
+end;
+$$;
+
+-- Le lien de paiement (PayPal, Azul) d'une facture. Qui peut modifier les
+-- factures le change quand il veut ; qui enregistre les colis peut poser le
+-- premier lien d'une facture qui n'en a pas encore — celle que le colis vient
+-- de faire naître —, sans pouvoir ensuite y retoucher. Seules les adresses
+-- https:// sont acceptées : c'est un bouton sur lequel le client cliquera.
+create or replace function public.definir_lien_paiement(p_facture uuid, p_lien text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  f public.factures;
+  v_lien text := trim(coalesce(p_lien, ''));
+begin
+  if not public.peut('invoices.edit') and not public.peut('shipments.create') then
+    perform public.exiger_permission('invoices.edit');
+  end if;
+  if v_lien !~* '^https://[^[:space:]]+$' or length(v_lien) > 500 then
+    perform public.erreur_metier('INVALID_INPUT', 'Le lien de paiement doit être une adresse https://.');
+  end if;
+  select * into f from public.factures where id = p_facture for update;
+  if not found then
+    perform public.erreur_metier('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+  end if;
+  if not public.peut('invoices.edit') and f.lien_paiement <> '' then
+    perform public.exiger_permission('invoices.edit');
+  end if;
+  update public.factures set lien_paiement = v_lien where id = f.id;
+  return jsonb_build_object('id', f.id, 'numero', f.numero, 'lien_paiement', v_lien);
 end;
 $$;
 
@@ -925,7 +958,7 @@ declare
   v_avant text := coalesce(current_setting('goship.finances', true), '');
 begin
   perform public.exiger_permission('invoices.create');
-  perform public.exiger_permission('invoices.edit');
+  perform public.exiger_permission('invoices.cancel');
   if v_cle is not null then
     perform pg_advisory_xact_lock(hashtextextended('goship-creer-facture:' || v_cle, 0));
     select id into v_existante from public.factures where cle_idempotence = v_cle;
@@ -1012,7 +1045,7 @@ declare
   v_mois timestamptz := date_trunc('month', now() at time zone 'America/Santo_Domingo')
                         at time zone 'America/Santo_Domingo';
 begin
-  perform public.exiger_permission('invoices.view');
+  perform public.exiger_permission('reports.view');
   -- Une seule agrégation des paiements plutôt que solde_usd() facture par
   -- facture : même règle (solde = total − paiements valides ; en retard =
   -- solde > 0 et échéance passée), dix fois plus vite sur des milliers de
@@ -1124,7 +1157,7 @@ begin
   -- Depuis le SQL Editor, personne n'est connecté : le rapport s'y lit quand
   -- même (un visiteur, lui, n'a pas le droit d'appeler la fonction).
   if auth.uid() is not null then
-    perform public.exiger_permission('audit.view');
+    perform public.exiger_permission('reports.view');
   end if;
   with lignes as (
     select l.facture_id, count(*) as nb, count(l.colis_id) as nb_colis, sum(l.montant_usd) as total
@@ -1290,6 +1323,7 @@ revoke execute on function public.enregistrer_paiement(uuid, jsonb, text) from p
 revoke execute on function public.annuler_paiement(uuid, text) from public, anon;
 revoke execute on function public.annuler_facture(uuid, text) from public, anon;
 revoke execute on function public.calculer_facture(uuid[]) from public, anon;
+revoke execute on function public.definir_lien_paiement(uuid, text) from public, anon;
 revoke execute on function public.regrouper_factures(uuid[], text) from public, anon;
 revoke execute on function public.resume_facturation() from public, anon;
 revoke execute on function public.rapport_anomalies_facturation() from public, anon;
@@ -1304,6 +1338,7 @@ grant execute on function public.enregistrer_paiement(uuid, jsonb, text) to auth
 grant execute on function public.annuler_paiement(uuid, text) to authenticated;
 grant execute on function public.annuler_facture(uuid, text) to authenticated;
 grant execute on function public.calculer_facture(uuid[]) to authenticated;
+grant execute on function public.definir_lien_paiement(uuid, text) to authenticated;
 grant execute on function public.regrouper_factures(uuid[], text) to authenticated;
 grant execute on function public.resume_facturation() to authenticated;
 grant execute on function public.rapport_anomalies_facturation() to authenticated;
