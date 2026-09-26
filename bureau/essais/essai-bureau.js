@@ -120,6 +120,15 @@ function taillePdf(octets) {
       await page.waitForSelector('[data-ecran="tableau"]:not([hidden])', { timeout: 15000 });
       await attendre(800);
     }
+    // Un onglet du menu, comme le ferait quelqu'un : sous 1024 px de large (petit
+    // écran, cadre de fenêtre Windows), le menu est un tiroir qu'on ouvre d'abord
+    async function onglet(vue) {
+      if (await page.isVisible('.gs-td__burger')) {
+        await page.click('.gs-td__burger');
+        await attendre(350);
+      }
+      await page.click('[data-onglet-vue="' + vue + '"]');
+    }
     var onglets = function () {
       return page.$$eval('[data-onglet-vue]', function (b) { return b.filter(function (x) { return x.offsetWidth; }).map(function (x) { return x.getAttribute('data-onglet-vue'); }); });
     };
@@ -132,7 +141,7 @@ function taillePdf(octets) {
     // Chaque onglet, sous la Content-Security-Policy de l'application : aucune violation
     var analyticsAffichees = false;
     for (var vue of ['apercu', 'colis', 'clients', 'factures', 'analytics', 'scanner', 'equipe']) {
-      await page.click('[data-onglet-vue="' + vue + '"]');
+      await onglet(vue);
       await attendre(vue === 'analytics' ? 1500 : 600);
       if (vue === 'analytics') analyticsAffichees = await page.isVisible('[data-analytics-corps] .gs-kpi');
     }
@@ -149,7 +158,7 @@ function taillePdf(octets) {
     await page.keyboard.press(mod + '+Shift+S');
     await attendre(300);
     ok(mod + '+Maj+S : le poste de scan s\'ouvre, prêt à lire', (await page.isVisible('[data-vue="scanner"]')) && (await actif()) === 'scanner');
-    await page.click('[data-onglet-vue="colis"]');
+    await onglet('colis');
     var clavier = await page.evaluate(function () {
       var r = [];
       [['k', 'KeyK'], ['л', 'KeyK']].forEach(function (t) {
@@ -233,7 +242,7 @@ function taillePdf(octets) {
       await f.waitForSelector('[data-apercu]:not([hidden])', { timeout: 20000 });
       return f;
     }
-    await page.click('[data-onglet-vue="colis"]');
+    await onglet('colis');
     await attendre(500);
     var imp = await fenetreImprimer(function () { return page.click('[data-vue="colis"] tbody button:has-text("Étiquette")'); });
     await attendre(800);
@@ -257,7 +266,7 @@ function taillePdf(octets) {
        /Impression échouée/.test(await imp.textContent('[data-etat]')) && (await imp.textContent('[data-imprimer]')) === 'Réessayer');
     await imp.click('[data-fermer]');
     await attendre(500);
-    await page.click('[data-onglet-vue="factures"]');
+    await onglet('factures');
     await attendre(1200);
     var imp2 = await fenetreImprimer(function () { return page.click('[data-vue="factures"] tbody button:has-text("Imprimer")'); });
     await imp2.click('[data-pdf]');
