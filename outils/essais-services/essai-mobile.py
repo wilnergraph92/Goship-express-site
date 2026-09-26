@@ -151,8 +151,13 @@ def b64(b):
 def jeton(sub, email, duree=3600):
     h = b64(json.dumps({'alg': 'HS256', 'typ': 'JWT'}).encode())
     maintenant = int(time.time())
+    # « iat » antidaté d'une heure : sur le Mac de la CI, PostgREST 16 a refusé des jetons
+    # tout frais (« JWT issued at future », PGRST303) après les minutes de démarrage du
+    # simulateur, son horloge restant en retard sur celle de ce script. La vraie base
+    # n'a pas ce décalage ; l'essai, lui, ne doit pas dépendre de l'horloge de la machine.
     p = b64(json.dumps({'role': 'authenticated', 'aud': 'authenticated', 'sub': sub, 'email': email,
-                        'iat': maintenant, 'exp': maintenant + duree, 'session_id': str(uuid.uuid4())}).encode())
+                        'iat': maintenant - 3600, 'exp': maintenant + duree,
+                        'session_id': str(uuid.uuid4())}).encode())
     return h + '.' + p + '.' + b64(hmac.new(SECRET.encode(), (h + '.' + p).encode(), hashlib.sha256).digest())
 
 
