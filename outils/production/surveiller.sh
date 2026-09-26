@@ -121,7 +121,9 @@ else
         *) echec "sante() inattendue : $etat" ;;
       esac
     elif [ "$code" = 404 ]; then
-      tolerant "sante() absente : exécuter outils/supabase-production.sql"
+      # Avertissement seulement : tant que la migration n'est pas passée en production,
+      # l'authentification et le suivi public (plus bas) disent déjà si la base répond
+      averti "sante() absente : exécuter outils/supabase-production.sql (docs/production/go-no-go.md)"
     else
       echec "base : sante() répond $code"
     fi

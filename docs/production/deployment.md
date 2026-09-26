@@ -6,6 +6,14 @@ migrations ajoutent sans rien retirer : l'ancien site et les applications déjà
 installées continuent de fonctionner sur une base plus récente — l'inverse n'est
 pas vrai (un site récent sur une base ancienne appelle des fonctions absentes).
 
+**Une exception : `supabase-notifications.sql`.** Il retire aux comptes
+`envoyer_email_client` et `envoyer_whatsapp_client`, que le site d'avant la
+Phase 11 appelle depuis le tableau de bord (la base envoie désormais elle-même).
+Entre cette migration et la publication du site de la Phase 11, l'envoi manuel
+d'un e-mail ou d'un WhatsApp depuis le tableau de bord échoue. Les deux se font
+donc **l'un juste après l'autre** : migration, contrôles, puis fusion de la PR
+des pages de la Phase 11 dans la foulée.
+
 | Composant | Comment il part en ligne | Qui déclenche | Retour arrière |
 |---|---|---|---|
 | Base (Supabase) | chaîne `outils/migrations.txt`, SQL Editor | une personne, à la main | rollback.md § Base |

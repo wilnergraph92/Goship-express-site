@@ -19,7 +19,7 @@ aucune donnée de client. Lancé :
 | Fichiers de travail non servis | `CLAUDE.md`, `README.md`, `outils/…sql`, `outils/migrations.txt`, `bureau/package.json`, `docs/…` répondent autre chose que 404 |
 | HTTP → HTTPS | avertissement seulement |
 | Auth Supabase | `auth/v1/health` ≠ 200 |
-| Base | `sante()` : `status ≠ ok`, `pret = false`, ou `notifications = en_retard` (un envoi attend depuis plus de 15 min : pg_cron arrêté ?) |
+| Base | `sante()` : `status ≠ ok`, `pret = false`, ou `notifications = en_retard` (un envoi attend depuis plus de 15 min : pg_cron arrêté ?). `sante()` absente (migration pas encore passée) : avertissement seulement |
 | Suivi public | `suivre_colis` ≠ 200 |
 
 `sante()` (`outils/supabase-production.sql`) est la seule fonction ajoutée pour

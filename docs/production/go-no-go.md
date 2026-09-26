@@ -34,7 +34,7 @@ l'ordre.
 | C6 | Sauvegarde existante **et** restauration réussie | **non rempli** | offre et sauvegardes Supabase inconnues ; `sauvegarde.yml` pas en service ; aucune restauration réelle → **B3** |
 | C7 | Préproduction | **non rempli** | n'existe pas → **B2** |
 | C8 | Auth : *Site URL*, *Redirect URLs*, confirmation d'e-mail, mot de passe | **non vérifié** | le README notait le *Site URL* encore sur `localhost:3000` → **B4** |
-| C9 | Surveillance et alertes actives | **non rempli** | `surveillance.yml` écrit et éprouvé, mais GitHub ne le planifie qu'une fois sur `main` → **B5** |
+| C9 | Surveillance et alertes actives | **partiel** | `surveillance.yml` sur `main` depuis le 26/09/2026 ; `sante()` absente de la production tant que A5 n'est pas fait → **B5** |
 | C10 | Retour arrière possible | **vérifié (site)** / documenté (base, mobile) | site : `git revert` + republication ; base : migrations rejouables, restauration éprouvée sur base d'essai |
 | C11 | HTTPS | **non vérifié** | `github.io` impose HTTPS par défaut ; le réseau de l'environnement de travail bloque `github.io` → vérifié automatiquement par le premier contrôle après publication |
 | C12 | Mobile signé, publié en test interne | **non rempli** | aucune soumission EAS, pas de fiche de boutique → **B6** |
@@ -51,11 +51,19 @@ ses accès). Aucune ne demande de coller un secret dans une conversation.
 | B2 | Pas de préproduction | **A2** : créer `goship-staging` (gratuit), y passer la chaîne, les contrôles | environment.md |
 | B3 | Aucune sauvegarde vérifiée | **A1** : relever l'offre et les sauvegardes Supabase (Database > Backups). **A3** : clé age, environnement `production`, secrets, lancer `sauvegarde.yml`, **restaurer** dans un projet vide | backup.md |
 | B4 | Réglages Auth non vérifiés | **A6** : *Site URL* = adresse de production, *Redirect URLs* sans `localhost`, confirmation d'e-mail, mot de passe ≥ 6 ; essai « mot de passe oublié » | README, « Les cinq réglages » |
-| B5 | Surveillance pas encore active | **A7** : fusionner la PR #13 **après A5** → `deploy.yml` vérifie le site publié, `surveillance.yml` démarre | monitoring.md |
+| — | Pages de la Phase 11 (notifications) pas en ligne | **A7** : fusionner la PR #13 juste après A5 → `deploy.yml` publie et vérifie | deployment.md § 2 |
+| B5 | Surveillance : active depuis le 26/09/2026 sur `main`, mais `sante()` n'existe pas encore en production (avertissement) et l'alerte ne va qu'à une personne | **A5** (`supabase-production.sql`), puis M3 / R7 | monitoring.md |
 | B6 | Mobile non publié | **A8** : comptes Apple Developer et Google Play, `eas credentials`, fiches des boutiques, `eas build` + `submit` en test interne, parcours de fumée, puis déploiement progressif ; fusionner la PR mobile #2 après A5 | deployment.md § 4 |
 | B7 | Bureau non signé | **A9** : certificat de signature de code Windows ; compte Apple Developer ID + notarisation ; secrets de signature dans l'environnement `production` | deployment.md § 3 |
 
 Ordre : A1 → A2 → A3 → A4 → A5 → A6 → A7, puis A8 et A9 indépendamment.
+**A5 (pour `supabase-notifications.sql`) et A7 se font l'un juste après l'autre** :
+cette migration ferme l'envoi manuel d'e-mails du site actuel (deployment.md).
+
+Publié le 26/09/2026 sans attendre (aucune dépendance à la base) : le
+durcissement de `deploy.yml`, la surveillance, les outils, les migrations (en
+fichiers, **non exécutées**) et cette documentation. Les pages de la Phase 11
+restent dans la PR #13.
 
 ## Risques
 
@@ -78,7 +86,7 @@ B1 à B7.
 | # | Risque | Note |
 |---|---|---|
 | L1 | 14 vulnérabilités « modérées » dans les dépendances de **construction** du mobile (outils Expo) ; `decode-uri-component` (déni de service) | aucune n'est exploitable depuis l'application publiée ; suivre les mises à jour d'Expo |
-| L2 | Le site en ligne sert encore `CLAUDE.md`, `.htaccess`… (ancien `deploy.yml`) | aucun secret dedans (le dépôt est public de toute façon) ; corrigé à la fusion de la PR #13 |
+| L2 | Le site en ligne servait `CLAUDE.md`, `.htaccess`… (ancien `deploy.yml`) | aucun secret dedans ; corrigé par la publication du 26/09/2026 (contrôle après publication) |
 | L3 | Les identifiants du mode démonstration sont dans `api.js` et `admin.html` | valables seulement en local sans configuration ; C4 vérifie qu'aucun compte `@goship.demo` n'existe en production |
 | L4 | Pas de fournisseur de paiement intégré (lien de paiement manuel) | aucune donnée de carte ne passe par la plateforme |
 | L5 | Journaux Supabase courts sur l'offre gratuite | `journal_audit` garde l'essentiel sans limite |

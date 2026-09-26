@@ -7,39 +7,46 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — Phases 11 et 12 (PR #13)
+## Non publié — pages de la Phase 11 (PR #13)
 
-**Décision : NO-GO** (docs/production/go-no-go.md). À ne fusionner qu'après les
-migrations en production.
+**À fusionner juste après `supabase-notifications.sql` en production**
+(docs/production/deployment.md, « Une exception »).
 
-### Pour les clients
-- Notifications : chaque étape de colis, facture ou paiement crée une
-  notification dans « Mon compte » (badge, filtres, lu) et dans l'application ;
-  e-mail, WhatsApp et push partent de la base, avec nouvelles tentatives et
-  préférences par canal.
+- Clients : notifications dans « Mon compte » (badge, filtres, lu, préférences)
+  et dans l'application.
+- Équipe : onglet Notifications (règles, centre des envois, envois d'un colis) ;
+  le dialogue d'un colis n'envoie plus lui-même d'e-mail ni de WhatsApp.
+- Essais : `essai-notifications.py` / `.js`, remis dans `essais.yml`.
 
-### Pour l'équipe
-- Onglet Notifications : règles (activer, canaux), centre des envois avec leur
-  statut réel, envois d'un colis.
-- Production : `sante()`, contrôles de sécurité et d'intégrité en lecture seule,
-  sauvegarde chiffrée quotidienne (à mettre en service), surveillance toutes les
-  30 minutes, documentation `docs/production/`.
+## site-2026.09.26 — outillage de production (publié le 26/09/2026)
 
-### Base
-- Migrations nouvelles : `supabase-notifications.sql`, `supabase-production.sql`.
+Aucune page du site ne change, et **aucune migration n'a été exécutée** en
+production. Verdict de mise en production : **NO-GO** (docs/production/go-no-go.md).
+
+### Publication
+- `deploy.yml` ne publie plus `CLAUDE.md`, `CHANGELOG.md`, `.htaccess`, `_headers`,
+  `_redirects` ; refuse de publier un fichier de travail ou une clé secrète ;
+  vérifie le site publié (`surveiller.sh`).
+- `surveillance.yml` : toutes les 30 minutes. `essais.yml` : tous les bancs
+  d'essai à chaque PR. `sauvegarde.yml` : chaque jour, une fois ses secrets posés.
+
+### Base (fichiers seulement, à exécuter selon docs/production/deployment.md)
+- `outils/migrations.txt` : la chaîne officielle.
+- `supabase-notifications.sql` (Phase 11) et `supabase-production.sql` (`sante()`).
 - `supabase.sql` : la contrainte `notifications_canal_check` accepte `app` (la
   chaîne ne se rejouait plus sur une base ayant des notifications de la Phase 11).
 - `supabase-code-client.sql`, `supabase-factures.sql`, `supabase-numero-facture.sql`
   refusent de s'exécuter sur une base à jour (`supabase-factures.sql` aurait remis
   une ancienne version de `mes_factures`).
 
-### Publication
-- `deploy.yml` ne publie plus `CLAUDE.md`, `CHANGELOG.md`, `.htaccess`, `_headers`,
-  `_redirects`, refuse de publier un fichier de travail ou une clé secrète, et
-  vérifie le site après publication.
+### Outils et documentation
+- `outils/production/` : contrôles de sécurité et d'intégrité (lecture seule),
+  sauvegarde chiffrée et restauration, surveillance.
+- `docs/production/` : GO / NO-GO, runbook, déploiement, sauvegarde, reprise,
+  surveillance, incidents, retour arrière, versions, dépannage.
 
 ### À faire à la main
-- Suivre `docs/production/go-no-go.md`, actions A1 à A9.
+- `docs/production/go-no-go.md`, actions A1 à A9.
 
 ## Déjà sur `main` (avant le 26/09/2026, jamais étiqueté)
 
