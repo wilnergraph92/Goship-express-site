@@ -136,11 +136,10 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
 .gs-graphe{padding:18px 18px 16px}
 .gs-graphe__titre{font-size:15.5px}
 .gs-graphe__svg{height:170px}
-.gs-graphe--recus{fill:#0d2b6b;background:#0d2b6b}
-.gs-graphe--livres{fill:#f4600d;background:#f4600d}
-.gs-graphe--facture{fill:#0d2b6b;background:#0d2b6b}
-.gs-graphe--encaisse{fill:#f4600d;background:#f4600d}
-.gs-graphe--scans{fill:#1f5fe0;background:#1f5fe0}
+/* Deux séries côte à côte : le bleu et l'orange de la marque, vérifiés pour les
+   daltonismes (le bleu nuit, trop sombre à côté de l'orange, ne l'est pas) */
+.gs-graphe--recus,.gs-graphe--facture,.gs-graphe--scans,.gs-graphe--serie1{fill:#1f5fe0;background:#1f5fe0}
+.gs-graphe--livres,.gs-graphe--encaisse,.gs-graphe--serie2{fill:#f4600d;background:#f4600d}
 .gs-graphe__svg rect{transition:opacity .15s ease}
 .gs-graphe__svg rect:hover{opacity:.75}
 .gs-repartition__piste{height:9px}
@@ -162,6 +161,50 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
   .gs-cellule-actions{width:1%;white-space:normal}
   .gs-cellule-actions .gs-bouton{display:flex;justify-content:center;width:100%;white-space:nowrap}
   .gs-cellule-actions .gs-bouton+.gs-bouton{margin:6px 0 0}
+}
+
+/* ---- Analytics (admin.html#analytics) ----------------------------------------------
+   Ce qui s'est passé, période par période. Même langage que la vue générale : cartes,
+   tableaux lisibles, peu de graphiques. Les hausses et les baisses ne sont ni « bonnes »
+   ni « mauvaises » : une flèche et un mot, dans une couleur neutre. */
+.gs-analytics__barre{align-items:flex-end}
+.gs-analytics__actions{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.gs-analytics__onglets{display:flex;gap:6px;margin:0 0 18px;padding:6px;overflow-x:auto;border:1px solid var(--app-bord);border-radius:16px;background:#fff;box-shadow:var(--app-ombre);scrollbar-width:none}
+.gs-analytics__onglets::-webkit-scrollbar{display:none}
+.gs-analytics__onglets button{flex:none;min-height:40px;padding:8px 14px;border:0;border-radius:11px;background:none;color:#5b6782;font:inherit;font-size:14.5px;font-weight:700;white-space:nowrap;cursor:pointer;transition:background-color .2s ease,color .2s ease}
+.gs-analytics__onglets button:hover{background:#f3f6fb;color:var(--ink)}
+.gs-analytics__onglets button[aria-selected="true"]{background:var(--ink);color:#fff}
+.gs-analytics__onglets button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.gs-analytics__corps{min-height:200px}
+.gs-analytics__corps[aria-busy="true"]{opacity:.55;transition:opacity .2s ease}
+.gs-analytics__section .gs-kpis{margin-top:4px}
+.gs-analytics__section .gs-tableau-cadre{margin-top:14px}
+.gs-analytics__graphe{margin:14px 0 0}
+.gs-kpi--analytics{min-height:0}
+.gs-kpi--analytics .gs-kpi__libelle{padding-right:0}
+.gs-kpi--analytics .gs-kpi__valeur{font-size:25px}
+.gs-variation{display:inline-block;padding:1px 8px;border-radius:999px;background:#eef2f8;color:#2d3850;font-size:12.5px;font-weight:700;white-space:nowrap}
+.gs-variation--hausse{background:#e8efff;color:#1a4fbd}
+.gs-variation--baisse{background:#fff1e8;color:#b44407}
+.gs-analytics__non-suivi{margin:12px 0 0;padding:12px 14px;border:1px dashed #cfd8e8;border-radius:14px;background:#f7f9fd;font-size:14px;line-height:1.5;color:#5b6782}
+.gs-tendances{display:grid;gap:8px;margin:6px 0 0;padding:0;list-style:none}
+.gs-tendances li{position:relative;padding:10px 14px 10px 30px;border:1px solid var(--app-bord);border-radius:14px;background:#fff;font-size:14.5px;line-height:1.5;color:#2d3850}
+.gs-tendances li::before{content:"";position:absolute;top:18px;left:14px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.gs-definitions{margin:0 0 24px;border:1px solid var(--app-bord);border-radius:var(--app-rayon);background:#fff;box-shadow:var(--app-ombre)}
+.gs-definitions summary{padding:14px 18px;font-weight:700;color:var(--ink);cursor:pointer}
+.gs-definitions dl{margin:0;padding:0 18px 14px}
+.gs-definitions dt{margin-top:10px;font-weight:700;color:var(--ink)}
+.gs-definitions dd{margin:2px 0 0;font-size:14px;line-height:1.5;color:#5b6782}
+.gs-analytics__detail{margin:14px 0 0;box-shadow:none}
+.gs-analytics__detail .gs-tableau-cadre{margin:0 12px 12px;box-shadow:none}
+.gs-tableau--analytics .gs-nombre{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:759px){
+  .gs-analytics__actions{margin-left:0}
+  .gs-analytics__onglets{margin-right:-14px;margin-left:-14px;border-radius:0;border-right:0;border-left:0}
+}
+@media (max-width:639px){
+  .gs-kpi--analytics .gs-kpi__valeur{font-size:21px}
+  .gs-tableau--analytics .gs-nombre{text-align:left}
 }
 
 /* ---- Les réglages ------------------------------------------------------------------ */

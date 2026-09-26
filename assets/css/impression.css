@@ -211,10 +211,60 @@ svg{display:block}
 
 
 /* --------------------------------------------------------------------------
+   Le rapport Analytics (admin.html#analytics, « Imprimer / PDF ») : la
+   rubrique affichée, recopiée telle quelle. Les cartes deviennent une grille
+   serrée, les tableaux gardent leurs colonnes et les chiffres alignés à
+   droite ; rien n'est recalculé pour le papier.
+   -------------------------------------------------------------------------- */
+.gs-rapport{font-size:10pt;line-height:1.4}
+.gs-rapport h1{margin-bottom:1.5mm;padding-bottom:2mm;border-bottom:1.4pt solid var(--or);font-size:16pt}
+.gs-rapport h2{margin:5mm 0 1.5mm;font-size:12.5pt;break-after:avoid}
+.gs-rapport p{margin:0 0 2mm}
+.gs-rapport__periode{color:var(--gris)}
+.gs-rapport section{break-inside:auto}
+.gs-rapport .gs-apercu__note,.gs-rapport .gs-kpi__sous,.gs-rapport .gs-analytics__non-suivi{font-size:9pt;color:var(--gris)}
+.gs-rapport .gs-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2mm}
+.gs-rapport .gs-kpi{display:flex;flex-direction:column;gap:.8mm;padding:2.2mm 2.5mm;border:.6pt solid #cfd8e8;border-radius:2mm;break-inside:avoid}
+.gs-rapport .gs-kpi__libelle{font-size:8pt;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gris)}
+.gs-rapport .gs-kpi__valeur{font-size:13pt}
+.gs-rapport .gs-kpi__picto{display:none}
+.gs-rapport .gs-variation{font-weight:700;color:var(--encre)}
+.gs-rapport table{width:100%;margin:2mm 0 3mm;border-collapse:collapse;font-size:9pt}
+.gs-rapport caption{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.gs-rapport th,.gs-rapport td{padding:1.2mm 1.6mm;border-bottom:.5pt solid #d6ddec;text-align:left;vertical-align:top}
+.gs-rapport th{background:#eef2f8;font-weight:700}
+.gs-rapport tr{break-inside:avoid}
+.gs-rapport .gs-nombre{text-align:right;white-space:nowrap}
+.gs-rapport ul{margin:1mm 0 3mm;padding-left:5mm}
+.gs-rapport .gs-repartition{padding:0;list-style:none}
+.gs-rapport .gs-repartition__ligne{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;align-items:center;gap:3mm;padding:.6mm 0}
+.gs-rapport .gs-repartition__piste{display:block;height:2mm;border-radius:1mm;background:#eef2f8;overflow:hidden}
+.gs-rapport .gs-repartition__barre{display:block;height:100%;background:#1f5fe0}
+.gs-rapport .gs-graphe{margin:2mm 0 3mm;break-inside:avoid}
+.gs-rapport .gs-graphe__titre{font-weight:700}
+.gs-rapport .gs-graphe__legende{display:flex;flex-wrap:wrap;gap:1mm 5mm;margin:1mm 0;padding:0;list-style:none;font-size:9pt}
+.gs-rapport .gs-graphe__legende li{display:flex;align-items:center;gap:1.5mm}
+.gs-rapport .gs-graphe__puce{display:inline-block;width:2.5mm;height:2.5mm;border-radius:.6mm}
+.gs-rapport .gs-graphe__max{font-size:8pt;color:var(--gris)}
+.gs-rapport .gs-graphe__svg{width:100%;height:32mm}
+.gs-rapport .gs-graphe__axe{stroke:#9aa6bf;stroke-width:1}
+.gs-rapport .gs-graphe__dates{display:flex;justify-content:space-between;font-size:8pt;color:var(--gris)}
+.gs-rapport .gs-graphe--serie1,.gs-rapport .gs-graphe--recus,.gs-rapport .gs-graphe--facture,.gs-rapport .gs-graphe--scans{fill:#1f5fe0;background:#1f5fe0}
+.gs-rapport .gs-graphe--serie2,.gs-rapport .gs-graphe--livres,.gs-rapport .gs-graphe--encaisse{fill:#f4600d;background:#f4600d}
+.gs-rapport .gs-tendances li{margin-bottom:1mm}
+.gs-rapport details summary{font-weight:700;list-style:none}
+.gs-rapport dl{margin:1mm 0 0}
+.gs-rapport dt{margin-top:1.5mm;font-weight:700}
+.gs-rapport dd{margin:0;color:var(--gris)}
+.gs-rapport .gs-admin-vide{color:var(--gris);font-style:italic}
+.gs-rapport .gs-invisible{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+
+/* --------------------------------------------------------------------------
    À l'écran, le document se voit centré sur fond gris : c'est l'aperçu
    affiché dans le tableau de bord avant d'imprimer.
    -------------------------------------------------------------------------- */
 @media screen{
   body{padding:12px;background:#e7edf9}
-  .et,.fa{margin:0 auto 12px;background:#fff;box-shadow:0 10px 30px -18px rgba(6,26,63,.6)}
+  .et,.fa,.gs-rapport{margin:0 auto 12px;background:#fff;box-shadow:0 10px 30px -18px rgba(6,26,63,.6)}
 }

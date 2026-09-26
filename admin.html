@@ -45,6 +45,7 @@
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1" title="Factures"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg><span class="gs-td__libelle">Factures</span><span class="gs-admin-onglets__total" data-total="factures"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/></svg><span class="gs-td__libelle">Analytics</span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg><span class="gs-td__libelle">Scanner</span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
     </div>
@@ -440,6 +441,61 @@
           <p class="gs-champ__aide" data-scan-journal-vide>Aucun scan pour l'instant.</p>
         </aside>
       </div>
+    </div>
+
+    <!-- Analytics (outils/supabase-analytics.sql) : ce qui s'est passé et
+         comment cela évolue, période contre période précédente. Réservé à
+         reports.view (gérant, administrateur) ; la base le vérifie. Chargé à
+         l'ouverture et sur « Actualiser », jamais en direct. -->
+    <div class="gs-admin-vue gs-analytics" data-vue="analytics" data-permission="reports.view" role="tabpanel" hidden>
+      <div class="gs-apercu__barre gs-analytics__barre">
+        <label class="gs-apercu__choix">
+          <span>Période</span>
+          <select class="gs-admin-filtre" data-analytics-periode>
+            <option value="aujourdhui">Aujourd'hui</option>
+            <option value="7j">7 derniers jours</option>
+            <option value="30j" selected>30 derniers jours</option>
+            <option value="mois">Ce mois-ci</option>
+            <option value="mois_precedent">Mois précédent</option>
+            <option value="3m">3 derniers mois</option>
+            <option value="6m">6 derniers mois</option>
+            <option value="12m">12 derniers mois</option>
+            <option value="annee">Cette année</option>
+            <option value="personnalise">Personnalisée…</option>
+          </select>
+        </label>
+        <div class="gs-apercu__dates" data-analytics-dates hidden>
+          <label class="gs-apercu__choix"><span>Du</span><input type="date" class="gs-admin-date" data-analytics-debut></label>
+          <label class="gs-apercu__choix"><span>Au</span><input type="date" class="gs-admin-date" data-analytics-fin></label>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--sombre" data-action="analytics-appliquer">Appliquer</button>
+        </div>
+        <label class="gs-apercu__choix">
+          <span>Découpage</span>
+          <select class="gs-admin-filtre" data-analytics-decoupage>
+            <option value="jour">Par jour</option>
+            <option value="semaine">Par semaine</option>
+            <option value="mois">Par mois</option>
+          </select>
+        </label>
+        <div class="gs-analytics__actions">
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="analytics-actualiser"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>Actualiser</button>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="analytics-csv"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>CSV / Excel</button>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="analytics-imprimer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Imprimer / PDF</button>
+        </div>
+        <p class="gs-apercu__etat" data-analytics-etat role="status"></p>
+      </div>
+      <div class="gs-analytics__onglets" role="tablist" aria-label="Rubriques Analytics">
+        <button type="button" role="tab" aria-selected="true" data-analytics-module="synthese">Synthèse</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="expeditions" tabindex="-1">Expéditions</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="operations" tabindex="-1">Opérations</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="clients" tabindex="-1">Clients</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="finances" tabindex="-1">Finances</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="routes" tabindex="-1">Routes</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="scanner" tabindex="-1">Scanner</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="qualite" tabindex="-1">Qualité des données</button>
+      </div>
+      <p class="gs-apercu__message" data-analytics-message role="alert" hidden></p>
+      <div class="gs-analytics__corps" data-analytics-corps aria-live="polite"></div>
     </div>
 
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>

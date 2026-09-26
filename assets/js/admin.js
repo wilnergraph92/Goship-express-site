@@ -1700,7 +1700,7 @@
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
-                      scanner: 'Poste de scan', equipe: 'Équipe' };
+                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
@@ -1719,6 +1719,7 @@
     // l'onglet, on s'assure de ne pas regarder une liste d'il y a une heure.
     if (vue === 'factures') chargerFactures();
     if (vue === 'apercu' && Date.now() - etatApercu.charge > 60000) chargerApercu();
+    if (vue === 'analytics') afficherAnalytics();
   }
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
@@ -2477,8 +2478,10 @@
      compte et découpe ; la page n'affiche que ce qu'elle reçoit. */
   var TAILLES_PAGE = [10, 25, 50, 100];
 
+  // nom : la zone [data-pagination=nom], ou la zone elle-même quand elle n'est
+  // pas encore dans la page (les Analytics se construisent à part, puis s'affichent)
   function paginer(nom, p, total, recharger) {
-    var zone = $('[data-pagination="' + nom + '"]');
+    var zone = typeof nom === 'string' ? $('[data-pagination="' + nom + '"]') : nom;
     zone.textContent = '';
     total = Number(total) || 0;
     zone.hidden = !total || (total <= TAILLES_PAGE[0] && !p.page);
@@ -2561,7 +2564,9 @@
   }
 
   // series : [{ nom, cle, classe, total, format }] ; jours : [{ jour, <cle>: n }]
-  function grapheJours(zone, jours, series) {
+  function grapheJours(zone, jours, series, nommer) {
+    // nommer(case, court) : « 12/09 », « semaine du 07/09 », « sept. 2026 »…
+    nommer = nommer || function (j, court) { return jourLisible(j.jour, court); };
     zone.textContent = '';
     jours = jours || [];
     var max = 0;
@@ -2582,7 +2587,7 @@
     var largeur = Math.max(1, (pas * (n > 60 ? 0.9 : 0.72)) / series.length);
     var dessin = svg('svg', { viewBox: '0 0 ' + L + ' ' + H, preserveAspectRatio: 'none', class: 'gs-graphe__svg',
                               role: 'img', 'aria-label': series.map(function (s) { return s.nom + ' ' + s.format(s.total); }).join(', ') +
-                                ', du ' + jourLisible(jours[0].jour) + ' au ' + jourLisible(jours[n - 1].jour) + '.' });
+                                ', du ' + nommer(jours[0]) + ' au ' + nommer(jours[n - 1]) + '.' });
     dessin.appendChild(svg('line', { x1: 0, x2: L, y1: H - 0.5, y2: H - 0.5, class: 'gs-graphe__axe' }));
     jours.forEach(function (j, i) {
       series.forEach(function (s, k) {
@@ -2593,7 +2598,7 @@
                                   y: (H - h).toFixed(2), width: largeur.toFixed(2), height: h.toFixed(2), class: s.classe,
                                   rx: Math.min(4, largeur / 2).toFixed(2) });
         var titre = svg('title');
-        titre.textContent = jourLisible(j.jour) + ' — ' + s.nom + ' : ' + s.format(v);
+        titre.textContent = nommer(j) + ' — ' + s.nom + ' : ' + s.format(v);
         barre.appendChild(titre);
         dessin.appendChild(barre);
       });
@@ -2603,9 +2608,9 @@
     cadre.appendChild(dessin);
     zone.appendChild(cadre);
     var axe = el('div', 'gs-graphe__dates');
-    axe.appendChild(el('span', '', jourLisible(jours[0].jour, true)));
-    if (n > 2) axe.appendChild(el('span', '', jourLisible(jours[Math.floor((n - 1) / 2)].jour, true)));
-    if (n > 1) axe.appendChild(el('span', '', jourLisible(jours[n - 1].jour, true)));
+    axe.appendChild(el('span', '', nommer(jours[0], true)));
+    if (n > 2) axe.appendChild(el('span', '', nommer(jours[Math.floor((n - 1) / 2)], true)));
+    if (n > 1) axe.appendChild(el('span', '', nommer(jours[n - 1], true)));
     zone.appendChild(axe);
   }
 
@@ -3211,7 +3216,6 @@
 
   // La date et l'heure de cet appareil, toujours visibles en haut de l'écran
   var horloge = { date: $('[data-horloge-date]'), court: $('[data-horloge-date-courte]'), heure: $('[data-horloge-heure]'), jour: '' };
-  function deux(n) { return (n < 10 ? '0' : '') + n; }
   function majHorloge() {
     var t = new Date();
     var jour = t.getFullYear() + '-' + deux(t.getMonth() + 1) + '-' + deux(t.getDate());
@@ -3457,6 +3461,642 @@
   $('[data-action="reglages-scanner"]', dlgReglages).addEventListener('click', function () {
     dlgReglages.close();
     $('[data-onglet-vue="scanner"]').click();
+  });
+
+  /* ---- Analytics ------------------------------------------------------------------
+     Ce qui s'est passé et comment cela évolue (outils/supabase-analytics.sql).
+     La base compte tout, sur les vraies tables, et compare chaque période à la
+     précédente ; la page met en forme, sans rien additionner. Chargé à
+     l'ouverture d'une rubrique et sur « Actualiser », jamais en direct : une
+     réponse est gardée une minute pour passer d'une rubrique à l'autre sans
+     recompter, et « Actualiser » l'oublie. */
+  var etatAnalytics = { module: 'synthese', periode: '30j', debut: '', fin: '', decoupage: 'jour', tri: 'colis',
+                        page: 0, parPage: 25, demande: 0, memoire: {}, tables: [], titre: '' };
+  var corpsAnalytics = $('[data-analytics-corps]');
+  var messageAnalytics = $('[data-analytics-message]');
+  var ongletsAnalytics = $$('[data-analytics-module]');
+  var NOMS_MODULES = { synthese: 'Synthèse', expeditions: 'Expéditions', operations: 'Opérations', clients: 'Clients',
+                       finances: 'Finances', routes: 'Routes et destinations', scanner: 'Scanner', qualite: 'Qualité des données' };
+  var PAYS_NOMS = { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' };
+
+  // Une réponse de la base, gardée une minute (même module, mêmes réglages)
+  function lireAnalytics(module, options) {
+    var o = Object.assign({ periode: etatAnalytics.periode, debut: etatAnalytics.debut, fin: etatAnalytics.fin }, options || {});
+    var cle = module + '|' + JSON.stringify(o);
+    var garde = etatAnalytics.memoire[cle];
+    if (garde && Date.now() - garde.t < 60000) return Promise.resolve(garde.r);
+    return API.admin.analytics(module, o).then(function (r) {
+      etatAnalytics.memoire[cle] = { t: Date.now(), r: r };
+      return r;
+    });
+  }
+
+  function texteErreurAnalytics(err) {
+    if (err && err.code === 'non-autorise') {
+      return 'Accès refusé : les Analytics sont réservées aux comptes qui voient les rapports (gérant, administrateur).';
+    }
+    if (err && err.code === 'absent') {
+      return 'Les Analytics ne sont pas encore installées : lancez outils/supabase-analytics.sql dans Supabase (SQL Editor), puis « Actualiser ».';
+    }
+    if (err && err.code === 'reseau') return 'Connexion impossible : les données n’ont pas pu être chargées. Vérifiez la connexion, puis « Actualiser ».';
+    return 'Impossible de calculer ces statistiques. ' + messageErreur(err);
+  }
+
+  // ---- Mise en forme : jamais de NaN, d'Infinity ni d'undefined à l'écran
+  function nombreOuTiret(n, format) { return n == null || !isFinite(Number(n)) ? '—' : format(Number(n)); }
+  function pourcent(n) { return nombreOuTiret(n, function (x) { return O.nombre(x) + ' %'; }); }
+  function duree(h) {
+    return nombreOuTiret(h, function (x) {
+      return x < 48 ? O.nombre(Math.round(x * 10) / 10) + ' h' : O.nombre(Math.round(x / 24 * 10) / 10) + ' j';
+    });
+  }
+  function poidsLb(n) { return nombreOuTiret(n, function (x) { return O.nombre(x) + ' lb'; }); }
+  function nomPays(code) { return PAYS_NOMS[code] || code || '—'; }
+  function nomService(code) { return SERVICES[code] || code || '—'; }
+  function nomStatut(code) { return STATUTS[code] || code || '—'; }
+  function nomMoyen(code) { return MOYENS[code] || code || '—'; }
+  function caseLisible(c, court) {
+    if (etatAnalytics.decoupage === 'mois') {
+      try { return new Intl.DateTimeFormat('fr-FR', { month: court ? 'short' : 'long', year: 'numeric' }).format(new Date(c.jour + 'T12:00:00Z')); }
+      catch (e) { return c.jour.slice(0, 7); }
+    }
+    if (etatAnalytics.decoupage === 'semaine') return (court ? '' : 'semaine du ') + jourLisible(c.debut, court);
+    return jourLisible(c.jour, court);
+  }
+
+  // Une comparaison : « +12,5 % », « nouveau », ou « stable » — et le chiffre d'avant
+  function variation(cmp, format) {
+    if (!cmp) return { texte: '—', classe: '' };
+    var sens = cmp.tendance === 'hausse' ? '↗' : (cmp.tendance === 'baisse' ? '↘' : '→');
+    var texte;
+    if (cmp.variation_pct != null) texte = (cmp.variation_pct > 0 ? '+' : '') + O.nombre(cmp.variation_pct) + ' %';
+    else if (Number(cmp.actuel)) texte = 'nouveau';
+    else texte = 'stable';
+    return { texte: sens + ' ' + texte, classe: 'gs-variation--' + (cmp.tendance || 'stable'),
+             precedent: 'avant : ' + format(cmp.precedent) };
+  }
+
+  function carte(libelle, cmp, format, note) {
+    var c = el('div', 'gs-kpi gs-kpi--analytics');
+    c.appendChild(el('span', 'gs-kpi__libelle', libelle));
+    c.appendChild(el('strong', 'gs-kpi__valeur', cmp && typeof cmp === 'object' ? format(cmp.actuel) : format(cmp)));
+    if (cmp && typeof cmp === 'object') {
+      var v = variation(cmp, format);
+      var ligne = el('span', 'gs-kpi__sous');
+      ligne.appendChild(el('span', 'gs-variation ' + v.classe, v.texte));
+      ligne.appendChild(document.createTextNode(' · ' + v.precedent));
+      c.appendChild(ligne);
+    }
+    if (note) c.appendChild(el('span', 'gs-kpi__sous', note));
+    return c;
+  }
+
+  function grille(cartes) {
+    var g = el('div', 'gs-kpis');
+    cartes.forEach(function (c) { g.appendChild(c); });
+    return g;
+  }
+
+  function section(titre, aide) {
+    var s = el('section', 'gs-apercu__bloc gs-analytics__section');
+    s.appendChild(el('h2', 'gs-apercu__titre', titre));
+    if (aide) s.appendChild(el('p', 'gs-apercu__note', aide));
+    corpsAnalytics.appendChild(s);
+    return s;
+  }
+
+  // Un tableau lisible, gardé pour l'export : colonnes [{ titre, valeur(ligne), brut(ligne), nombre }]
+  function tableau(parent, titre, colonnes, lignes, vide) {
+    etatAnalytics.tables.push({ titre: titre, colonnes: colonnes, lignes: lignes });
+    if (!lignes.length) {
+      parent.appendChild(el('p', 'gs-admin-vide', vide || 'Aucune donnée disponible pour cette période.'));
+      return;
+    }
+    var cadre = el('div', 'gs-tableau-cadre');
+    var t = el('table', 'gs-tableau gs-tableau--analytics');
+    var cap = el('caption', 'gs-invisible', titre);
+    t.appendChild(cap);
+    var tete = el('tr');
+    colonnes.forEach(function (c) {
+      var th = el('th', c.nombre ? 'gs-nombre' : '', c.titre);
+      th.scope = 'col';
+      tete.appendChild(th);
+    });
+    var thead = el('thead');
+    thead.appendChild(tete);
+    t.appendChild(thead);
+    var tbody = el('tbody');
+    lignes.forEach(function (l) {
+      var tr = el('tr');
+      colonnes.forEach(function (c) {
+        var td = cellule(c.titre);
+        if (c.nombre) td.className = 'gs-nombre';
+        td.textContent = c.valeur(l);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    t.appendChild(tbody);
+    cadre.appendChild(t);
+    parent.appendChild(cadre);
+  }
+
+  // Une phrase qui décrit, sans expliquer : « a augmenté de 18 % par rapport à la période précédente »
+  function phrase(libelle, cmp, format) {
+    if (!cmp) return null;
+    var a = format(cmp.actuel), b = format(cmp.precedent);
+    if (cmp.tendance === 'stable') return libelle + ' : stable (' + a + ').';
+    if (cmp.variation_pct == null) return libelle + ' : ' + a + ', contre aucun sur la période précédente.';
+    return libelle + ' : ' + (cmp.tendance === 'hausse' ? 'en hausse' : 'en baisse') + ' de ' +
+           O.nombre(Math.abs(cmp.variation_pct)) + ' % par rapport à la période précédente (' + a + ' contre ' + b + ').';
+  }
+
+  function definitions(parent, liste) {
+    var d = el('details', 'gs-definitions');
+    d.appendChild(el('summary', '', 'Définitions et sources'));
+    var dl = el('dl');
+    liste.forEach(function (x) {
+      dl.appendChild(el('dt', '', x[0]));
+      dl.appendChild(el('dd', '', x[1]));
+    });
+    d.appendChild(dl);
+    parent.appendChild(d);
+  }
+
+  function serieGraphe(parent, titre, cases, series) {
+    var fig = el('figure', 'gs-graphe gs-analytics__graphe');
+    fig.appendChild(el('figcaption', 'gs-graphe__titre', titre));
+    var zone = el('div', 'gs-graphe__zone');
+    fig.appendChild(zone);
+    parent.appendChild(fig);
+    grapheJours(zone, cases, series, caseLisible);
+  }
+
+  // Un tableau qui double un graphique (une ligne par jour, semaine, mois ou
+  // statut) : replié dessous ; l'export CSV et l'impression le reprennent en entier
+  function detailSerie(parent, nombre, texte) {
+    var d = el('details', 'gs-definitions gs-analytics__detail');
+    d.appendChild(el('summary', '', (texte || 'Voir le détail, période par période') + ' (' + nombre + ' ligne' + (nombre > 1 ? 's' : '') + ')'));
+    parent.appendChild(d);
+    return d;
+  }
+
+  function repartitionAvecPart(parent, lignes, total) {
+    var ul = el('ul', 'gs-repartition');
+    parent.appendChild(ul);
+    repartition(ul, lignes.map(function (l) {
+      return { libelle: l.libelle + (total ? ' — ' + O.nombre(Math.round(l.nombre * 1000 / total) / 10) + ' %' : ''),
+               nombre: l.nombre, pastille: l.pastille };
+    }), 'Aucune donnée disponible pour cette période.');
+  }
+
+  /* ---- Les rubriques ----------------------------------------------------------- */
+  var RUBRIQUES = {
+    synthese: function () {
+      return lireAnalytics('synthese').then(function (s) {
+        var m = s.mesures;
+        var colis = section('Colis', 'Période choisie comparée à la période précédente de même longueur.');
+        colis.appendChild(grille([
+          carte('Colis reçus', m.recus, entier), carte('Expédiés (embarqués)', m.expedies, entier),
+          carte('Rendus disponibles', m.disponibles, entier), carte('Livrés', m.livres, entier),
+          carte('Passés en action requise', m.actions_requises, entier), carte('Poids reçu', m.poids, poidsLb)]));
+        var cl = section('Clients');
+        cl.appendChild(grille([carte('Clients inscrits (fin de période)', s.clients_total, entier),
+                               carte('Nouveaux clients', m.nouveaux_clients, entier)]));
+        var fi = section('Argent', 'Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé, l’autre ce qui est entré.');
+        fi.appendChild(grille([carte('Facturé', m.facture, argent), carte('Encaissé', m.encaisse, argent),
+                               carte('Reste sur les factures de la période', m.reste, argent, 'dû aujourd’hui'),
+                               carte('Créances en fin de période', s.creances_fin, argent)]));
+        var tend = section('Tendances', 'Des faits chiffrés, sans explication : les causes ne se lisent pas dans les données.');
+        var ul = el('ul', 'gs-tendances');
+        [phrase('Colis reçus', m.recus, entier), phrase('Colis livrés', m.livres, entier),
+         phrase('Nouveaux clients', m.nouveaux_clients, entier), phrase('Facturé', m.facture, argent),
+         phrase('Encaissé', m.encaisse, argent), phrase('Créances en fin de période', s.creances_fin, argent),
+         phrase('Opérations au scanner', m.scans, entier)].filter(Boolean).forEach(function (t) { ul.appendChild(el('li', '', t)); });
+        tend.appendChild(ul);
+        var st = section('Colis par statut, maintenant', 'Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.');
+        repartitionAvecPart(st, Object.keys(STATUTS).map(function (k) {
+          return { libelle: STATUTS[k], nombre: s.maintenant.statuts[k] || 0, pastille: k };
+        }), s.maintenant.total);
+        tableau(detailSerie(st, 8, 'Voir le tableau'), 'Colis par statut, maintenant', [
+          { titre: 'Statut', valeur: function (l) { return l.nom; } },
+          { titre: 'Colis', nombre: true, valeur: function (l) { return entier(l.n); }, brut: function (l) { return l.n; } }],
+          Object.keys(STATUTS).map(function (k) { return { nom: STATUTS[k], n: s.maintenant.statuts[k] || 0 }; }));
+        definitions(corpsAnalytics, [
+          ['Colis reçus', 'Colis dont la réception à Miami (date saisie à l’arrivée) tombe dans la période. Source : colis.'],
+          ['Expédiés, rendus disponibles, livrés, action requise', 'Colis passés à ce statut pendant la période, chacun une fois, sans les étapes annulées par une correction. Source : les événements (colis_historique).'],
+          ['Facturé', 'Total des factures émises pendant la période, hors annulées ; montants arrêtés à la création (un changement de tarif ne les modifie pas).'],
+          ['Encaissé', 'Paiements valides reçus pendant la période, quelle que soit la facture. Source : paiements.'],
+          ['Créances en fin de période', 'Ce qui restait dû à la fin de la période, reconstitué à partir des factures et des paiements datés.'],
+          ['Période précédente', 'Même nombre de jours juste avant ; « ce mois » : le mois précédent aux mêmes dates ; « cette année » : l’année précédente aux mêmes dates.'],
+          ['Pourcentage', 'Absent quand la période précédente vaut zéro : on écrit « nouveau » plutôt qu’un pourcentage infini.']]);
+      });
+    },
+
+    expeditions: function () {
+      return Promise.all([lireAnalytics('serie', { granularite: etatAnalytics.decoupage }), lireAnalytics('synthese')]).then(function (r) {
+        var se = r[0], s = r[1], m = s.mesures;
+        var haut = section('Volume');
+        haut.appendChild(grille([carte('Colis reçus', m.recus, entier), carte('Livrés', m.livres, entier),
+                                 carte('Poids total', m.poids, poidsLb),
+                                 carte('Poids moyen', s.moyennes.poids_moyen, poidsLb, 'colis pesés seulement'),
+                                 carte('Prix moyen d’un colis', s.moyennes.prix_moyen, function (x) { return x == null ? '—' : argent(x); },
+                                       'prix arrêté à l’enregistrement'),
+                                 carte('Facture moyenne', s.moyennes.revenu_moyen_facture, function (x) { return x == null ? '—' : argent(x); })]));
+        var g = section('Colis reçus et livrés');
+        serieGraphe(g, 'Colis reçus et livrés, ' + { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[se.granularite],
+                    se.cases, [{ nom: 'Reçus', cle: 'recus', classe: 'gs-graphe--serie1', total: m.recus.actuel, format: entier },
+                               { nom: 'Livrés', cle: 'livres', classe: 'gs-graphe--serie2', total: m.livres.actuel, format: entier }]);
+        tableau(detailSerie(g, se.cases.length), 'Volume par période', [
+          { titre: 'Période', valeur: function (c) { return c.debut === c.fin ? jourLisible(c.debut) : jourLisible(c.debut) + ' → ' + jourLisible(c.fin); } },
+          { titre: 'Colis reçus', nombre: true, valeur: function (c) { return entier(c.recus); }, brut: function (c) { return c.recus; } },
+          { titre: 'Poids', nombre: true, valeur: function (c) { return poidsLb(c.poids); }, brut: function (c) { return c.poids; } },
+          { titre: 'Expédiés', nombre: true, valeur: function (c) { return entier(c.expedies); }, brut: function (c) { return c.expedies; } },
+          { titre: 'Livrés', nombre: true, valeur: function (c) { return entier(c.livres); }, brut: function (c) { return c.livres; } },
+          { titre: 'Facturé', nombre: true, valeur: function (c) { return argent(c.facture); }, brut: function (c) { return c.facture; } },
+          { titre: 'Encaissé', nombre: true, valeur: function (c) { return argent(c.encaisse); }, brut: function (c) { return c.encaisse; } }],
+          se.cases);
+        var st = section('Colis par statut, maintenant');
+        repartitionAvecPart(st, Object.keys(STATUTS).map(function (k) {
+          return { libelle: STATUTS[k], nombre: s.maintenant.statuts[k] || 0, pastille: k };
+        }), s.maintenant.total);
+        definitions(corpsAnalytics, [
+          ['Découpage', 'Par jour, par semaine (du lundi au dimanche) ou par mois, en jours de Santo Domingo. La première et la dernière case peuvent être partielles.'],
+          ['Livrés, expédiés', 'Un colis compte le jour de sa première arrivée à l’étape pendant la période : la somme des cases vaut le total.'],
+          ['Prix moyen', 'Moyenne des prix enregistrés sur les colis reçus (poids × tarif du jour de l’enregistrement).']]);
+      });
+    },
+
+    operations: function () {
+      return lireAnalytics('operations').then(function (o) {
+        var d = o.durees;
+        var ETAPES = [['reception_expedition', 'Reçu → Embarqué (entrepôt de Miami)'], ['expedition_disponible', 'Embarqué → Disponible (acheminement)'],
+                      ['disponible_livraison', 'Disponible → Livré (retrait)'], ['reception_livraison', 'Reçu → Livré (total)']];
+        var s1 = section('Temps de traitement', 'Tirés des événements réels. Une étape compte dans la période où elle s’achève. Les valeurs extrêmes restent dans les chiffres et sont signalées.');
+        repartition((function () { var ul = el('ul', 'gs-repartition'); s1.appendChild(ul); return ul; })(),
+                    ETAPES.filter(function (e) { return d[e[0]].nombre; }).map(function (e) {
+                      return { libelle: e[1] + ' — médiane ' + duree(d[e[0]].mediane_h), nombre: d[e[0]].mediane_h };
+                    }), 'Aucune étape achevée pendant cette période.');
+        tableau(s1, 'Temps de traitement', [
+          { titre: 'Étape', valeur: function (e) { return e[1]; } },
+          { titre: 'Colis', nombre: true, valeur: function (e) { return entier(d[e[0]].nombre); }, brut: function (e) { return d[e[0]].nombre; } },
+          { titre: 'Moyenne', nombre: true, valeur: function (e) { return duree(d[e[0]].moyenne_h); }, brut: function (e) { return d[e[0]].moyenne_h; } },
+          { titre: 'Médiane', nombre: true, valeur: function (e) { return duree(d[e[0]].mediane_h); }, brut: function (e) { return d[e[0]].mediane_h; } },
+          { titre: 'Minimum', nombre: true, valeur: function (e) { return duree(d[e[0]].minimum_h); }, brut: function (e) { return d[e[0]].minimum_h; } },
+          { titre: 'Maximum', nombre: true, valeur: function (e) { return duree(d[e[0]].maximum_h); }, brut: function (e) { return d[e[0]].maximum_h; } },
+          { titre: 'Valeurs extrêmes', nombre: true, valeur: function (e) { return entier(d[e[0]].extremes); }, brut: function (e) { return d[e[0]].extremes; } },
+          { titre: 'Durées négatives', nombre: true, valeur: function (e) { return entier(d[e[0]].negatives); }, brut: function (e) { return d[e[0]].negatives; } }],
+          ETAPES.filter(function (e) { return d[e[0]].nombre || d[e[0]].negatives; }), 'Aucune étape achevée pendant cette période.');
+        var s2 = section('Livraison');
+        s2.appendChild(grille([
+          carte('Livrés pendant la période', o.livraison.livres, entier),
+          carte('Taux de livraison de la cohorte', o.livraison.taux_cohorte, pourcent,
+                entier(o.livraison.cohorte_livres) + ' livrés sur ' + entier(o.livraison.cohorte_recus) + ' reçus pendant la période'),
+          carte('Même taux, période précédente', o.livraison.taux_cohorte_precedente, pourcent),
+          carte('Délai médian Reçu → Livré', d.reception_livraison.mediane_h, duree, 'moyenne : ' + duree(d.reception_livraison.moyenne_h))]));
+        var s3 = section('Transitions de statut', 'Chaque changement de statut de la période et le temps passé dans le statut quitté.');
+        tableau(s3, 'Transitions de statut', [
+          { titre: 'Transition', valeur: function (t) { return nomStatut(t.de) + ' → ' + nomStatut(t.vers); } },
+          { titre: 'Nombre', nombre: true, valeur: function (t) { return entier(t.nombre); }, brut: function (t) { return t.nombre; } },
+          { titre: 'Durée moyenne', nombre: true, valeur: function (t) { return duree(t.moyenne_h); }, brut: function (t) { return t.moyenne_h; } },
+          { titre: 'Durée médiane', nombre: true, valeur: function (t) { return duree(t.mediane_h); }, brut: function (t) { return t.mediane_h; } }],
+          o.transitions, 'Aucun changement de statut pendant cette période.');
+        s3.appendChild(el('p', 'gs-apercu__note', 'Anomalies : ' + pluriel(o.anomalies.corrections, 'correction', 'corrections') + ' et ' +
+                          pluriel(o.anomalies.retours_en_arriere, 'retour en arrière', 'retours en arrière') + ' pendant la période.'));
+        var s4 = section('Colis sans progression, maintenant', 'Colis pas encore livrés, selon le temps écoulé depuis leur dernier événement. Des repères de lecture : l’alerte officielle reste le réglage « sans mouvement » de la vue générale, où se trouve la liste.');
+        var sm = o.sans_mouvement;
+        repartitionAvecPart(s4, [{ libelle: 'Moins de 24 h', nombre: sm.moins_24h }, { libelle: '24 à 48 h', nombre: sm.de_24_a_48h },
+                                 { libelle: '48 à 72 h', nombre: sm.de_48_a_72h }, { libelle: '72 h à 7 jours', nombre: sm.de_72h_a_7j },
+                                 { libelle: 'Plus de 7 jours', nombre: sm.plus_de_7j }], sm.actifs);
+        var ar = o.action_requise;
+        var s5 = section('Action requise');
+        s5.appendChild(grille([carte('Colis passés en action requise', ar.entrees, entier), carte('En action requise maintenant', ar.en_cours, entier),
+                               carte('Durée moyenne dans l’état', ar.duree_episodes.moyenne_h, duree,
+                                     pluriel(ar.duree_episodes.nombre, 'épisode terminé', 'épisodes terminés') + ' · médiane ' + duree(ar.duree_episodes.mediane_h)),
+                               carte('Clients concernés', ar.clients, entier)]));
+        tableau(s5, 'Action requise par destination', [
+          { titre: 'Destination', valeur: function (x) { return nomPays(x.pays); } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          ar.par_destination, 'Aucun colis passé en action requise pendant cette période.');
+        s5.appendChild(el('p', 'gs-apercu__note', 'Le motif d’une action requise est une note en texte libre : aucune cause n’est classée. Les notes les plus fréquentes, telles qu’elles ont été écrites :'));
+        tableau(s5, 'Notes les plus fréquentes', [
+          { titre: 'Note', valeur: function (x) { return x.note; } },
+          { titre: 'Fois', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          ar.notes, 'Aucune note.');
+        definitions(corpsAnalytics, [
+          ['Départ d’un colis', 'Sa réception à Miami (date et heure saisies à l’arrivée) ; chaque étape suivante est la première arrivée au statut, non annulée par une correction.'],
+          ['Taux de livraison de la cohorte', 'Parmi les colis reçus pendant la période, la part livrée aujourd’hui. Une période récente a naturellement un taux plus bas : ses colis sont encore en route.'],
+          ['Valeurs extrêmes', 'Au-delà de Q3 + 1,5 × l’écart interquartile (dès 4 valeurs). Gardées dans la moyenne et le maximum.'],
+          ['Durées négatives', 'Date de réception saisie après l’événement : comptées à part, hors statistiques.']]);
+      });
+    },
+
+    clients: function () {
+      return lireAnalytics('clients', { tri: etatAnalytics.tri, page: etatAnalytics.page, parPage: etatAnalytics.parPage }).then(function (c) {
+        var s1 = section('Clients');
+        s1.appendChild(grille([carte('Inscrits (fin de période)', c.total_fin, entier), carte('Nouveaux', c.nouveaux, entier),
+                               carte('Actifs', c.actifs, entier, 'au moins un colis reçu pendant la période'),
+                               carte('Inactifs', c.inactifs, entier, 'inscrits, sans colis reçu pendant la période'),
+                               carte('Colis par client actif', c.colis_par_client_actif, function (x) { return x == null ? '—' : O.nombre(x); })]));
+        var s2 = section('Activité des clients actifs', 'Des seuils fixes, affichés tels quels : ce n’est pas une note ni un classement.');
+        tableau(s2, 'Segments', [
+          { titre: 'Activité', valeur: function (x) { return { petite: 'Petite', moyenne: 'Moyenne', forte: 'Forte' }[x.segment] || x.segment; } },
+          { titre: 'Définition', valeur: function (x) { return x.definition; } },
+          { titre: 'Clients', nombre: true, valeur: function (x) { return entier(x.clients); }, brut: function (x) { return x.clients; } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } }], c.segments);
+        var s3 = section('Clients les plus actifs');
+        var outils = el('div', 'gs-admin-outils');
+        var choix = el('select', 'gs-admin-filtre');
+        choix.setAttribute('aria-label', 'Trier les clients');
+        [['colis', 'Par nombre de colis'], ['poids', 'Par poids'], ['facture', 'Par montant facturé'], ['paye', 'Par montant payé'], ['solde', 'Par solde']]
+          .forEach(function (x) { var op = new Option(x[1], x[0]); op.selected = x[0] === etatAnalytics.tri; choix.add(op); });
+        choix.addEventListener('change', function () { etatAnalytics.tri = choix.value; etatAnalytics.page = 0; afficherAnalytics(); });
+        outils.appendChild(choix);
+        s3.appendChild(outils);
+        tableau(s3, 'Clients les plus actifs', [
+          { titre: 'Client', valeur: function (x) { return (x.nom_complet || '—') + ' (' + (x.code || '—') + ')'; } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Poids', nombre: true, valeur: function (x) { return poidsLb(x.poids); }, brut: function (x) { return x.poids; } },
+          { titre: 'Facturé', nombre: true, valeur: function (x) { return argent(x.facture); }, brut: function (x) { return x.facture; } },
+          { titre: 'Payé', nombre: true, valeur: function (x) { return argent(x.paye); }, brut: function (x) { return x.paye; } },
+          { titre: 'Solde (maintenant)', nombre: true, valeur: function (x) { return argent(x.solde); }, brut: function (x) { return x.solde; } },
+          { titre: 'Dernière activité', valeur: function (x) { return x.derniere_activite ? O.date(x.derniere_activite, true) : '—'; } }],
+          c.lignes, 'Aucun client actif pendant cette période.');
+        var pages = el('div', 'gs-pagination');
+        s3.appendChild(pages);
+        paginer(pages, etatAnalytics, c.total_liste, afficherAnalytics);
+        definitions(corpsAnalytics, [
+          ['Client actif', 'Au moins un colis reçu à Miami pendant la période.'],
+          ['Liste', 'Les clients qui ont reçu un colis, reçu une facture ou payé pendant la période. Facturé et payé : pendant la période ; solde : aujourd’hui, toutes factures.']]);
+      });
+    },
+
+    finances: function () {
+      return Promise.all([lireAnalytics('finances'), lireAnalytics('serie', { granularite: etatAnalytics.decoupage })]).then(function (r) {
+        var f = r[0], se = r[1], cr = f.creances;
+        var s1 = section('Facturé et encaissé', 'Le facturé est ce qui a été demandé ; l’encaissé, l’argent réellement reçu. Les deux ne se confondent jamais.');
+        s1.appendChild(grille([carte('Facturé', f.facture, argent), carte('Encaissé', f.encaisse, argent),
+                               carte('Reste sur les factures de la période', f.reste, argent, 'dû aujourd’hui'),
+                               carte('Factures émises', f.factures_emises, entier),
+                               carte('Dont transport', f.transport, argent), carte('Dont frais de service', f.frais_service, argent)]));
+        serieGraphe(s1, 'Facturé et encaissé, ' + { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[se.granularite], se.cases,
+                    [{ nom: 'Facturé', cle: 'facture', classe: 'gs-graphe--serie1', total: f.facture.actuel, format: argent },
+                     { nom: 'Encaissé', cle: 'encaisse', classe: 'gs-graphe--serie2', total: f.encaisse.actuel, format: argent }]);
+        tableau(detailSerie(s1, se.cases.length), 'Facturé, encaissé et dû par période', [
+          { titre: 'Période', valeur: function (c) { return c.debut === c.fin ? jourLisible(c.debut) : jourLisible(c.debut) + ' → ' + jourLisible(c.fin); } },
+          { titre: 'Factures', nombre: true, valeur: function (c) { return entier(c.factures); }, brut: function (c) { return c.factures; } },
+          { titre: 'Facturé', nombre: true, valeur: function (c) { return argent(c.facture); }, brut: function (c) { return c.facture; } },
+          { titre: 'Encaissé', nombre: true, valeur: function (c) { return argent(c.encaisse); }, brut: function (c) { return c.encaisse; } },
+          { titre: 'Dû en fin de période', nombre: true, valeur: function (c) { return argent(c.creances_fin); }, brut: function (c) { return c.creances_fin; } }],
+          se.cases);
+        var s2 = section('Créances, maintenant');
+        s2.appendChild(grille([carte('À recouvrer', cr.total, argent, pluriel(cr.factures, 'facture ouverte', 'factures ouvertes')),
+                               carte('Impayées', cr.impayees, entier, 'rien reçu'), carte('Payées en partie', cr.partielles, entier),
+                               carte('En retard', cr.montant_en_retard, argent, pluriel(cr.en_retard, 'facture échue', 'factures échues')),
+                               carte('Non échues', cr.non_echues, entier), carte('Sans échéance', cr.sans_echeance, entier),
+                               carte('Créances en fin de période', f.creances_fin, argent)]));
+        var TRANCHES = { '0_30': '0 à 30 jours', '31_60': '31 à 60 jours', '61_90': '61 à 90 jours', '90_plus': 'Plus de 90 jours' };
+        tableau(s2, 'Âge des créances (depuis l’émission)', [
+          { titre: 'Âge', valeur: function (t) { return TRANCHES[t.tranche] || t.tranche; } },
+          { titre: 'Factures', nombre: true, valeur: function (t) { return entier(t.factures); }, brut: function (t) { return t.factures; } },
+          { titre: 'Montant dû', nombre: true, valeur: function (t) { return argent(t.montant); }, brut: function (t) { return t.montant; } }], cr.age);
+        var s3 = section('Encaissé par moyen de paiement');
+        tableau(s3, 'Encaissé par moyen de paiement', [
+          { titre: 'Moyen', valeur: function (x) { return nomMoyen(x.moyen); } },
+          { titre: 'Paiements', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } },
+          { titre: 'Montant', nombre: true, valeur: function (x) { return argent(x.montant); }, brut: function (x) { return x.montant; } }],
+          f.par_moyen, 'Aucun paiement reçu pendant cette période.');
+        var s4 = section('Dépenses, dettes et résultat');
+        s4.appendChild(el('p', 'gs-analytics__non-suivi', 'Non suivis par le système : aucune dépense ni dette n’y est enregistrée. Aucun résultat ni bénéfice n’est donc calculé — l’encaissé n’est pas un bénéfice.'));
+        definitions(corpsAnalytics, [
+          ['Facturé', 'Factures émises pendant la période, hors annulées ; montant arrêté à la création. Transport = total − frais de service.'],
+          ['Encaissé', 'Paiements valides reçus pendant la période ; un paiement annulé n’y est jamais.'],
+          ['Dû en fin de période', 'Factures émises avant la fin, moins celles annulées, moins les paiements reçus, plus ceux annulés — tous datés. Maintenant, il vaut « à encaisser » de la vue générale.'],
+          ['Âge des créances', 'Jours écoulés depuis l’émission de chaque facture encore ouverte. En retard : échéance dépassée et solde restant.']]);
+      });
+    },
+
+    routes: function () {
+      return lireAnalytics('routes').then(function (r) {
+        var s1 = section('Routes', 'Origine unique : l’entrepôt de ' + r.origine + ' — la base n’enregistre pas d’autre origine. Seules les routes réellement utilisées apparaissent, pour les colis reçus pendant la période.');
+        tableau(s1, 'Routes', [
+          { titre: 'Route', valeur: function (x) { return 'Miami → ' + nomPays(x.pays) + ' · ' + nomService(x.service); } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Période précédente', nombre: true, valeur: function (x) { return entier(x.colis_precedents); }, brut: function (x) { return x.colis_precedents; } },
+          { titre: 'Poids', nombre: true, valeur: function (x) { return poidsLb(x.poids); }, brut: function (x) { return x.poids; } },
+          { titre: 'Transport facturé', nombre: true, valeur: function (x) { return argent(x.facture); }, brut: function (x) { return x.facture; } },
+          { titre: 'Livrés', nombre: true, valeur: function (x) { return entier(x.livres) + ' (' + pourcent(x.taux_livre) + ')'; }, brut: function (x) { return x.livres; } },
+          { titre: 'Délai moyen Reçu → Livré', nombre: true, valeur: function (x) { return duree(x.delai_moyen_h); }, brut: function (x) { return x.delai_moyen_h; } }],
+          r.routes, 'Aucun colis reçu pendant cette période.');
+        var s2 = section('Pays de destination');
+        tableau(s2, 'Pays de destination', [
+          { titre: 'Pays', valeur: function (x) { return nomPays(x.pays); } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Période précédente', nombre: true, valeur: function (x) { return entier(x.colis_precedents); }, brut: function (x) { return x.colis_precedents; } },
+          { titre: 'Évolution', nombre: true, valeur: function (x) { var v = variation({ actuel: x.colis, precedent: x.colis_precedents,
+              variation_pct: x.colis_precedents ? Math.round((x.colis - x.colis_precedents) * 1000 / x.colis_precedents) / 10 : null,
+              tendance: x.colis > x.colis_precedents ? 'hausse' : (x.colis < x.colis_precedents ? 'baisse' : 'stable') }, entier); return v.texte; } }],
+          r.pays, 'Aucun colis sur ces deux périodes.');
+        var s3 = section('Villes les plus fréquentes', 'La ville de livraison saisie, telle quelle. ' + pluriel(r.sans_ville, 'colis sans ville indiquée', 'colis sans ville indiquée') + '.');
+        tableau(s3, 'Villes les plus fréquentes', [
+          { titre: 'Ville', valeur: function (x) { return x.ville + ' (' + nomPays(x.pays) + ')'; } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Période précédente', nombre: true, valeur: function (x) { return entier(x.colis_precedents); }, brut: function (x) { return x.colis_precedents; } }],
+          r.villes, 'Aucune ville indiquée.');
+        definitions(corpsAnalytics, [
+          ['Route', 'Miami → pays de destination, par service (aérien, maritime, terrestre).'],
+          ['Transport facturé', 'Lignes des colis de la route sur des factures non annulées ; les frais de service, comptés par facture, n’y sont pas.'],
+          ['Livrés, taux', 'Colis de la route livrés aujourd’hui, rapportés aux colis reçus pendant la période.']]);
+      });
+    },
+
+    scanner: function () {
+      return Promise.all([lireAnalytics('scanner'), lireAnalytics('serie', { granularite: etatAnalytics.decoupage })]).then(function (r) {
+        var s = r[0], se = r[1];
+        var s1 = section('Opérations au poste de scan', 'Une opération compte quand le scan l’a enregistrée. Les scans refusés, illisibles ou sans suite ne sont pas enregistrés : ils ne peuvent pas être comptés.');
+        s1.appendChild(grille([carte('Opérations', s.total, entier), carte('Colis scannés', s.colis, entier),
+                               carte('Jours avec des scans', s.jours_actifs, entier),
+                               carte('Intervalle médian entre deux opérations', s.intervalle_minutes.mediane,
+                                     function (x) { return x == null ? '—' : O.nombre(x) + ' min'; }, 'même compte, même jour')]));
+        serieGraphe(s1, 'Opérations, ' + { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[se.granularite], se.cases,
+                    [{ nom: 'Opérations', cle: 'scans', classe: 'gs-graphe--serie1', total: s.total.actuel, format: entier }]);
+        var s2 = section('Par opération');
+        tableau(s2, 'Par opération', [
+          { titre: 'Opération', valeur: function (x) { return x.libelle; } },
+          { titre: 'Nombre', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          s.par_operation, 'Aucune opération pendant cette période.');
+        var s3 = section('Par compte', 'Dans l’ordre alphabétique : pour comprendre l’activité, pas pour classer les personnes.');
+        tableau(s3, 'Par compte', [
+          { titre: 'Compte', valeur: function (x) { return x.nom + (x.role && ROLES[x.role] ? ' (' + ROLES[x.role].toLowerCase() + ')' : ''); } },
+          { titre: 'Opérations', nombre: true, valeur: function (x) { return entier(x.operations); }, brut: function (x) { return x.operations; } },
+          { titre: 'Jours', nombre: true, valeur: function (x) { return entier(x.jours); }, brut: function (x) { return x.jours; } }],
+          s.par_compte, 'Aucune opération pendant cette période.');
+        var s4 = section('Par lieu');
+        tableau(s4, 'Par lieu', [
+          { titre: 'Lieu du poste', valeur: function (x) { return x.lieu || 'Lieu non indiqué'; } },
+          { titre: 'Opérations', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          s.par_lieu, 'Aucune opération pendant cette période.');
+      });
+    },
+
+    qualite: function () {
+      return lireAnalytics('qualite').then(function (q) {
+        var s1 = section('Indicateurs de qualité', 'Sur toute la base. Rien n’est corrigé ni caché : chaque ligne dit combien de données sont en cause.');
+        tableau(s1, 'Indicateurs de qualité', [
+          { titre: 'Indicateur', valeur: function (x) { return x.libelle; } },
+          { titre: 'Conformes', nombre: true, valeur: function (x) { return entier(x.ok) + ' sur ' + entier(x.total); }, brut: function (x) { return x.ok; } },
+          { titre: 'Part', nombre: true, valeur: function (x) { return x.total ? pourcent(Math.round(x.ok * 1000 / x.total) / 10) : 'Aucune donnée'; },
+            brut: function (x) { return x.total ? Math.round(x.ok * 1000 / x.total) / 10 : ''; } }], q.indicateurs);
+        var s2 = section('Anomalies');
+        tableau(s2, 'Anomalies', [
+          { titre: 'Anomalie', valeur: function (x) { return x.libelle; } },
+          { titre: 'Nombre', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }], q.anomalies);
+        var s3 = section('Facturation', 'Le rapport d’anomalies de facturation (bouton « Contrôler » de l’onglet Factures), compté par type.');
+        tableau(s3, 'Anomalies de facturation', [
+          { titre: 'Type', valeur: function (x) { return x.type.replace(/_/g, ' '); } },
+          { titre: 'Gravité', valeur: function (x) { return x.gravite; } },
+          { titre: 'Nombre', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          q.facturation, 'Aucune anomalie de facturation.');
+      });
+    }
+  };
+
+  function afficherAnalytics() {
+    if (!peut('reports.view')) return Promise.resolve();
+    var numero = ++etatAnalytics.demande;
+    var module = etatAnalytics.module;
+    corpsAnalytics.setAttribute('aria-busy', 'true');
+    messageAnalytics.hidden = true;
+    $('[data-analytics-etat]').textContent = 'Chargement des données…';
+    // Le découpage ne sert qu'aux rubriques qui ont une série dans le temps
+    $('[data-analytics-decoupage]').closest('label').hidden = ['expeditions', 'finances', 'scanner'].indexOf(module) < 0;
+    return lireAnalytics('synthese').then(function (s) {
+      if (numero !== etatAnalytics.demande) return;
+      etatAnalytics.titre = NOMS_MODULES[module];
+      var p = s.periode;
+      $('[data-analytics-etat]').textContent = (module === 'qualite' ? 'Toute la base · ' : '') +
+        (p.debut === p.fin ? 'Le ' + jourLisible(p.debut) : 'Du ' + jourLisible(p.debut) + ' au ' + jourLisible(p.fin)) +
+        ', comparé ' + (p.precedente.debut === p.precedente.fin ? 'au ' + jourLisible(p.precedente.debut)
+          : 'du ' + jourLisible(p.precedente.debut) + ' au ' + jourLisible(p.precedente.fin)) +
+        ' · jours de Santo Domingo · chiffres de ' + heure(s.genere_le);
+      var temporaire = el('div');
+      var vrai = corpsAnalytics;
+      corpsAnalytics = temporaire;
+      etatAnalytics.tables = [];
+      return RUBRIQUES[module]().then(function () {
+        corpsAnalytics = vrai;
+        if (numero !== etatAnalytics.demande) return;
+        corpsAnalytics.textContent = '';
+        while (temporaire.firstChild) corpsAnalytics.appendChild(temporaire.firstChild);
+      }, function (err) { corpsAnalytics = vrai; throw err; });
+    }).catch(function (err) {
+      if (numero !== etatAnalytics.demande) return;
+      corpsAnalytics.textContent = '';
+      etatAnalytics.tables = [];
+      messageAnalytics.textContent = texteErreurAnalytics(err);
+      messageAnalytics.hidden = false;
+      $('[data-analytics-etat]').textContent = '';
+    }).then(function () {
+      if (numero === etatAnalytics.demande) corpsAnalytics.removeAttribute('aria-busy');
+    });
+  }
+
+  function choisirModule(module) {
+    etatAnalytics.module = module;
+    etatAnalytics.page = 0;
+    ongletsAnalytics.forEach(function (b) {
+      var actif = b.getAttribute('data-analytics-module') === module;
+      b.setAttribute('aria-selected', String(actif));
+      b.tabIndex = actif ? 0 : -1;
+    });
+    afficherAnalytics();
+  }
+  ongletsAnalytics.forEach(function (b) {
+    b.addEventListener('click', function () { choisirModule(b.getAttribute('data-analytics-module')); });
+    b.addEventListener('keydown', function (e) {
+      var sens = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!sens) return;
+      e.preventDefault();
+      var autre = ongletsAnalytics[(ongletsAnalytics.indexOf(b) + sens + ongletsAnalytics.length) % ongletsAnalytics.length];
+      autre.focus();
+      choisirModule(autre.getAttribute('data-analytics-module'));
+    });
+  });
+
+  var choixPeriodeAnalytics = $('[data-analytics-periode]');
+  choixPeriodeAnalytics.addEventListener('change', function () {
+    var perso = choixPeriodeAnalytics.value === 'personnalise';
+    $('[data-analytics-dates]').hidden = !perso;
+    if (perso) { $('[data-analytics-debut]').focus(); return; }
+    etatAnalytics.periode = choixPeriodeAnalytics.value;
+    etatAnalytics.debut = etatAnalytics.fin = '';
+    etatAnalytics.page = 0;
+    afficherAnalytics();
+  });
+  $('[data-action="analytics-appliquer"]').addEventListener('click', function () {
+    var debut = $('[data-analytics-debut]').value, fin = $('[data-analytics-fin]').value;
+    if (!debut || !fin) { toast('Choisissez une date de début et une date de fin.', true); return; }
+    if (fin < debut) { toast('La date de fin est avant la date de début.', true); return; }
+    etatAnalytics.periode = 'personnalise';
+    etatAnalytics.debut = debut;
+    etatAnalytics.fin = fin;
+    etatAnalytics.page = 0;
+    afficherAnalytics();
+  });
+  $('[data-analytics-decoupage]').addEventListener('change', function (e) {
+    etatAnalytics.decoupage = e.target.value;
+    afficherAnalytics();
+  });
+  $('[data-action="analytics-actualiser"]').addEventListener('click', function () {
+    etatAnalytics.memoire = {};
+    afficherAnalytics();
+  });
+
+  /* ---- Export : un seul mécanisme, les tableaux affichés -----------------------
+     CSV avec point-virgule, virgule décimale et marque UTF-8 : Excel l'ouvre tel
+     quel. Pour le PDF, l'impression A4 existante (impression.js) : « Enregistrer
+     au format PDF » dans la fenêtre d'impression. Rien de plus que ce que la
+     page montre, donc rien de plus que ce que reports.view permet. */
+  function celluleCsv(v) {
+    var t = typeof v === 'number' ? String(v).replace('.', ',') : String(v == null ? '' : v);
+    return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function periodeTexte() { return $('[data-analytics-etat]').textContent; }
+  $('[data-action="analytics-csv"]').addEventListener('click', function () {
+    if (!etatAnalytics.tables.length) { toast('Rien à exporter : chargez d’abord une rubrique.', true); return; }
+    var lignes = [['Goship Express — Analytics — ' + etatAnalytics.titre], [periodeTexte()], []];
+    etatAnalytics.tables.forEach(function (t) {
+      lignes.push([t.titre]);
+      lignes.push(t.colonnes.map(function (c) { return c.titre; }));
+      t.lignes.forEach(function (l) {
+        lignes.push(t.colonnes.map(function (c) { return c.brut ? c.brut(l) : c.valeur(l); }));
+      });
+      lignes.push([]);
+    });
+    var texte = '﻿' + lignes.map(function (l) { return l.map(celluleCsv).join(';'); }).join('\r\n');
+    var lien = el('a');
+    lien.href = URL.createObjectURL(new Blob([texte], { type: 'text/csv;charset=utf-8' }));
+    lien.download = 'goship-analytics-' + etatAnalytics.module + '-' + aujourdhuiTexte() + '.csv';
+    document.body.appendChild(lien);
+    lien.click();
+    setTimeout(function () { URL.revokeObjectURL(lien.href); lien.remove(); }, 1000);
+  });
+  function aujourdhuiTexte() {
+    var t = new Date();
+    return t.getFullYear() + '-' + deux(t.getMonth() + 1) + '-' + deux(t.getDate());
+  }
+  $('[data-action="analytics-imprimer"]').addEventListener('click', function () {
+    if (!corpsAnalytics.children.length) { toast('Rien à imprimer : chargez d’abord une rubrique.', true); return; }
+    var feuille = el('div', 'gs-rapport');
+    feuille.appendChild(el('h1', '', 'Goship Express — Analytics : ' + etatAnalytics.titre));
+    feuille.appendChild(el('p', 'gs-rapport__periode', periodeTexte()));
+    var copie = corpsAnalytics.cloneNode(true);
+    $$('select, button, .gs-pagination', copie).forEach(function (n) { n.remove(); });
+    $$('details', copie).forEach(function (n) { n.open = true; });
+    feuille.appendChild(copie);
+    IMP.imprimer(feuille, { titre: 'Analytics — ' + etatAnalytics.titre, papier: 'A4', marge: '12mm' }).catch(function () {
+      toast('Impression impossible : autorisez les fenêtres de ce site.', true);
+    });
   });
 
   /* ---- Démonstration --------------------------------------------------------- */
