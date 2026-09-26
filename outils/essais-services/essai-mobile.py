@@ -301,6 +301,9 @@ def fabriquer_gestionnaire(etat):
             d = json.loads(donnees or b'{}')
             if action == 'health':                      # comme GoTrue : la surveillance l'interroge
                 return self.repondre(200, {'name': 'GoTrue (doublure d\'essai)', 'description': 'ok'})
+            if action == 'settings':                    # réglages publics, lus par sonder.sh et surveiller.sh
+                return self.repondre(200, {'external': {'email': True, 'phone': False}, 'disable_signup': False,
+                                           'mailer_autoconfirm': False, 'phone_autoconfirm': False})
             if action == 'token':
                 genre = (params.get('grant_type') or [''])[0]
                 with etat.verrou:
@@ -653,6 +656,37 @@ def essais(db, d):
     verifier('%s colis chez un client : une page de 20 en %.0f ms' % (n, duree * 1000), (len(v), duree < 1.5), (20, True))
 
 
+def outils_de_production(db):
+    """sonder.sh et surveiller.sh contre ce vrai PostgREST : ce qu'ils disent de la production
+    (docs/production/monitoring.md) repose sur les codes que rend PostgREST."""
+    print('\nZ. Outils de production contre PostgREST : sonder.sh, surveiller.sh')
+    prod = os.path.join(RACINE, 'outils', 'production')
+    env = dict(os.environ, SUPABASE_URL='http://localhost:%d' % PORT, SUPABASE_CLE='cle-publique-essai',
+               NO_PROXY='*', no_proxy='*')
+    r = subprocess.run(['bash', os.path.join(prod, 'sonder.sh')], env=env, capture_output=True, text=True)
+    verifier('sonder.sh : les %d migrations présentes, aucune fonction ouverte à tort, code 0' % len(FICHIERS),
+             (r.returncode, r.stdout.count('  présente  '), 'confirmation des adresses e-mail : ACTIVE' in r.stdout),
+             (0, len(FICHIERS), True))
+    surveiller = lambda: subprocess.run(['bash', os.path.join(prod, 'surveiller.sh')],
+                                        env=dict(env, SANS_SITE='1'), capture_output=True, text=True)
+    r = surveiller()
+    verifier('surveiller.sh (base seule) : tout présent, rien d\'exposé, code 0',
+             (r.returncode, 'CRITIQUE' in r.stdout), (0, False))
+    # Une migration qui manque et une fonction ouverte à tort : les deux outils le disent
+    db.sql("drop function public.sante(); drop function public.mes_factures(); "
+           "grant execute on function public.types_evenement() to anon; notify pgrst, 'reload schema';")
+    time.sleep(2)
+    r = subprocess.run(['bash', os.path.join(prod, 'sonder.sh')], env=env, capture_output=True, text=True)
+    verifier('sonder.sh : sante() et mes_factures absentes, types_evenement exposée, code 1',
+             (r.returncode, 'ABSENTE   supabase-production.sql' in r.stdout,
+              'ABSENTE   supabase-facturation.sql' in r.stdout, '1 fonction(s) ouverte(s)' in r.stdout),
+             (1, True, True, True))
+    r = surveiller()
+    verifier('surveiller.sh : CRITIQUE pour la fonction absente et pour l\'exposée, code 1',
+             (r.returncode, 'CRITIQUE  fonctions absentes : mes_factures' in r.stdout,
+              'CRITIQUE  fonctions ouvertes aux visiteurs : types_evenement' in r.stdout), (1, True, True))
+
+
 def main():
     serveur_seul = '--serveur' in sys.argv
     db = installer()
@@ -671,6 +705,7 @@ def main():
                 time.sleep(3600)
         else:
             essais(db, d)
+            outils_de_production(db)
     except KeyboardInterrupt:
         pass
     finally:

@@ -17,6 +17,7 @@
 # Variables facultatives :
 #   SUPABASE_URL, SUPABASE_CLE   sinon lues dans assets/js/config.js
 #   SANS_SUPABASE=1              contrôler le site seul
+#   SANS_SITE=1                  contrôler la base seule (essais, préproduction)
 #   SURVEILLANCE_TOLERANTE=1     avant une mise en ligne (pull request) : ce qui
 #                                dépend d'une version pas encore publiée (fichiers
 #                                retirés, sante() pas encore installée) n'est
@@ -31,8 +32,10 @@ RACINE="$(cd "$ICI/../.." && pwd)"
 echecs=0
 avertissements=0
 
-ok()     { echo "OK       $1"; }
-echec()  { echo "ÉCHEC    $1"; echecs=$((echecs + 1)); }
+# Deux niveaux : CRITIQUE (le service est cassé ou exposé : le workflow échoue et
+# l'alerte part) et ATTENTION (à traiter, mais le service tient : écrit au journal)
+ok()     { echo "OK        $1"; }
+echec()  { echo "CRITIQUE  $1"; echecs=$((echecs + 1)); }
 averti() { echo "ATTENTION $1"; avertissements=$((avertissements + 1)); }
 tolerant() { if [ "${SURVEILLANCE_TOLERANTE:-}" = 1 ]; then averti "$1 (toléré avant publication)"; else echec "$1"; fi; }
 
@@ -50,6 +53,9 @@ recuperer() {
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+if [ "${SANS_SITE:-}" = 1 ]; then
+  echo "== Site : non contrôlé (SANS_SITE=1)"
+else
 echo "== Site : $SITE"
 # Pages publiques, espace client, tableau de bord, une traduction : chacune complète
 for page in index.html connexion.html mon-compte.html admin.html en/index.html ht/index.html; do
@@ -97,6 +103,7 @@ case "$SITE" in
     else averti "HTTP ne redirige pas vers HTTPS (à activer : Settings > Pages > Enforce HTTPS)"; fi
     ;;
 esac
+fi
 
 if [ "${SANS_SUPABASE:-}" = 1 ]; then
   echo "== Base : non contrôlée (SANS_SUPABASE=1)"
@@ -135,6 +142,35 @@ else
             -H 'Content-Type: application/json' \
             -d '{"p_numero":"GSE-0000-ZZ"}' "$URL/rest/v1/rpc/suivre_colis" 2>/dev/null || echo 000)"
     if [ "$code" = 200 ]; then ok "suivi public (suivre_colis)"; else echec "suivi public : code $code"; fi
+
+    # Les fonctions dont dépendent le site en ligne et l'application déjà installée
+    # (migrations 1 à 9). GET, clé publique : PostgREST les exécute en lecture seule
+    # et refuse le visiteur (401) — la fonction existe. 404 PGRST202 : elle n'existe
+    # plus, une page ou l'application est cassée. 200 : elle répond à un visiteur,
+    # elle ne devrait pas. Aucune réponse n'est affichée.
+    absentes=""; exposees=""
+    for temoin in mes_permissions mon_resume mes_factures vue_generale types_evenement \
+                  operations_du_scanner moyens_paiement analytics_synthese \
+                  "creer_prealerte?p_cle=00000000-0000-0000-0000-000000000000&p_magasin=sonde&p_description=sonde"; do
+      code="$(curl -sS -o "$tmp/f" -w '%{http_code}' --max-time 20 -H "apikey: $CLE" "$URL/rest/v1/rpc/$temoin" 2>/dev/null || echo 000)"
+      nom="${temoin%%\?*}"
+      if [ "$code" = 404 ] && grep -q PGRST202 "$tmp/f"; then absentes="$absentes $nom"
+      elif [ "$code" = 200 ]; then exposees="$exposees $nom"; fi
+    done
+    [ -z "$absentes" ] && ok "fonctions du site et de l'application : présentes" || echec "fonctions absentes :$absentes"
+    [ -z "$exposees" ] && ok "aucune de ces fonctions ne répond à un visiteur" || echec "fonctions ouvertes aux visiteurs :$exposees"
+
+    # L'authentification : confirmation des adresses e-mail (réglage public)
+    code="$(curl -sS -o "$tmp/auth" -w '%{http_code}' --max-time 20 -H "apikey: $CLE" "$URL/auth/v1/settings" 2>/dev/null || echo 000)"
+    if [ "$code" = 200 ]; then
+      case "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('mailer_autoconfirm'))" "$tmp/auth" 2>/dev/null)" in
+        False) ok "Auth : confirmation des adresses e-mail active" ;;
+        True)  averti "Auth : confirmation des adresses e-mail DÉSACTIVÉE (docs/production/go-no-go.md, B4)" ;;
+        *)     averti "Auth : réglage de confirmation illisible" ;;
+      esac
+    else
+      averti "Auth : réglages publics illisibles (code $code)"
+    fi
   fi
 fi
 
