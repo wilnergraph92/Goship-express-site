@@ -227,6 +227,20 @@ reste sans build. `deploy.yml` exclut `bureau/` de GitHub Pages.
   root) et `essai-paquet.js` ; le site d'essai (`serveur-essai.js`) sert un
   `config.js` vide. Voir `bureau/LISEZ-MOI.md`.
 
+### L'application mobile (dépôt `goship-express-app`)
+
+L'espace client sur téléphone (Expo), cloné dans `application-mobile/` (ignoré ici).
+Même règle que le bureau : aucune logique métier, elle lit `mon_resume`,
+`mes_factures`, `suivre_colis`, `mes_permissions`, les tables `colis`,
+`colis_historique`, `prealertes`, et écrit par `creer_prealerte` et
+`enregistrer_appareil`. `outils/supabase-mobile.sql` ne fait qu'ajouter
+`creer_prealerte` (clé d'envoi, doublon, validation) et un index ; l'insert direct
+dans `prealertes` reste ouvert pour les versions déjà installées — **ne le ferme pas**
+sans une période de transition. Une fonction dont l'application dépend ne se renomme
+pas et ne change pas de forme de réponse : les versions déjà installées ne se mettent
+pas à jour toutes seules. `essai-mobile.py` rejoue ses requêtes ; `--serveur` sert de
+base à ses essais (navigateur, émulateur, simulateur).
+
 ## Base de données
 
 Tables : `clients`, `colis`, `colis_historique`, `notifications`,
@@ -239,7 +253,7 @@ SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
 donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql` — relancer l'un impose
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql` — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.

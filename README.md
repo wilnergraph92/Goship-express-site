@@ -382,18 +382,27 @@ il peut être relancé sans risque).
 3. Scannez le QR code affiché : avec l'application Expo Go sur Android, avec l'appareil photo sur iPhone.
    Le téléphone et le Mac doivent être sur le même réseau Wi-Fi.
 
-**Ce que contient l'application :** connexion et création de compte, accueil avec l'adresse de
-Miami (copier / partager), liste des colis avec recherche et filtres, détail avec les étapes,
-pré-alerte avec scan du code-barres, factures, agences et compte (langue, notifications,
-déconnexion). Quatre langues, comme le site.
+**Ce que contient l'application :** connexion et création de compte, accueil (adresse de
+Miami, colis en cours, action requise, solde, derniers messages, suivi rapide), liste des colis
+page par page avec recherche et filtres faits par la base, détail avec les étapes réelles,
+suivi d'un numéro, pré-alerte avec scan du code-barres, factures (payé, solde, paiements reçus),
+paiement, agences et compte (langue, notifications, fermeture du compte). Quatre langues, comme
+le site. Tous les chiffres viennent de la base (`mon_resume`, `mes_factures`) : l'application
+n'additionne rien.
 
-**Organisation des fichiers :** `app/` un fichier par écran, `components/` les éléments
-réutilisés, `lib/` la connexion à Supabase, les traductions et les formats, `config.js` l'adresse
-de Miami, le téléphone et les agences, `assets/` le logo et les icônes.
+**Sa base** : `outils/supabase-mobile.sql` (Phase 10) ajoute `creer_prealerte` — une pré-alerte
+validée par la base, doublon refusé, **une seule par envoi** même si la requête part deux fois
+(clé d'envoi) — et l'index de la liste « Mes colis ». Il n'ajoute que cela ; l'ancien chemin
+(insert direct) reste ouvert pour les versions déjà installées. `outils/essais-services/essai-mobile.py`
+rejoue les requêtes exactes de l'application sur un vrai PostgREST (isolation d'un client à
+l'autre par l'API directe, pré-alertes, factures, téléphones, 10 000 colis) ; avec `--serveur`, il
+garde cette base jetable allumée pour les essais de l'application elle-même (navigateur,
+émulateur Android, simulateur iOS).
 
-**Pour publier sur l'App Store et le Play Store** (étape suivante, quand l'application vous
-convient) : un compte Apple Developer (99 $ par an), un compte Google Play (25 $ une fois) et un
-compte Expo gratuit, qui fabrique les deux versions sur ses serveurs.
+**Tout le reste** — architecture, environnements, construction Android et iOS, EAS, essais,
+notifications, liens profonds, publication et retour arrière, données personnelles, ce qui
+manque avant la publication — est dans le `README.md` du dépôt de l'application
+(`goship-express-app`).
 
 ## Étiquettes, QR codes et codes-barres
 
@@ -477,7 +486,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, `outils/supabase-finances.sql`, `outils/supabase-tableau-de-bord.sql`, puis `outils/supabase-analytics.sql`. **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les huit, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql` ; `tableau_sur_12 = 12`, `index_sur_8 = 8` et `ouvertes_aux_visiteurs = 0` à la fin de `supabase-tableau-de-bord.sql` ; `analytics_sur_15 = 15`, `ouvertes_aux_visiteurs = 0` et `creances_egales = true` à la fin de `supabase-analytics.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, `outils/supabase-finances.sql`, `outils/supabase-tableau-de-bord.sql`, `outils/supabase-analytics.sql`, puis `outils/supabase-mobile.sql`. **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les neuf, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql` ; `tableau_sur_12 = 12`, `index_sur_8 = 8` et `ouvertes_aux_visiteurs = 0` à la fin de `supabase-tableau-de-bord.sql` ; `analytics_sur_15 = 15`, `ouvertes_aux_visiteurs = 0` et `creances_egales = true` à la fin de `supabase-analytics.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false`, `index_sur_2 = 2` et `colonne = 1` à la fin de `supabase-mobile.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 

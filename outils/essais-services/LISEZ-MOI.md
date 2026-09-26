@@ -14,6 +14,7 @@ python3 outils/essais-services/essai-finances.py     # paiements, soldes, annula
 python3 outils/essais-services/essai-permissions.py  # rôles, permissions, isolation des clients (Phase 6)
 python3 outils/essais-services/essai-tableau.py      # le tableau de bord : chiffres, rôles, périodes (Phase 7)
 python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes, délais, créances, volume (Phase 8)
+python3 outils/essais-services/essai-mobile.py       # l'application mobile par l'API réelle : isolation, pré-alertes (Phase 10)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
@@ -24,7 +25,7 @@ node outils/essais-services/essai-analytics.js       # les Analytics en démonst
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`
@@ -226,3 +227,31 @@ Comme `outils/essais-sql/`, il remplace par des doublures ce qui n'existe que
 chez Supabase : les comptes (`auth`), le coffre-fort (`vault`), les appels
 sortants (`pg_net`) et le stockage. La base d'essai est écrite dans un dossier
 temporaire du système, jamais dans le site.
+
+## Ce que prouve `essai-mobile.py`
+
+Il installe les neuf migrations (la mobile, deux fois de plus), crée deux clients
+(Marie, 25 colis ; Jean, 2 colis), une employée et un administrateur, des événements
+(parcours complet, inspection interne, action requise, correction), des factures et
+des paiements. Puis il envoie **les requêtes HTTP exactes** de l'application mobile
+(`lib/api.js` du dépôt `goship-express-app`) à un **vrai PostgREST 12**, avec le
+jeton d'un client — comme quelqu'un qui contournerait l'application :
+
+- **Isolation** : Marie n'obtient rien de Jean (colis, étapes, factures, lignes,
+  paiements, pré-alertes, profil, téléphones, notifications), ne modifie ni ne
+  supprime rien à lui, ne fait pas sonner son téléphone ; le visiteur n'a rien.
+- **Liste** : pages de 20, filtres et recherche faits par la base, index utilisé ;
+  10 000 colis chez un client : une page en quelques millisecondes.
+- **Étapes** : une opération interne ou une étape corrigée n'est pas montrée.
+- **Pré-alertes** (`creer_prealerte`) : sept refus avec leur code, doublon, colis
+  déjà arrivé, même envoi répété, cinq requêtes simultanées → une pré-alerte,
+  ancien chemin toujours ouvert, limite de 60.
+- **Argent** : `mon_resume` et `mes_factures` disent les mêmes soldes ; un client
+  n'écrit ni paiement ni montant payé.
+- **Compte de l'équipe** : filtré sur son compte, « Mes colis » ne montre pas ceux
+  des clients.
+
+Il faut PostgREST 12 (`postgrest` dans le PATH, ou `POSTGREST=chemin`).
+`--serveur` garde la base allumée sur `http://localhost:54321` (PostgREST, doublure
+de l'authentification, commandes `/essai/panne`, `/essai/revoquer`, `/essai/sql`) :
+c'est la base des essais de l'application (`npm run essai:web`, parcours Maestro).
