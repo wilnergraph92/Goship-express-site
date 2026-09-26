@@ -82,6 +82,12 @@ jobs:
       - name: Construire l'installateur
         shell: bash
         run: |
+          # Une variable de signature vide n'est pas « absente » pour electron-builder :
+          # CSC_LINK="" est lu comme un chemin (le dossier courant, « not a file »).
+          # On retire donc celles qui n'ont pas de valeur.
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
           if [ "$SIGNER" = oui ]; then
             echo "Signature de distribution ($RUNNER_OS)"
             ${{ matrix.construire }} --config electron-builder.distribution.js
