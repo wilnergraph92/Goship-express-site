@@ -54,7 +54,7 @@ verifier, jsonq, creer, un = S.verifier, S.jsonq, S.creer, S.un
 
 FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
-            'supabase-analytics.sql', 'supabase-mobile.sql')
+            'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -479,7 +479,7 @@ def essais(db, d):
                           ('ses pré-alertes', '/prealertes?select=id&client_id=eq.%s' % JEAN),
                           ('son profil', '/clients?select=id,email&id=eq.%s' % JEAN),
                           ('ses téléphones', '/appareils?select=id&client_id=eq.%s' % JEAN),
-                          ('ses notifications', '/notifications?select=id')):
+                          ('ses notifications', '/notifications?select=id&client_id=eq.%s' % JEAN)):
         c, v, _ = appel('GET', chemin, MARIE)
         if titre == 'ses paiements':
             # Marie voit les siens (2) et jamais celui de Jean
