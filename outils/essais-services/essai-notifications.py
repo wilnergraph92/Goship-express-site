@@ -481,8 +481,11 @@ def main():
     verifier('… lien vers la facture, et vers l\'onglet Factures pour les versions installées',
              [push['data'].get('facture_id') == r['facture']['id'], push['data'].get('route')], [True, '/(onglets)/factures'])
     verifier('les envois ne gardent ni jeton, ni adresse, ni numéro (seulement une cible)',
-             db.sql("select count(*) from notification_envois where cible like '%%@%%' or cible like '%%Token%%' "
-                    "or cible ~ '[0-9]{8}';").strip(), '0')
+             # « appareil:<uuid> » est une cible légitime : un UUID tiré au hasard contient
+             # parfois huit chiffres de suite, qu'on ne doit pas prendre pour un numéro.
+             db.sql("select count(*) from (select regexp_replace(cible, '^appareil:[0-9a-f-]{36}$', 'appareil') c "
+                    "from notification_envois) e where c like '%%@%%' or c like '%%Token%%' "
+                    "or c ~ '[0-9]{8}';").strip(), '0')
 
     print('L. Les applications déjà installées (mon_resume)')
     db.sql("update notification_envois set statut = 'envoye', envoye_le = now() where canal = 'push';")
