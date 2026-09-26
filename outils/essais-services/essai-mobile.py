@@ -367,6 +367,11 @@ def fabriquer_gestionnaire(etat):
             except urllib.error.HTTPError as e:
                 code, corps, hs = e.code, e.read(), e.headers
             garder = {k: v for k, v in hs.items() if k.lower() in ('content-type', 'content-range', 'preference-applied')}
+            if code >= 400:
+                # Le journal de la base d'essai (base.log en CI) : chaque refus, pour comprendre un
+                # parcours qui échoue sur un émulateur. Ni jeton ni mot de passe : la réponse d'erreur.
+                print('REST %s %s → %d %s (jeton : %s)' % (methode, chemin[:140], code, corps[:200].decode('utf-8', 'replace'),
+                      'oui' if auth.startswith('Bearer ey') else ('clé publique' if auth else 'aucun')), flush=True)
             self.repondre(code, corps, garder)
 
     return Gestionnaire
