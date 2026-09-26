@@ -24,6 +24,8 @@ admin.html                          tableau de bord équipe
 mon-compte.html, connexion.html     espace client
 en/ es/ ht/                         traductions (copies complètes des pages)
 assets/js/                          toute la logique
+assets/css/site.css                 styles du site (et de l'espace client)
+assets/css/tableau.css              habillage du tableau de bord seul (admin.html)
 outils/*.sql                        migrations Supabase
 application-mobile/                 app Expo — DÉPÔT SÉPARÉ, ignoré par git
 ```
@@ -160,6 +162,14 @@ Les factures antérieures au 22/09/2026 portent `frais_service_usd = 0`,
 volontairement : leur total ne devait pas changer rétroactivement.
 
 ### Le tableau de bord
+
+Habillage : `assets/css/tableau.css`, chargé par `admin.html` seulement —
+menu latéral (les onglets `data-onglet-vue`), barre du haut (titre de la
+vue, date et heure de l'appareil, recherche rapide, cloche des alertes,
+réglages, compte). Préfixe `gs-td__` (`gs-app` est déjà pris par la section
+de l'application mobile du site). Les réglages sont des préférences
+d'affichage gardées en `localStorage` (`gse-tableau-reglages`) : aucune
+donnée, aucune permission.
 
 `outils/supabase-tableau-de-bord.sql` : fonctions de **lecture** seulement
 (`vue_generale`, `colis_a_traiter`, `recherche_rapide`, `clients_soldes`,

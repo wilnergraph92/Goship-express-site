@@ -99,6 +99,9 @@
 
   function ecran(nom) {
     $$('[data-ecran]').forEach(function (s) { s.hidden = s.getAttribute('data-ecran') !== nom; });
+    // Le menu latéral et les outils de la barre n'existent qu'une fois dans le tableau de bord
+    document.body.classList.toggle('is-app', nom === 'tableau');
+    if (nom !== 'tableau') $('[data-titre-vue]').textContent = 'Tableau de bord';
   }
 
   var minuteurToast = null;
@@ -159,6 +162,7 @@
     var badge = $('[data-role-compte]');
     badge.textContent = ROLES[droits.role] || '';
     badge.hidden = !droits.role;
+    $('[data-role-texte]').textContent = ROLES[droits.role] || '';
   }
 
   /* ---- État de l'affichage ------------------------------------------------ */
@@ -184,6 +188,8 @@
     API.session().then(function (s) {
       if (!s) { ecran('connexion'); return null; }
       $$('[data-email]').forEach(function (n) { n.textContent = s.email; });
+      $('[data-avatar]').textContent = String(s.email || '?').replace(/@.*/, '').split(/[._-]+/)
+        .filter(Boolean).slice(0, 2).map(function (m) { return m.charAt(0).toUpperCase(); }).join('') || '?';
       $('[data-barre-connecte]').hidden = false;
       // Un compte de l'équipe entre ; un client est renvoyé vers son espace
       return API.permissions().then(function (p) {
@@ -243,10 +249,7 @@
   function ouvrirTableau() {
     ecran('tableau');
     $('[data-demo-actions]').hidden = API.mode !== 'demo';
-    try {
-      var jour = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
-      $('[data-date-jour]').textContent = jour.charAt(0).toUpperCase() + jour.slice(1);
-    } catch (e) { /* date facultative */ }
+    appliquerReglages();
     choisirVue(etat.vue);
     chargerStatistiques();
     chargerColis();
@@ -1696,12 +1699,16 @@
 
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
+  var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
+                      scanner: 'Poste de scan', equipe: 'Équipe' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
       vue = $('[data-onglet-vue="apercu"]').hasAttribute('data-interdit') ? 'colis' : 'apercu';
     }
     etat.vue = vue;
+    $('[data-titre-vue]').textContent = TITRES_VUES[vue] || 'Tableau de bord';
+    fermerMenu();
     onglets.forEach(function (b) {
       var actif = b.getAttribute('data-onglet-vue') === vue;
       b.setAttribute('aria-selected', String(actif));
@@ -1716,9 +1723,12 @@
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
     b.addEventListener('keydown', function (e) {
-      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      // Le menu est vertical : ↓ et → pour le suivant, ↑ et ← pour le précédent
+      var sens = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!sens) return;
+      e.preventDefault();
       var visibles = onglets.filter(function (o) { return !o.hasAttribute('data-interdit'); });
-      var autre = visibles[(visibles.indexOf(b) + 1) % visibles.length];
+      var autre = visibles[(visibles.indexOf(b) + sens + visibles.length) % visibles.length];
       autre.focus();
       choisirVue(autre.getAttribute('data-onglet-vue'));
     });
@@ -2580,7 +2590,8 @@
         if (!v) return;
         var h = Math.max(2, v / max * (H - 8));
         var barre = svg('rect', { x: (i * pas + (pas - largeur * series.length) / 2 + k * largeur).toFixed(2),
-                                  y: (H - h).toFixed(2), width: largeur.toFixed(2), height: h.toFixed(2), class: s.classe });
+                                  y: (H - h).toFixed(2), width: largeur.toFixed(2), height: h.toFixed(2), class: s.classe,
+                                  rx: Math.min(4, largeur / 2).toFixed(2) });
         var titre = svg('title');
         titre.textContent = jourLisible(j.jour) + ' — ' + s.nom + ' : ' + s.format(v);
         barre.appendChild(titre);
@@ -2682,6 +2693,25 @@
     }, attente);
   }
 
+  // Les pictogrammes des chiffres clés (traits, 24 × 24) : des constantes, jamais une donnée
+  var PICTOS = {
+    colis: '<path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+    livre: '<circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 5-5.5"/>',
+    route: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+    alerte: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+    horloge: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    clients: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    nouveau: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+    facture: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>',
+    argent: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    portefeuille: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/>'
+  };
+  function picto(nom) {
+    return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" ' +
+           'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + PICTOS[nom] + '</svg>';
+  }
+
   function kpis(nom, cartes) {
     var zone = $('[data-kpis="' + nom + '"]');
     zone.textContent = '';
@@ -2690,6 +2720,11 @@
       if (k.action) {
         carte.type = 'button';
         carte.addEventListener('click', k.action);
+      }
+      if (k.picto && PICTOS[k.picto]) {
+        var pastille = el('span', 'gs-kpi__picto gs-kpi__picto--' + (k.teinte || 'bleu'));
+        pastille.innerHTML = picto(k.picto);
+        carte.appendChild(pastille);
       }
       carte.appendChild(el('span', 'gs-kpi__libelle', k.libelle));
       carte.appendChild(el('strong', 'gs-kpi__valeur', k.valeur));
@@ -2709,24 +2744,24 @@
 
     var c = v.colis || {};
     kpis('colis', [
-      { libelle: 'Reçus', valeur: entier(c.recus_periode),
+      { picto: 'colis', teinte: 'bleu', libelle: 'Reçus', valeur: entier(c.recus_periode),
         sous: Number(c.poids_periode) ? O.nombre(Number(c.poids_periode)) + ' lb sur la période' : 'sur la période' },
-      { libelle: 'Livrés', valeur: entier(c.livres_periode), sous: 'sur la période' },
-      { libelle: 'En cours', valeur: entier(c.actifs), sous: 'maintenant · ' + pluriel(c.total, 'colis au total', 'colis au total'),
+      { picto: 'livre', teinte: 'vert', libelle: 'Livrés', valeur: entier(c.livres_periode), sous: 'sur la période' },
+      { picto: 'route', teinte: 'marine', libelle: 'En cours', valeur: entier(c.actifs), sous: 'maintenant · ' + pluriel(c.total, 'colis au total', 'colis au total'),
         action: function () { viderFiltresColis(); filtrerParStatut('actifs'); } },
-      { libelle: 'Action requise', valeur: entier(c.action_requise), sous: 'maintenant', ton: c.action_requise ? 'critique' : '',
+      { picto: 'alerte', teinte: 'rouge', libelle: 'Action requise', valeur: entier(c.action_requise), sous: 'maintenant', ton: c.action_requise ? 'critique' : '',
         action: function () { choisirListe('action_requise'); } },
-      { libelle: 'Sans mouvement', valeur: entier(c.sans_mouvement), sous: 'aucun événement depuis ' + v.jours_sans_mouvement + ' j ou plus',
+      { picto: 'horloge', teinte: 'orange', libelle: 'Sans mouvement', valeur: entier(c.sans_mouvement), sous: 'aucun événement depuis ' + v.jours_sans_mouvement + ' j ou plus',
         ton: c.sans_mouvement ? 'attention' : '', action: function () { choisirListe('sans_mouvement'); } }
     ]);
 
     partie('clients', !!v.clients);
     if (v.clients) {
       kpis('clients', [
-        { libelle: 'Clients inscrits', valeur: entier(v.clients.total), sous: 'maintenant',
+        { picto: 'clients', teinte: 'bleu', libelle: 'Clients inscrits', valeur: entier(v.clients.total), sous: 'maintenant',
           action: function () { choisirVue('clients'); } },
-        { libelle: 'Nouveaux', valeur: entier(v.clients.nouveaux_periode), sous: 'inscrits sur la période' },
-        { libelle: 'Avec des colis en cours', valeur: entier(v.clients.avec_colis_en_cours), sous: 'maintenant' }
+        { picto: 'nouveau', teinte: 'vert', libelle: 'Nouveaux', valeur: entier(v.clients.nouveaux_periode), sous: 'inscrits sur la période' },
+        { picto: 'colis', teinte: 'marine', libelle: 'Avec des colis en cours', valeur: entier(v.clients.avec_colis_en_cours), sous: 'maintenant' }
       ]);
     }
 
@@ -2734,13 +2769,13 @@
     partie('facturation', !!f);
     if (f) {
       kpis('facturation', [
-        { libelle: 'Facturé', valeur: argent(f.facture_periode),
+        { picto: 'facture', teinte: 'marine', libelle: 'Facturé', valeur: argent(f.facture_periode),
           sous: pluriel(f.emises_periode, 'facture', 'factures') + ' · payé ' + argent(f.paye_sur_periode) + ' · reste ' + argent(f.solde_sur_periode) },
-        { libelle: 'Encaissé', valeur: argent(f.encaisse_periode), sous: pluriel(f.paiements_periode, 'paiement reçu', 'paiements reçus') },
-        { libelle: 'À encaisser', valeur: argent(f.a_encaisser),
+        { picto: 'argent', teinte: 'vert', libelle: 'Encaissé', valeur: argent(f.encaisse_periode), sous: pluriel(f.paiements_periode, 'paiement reçu', 'paiements reçus') },
+        { picto: 'portefeuille', teinte: 'orange', ton: 'fort', libelle: 'À encaisser', valeur: argent(f.a_encaisser),
           sous: pluriel(f.ouvertes, 'facture ouverte', 'factures ouvertes') + ' · ' + pluriel(f.clients_avec_solde, 'client', 'clients'),
           action: function () { choisirFactures('a_payer'); } },
-        { libelle: 'En retard', valeur: argent(f.montant_en_retard), sous: pluriel((f.etats || {}).en_retard, 'facture échue', 'factures échues'),
+        { picto: 'alerte', teinte: 'rouge', libelle: 'En retard', valeur: argent(f.montant_en_retard), sous: pluriel((f.etats || {}).en_retard, 'facture échue', 'factures échues'),
           ton: (f.etats || {}).en_retard ? 'attention' : '', action: function () { choisirFactures('en_retard'); } }
       ]);
       var etats = el('p', 'gs-apercu__etats');
@@ -2776,10 +2811,7 @@
     (v.alertes || []).forEach(function (a) {
       var li = el('li', 'gs-alerte-ligne gs-alerte-ligne--' + a.gravite);
       li.appendChild(el('span', 'gs-alerte-ligne__texte', a.message));
-      var aller = { action_requise: function () { choisirListe('action_requise'); },
-                    sans_mouvement: function () { choisirListe('sans_mouvement'); },
-                    factures_en_retard: function () { choisirFactures('en_retard'); },
-                    colis_sans_facture: peut('reports.view') ? function () { choisirVue('factures'); $('[data-action="controler-factures"]').click(); } : null }[a.code];
+      var aller = actionAlerte(a.code);
       if (aller) {
         var b = el('button', 'gs-lien-bouton', 'Voir');
         b.type = 'button';
@@ -2789,6 +2821,7 @@
       alertes.appendChild(li);
     });
     if (!(v.alertes || []).length) alertes.appendChild(el('li', 'gs-alerte-ligne gs-alerte-ligne--ok', 'Aucune alerte critique.'));
+    majCloche(v.alertes || []);
 
     partie('activite', !!v.activite);
     if (v.activite) {
@@ -2820,9 +2853,9 @@
     if (v.scanner) {
       var s = v.scanner, d = s.dernier;
       kpis('scanner', [
-        { libelle: 'Opérations aujourd’hui', valeur: entier(s.aujourdhui), sous: 'enregistrées au poste de scan' },
-        { libelle: 'Sur la période', valeur: entier(s.periode), sous: 'opérations enregistrées' },
-        { libelle: 'Dernier scan', valeur: d ? O.date(d.cree_le, true) : 'Aucun',
+        { picto: 'scan', teinte: 'orange', libelle: 'Opérations aujourd’hui', valeur: entier(s.aujourdhui), sous: 'enregistrées au poste de scan' },
+        { picto: 'scan', teinte: 'bleu', libelle: 'Sur la période', valeur: entier(s.periode), sous: 'opérations enregistrées' },
+        { picto: 'horloge', teinte: 'marine', libelle: 'Dernier scan', valeur: d ? O.date(d.cree_le, true) : 'Aucun',
           sous: d ? [d.numero, libelleTypeEvenement(d.type_evenement), d.auteur ? 'par ' + d.auteur : ''].filter(Boolean).join(' · ') : 'aucune opération encore' }
       ]);
       repartition($('[data-scan-employes]'), (s.par_employe || []).map(function (x) {
@@ -3151,6 +3184,279 @@
   });
   champRapide.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { champRapide.value = ''; fermerRapide(); }
+  });
+
+  /* ---- Le cadre : horloge, menu, panneaux de la barre du haut -----------------
+     Rien ici ne lit ni n'écrit une donnée de la base : c'est la présentation
+     de ce que les autres parties de ce fichier chargent déjà. */
+
+  // Les préférences d'affichage, gardées sur cet appareil seulement
+  var CLE_REGLAGES = 'gse-tableau-reglages';
+  var REGLAGES_DEFAUT = { periode: '30j', parPage: 25, jours: 7, menuReduit: false, secondes: false };
+  var PERIODES_REGLAGES = ['aujourdhui', '7j', '30j', 'mois', 'mois_precedent', 'annee'];
+  function lireReglages() {
+    var r = Object.assign({}, REGLAGES_DEFAUT), lu = {};
+    try { lu = JSON.parse(localStorage.getItem(CLE_REGLAGES) || '{}') || {}; } catch (e) { lu = {}; }
+    if (PERIODES_REGLAGES.indexOf(lu.periode) >= 0) r.periode = lu.periode;
+    if (TAILLES_PAGE.indexOf(Number(lu.parPage)) >= 0) r.parPage = Number(lu.parPage);
+    if ([3, 7, 14, 30].indexOf(Number(lu.jours)) >= 0) r.jours = Number(lu.jours);
+    r.menuReduit = lu.menuReduit === true;
+    r.secondes = lu.secondes === true;
+    return r;
+  }
+  function ecrireReglages() {
+    try { localStorage.setItem(CLE_REGLAGES, JSON.stringify(reglages)); } catch (e) { /* navigation privée : tant pis */ }
+  }
+  var reglages = lireReglages();
+
+  // La date et l'heure de cet appareil, toujours visibles en haut de l'écran
+  var horloge = { date: $('[data-horloge-date]'), court: $('[data-horloge-date-courte]'), heure: $('[data-horloge-heure]'), jour: '' };
+  function deux(n) { return (n < 10 ? '0' : '') + n; }
+  function majHorloge() {
+    var t = new Date();
+    var jour = t.getFullYear() + '-' + deux(t.getMonth() + 1) + '-' + deux(t.getDate());
+    if (jour !== horloge.jour) {
+      horloge.jour = jour;
+      try {
+        var long = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(t);
+        horloge.date.textContent = long.charAt(0).toUpperCase() + long.slice(1);
+        horloge.court.textContent = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).format(t);
+      } catch (e) {
+        horloge.date.textContent = horloge.court.textContent = deux(t.getDate()) + '/' + deux(t.getMonth() + 1) + '/' + t.getFullYear();
+      }
+    }
+    var texte = deux(t.getHours()) + ':' + deux(t.getMinutes()) + (reglages.secondes ? ':' + deux(t.getSeconds()) : '');
+    if (horloge.heure.textContent !== texte) {
+      horloge.heure.textContent = texte;
+      horloge.heure.setAttribute('datetime', jour + 'T' + deux(t.getHours()) + ':' + deux(t.getMinutes()));
+    }
+  }
+  majHorloge();
+  setInterval(majHorloge, 1000);
+
+  // Le menu : un tiroir sur téléphone et tablette, réductible sur ordinateur
+  var burger = $('[data-action="ouvrir-menu"]');
+  var voile = $('.gs-td__voile');
+  function ouvrirMenu() {
+    document.body.classList.add('is-menu-ouvert');
+    voile.hidden = false;
+    burger.setAttribute('aria-expanded', 'true');
+    var actif = $('[data-onglet-vue][aria-selected="true"]');
+    if (actif) actif.focus();
+  }
+  function fermerMenu() {
+    if (!document.body.classList.contains('is-menu-ouvert')) return;
+    document.body.classList.remove('is-menu-ouvert');
+    voile.hidden = true;
+    burger.setAttribute('aria-expanded', 'false');
+  }
+  burger.addEventListener('click', function () {
+    if (document.body.classList.contains('is-menu-ouvert')) fermerMenu(); else ouvrirMenu();
+  });
+  voile.addEventListener('click', fermerMenu);
+  $('[data-action="replier-menu"]').addEventListener('click', function () {
+    majReglage('menuReduit', !reglages.menuReduit);
+  });
+
+  // Les deux panneaux de la barre : les alertes (cloche) et le compte
+  var deroulants = [
+    { bouton: $('[data-action="alertes"]'), panneau: $('[data-panneau-alertes]') },
+    { bouton: $('[data-action="menu-compte"]'), panneau: $('[data-menu-compte]') }
+  ];
+  function fermerPanneaux(sauf) {
+    deroulants.forEach(function (d) {
+      if (d === sauf) return;
+      d.panneau.hidden = true;
+      d.bouton.setAttribute('aria-expanded', 'false');
+    });
+  }
+  deroulants.forEach(function (d) {
+    d.bouton.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var ouvrir = d.panneau.hidden;
+      fermerPanneaux(d);
+      d.panneau.hidden = !ouvrir;
+      d.bouton.setAttribute('aria-expanded', String(ouvrir));
+      // La cloche lit les alertes de la vue générale : chargées si elles ne le sont pas encore
+      if (ouvrir && d.panneau.hasAttribute('data-panneau-alertes') && !etatApercu.donnees) chargerApercu();
+    });
+    d.panneau.addEventListener('click', function (e) { e.stopPropagation(); });
+  });
+  document.addEventListener('click', function () { fermerPanneaux(null); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    fermerPanneaux(null);
+    fermerMenu();
+  });
+  $$('[data-menu-compte] .gs-td__lien').forEach(function (b) { b.addEventListener('click', function () { fermerPanneaux(null); }); });
+
+  // Ce que fait « Voir » sur une alerte, dans la vue générale comme sous la cloche
+  function actionAlerte(code) {
+    return {
+      action_requise: function () { choisirListe('action_requise'); },
+      sans_mouvement: function () { choisirListe('sans_mouvement'); },
+      factures_en_retard: function () { choisirFactures('en_retard'); },
+      colis_sans_facture: peut('reports.view')
+        ? function () { choisirVue('factures'); $('[data-action="controler-factures"]').click(); } : null
+    }[code] || null;
+  }
+
+  function majCloche(alertes) {
+    var compteur = $('[data-alertes-nombre]');
+    compteur.textContent = String(alertes.length);
+    compteur.hidden = !alertes.length;
+    compteur.classList.toggle('is-critique', alertes.some(function (a) { return a.gravite === 'critique'; }));
+    var liste = $('[data-alertes-cloche]');
+    liste.textContent = '';
+    alertes.forEach(function (a) {
+      var li = el('li', 'gs-alerte-ligne gs-alerte-ligne--' + a.gravite);
+      li.appendChild(el('span', 'gs-alerte-ligne__texte', a.message));
+      var aller = actionAlerte(a.code);
+      if (aller) {
+        var b = el('button', 'gs-lien-bouton', 'Voir');
+        b.type = 'button';
+        b.addEventListener('click', function () { fermerPanneaux(null); aller(); });
+        li.appendChild(b);
+      }
+      liste.appendChild(li);
+    });
+    if (!alertes.length) liste.appendChild(el('li', 'gs-alerte-ligne gs-alerte-ligne--ok', 'Aucune alerte critique.'));
+  }
+  $('[data-alertes-cloche]').appendChild(el('li', 'gs-alerte-ligne', 'Chargement des alertes…'));
+
+  /* ---- Les réglages --------------------------------------------------------------- */
+  var dlgReglages = $('[data-dialogue="reglages"]');
+  var rubriques = $$('[data-reglages-rubrique]', dlgReglages);
+
+  // Les préférences s'appliquent au tableau de bord : période, listes, menu, horloge
+  function appliquerReglages() {
+    etatApercu.periode = reglages.periode;
+    etatApercu.debut = etatApercu.fin = '';
+    choixPeriode.value = reglages.periode;
+    $('[data-apercu-dates]').hidden = true;
+    etat.colis.parPage = etat.clients.parPage = traiter.parPage = reglages.parPage;
+    etat.colis.page = etat.clients.page = traiter.page = 0;
+    traiter.jours = reglages.jours;
+    $('[data-traiter-jours]').value = String(reglages.jours);
+    appliquerMenu();
+  }
+  function appliquerMenu() {
+    document.body.classList.toggle('is-menu-reduit', reglages.menuReduit);
+    var b = $('[data-action="replier-menu"]');
+    b.setAttribute('aria-pressed', String(reglages.menuReduit));
+    b.setAttribute('aria-label', reglages.menuReduit ? 'Déplier le menu' : 'Réduire le menu');
+    b.title = b.getAttribute('aria-label');
+  }
+
+  function majReglage(cle, valeur) {
+    reglages[cle] = valeur;
+    ecrireReglages();
+    if (cle === 'periode') {
+      etatApercu.periode = valeur;
+      etatApercu.debut = etatApercu.fin = '';
+      choixPeriode.value = valeur;
+      $('[data-apercu-dates]').hidden = true;
+      chargerApercu();
+    } else if (cle === 'parPage') {
+      etat.colis.parPage = etat.clients.parPage = traiter.parPage = valeur;
+      etat.colis.page = etat.clients.page = traiter.page = 0;
+      chargerColis();
+      if (peut('clients.view')) chargerClients();
+      chargerTraiter();
+    } else if (cle === 'jours') {
+      traiter.jours = valeur;
+      traiter.page = 0;
+      $('[data-traiter-jours]').value = String(valeur);
+      chargerApercu();
+    } else if (cle === 'menuReduit') {
+      appliquerMenu();
+      var controle = $('[data-reglage="menuReduit"]', dlgReglages);
+      if (controle) controle.checked = valeur;
+    } else if (cle === 'secondes') {
+      majHorloge();
+    }
+  }
+
+  function choisirRubrique(nom) {
+    rubriques.forEach(function (b) {
+      var actif = b.getAttribute('data-reglages-rubrique') === nom;
+      b.setAttribute('aria-selected', String(actif));
+      b.tabIndex = actif ? 0 : -1;
+    });
+    $$('[data-reglages-section]', dlgReglages).forEach(function (s) {
+      s.hidden = s.getAttribute('data-reglages-section') !== nom;
+    });
+  }
+  rubriques.forEach(function (b) {
+    b.addEventListener('click', function () { choisirRubrique(b.getAttribute('data-reglages-rubrique')); });
+    b.addEventListener('keydown', function (e) {
+      var sens = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!sens) return;
+      e.preventDefault();
+      var visibles = rubriques.filter(function (o) { return !o.hasAttribute('data-interdit'); });
+      var autre = visibles[(visibles.indexOf(b) + sens + visibles.length) % visibles.length];
+      autre.focus();
+      choisirRubrique(autre.getAttribute('data-reglages-rubrique'));
+    });
+  });
+
+  function reglageScanner(cle, defaut) {
+    try { var v = localStorage.getItem('gse-scan-' + cle); return v === null ? defaut : v; } catch (e) { return defaut; }
+  }
+
+  function ouvrirReglages() {
+    fermerPanneaux(null);
+    fermerMenu();
+    $$('[data-reglage]', dlgReglages).forEach(function (c) {
+      var cle = c.getAttribute('data-reglage');
+      if (c.type === 'checkbox') c.checked = !!reglages[cle]; else c.value = String(reglages[cle]);
+    });
+    $('[data-reglages-role]', dlgReglages).textContent = ROLES[droits.role] || '—';
+    $('[data-reglages-permissions]', dlgReglages).textContent = pluriel(droits.permissions.length, 'permission', 'permissions');
+    $('[data-reglages-mode]', dlgReglages).textContent = API.mode === 'demo'
+      ? 'Démonstration : données enregistrées dans ce navigateur seulement' : 'Base de données en ligne (Supabase)';
+    $('[data-reglages-direct]', dlgReglages).textContent = $('[data-direct]').hidden
+      ? 'Inactives : les listes se mettent à jour à chaque action et avec « Actualiser »' : 'Actives';
+    var mode = reglageScanner('mode', '');
+    var type = mode && API.regles.typesEvenement[mode];
+    $('[data-reglages-scan-mode]', dlgReglages).textContent = type ? 'Rapide : « ' + type.libelle + ' » à chaque scan'
+      : 'Consulter, puis choisir l’opération';
+    $('[data-reglages-scan-lieu]', dlgReglages).textContent = reglageScanner('lieu', '') || 'Non renseigné';
+    $('[data-reglages-scan-son]', dlgReglages).textContent = reglageScanner('son', 'oui') === 'oui' ? 'Activé' : 'Coupé';
+    choisirRubrique('affichage');
+    dlgReglages.showModal();
+  }
+  $$('[data-action="ouvrir-reglages"]').forEach(function (b) { b.addEventListener('click', ouvrirReglages); });
+
+  $$('[data-reglage]', dlgReglages).forEach(function (c) {
+    c.addEventListener('change', function () {
+      var cle = c.getAttribute('data-reglage');
+      majReglage(cle, c.type === 'checkbox' ? c.checked : (cle === 'periode' ? c.value : Number(c.value)));
+    });
+  });
+  $('[data-action="reglages-defaut"]', dlgReglages).addEventListener('click', function () {
+    reglages = Object.assign({}, REGLAGES_DEFAUT);
+    ecrireReglages();
+    appliquerReglages();
+    majHorloge();
+    $$('[data-reglage]', dlgReglages).forEach(function (c) {
+      var cle = c.getAttribute('data-reglage');
+      if (c.type === 'checkbox') c.checked = !!reglages[cle]; else c.value = String(reglages[cle]);
+    });
+    chargerApercu();
+    chargerColis();
+    if (peut('clients.view')) chargerClients();
+    toast('Affichage par défaut rétabli.');
+  });
+  $('[data-action="reglages-equipe"]', dlgReglages).addEventListener('click', function () {
+    dlgReglages.close();
+    choisirVue('equipe');
+    var roles = $('details.gs-roles');
+    if (roles) roles.open = true;
+  });
+  $('[data-action="reglages-scanner"]', dlgReglages).addEventListener('click', function () {
+    dlgReglages.close();
+    $('[data-onglet-vue="scanner"]').click();
   });
 
   /* ---- Démonstration --------------------------------------------------------- */

@@ -586,15 +586,6 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 
 /* 8. Tableau de bord ---------------------------------------------------------------- */
 .gs-admin-body{background:#f3f6fb}
-.gs-admin-barre{position:sticky;top:0;z-index:40;background:var(--ink);color:#fff;box-shadow:0 10px 30px -20px rgba(0,0,0,.6)}
-.gs-admin-barre__wrap{max-width:1400px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 22px}
-.gs-admin-barre__logo span{display:flex;align-items:center;padding:6px 11px;border-radius:11px;background:#fff}
-.gs-admin-barre__logo img{display:block;width:auto;height:30px}
-.gs-admin-barre__titre{display:flex;align-items:center;gap:10px;font-family:'Archivo','Manrope',sans-serif;font-size:17px;font-weight:800}
-.gs-admin-barre__demo{padding:3px 9px;border-radius:999px;background:var(--accent);font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
-.gs-admin-barre__actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-left:auto}
-.gs-admin-barre__email{font-size:14px;color:#c4d0ec}
-.gs-admin-barre__role{padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap}
 /* Un menu ou un bouton que le rôle ne permet pas : masqué. Confort seulement,
    la base refuse l'action de toute façon. */
 [data-interdit]{display:none!important}
@@ -611,9 +602,6 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-tableau--roles th,.gs-tableau--roles td{font-size:14px}
 .gs-tableau--roles th .gs-cellule-sous{display:block;font-family:'IBM Plex Mono',monospace;font-weight:500}
 .gs-centre{text-align:center}
-.gs-admin-barre__bouton{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid rgba(255,255,255,.22);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background-color .2s ease,border-color .2s ease}
-.gs-admin-barre__bouton:hover{border-color:var(--accent);background:var(--accent)}
-.gs-admin-barre__bouton .gs-ico{width:17px;height:17px}
 .gs-admin{max-width:1400px;margin:0 auto;padding:26px 24px 90px}
 .gs-admin h1,.gs-admin h2,.gs-admin h3{letter-spacing:-.015em}
 .gs-admin-attente{justify-content:center;padding:60px 0}
@@ -628,10 +616,6 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-admin-carte .gs-form{margin-top:22px;text-align:left}
 .gs-admin-carte .gs-bouton{margin-top:18px}
 .gs-admin-carte code{padding:2px 6px;border-radius:6px;background:#f1f4fa;font-size:14px}
-.gs-admin-entete{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px}
-.gs-admin-entete h1{font-size:clamp(26px,3vw,34px);line-height:1.1}
-.gs-admin-entete__date{margin-top:4px;font-size:14.5px;color:#6b7690}
-.gs-admin-entete .gs-ico,.gs-admin-outils .gs-ico{width:18px;height:18px}
 .gs-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:26px}
 .gs-stat{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:16px 18px;border:1px solid #e3e8f2;border-radius:16px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .25s ease,border-color .25s ease}
 .gs-stat:hover{transform:translateY(-3px);border-color:#cfd8e8;box-shadow:0 22px 40px -30px rgba(6,26,63,.55)}
@@ -647,12 +631,10 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-pastille--disponible{background:#0f766e}
 .gs-pastille--livre{background:#16a34a}
 .gs-pastille--incident{background:#dc2626}
-.gs-admin-onglets{display:flex;gap:4px;margin-bottom:18px;border-bottom:1px solid #dfe5f0}
-.gs-admin-onglets button{display:inline-flex;align-items:center;gap:8px;margin-bottom:-1px;padding:12px 16px;border:0;border-bottom:2px solid transparent;background:none;font:inherit;font-size:16px;font-weight:700;color:#6b7690;cursor:pointer}
-.gs-admin-onglets button[aria-selected="true"]{border-bottom-color:var(--accent);color:var(--ink)}
 .gs-admin-onglets__total{padding:1px 8px;border-radius:999px;background:#e7edf9;font-size:12.5px;color:#0d2b6b}
 .gs-admin-onglets__total:empty{display:none}
 .gs-admin-outils{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.gs-admin-outils .gs-ico{width:18px;height:18px}
 .gs-recherche{display:flex;flex:1 1 320px;align-items:center;gap:10px;height:48px;padding:0 14px;border:1px solid #d6ddec;border-radius:12px;background:#fff;color:#8a93ac;transition:border-color .2s ease,box-shadow .2s ease}
 .gs-recherche:focus-within{border-color:#10308f;box-shadow:0 0 0 4px rgba(16,48,143,.1)}
 .gs-recherche input{flex:1;min-width:0;height:100%;border:0;outline:0;background:none;color:var(--ink);font-size:15.5px}
@@ -998,10 +980,6 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
   .gs-pagination{justify-content:flex-start}
   .gs-admin-periode{flex:1 1 45%}
   .gs-admin-periode .gs-admin-date{flex:1;min-width:0}
-  /* Six onglets : ils défilent dans leur rangée plutôt que d'élargir la page */
-  .gs-admin-onglets{overflow-x:auto;scrollbar-width:none}
-  .gs-admin-onglets::-webkit-scrollbar{display:none}
-  .gs-admin-onglets button{flex:none;padding:12px 12px;white-space:nowrap}
 }
 
 @media (max-width:859px){
@@ -1019,9 +997,6 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
 }
 @media (max-width:640px){
   .gs-admin{padding:18px 14px 80px}
-  .gs-admin-barre__wrap{padding:10px 14px}
-  .gs-admin-barre__email{display:none}
-  .gs-admin-entete .gs-bouton{width:100%}
   .gs-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .gs-stat{padding:14px}
   .gs-stat__nombre{font-size:26px}
