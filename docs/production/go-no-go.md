@@ -28,7 +28,7 @@ l'ordre.
 |---|---|---|---|
 | C1 | Aucun secret dans les dépôts, l'historique, le site publié, les paquets | **vérifié** | audit des deux dépôts, tout l'historique (secrets.md) ; garde-fou de `deploy.yml` ; `controle-paquet.mjs` (mobile) |
 | C2 | Tous les essais verts | **vérifié** | 1 035 vérifications sur base réelle (dix bancs), 332 en démonstration, 43 SQL (e-mails, factures) ; mobile 51 + 84, CI Android et iOS (Maestro) verte, installateurs du bureau essayés |
-| C3 | La base de production a toute la chaîne de migrations | **non vérifié** | l'état de la base n'est pas visible depuis le dépôt. Le site en ligne (`main`, Phase 10) appelle déjà des fonctions des Phases 2 à 10 → **B1** |
+| C3 | La base de production a toute la chaîne de migrations | **non rempli** | `sante()` absente en production (contrôle du 26/09/2026) : au moins `supabase-production.sql` manque ; le reste n'est pas visible depuis le dépôt. Le site en ligne (`main`, Phase 10) appelle déjà des fonctions des Phases 2 à 10 → **B1** |
 | C4 | Sécurité de la base de production (RLS, droits des visiteurs, verrous, comptes de démonstration) | **non vérifié** | `controle-securite.sql` jamais lancé en production → **B1** |
 | C5 | Intégrité des données de production | **non vérifié** | `controle-integrite.sql` jamais lancé en production → **B1** |
 | C6 | Sauvegarde existante **et** restauration réussie | **non rempli** | offre et sauvegardes Supabase inconnues ; `sauvegarde.yml` pas en service ; aucune restauration réelle → **B3** |
@@ -36,7 +36,7 @@ l'ordre.
 | C8 | Auth : *Site URL*, *Redirect URLs*, confirmation d'e-mail, mot de passe | **non vérifié** | le README notait le *Site URL* encore sur `localhost:3000` → **B4** |
 | C9 | Surveillance et alertes actives | **partiel** | `surveillance.yml` sur `main` depuis le 26/09/2026 ; `sante()` absente de la production tant que A5 n'est pas fait → **B5** |
 | C10 | Retour arrière possible | **vérifié (site)** / documenté (base, mobile) | site : `git revert` + republication ; base : migrations rejouables, restauration éprouvée sur base d'essai |
-| C11 | HTTPS | **non vérifié** | `github.io` impose HTTPS par défaut ; le réseau de l'environnement de travail bloque `github.io` → vérifié automatiquement par le premier contrôle après publication |
+| C11 | HTTPS | **vérifié** | contrôle après publication du 26/09/2026 (`deploy.yml`, commit `645e08a`) : HTTP redirige vers HTTPS ; fichiers de travail non servis ; aucune clé secrète publiée |
 | C12 | Mobile signé, publié en test interne | **non rempli** | aucune soumission EAS, pas de fiche de boutique → **B6** |
 | C13 | Bureau signé (Windows) et notarisé (macOS) | **non rempli** | → **B7** |
 
