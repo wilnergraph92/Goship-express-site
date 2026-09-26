@@ -1,0 +1,44 @@
+# ==========================================================================
+#  Audit anonyme de la base de production
+# ==========================================================================
+#  outils/production/sonder.sh : quelles migrations de la chaîne officielle sont
+#  passées en production, quelles fonctions répondent aux visiteurs, quels réglages
+#  publics a l'authentification. Clé publique seulement, appels GET exécutés en
+#  lecture seule par PostgREST, aucune réponse affichée (seulement des codes) :
+#  aucun secret, aucune donnée, rien d'écrit.
+#
+#  Le journal dit exactement ce qui manque ; le contrôle complet (tables, RLS,
+#  verrous, comptes, Vault, pg_cron) demande l'accès à la base :
+#  controles-production.yml.
+# ==========================================================================
+
+name: Audit de la base de production
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 6 * * *'
+  pull_request:
+    paths:
+      - '.github/workflows/audit-production.yml'
+      - 'outils/production/sonder.sh'
+      - 'outils/migrations.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  sonder:
+    name: Migrations présentes, exposition, Auth
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            assets/js/config.js
+            outils/production
+            outils/migrations.txt
+          sparse-checkout-cone-mode: false
+      - name: Sonder la production
+        run: bash outils/production/sonder.sh
