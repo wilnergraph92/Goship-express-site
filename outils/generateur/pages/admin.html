@@ -48,6 +48,7 @@
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics">[[ico:chart]]<span class="gs-td__libelle">Analytics</span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan">[[ico:barcode]]<span class="gs-td__libelle">Scanner</span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe">[[ico:shield]]<span class="gs-td__libelle">Équipe</span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="notifications" data-permission="reports.view" tabindex="-1" title="Notifications">[[ico:bell]]<span class="gs-td__libelle">Notifications</span></button>
     </div>
     <div class="gs-td__pied">
       <button type="button" class="gs-td__lien" data-action="ouvrir-reglages" title="Réglages">[[ico:settings]]<span class="gs-td__libelle">Réglages</span></button>
@@ -592,6 +593,77 @@
         <div class="gs-tableau-cadre"><table class="gs-tableau gs-tableau--roles" data-matrice-roles></table></div>
       </details>
     </div>
+
+    <!-- Notifications (outils/supabase-notifications.sql) : ce que la base a envoyé,
+         ce qui a échoué et pourquoi, les règles. Lecture : reports.view ; règles et
+         essai : settings.manage. Aucune clé de fournisseur n'arrive jusqu'ici. -->
+    <div class="gs-admin-vue" data-vue="notifications" data-permission="reports.view" role="tabpanel" hidden>
+      <p class="gs-equipe__intro">Chaque étape publique d'un colis, chaque facture et chaque paiement passent par une règle : la notification apparaît dans l'espace du client (site et application), puis part sur les canaux configurés. « Envoyé » veut dire accepté par le fournisseur, pas forcément lu.</p>
+      <div class="gs-notifs-centre__filtres">
+        <select class="gs-admin-filtre" data-notifs-filtre="periode" aria-label="Période">
+          <option value="1">24 dernières heures</option>
+          <option value="7" selected>7 derniers jours</option>
+          <option value="30">30 derniers jours</option>
+          <option value="90">90 derniers jours</option>
+        </select>
+        <select class="gs-admin-filtre" data-notifs-filtre="type" aria-label="Type de notification"><option value="">Toutes les notifications</option></select>
+        <select class="gs-admin-filtre" data-notifs-filtre="canal" aria-label="Canal">
+          <option value="">Tous les canaux</option>
+          <option value="push">Téléphone</option>
+          <option value="email">E-mail</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="sms">SMS</option>
+        </select>
+        <select class="gs-admin-filtre" data-notifs-filtre="statut" aria-label="Statut de l'envoi">
+          <option value="">Tous les statuts</option>
+          <option value="attente">En file</option>
+          <option value="envoi">Chez le fournisseur</option>
+          <option value="envoye">Envoyé</option>
+          <option value="livre">Livré</option>
+          <option value="echec">Échec</option>
+          <option value="annule">Non envoyé</option>
+        </select>
+      </div>
+      <p class="gs-form__erreur" data-notifs-erreur role="alert" hidden></p>
+      <div class="gs-kpis" data-kpis="notifications"></div>
+      <ul class="gs-notifs-centre__alertes" data-notifs-alertes hidden></ul>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--envois">
+          <thead>
+            <tr>
+              <th scope="col">Date</th>
+              <th scope="col">Notification</th>
+              <th scope="col">Client</th>
+              <th scope="col">Référence</th>
+              <th scope="col">Canal</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Essais</th>
+              <th scope="col"><span class="gs-invisible">Suivi</span></th>
+            </tr>
+          </thead>
+          <tbody data-lignes="envois"></tbody>
+        </table>
+      </div>
+      <div class="gs-pagination" data-pagination="envois" hidden></div>
+      <h2 class="gs-apercu__titre">Canaux</h2>
+      <ul class="gs-notifs-canaux" data-notifs-canaux></ul>
+      <h2 class="gs-apercu__titre">Règles</h2>
+      <p class="gs-apercu__note" data-notifs-regles-aide>Une règle coupée ne crée plus de notification pour cet événement. La notification dans l'espace du client part toujours avec sa règle ; les canaux cochés s'y ajoutent quand ils sont configurés. Les modifications sont notées au journal.</p>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--regles">
+          <thead>
+            <tr>
+              <th scope="col">Notification</th>
+              <th scope="col">Événement</th>
+              <th scope="col">Canaux extérieurs</th>
+              <th scope="col">Active</th>
+              <th scope="col"><span class="gs-invisible">Enregistrer</span></th>
+            </tr>
+          </thead>
+          <tbody data-lignes="regles"></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 </main>
   </div>
@@ -679,7 +751,7 @@
         </div>
         <label class="gs-case gs-champ--large">
           <input type="checkbox" name="prevenir" checked>
-          <span><strong>Prévenir le client</strong> par e-mail et WhatsApp que son colis est reçu</span>
+          <span><strong>Voir les messages au client</strong> : la base le prévient elle-même (espace client, téléphone, e-mail, WhatsApp selon les règles)</span>
         </label>
       </div>
       <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
@@ -930,18 +1002,18 @@
       </div>
       <label class="gs-case" data-bloc-prevenir hidden>
         <input type="checkbox" name="prevenir" checked>
-        <span><strong>Prévenir le client</strong> par e-mail et WhatsApp que son colis est disponible</span>
+        <span><strong>Voir les messages au client</strong> : la base le prévient elle-même que son colis est disponible</span>
       </label>
       <div class="gs-dialogue__historique" data-bloc-historique>
         <h3>Historique</h3>
         <ol class="gs-chrono" data-historique></ol>
       </div>
       <div class="gs-dialogue__historique" data-bloc-notifications hidden>
-        <h3>Messages envoyés au client</h3>
+        <h3>Messages au client</h3>
         <ul class="gs-notifs" data-notifications></ul>
       </div>
       <div class="gs-dialogue__actions-colis" data-bloc-actions>
-        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" data-permission="shipments.change_status" hidden>[[ico:message]]Prévenir le client</button>
+        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" data-permission="shipments.change_status" hidden>[[ico:message]]Messages au client</button>
         <button type="button" class="gs-lien-bouton" data-action="etiquette-colis">[[ico:tag]]Imprimer l'étiquette d'expédition</button>
         <button type="button" class="gs-lien-bouton" data-action="modifier-colis" data-permission="shipments.edit">[[ico:pencil]]Modifier les informations du colis</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis" data-permission="shipments.delete">[[ico:trash]]Supprimer ce colis</button>
@@ -953,6 +1025,24 @@
       <button type="submit" class="gs-bouton gs-bouton--plein" data-envoyer>Mettre à jour</button>
     </div>
   </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="suivi-notification" aria-labelledby="dlg-suivi-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-suivi-titre" data-suivi-titre>Suivi de la notification</h2>
+        <p class="gs-dialogue__sous-titre" data-suivi-sous-titre></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer">[[ico:x]]</button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <ol class="gs-suivi-notif" data-suivi-etapes></ol>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Fermer</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="gs-dialogue" data-dialogue="notification" aria-labelledby="dlg-notif-titre">
@@ -971,21 +1061,6 @@
     <div class="gs-dialogue__pied">
       <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Fermer</button>
       <button type="button" class="gs-bouton gs-bouton--plein" data-action="autre-colis" hidden>[[ico:plus]]Enregistrer un autre colis</button>
-    </div>
-  </div>
-</dialog>
-
-<dialog class="gs-dialogue gs-dialogue--large" data-dialogue="apercu" aria-labelledby="dlg-apercu-titre">
-  <div class="gs-form">
-    <div class="gs-dialogue__tete">
-      <div>
-        <h2 id="dlg-apercu-titre">Aperçu de l'e-mail</h2>
-        <p class="gs-dialogue__sous-titre" data-apercu-sujet></p>
-      </div>
-      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer">[[ico:x]]</button>
-    </div>
-    <div class="gs-dialogue__corps gs-dialogue__corps--apercu">
-      <iframe class="gs-apercu" title="Aperçu de l'e-mail envoyé au client" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" data-apercu></iframe>
     </div>
   </div>
 </dialog>

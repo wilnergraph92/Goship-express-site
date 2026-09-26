@@ -25,7 +25,7 @@ node outils/essais-services/essai-analytics.js       # les Analytics en démonst
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`
@@ -255,3 +255,19 @@ Il faut PostgREST 12 (`postgrest` dans le PATH, ou `POSTGREST=chemin`).
 `--serveur` garde la base allumée sur `http://localhost:54321` (PostgREST, doublure
 de l'authentification, commandes `/essai/panne`, `/essai/revoquer`, `/essai/sql`) :
 c'est la base des essais de l'application (`npm run essai:web`, parcours Maestro).
+
+## essai-notifications.py et essai-notifications.js (Phase 11)
+
+Les notifications : événement → règle → notification → envois → statut. Base
+jetable avec toutes les migrations ; les fournisseurs (Expo, Brevo, Meta) ne
+sont jamais appelés — la doublure de pg_net garde chaque requête et l'essai
+écrit lui-même la réponse du fournisseur (réussite, refus, panne, silence).
+Règles et étapes, idempotence (même clé, six traitements simultanés),
+factures et paiements, travailleur (nouveaux essais 30 s / 2 min, abandon au
+troisième, échecs définitifs), panne de pg_net et moteur cassé sans effet sur
+l'opération métier, préférences, sécurité compte par compte, rappels de
+retard, échappement et liens, forme des réponses démo = base, volume (10 000
+envois, quatre travailleurs en parallèle).
+
+    python3 outils/essais-services/essai-notifications.py
+    node outils/essais-services/essai-notifications.js

@@ -415,6 +415,24 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-messages__ligne{display:flex;flex-direction:column;gap:2px;padding:9px 0;border-bottom:1px solid #eef2f8;font-size:14.5px}
 .gs-messages__ligne:last-child{border-bottom:0}
 .gs-messages__ligne span{font-size:13px;color:#6b7690}
+.gs-notifs-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;margin-left:6px;padding:0 7px;border-radius:999px;background:#f4600d;color:#fff;font-size:12.5px;font-weight:800;vertical-align:middle}
+.gs-filtres-notifs{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.gs-filtres-notifs__choix{padding:6px 12px;border:1px solid #d8dfec;border-radius:999px;background:#fff;color:#33405c;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.gs-filtres-notifs__choix[aria-pressed="true"]{border-color:#0d2b6b;background:#0d2b6b;color:#fff}
+.gs-notif{padding:0}
+.gs-notif__bouton{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;padding:10px 8px;border:0;border-radius:10px;background:none;font:inherit;text-align:left;color:inherit;cursor:pointer}
+.gs-notif__bouton:hover,.gs-notif__bouton:focus-visible{background:#f5f7fb}
+.gs-notif.is-non-lue .gs-notif__bouton{background:#fff6f0}
+.gs-notif.is-prioritaire strong{color:#b45309}
+.gs-notif__nouvelle{display:inline-block;padding:1px 7px;border-radius:999px;background:#f4600d;color:#fff;font-size:11px;font-weight:800;vertical-align:1px}
+.gs-notif__message{font-size:14px;color:#33405c}
+.gs-notif__date{font-size:12.5px;color:#6b7690}
+.gs-notifs-reglages{margin-top:12px}
+.gs-notifs-reglages summary{cursor:pointer;font-weight:700;font-size:14px;color:#0d2b6b}
+.gs-notifs-reglages__grille{width:100%;margin-top:8px;border-collapse:collapse;font-size:13.5px}
+.gs-notifs-reglages__grille th,.gs-notifs-reglages__grille td{padding:6px 4px;border-bottom:1px solid #eef2f8;text-align:center}
+.gs-notifs-reglages__grille th[scope="row"]{text-align:left;font-weight:600}
+.is-signale{outline:3px solid #f4600d;outline-offset:3px;transition:outline-color .6s}
 @media (max-width:560px){.gs-solde{grid-template-columns:minmax(0,1fr)}}
 .gs-panneau--aide strong{display:block;font-family:'Archivo','Manrope',sans-serif;font-size:19px;font-weight:800}
 .gs-panneau--aide p{margin-top:6px;font-size:15px;color:#c4d0ec}

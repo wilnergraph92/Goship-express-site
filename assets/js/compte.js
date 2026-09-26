@@ -768,29 +768,147 @@
           note.textContent = phrases.join(' ');
           note.hidden = !phrases.length;
         }
-        var panneau = $('[data-panneau-messages]');
-        var messages = (r && r.notifications) || null;
-        panneau.hidden = !messages;
-        if (!messages) return;
-        var liste = $('[data-messages]');
-        liste.textContent = '';
-        messages.forEach(function (m) {
-          var li = document.createElement('li');
-          li.className = 'gs-messages__ligne';
-          var quoi = document.createElement('strong');
-          quoi.textContent = t('message-' + m.evenement) || t('statut-' + m.evenement) || t('message-autre');
-          li.appendChild(quoi);
-          var details = document.createElement('span');
-          details.textContent = [t('canal-' + m.canal) || m.canal, m.numero, O.date(m.envoye_le, true)].filter(Boolean).join(' · ');
-          li.appendChild(details);
-          liste.appendChild(li);
-        });
-        $('[data-messages-vide]').hidden = messages.length > 0;
       }).catch(function () {
         $('[data-solde]').hidden = true;
         $('[data-solde-note]').hidden = true;
-        $('[data-panneau-messages]').hidden = true;
       });
+    };
+
+    /* ---- Mes notifications (mes_notifications, outils/supabase-notifications.sql) ----
+       La base les écrit à chaque étape d'un colis, facture ou paiement, les traduit
+       dans la langue de la page et compte les non lues : le badge ne se calcule pas
+       ici. Ce sont les mêmes que dans l'application mobile. */
+    var panneauNotifs = $('[data-panneau-notifications]');
+    var listeNotifs = $('[data-notifications]');
+    var notifs = { filtre: 'toutes', parPage: 10 };
+
+    var ouvrirCible = function (n) {
+      // La carte du colis ou de la facture concernés, s'ils sont à l'écran
+      var carte = n.colis_id ? $('[data-liste-colis] [data-id="' + n.colis_id + '"]')
+        : n.facture_id ? $('[data-liste-factures] [data-id="' + n.facture_id + '"]') : null;
+      if (!carte) return;
+      carte.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      carte.classList.add('is-signale');
+      setTimeout(function () { carte.classList.remove('is-signale'); }, 1600);
+    };
+
+    var afficherNotifications = function (r) {
+      panneauNotifs.hidden = false;
+      var badge = $('[data-notifs-badge]');
+      badge.textContent = r.non_lues > 99 ? '99+' : String(r.non_lues);
+      badge.hidden = !r.non_lues;
+      badge.setAttribute('aria-label', t('notifs-non-lues', { n: r.non_lues }));
+      $('[data-action="notifs-tout-lu"]').hidden = !r.non_lues;
+      listeNotifs.textContent = '';
+      r.elements.forEach(function (n) {
+        var li = document.createElement('li');
+        li.className = 'gs-messages__ligne gs-notif' + (n.lu ? '' : ' is-non-lue') + (n.priorite === 'haute' ? ' is-prioritaire' : '');
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'gs-notif__bouton';
+        var titre = document.createElement('strong');
+        titre.textContent = n.titre;
+        if (!n.lu) {
+          var nouvelle = document.createElement('span');
+          nouvelle.className = 'gs-notif__nouvelle';
+          nouvelle.textContent = t('notifs-nouvelle');
+          titre.appendChild(document.createTextNode(' '));
+          titre.appendChild(nouvelle);
+        }
+        b.appendChild(titre);
+        var message = document.createElement('span');
+        message.className = 'gs-notif__message';
+        message.textContent = n.message;
+        b.appendChild(message);
+        var quand = document.createElement('span');
+        quand.className = 'gs-notif__date';
+        quand.textContent = [t('categorie-' + n.categorie), O.date(n.date, true)].filter(Boolean).join(' · ');
+        b.appendChild(quand);
+        b.addEventListener('click', function () {
+          ouvrirCible(n);
+          if (n.lu) return;
+          API.marquerNotificationsLues([n.id]).then(chargerNotifications, function () {});
+        });
+        li.appendChild(b);
+        listeNotifs.appendChild(li);
+      });
+      $('[data-notifications-vide]').hidden = r.elements.length > 0;
+      $('[data-action="notifs-plus"]').hidden = r.total <= r.elements.length;
+    };
+
+    var chargerNotifications = function () {
+      $('[data-notifications-erreur]').hidden = true;
+      return API.mesNotifications({ filtre: notifs.filtre, parPage: notifs.parPage }).then(afficherNotifications, function (err) {
+        // Base sans la Phase 11 : le cadre reste caché, rien d'inventé
+        if (err && err.code === 'non-autorise') return;
+        if (!panneauNotifs.hidden) {
+          var zone = $('[data-notifications-erreur]');
+          zone.textContent = t('notifs-erreur');
+          zone.hidden = false;
+        }
+      });
+    };
+
+    $$('[data-filtre-notifs]').forEach(function (bouton) {
+      bouton.addEventListener('click', function () {
+        notifs.filtre = bouton.getAttribute('data-filtre-notifs');
+        notifs.parPage = 10;
+        $$('[data-filtre-notifs]').forEach(function (b) { b.setAttribute('aria-pressed', String(b === bouton)); });
+        chargerNotifications();
+      });
+    });
+    $('[data-action="notifs-plus"]').addEventListener('click', function () {
+      notifs.parPage += 10;
+      chargerNotifications();
+    });
+    $('[data-action="notifs-tout-lu"]').addEventListener('click', function () {
+      API.marquerNotificationsLues().then(chargerNotifications, function () {});
+    });
+
+    // Les canaux en plus de l'espace client : seuls ceux que la base a configurés
+    // sont proposés — un canal sans fournisseur n'est jamais présenté comme actif.
+    var chargerPreferences = function () {
+      return API.mesPreferencesNotifications().then(function (p) {
+        var zone = $('[data-preferences]');
+        zone.textContent = '';
+        var canaux = ['push', 'email', 'whatsapp', 'sms'].filter(function (c) { return p.canaux[c] && p.canaux[c].configure; });
+        if (!canaux.length) { $('[data-notifs-reglages]').hidden = true; return; }
+        var table = document.createElement('table');
+        table.className = 'gs-notifs-reglages__grille';
+        var tete = table.insertRow();
+        tete.appendChild(document.createElement('th'));
+        canaux.forEach(function (c) {
+          var th = document.createElement('th');
+          th.scope = 'col';
+          th.textContent = t('canal-' + c) || c;
+          tete.appendChild(th);
+        });
+        p.preferences.forEach(function (ligne) {
+          var tr = table.insertRow();
+          var th = document.createElement('th');
+          th.scope = 'row';
+          th.textContent = t('categorie-' + ligne.categorie);
+          tr.appendChild(th);
+          canaux.forEach(function (c) {
+            var td = tr.insertCell();
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = ligne[c] !== false;
+            cb.setAttribute('aria-label', t('categorie-' + ligne.categorie) + ' — ' + (t('canal-' + c) || c));
+            cb.addEventListener('change', function () {
+              cb.disabled = true;
+              API.reglerPreferenceNotification(ligne.categorie, c, cb.checked).then(function () {
+                var ok = $('[data-preferences-ok]');
+                ok.textContent = t('notifs-reglage-ok');
+                ok.hidden = false;
+                setTimeout(function () { ok.hidden = true; }, 2500);
+              }, function () { cb.checked = !cb.checked; }).then(function () { cb.disabled = false; });
+            });
+            td.appendChild(cb);
+          });
+        });
+        zone.appendChild(table);
+      }, function () { $('[data-notifs-reglages]').hidden = true; });
     };
 
     // Onglets « En cours » / « Livrés » (flèches du clavier comprises)
@@ -901,13 +1019,16 @@
       chargerColis();
       chargerFactures();
       chargerResume();
+      chargerNotifications();
+      chargerPreferences();
       var direct = $('[data-direct]');
       var prevu = null;
       API.surveiller(function (quoi) {
         clearTimeout(prevu);
         prevu = setTimeout(function () {
-          if (quoi === 'factures') chargerFactures(); else chargerColis();
-          chargerResume();
+          if (quoi === 'factures') chargerFactures(); else if (quoi !== 'notifications') chargerColis();
+          if (quoi !== 'notifications') chargerResume();
+          chargerNotifications();
         }, 250);
       }, { etat: function (actif) { direct.hidden = !actif; } });
     }).catch(function (err) {

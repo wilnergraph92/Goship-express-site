@@ -42,6 +42,7 @@ jobs:
             --exclude 'outils' \
             --exclude 'application-mobile' \
             --exclude 'bureau' \
+            --exclude 'docs' \
             --exclude 'README.md' \
             --exclude '.DS_Store' \
             --exclude '*.command' \

@@ -198,13 +198,30 @@
           </div>
         </div>
 
-        <div class="gs-panneau" data-panneau-messages hidden>
+        <!-- Mes notifications : écrites, traduites et comptées par la base (mes_notifications,
+             outils/supabase-notifications.sql) — les mêmes que dans l'application -->
+        <div class="gs-panneau" data-panneau-notifications hidden>
           <div class="gs-panneau__tete">
-            <h2>Mesaj mwen yo</h2>
+            <h2>Notifikasyon mwen yo <span class="gs-notifs-badge" data-notifs-badge hidden></span></h2>
+            <button type="button" class="gs-lien-bouton" data-action="notifs-tout-lu" hidden>Make yo tout kòm li</button>
           </div>
-          <p class="gs-panneau__intro">Dènye imèl ak mesaj Goship Express voye ba ou.</p>
-          <ul class="gs-messages" data-messages></ul>
-          <p class="gs-panneau__intro" data-messages-vide hidden>Poko gen mesaj pou kounye a.</p>
+          <div class="gs-filtres-notifs" role="group" aria-label="Chwazi ki notifikasyon pou w wè">
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="toutes" aria-pressed="true">Tout</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="non_lues" aria-pressed="false">Poko li</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="colis" aria-pressed="false">Koli</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="factures" aria-pressed="false">Fakti</button>
+            <button type="button" class="gs-filtres-notifs__choix" data-filtre-notifs="paiements" aria-pressed="false">Peman</button>
+          </div>
+          <ul class="gs-messages gs-notifs" data-notifications aria-live="polite"></ul>
+          <p class="gs-panneau__intro" data-notifications-vide hidden>Poko gen notifikasyon pou kounye a.</p>
+          <p class="gs-form__erreur" data-notifications-erreur role="alert" hidden></p>
+          <button type="button" class="gs-lien-bouton" data-action="notifs-plus" hidden>Wè plis</button>
+          <details class="gs-notifs-reglages" data-notifs-reglages>
+            <summary>Chwazi kijan pou nou avèti w</summary>
+            <p class="gs-panneau__intro">Notifikasyon ou yo toujou rete la a, sou sit la ak nan aplikasyon an. Chwazi lòt kanal nou ka itilize pou avèti w.</p>
+            <div class="gs-notifs-reglages__table" data-preferences></div>
+            <p class="gs-copie-ok" data-preferences-ok role="status" hidden></p>
+          </details>
         </div>
 
         <div class="gs-panneau" data-profil>
@@ -441,6 +458,15 @@
   <p data-t="message-bienvenue">Byenveni lakay Goship Express</p>
   <p data-t="message-maj">Swivi koli a mete ajou</p>
   <p data-t="message-autre">Mesaj Goship Express</p>
+  <p data-t="canal-sms">SMS</p>
+  <p data-t="categorie-colis">Koli</p>
+  <p data-t="categorie-factures">Fakti</p>
+  <p data-t="categorie-paiements">Peman</p>
+  <p data-t="notifs-non-lues">{n} poko li</p>
+  <p data-t="notifs-reglage-ok">Nou anrejistre chwa ou.</p>
+  <p data-t="notifs-indisponible">poko disponib</p>
+  <p data-t="notifs-erreur">Nou pa ka chaje notifikasyon ou yo kounye a.</p>
+  <p data-t="notifs-nouvelle">Nouvo</p>
   <p data-t="admin-avis">Sa a se yon kont ekip Goship Express.</p>
   <p data-t="admin-lien">Louvri tablo bò a</p>
 </template>

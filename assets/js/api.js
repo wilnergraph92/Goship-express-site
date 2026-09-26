@@ -2968,7 +2968,9 @@
       if (['toutes', 'non_lues', 'colis', 'factures', 'paiements', 'compte'].indexOf(filtre) < 0) {
         return rejeter(Erreur('INVALID_FILTER', 'Filtre inconnu.'));
       }
-      var langue = ['fr', 'en', 'es', 'ht'].indexOf(o.langue) >= 0 ? o.langue : langueNotification(moi.langue);
+      // La langue de la page (comme en ligne), sinon celle du compte
+      var voulue = o.langue || LANGUE;
+      var langue = ['fr', 'en', 'es', 'ht'].indexOf(voulue) >= 0 ? voulue : langueNotification(moi.langue);
       var miennes = (d.notificationsApp || []).filter(function (n) { return n.client_id === moi.id; });
       var liste = miennes.filter(function (n) {
         return filtre === 'toutes' || (filtre === 'non_lues' ? !n.lu_le : n.categorie === filtre);
