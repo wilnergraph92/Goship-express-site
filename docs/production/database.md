@@ -27,6 +27,19 @@ Procédure de production : deployment.md § 1. Une migration n'a pas de « down 
 on revient en arrière par une nouvelle migration ou une restauration
 (rollback.md § Base).
 
+### État de la production (26/09/2026, `audit-production.yml`)
+
+| Migration | Production |
+|---|---|
+| `supabase.sql` à `supabase-mobile.sql` (1 à 9) | présentes (fonction témoin de chacune) |
+| `supabase-notifications.sql` (10) | **absente** |
+| `supabase-production.sql` (11) | **absente** |
+
+Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
+version : `controles-production.yml` (section « Migrations » de
+`controle-securite.sql`) le dit. Passer la chaîne : deployment.md § 1
+(`appliquer-chaine.sh`, préproduction d'abord).
+
 ## Tables (16)
 
 | Domaine | Tables |
@@ -64,6 +77,32 @@ trop-payé, montants négatifs, facture « payée » avec un solde, colis sur de
 factures actives), statuts, files bloquées. Les exemples ne montrent que des
 numéros, jamais un nom ou une adresse. À lancer avant et après chaque migration,
 et une fois par semaine (runbook.md).
+
+Une base avec des lignes orphelines **ne se restaure pas** : les clés
+étrangères sont recréées après les données et les refusent. Un contrôle
+d'intégrité vert est donc une condition des sauvegardes utilisables (backup.md).
+Toute correction de données se fait par les fonctions de service ou un
+événement `CORRECTION`, dans une migration relue, idempotente, passée en
+préproduction ; jamais par un `DELETE`.
+
+## Suivi public : limite de débit
+
+`suivre_colis` est ouverte aux visiteurs (c'est le suivi public) et ne rend ni nom
+ni adresse. Supabase ne limite pas le débit **par fonction** : ses limites
+portent sur l'Auth (connexions, e-mails) et le projet entier. Ce qu'on peut faire,
+par ordre de coût :
+
+1. **Numéros de colis tirés au hasard** (partie « Facultatif » de `supabase.sql`,
+   prête, désactivée) : essayer les numéros voisins ne donne plus rien. Les colis
+   déjà enregistrés gardent leur numéro. Décision du propriétaire (étiquettes,
+   habitudes de l'équipe) — non activée.
+2. Une limite dans la fonction elle-même (compteur par adresse IP, lue dans
+   `request.headers`) : possible, mais c'est une règle nouvelle sur une fonction
+   dont dépendent les applications installées — à ne faire qu'avec un essai
+   dédié et une période d'observation.
+3. Un pare-feu devant l'API (proxy) : hors de la pile actuelle.
+
+Aucune de ces mesures n'est appliquée au 26/09/2026 (go-no-go.md, M6).
 
 ## Index
 

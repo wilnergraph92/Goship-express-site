@@ -33,11 +33,20 @@ Outils (tous dans `outils/`, jamais publiés) :
 | `outils/production/controle-securite.sql` | RLS, fonctions, droits des visiteurs, comptes, verrous, migrations — **lecture seule** |
 | `outils/production/controle-integrite.sql` | rattachements, doublons, argent, statuts, files — **lecture seule** |
 | `outils/production/surveiller.sh` | le site et la base répondent-ils ? (surveillance et contrôle après publication) |
-| `outils/production/sauvegarder.sh` / `restaurer.sh` | sauvegarde chiffrée et sa restauration |
+| `outils/production/sauvegarder.sh` / `restaurer.sh` | sauvegarde chiffrée et sa restauration (`RESTAURATION_ESSAI=1` : épreuve sur PostgreSQL ordinaire) |
+| `outils/production/sonder.sh` | quelles migrations sont en production, vu de l'extérieur (clé publique, lecture seule) |
+| `outils/production/controler.sh` | les deux contrôles en lecture seule ; sortie publiable, détail chiffré |
+| `outils/production/appliquer-chaine.sh` | la chaîne des migrations, arrêt au premier échec, refus de la production sans confirmation |
+| `outils/production/essai-metier.sql` | le parcours métier complet sur la préproduction, dans une transaction annulée |
+| `outils/production/doublures-supabase.py` | un PostgreSQL ordinaire habillé en projet Supabase neuf (épreuve de restauration) |
 | `outils/essais-services/essai-production.py` | éprouve tout ce qui précède sur une base jetable |
 
 Workflows GitHub Actions : `deploy.yml` (publication + contrôle après
 publication), `essais.yml` (tous les bancs d'essai), `surveillance.yml`
-(toutes les 30 minutes), `sauvegarde.yml` (chaque jour, une fois configuré),
-`bureau.yml` (application de bureau). L'application mobile a les siens dans
+(toutes les 30 minutes, alerte à une seconde personne, battement externe),
+`audit-production.yml` (chaque jour), `controles-production.yml` (chaque lundi),
+`preproduction.yml` (à la demande et sur les PR qui touchent `outils/`),
+`sauvegarde.yml` (chaque nuit, sauvegarde + restauration d'épreuve, une fois
+configuré), `bureau.yml` (application de bureau, signée si les certificats sont
+posés). Toutes les actions sont épinglées par empreinte (`dependabot.yml`). L'application mobile a les siens dans
 son dépôt (`goship-express-app/.github/workflows/mobile.yml`).

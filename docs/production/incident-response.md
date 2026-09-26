@@ -8,6 +8,20 @@
 | **S2** — une fonction majeure est cassée | connexion impossible ; scan ou facturation en erreur ; notifications bloquées > 1 h | dans l'heure |
 | **S3** — gêne limitée | une page traduite cassée ; un e-mail mal mis en forme ; lenteur | jour ouvré suivant |
 
+## Escalade
+
+| Signal | Gravité de départ | Qui | Délai |
+|---|---|---|---|
+| `surveillance.yml` CRITIQUE (site, Auth, fonctions, exposition, file bloquée) | S1 ou S2 selon le point | 1. propriétaire (e-mail GitHub) ; 2. seconde personne (`ALERTE_WEBHOOK`) | accusé de réception en 15 min ; sinon la seconde personne prend l'incident |
+| Healthchecks sans nouvelles (GitHub Actions arrêté) | S2 | les deux personnes (Healthchecks) | 1 h : lancer la surveillance à la main, réactiver le workflow |
+| `controles-production.yml` ALERTE | S2 (S1 si RLS, exposition ou argent) | propriétaire | jour même |
+| `sauvegarde.yml` rouge (sauvegarde ou restauration d'épreuve) | S2 | propriétaire | avant la sauvegarde suivante — pas de migration tant que ce n'est pas vert |
+| ATTENTION dans la surveillance | S3 | propriétaire | jour ouvré suivant |
+| Un client ou l'équipe signale | selon les critères ci-dessus | la personne qui reçoit | le classer tout de suite |
+
+Si personne ne répond sous 30 min à un S1 : la seconde personne applique elle-même
+la contention (tableau ci-dessous) — elle doit donc avoir les accès (R6).
+
 ## Les cinq temps
 
 1. **Constater** — l'alerte (e-mail GitHub, Supabase, un client, l'équipe). Noter

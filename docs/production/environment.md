@@ -2,11 +2,11 @@
 
 | | Développement | Essai (automatique) | Préproduction (staging) | Production |
 |---|---|---|---|---|
-| **Existe ?** | oui | oui | **non — à créer** (go-no-go.md) | oui |
+| **Existe ?** | oui | oui | **outillée, projet à créer** (go-no-go.md, A2) | oui |
 | Base | `localStorage` (mode démo) | PostgreSQL jetable (pgserver), recréé à chaque essai | projet Supabase séparé, à créer | projet Supabase `gpfdyslysqjmojgzggib` |
 | Site | `python3 -m http.server 8765` ou « Voir le site en local.command » | idem, `config.js` remplacé par une configuration vide | site servi en local avec la configuration de préproduction (jamais commitée) | GitHub Pages : `https://wilnergraph92.github.io/Goship-express-site/` |
 | Bureau | `environnements.json` → `local` | `bureau/essais/serveur-essai.js` (`config.js` vide) | — | `environnements.json` → `production` (l'adresse ci-dessus) |
-| Mobile | `EXPO_PUBLIC_GOSHIP_ENV=essai` + base d'essai | `essai-mobile.py --serveur` (CI) | **à ajouter** : profil EAS `staging` | `EXPO_PUBLIC_GOSHIP_ENV=production` (tous les profils EAS aujourd'hui) |
+| Mobile | `EXPO_PUBLIC_GOSHIP_ENV=essai` + base d'essai | `essai-mobile.py --serveur` (CI) | profil EAS `staging` (dépôt mobile, PR #2) : adresse et clé publiable de goship-staging à écrire dans `eas.json` | profils `development`, `preview`, `production` |
 | Fournisseurs | aucun (envois « annulés — non configuré ») | aucun (pg_net remplacé par une doublure) | comptes de test des fournisseurs | Brevo/Resend, Meta, Expo — **configuration à vérifier** |
 
 ## Où est la configuration
@@ -53,5 +53,18 @@ une nouvelle version publiée (voir rollback.md).
    site en ligne parlerait à la préproduction).
 6. Fournisseurs : clés de test (Brevo en mode test, numéro de test WhatsApp),
    posées avec `definir_reglage` dans `goship-staging` seulement.
+
+7. GitHub > Settings > Environments > New environment **`staging`** :
+   - secret `STAGING_DB_URL` : chaîne de connexion de goship-staging (Connect >
+     *Session pooler*) ;
+   - variables `STAGING_SUPABASE_URL` (`https://<ref>.supabase.co`) et
+     `STAGING_SUPABASE_CLE` (clé *publishable*, publique par conception).
+8. Actions > **Préproduction** > Run workflow : chaîne des migrations
+   (`appliquer-chaine.sh`, qui refuse l'adresse de production), contrôles
+   (`controler.sh`), essai métier (`essai-metier.sql`, dans une transaction
+   annulée : rien ne reste) et sonde de l'API (`sonder.sh`). Le workflow repasse
+   sur chaque pull request qui touche `outils/*.sql` ou `outils/production/`.
+9. Mobile : dans `eas.json` du dépôt `goship-express-app`, profil `staging`,
+   remplacer les deux valeurs `REMPLACER…` ; `eas build --profile staging`.
 
 Toute migration passe par la préproduction avant la production (deployment.md).

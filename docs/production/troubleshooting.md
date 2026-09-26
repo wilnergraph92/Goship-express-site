@@ -17,6 +17,23 @@
 | `controle-securite.sql` : ALERTE « Extensions » | pg_cron / pg_net non activés | les activer |
 | `controle-securite.sql` : ALERTE « Comptes de démonstration » | un compte `@goship.demo`, `@goship.test`, `@exemple.com`… existe en production | le supprimer (Authentication > Users) après avoir vérifié qu'il n'a aucune donnée réelle |
 
+## Outils de production
+
+| Symptôme | Cause | Remède |
+|---|---|---|
+| `audit-production.yml` rouge : « ABSENTE supabase-… » | la migration n'est pas passée en production | deployment.md § 1 (préproduction, sauvegarde, puis `appliquer-chaine.sh`) |
+| `audit-production.yml` : « OUVERTE AUX VISITEURS » | une fonction a reçu `execute` pour `anon` | S1 : `revoke execute on function … from anon;` dans une migration, puis `controles-production.yml` |
+| `appliquer-chaine.sh` : « REFUS » (code 3) | l'adresse est celle de la production | voulu : ajouter `CONFIRMER_PRODUCTION=gpfdyslysqjmojgzggib` seulement après préproduction et sauvegarde restaurée |
+| `appliquer-chaine.sh` : « ÉCHEC <fichier> — arrêt » | ce fichier a échoué ; rien après lui n'a été lancé ; le fichier lui-même est annulé (transaction unique) | lire l'erreur, corriger, relancer **à partir de ce fichier** |
+| Restauration d'épreuve rouge : `violates foreign key constraint` | des lignes orphelines dans la production (sauvegarde non restaurable telle quelle) | `controles-production.yml` (intégrité) ; corriger par une migration relue, en préproduction d'abord |
+| Restauration d'épreuve : `role "…" does not exist` | un droit cite un rôle Supabase que l'épreuve ne crée pas | ajouter ce rôle à l'étape « Une base comme un projet Supabase neuf » de `sauvegarde.yml` |
+| `preproduction.yml` : « Préproduction non configurée » | environnement `staging` incomplet | environment.md, « Créer la préproduction » |
+| `preproduction.yml` : « STAGING pointe vers la PRODUCTION » | `STAGING_DB_URL` ou `STAGING_SUPABASE_URL` contient la référence de production | corriger le secret / la variable |
+| `essai-metier.sql` : « ÉCHEC : … » | une règle métier ne tient pas dans la préproduction | ne pas migrer la production ; le message nomme la règle |
+| Bureau : `spctl` refuse ou `stapler validate` échoue | notarisation absente ou refusée par Apple | vérifier `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` et le certificat *Developer ID Application* |
+| Bureau : Authenticode ≠ `Valid` | certificat Windows expiré ou mot de passe faux | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` |
+| Mobile : « Préproduction mal configurée » au démarrage | `eas.json`, profil staging : valeurs `REMPLACER…` | les remplacer par l'adresse et la clé publiable de goship-staging |
+
 ## Site
 
 | Symptôme | Cause | Remède |

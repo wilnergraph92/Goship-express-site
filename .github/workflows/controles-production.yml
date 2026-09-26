@@ -43,17 +43,24 @@ jobs:
         id: pret
         run: |
           if [ -z "$CIBLE_DB_URL" ]; then
+            if [ "${{ github.event_name }}" = schedule ]; then
+              echo "::notice::Contrôle non configuré : SUPABASE_DB_URL absent (docs/production/backup.md, « Mettre en service »)."
+              echo "pret=non" >> "$GITHUB_OUTPUT"; exit 0
+            fi
             echo "::error::SUPABASE_DB_URL absent de l'environnement production : contrôle impossible (docs/production/backup.md, « Mettre en service »)."
             exit 1
           fi
+          echo "pret=oui" >> "$GITHUB_OUTPUT"
           [ -n "$SAUVEGARDE_DESTINATAIRE" ] || echo "::warning::SAUVEGARDE_DESTINATAIRE absent : le détail complet ne sera pas conservé."
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.pret.outputs.pret == 'oui'
         with:
           sparse-checkout: outils/production
           sparse-checkout-cone-mode: false
 
       - name: Outils (psql 17, age)
+        if: steps.pret.outputs.pret == 'oui'
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
@@ -64,10 +71,11 @@ jobs:
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       - name: Contrôler (lecture seule)
+        if: steps.pret.outputs.pret == 'oui'
         run: bash outils/production/controler.sh resultat
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: always() && steps.pret.outputs.pret == 'oui'
         with:
           name: controle-production-${{ github.run_number }}
           path: resultat/*.age

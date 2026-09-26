@@ -7,6 +7,30 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — finalisation de la mise en production (26/09/2026)
+
+Aucune page ne change, aucune donnée n'est modifiée. **Verdict : NO-GO**
+(docs/production/go-no-go.md) — preuves nouvelles : 9 migrations sur 11 en
+production ; confirmation des adresses e-mail désactivée.
+
+- Audit anonyme de la production (`sonder.sh`, `audit-production.yml`).
+- Contrôles de la production en lecture seule (`controler.sh`,
+  `controles-production.yml`) : journal publiable, détail chiffré.
+- Préproduction outillée (`preproduction.yml`, `appliquer-chaine.sh`,
+  `essai-metier.sql` dans une transaction annulée) ; profil EAS `staging`
+  (dépôt mobile).
+- Restauration d'épreuve après chaque sauvegarde, RPO et RTO mesurés ;
+  sauvegarde chiffrée pour deux destinataires ; définition des tables de comptes
+  sauvegardée.
+- Surveillance : CRITIQUE / ATTENTION, fonctions du site et de l'application,
+  réglage de confirmation d'e-mail, seconde personne (`ALERTE_WEBHOOK`),
+  battement externe (`HEARTBEAT_URL`).
+- Bureau : signature Developer ID + notarisation et Authenticode dès que les
+  certificats sont posés.
+- Actions de GitHub épinglées par empreinte, Dependabot.
+- Essais : `essai-production.py` 70/70 (H à K nouvelles), `essai-mobile.py` 87/87
+  (section Z), mobile 52/52.
+
 ## Non publié — pages de la Phase 11 (PR #13)
 
 **À fusionner juste après `supabase-notifications.sql` en production**
