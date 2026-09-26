@@ -35,7 +35,7 @@
     ligne1: 'Calle 25 de Febrero, La Caleta',
     ligne2: 'Santo Domingo Este 11500',
     telephone: '809 317-6686',
-    rnc: '133-79976-6'
+    rnc: '1-33-79976-6'
   };
 
   // Les moyens de paiement imprimés sur une facture à payer : un titre, sa
@@ -67,10 +67,11 @@
   var TEXTES = {
     fr: {
       titre: 'Facture', etablie: 'Établie le', echeance: 'À payer avant le', payeeLe: 'Payée le',
-      statuts: { a_payer: 'À payer', payee: 'Payée', annulee: 'Annulée' },
+      statuts: { a_payer: 'À payer', partielle: 'Payée en partie', en_retard: 'En retard', payee: 'Payée', annulee: 'Annulée' },
       factureA: 'Facturé à', codeClient: 'Code client {code}',
       colonnes: { quantite: 'Quantité', poids: 'Poids / lbs', description: 'Description', colis: 'Colis', montant: 'Total' },
       totalColis: 'Total colis', fraisService: 'Frais de service', balance: 'Balance', grandTotal: 'Grand total',
+      dejaPaye: 'Déjà payé', recus: 'Paiements reçus', parLivre: '/lb',
       signature: 'Signature autorisée', pourGoship: 'Pour Goship Express',
       total: 'Total à payer', paiement: 'Paiement',
       reglee: 'Facture réglée, merci !', regleePar: 'Payée par {moyen}', regleeLe: 'Payée le {date}',
@@ -80,7 +81,8 @@
       parWhatsApp: 'Écrivez-nous sur WhatsApp pour régler cette facture.',
       scanner: 'Scannez pour payer', transport: 'Transport', transportColis: 'Transport de colis',
       moyens: { paypal: 'PayPal', banque: 'Compte bancaire', azul: 'Azul',
-                moncash: 'MonCash', natcash: 'NatCash', especes: 'Espèces' },
+                moncash: 'MonCash', natcash: 'NatCash', especes: 'Espèces',
+                transfert: 'Transfert d\'argent', autre: 'Autre moyen' },
       moyensTitres: { banque: 'Virement bancaire', paypal: 'PayPal', transfert: 'Transfert d\'argent' },
       champs: { nom: 'Nom', compte: 'N° de compte', typeCompte: 'Type de compte',
                 telephone: 'Téléphone', ville: 'Ville' },
@@ -89,10 +91,11 @@
     },
     en: {
       titre: 'Invoice', etablie: 'Issued on', echeance: 'Due by', payeeLe: 'Paid on',
-      statuts: { a_payer: 'Unpaid', payee: 'Paid', annulee: 'Cancelled' },
+      statuts: { a_payer: 'Unpaid', partielle: 'Partly paid', en_retard: 'Overdue', payee: 'Paid', annulee: 'Cancelled' },
       factureA: 'Billed to', codeClient: 'Customer code {code}',
       colonnes: { quantite: 'Qty', poids: 'Weight / lbs', description: 'Description', colis: 'Package', montant: 'Total' },
       totalColis: 'Packages total', fraisService: 'Service fee', balance: 'Balance', grandTotal: 'Grand total',
+      dejaPaye: 'Already paid', recus: 'Payments received', parLivre: '/lb',
       signature: 'Authorised signature', pourGoship: 'For Goship Express',
       total: 'Total due', paiement: 'Payment',
       reglee: 'Invoice paid — thank you!', regleePar: 'Paid by {moyen}', regleeLe: 'Paid on {date}',
@@ -102,7 +105,8 @@
       parWhatsApp: 'Message us on WhatsApp to settle this invoice.',
       scanner: 'Scan to pay', transport: 'Shipping', transportColis: 'Package shipping',
       moyens: { paypal: 'PayPal', banque: 'Bank account', azul: 'Azul',
-                moncash: 'MonCash', natcash: 'NatCash', especes: 'Cash' },
+                moncash: 'MonCash', natcash: 'NatCash', especes: 'Cash',
+                transfert: 'Money transfer', autre: 'Other method' },
       moyensTitres: { banque: 'Bank transfer', paypal: 'PayPal', transfert: 'Money transfer' },
       champs: { nom: 'Name', compte: 'Account number', typeCompte: 'Account type',
                 telephone: 'Phone', ville: 'City' },
@@ -111,10 +115,11 @@
     },
     es: {
       titre: 'Factura', etablie: 'Emitida el', echeance: 'A pagar antes del', payeeLe: 'Pagada el',
-      statuts: { a_payer: 'Por pagar', payee: 'Pagada', annulee: 'Anulada' },
+      statuts: { a_payer: 'Por pagar', partielle: 'Pagada en parte', en_retard: 'Vencida', payee: 'Pagada', annulee: 'Anulada' },
       factureA: 'Facturado a', codeClient: 'Código de cliente {code}',
       colonnes: { quantite: 'Cant.', poids: 'Peso / lbs', description: 'Descripción', colis: 'Paquete', montant: 'Total' },
       totalColis: 'Total paquetes', fraisService: 'Cargo por servicio', balance: 'Balance', grandTotal: 'Gran total',
+      dejaPaye: 'Ya pagado', recus: 'Pagos recibidos', parLivre: '/lb',
       signature: 'Firma autorizada', pourGoship: 'Por Goship Express',
       total: 'Total a pagar', paiement: 'Pago',
       reglee: '¡Factura pagada, gracias!', regleePar: 'Pagada con {moyen}', regleeLe: 'Pagada el {date}',
@@ -124,7 +129,8 @@
       parWhatsApp: 'Escríbanos por WhatsApp para pagar esta factura.',
       scanner: 'Escanee para pagar', transport: 'Transporte', transportColis: 'Transporte de paquetes',
       moyens: { paypal: 'PayPal', banque: 'Cuenta bancaria', azul: 'Azul',
-                moncash: 'MonCash', natcash: 'NatCash', especes: 'Efectivo' },
+                moncash: 'MonCash', natcash: 'NatCash', especes: 'Efectivo',
+                transfert: 'Transferencia de dinero', autre: 'Otro medio' },
       moyensTitres: { banque: 'Transferencia bancaria', paypal: 'PayPal', transfert: 'Transferencia de dinero' },
       champs: { nom: 'Nombre', compte: 'N.º de cuenta', typeCompte: 'Tipo de cuenta',
                 telephone: 'Teléfono', ville: 'Ciudad' },
@@ -133,10 +139,11 @@
     },
     ht: {
       titre: 'Fakti', etablie: 'Fèt le', echeance: 'Pou peye anvan', payeeLe: 'Peye le',
-      statuts: { a_payer: 'Pou peye', payee: 'Peye', annulee: 'Anile' },
+      statuts: { a_payer: 'Pou peye', partielle: 'Peye an pati', en_retard: 'An reta', payee: 'Peye', annulee: 'Anile' },
       factureA: 'Faktire pou', codeClient: 'Kòd kliyan {code}',
       colonnes: { quantite: 'Kantite', poids: 'Pwa / lbs', description: 'Deskripsyon', colis: 'Koli', montant: 'Total' },
       totalColis: 'Total kolis', fraisService: 'Frè sèvis', balance: 'Balans', grandTotal: 'Gran total',
+      dejaPaye: 'Deja peye', recus: 'Peman resevwa', parLivre: '/lb',
       signature: 'Siyati otorize', pourGoship: 'Pou Goship Express',
       total: 'Total pou peye', paiement: 'Peman',
       reglee: 'Fakti peye, mèsi !', regleePar: 'Peye ak {moyen}', regleeLe: 'Peye le {date}',
@@ -146,7 +153,8 @@
       parWhatsApp: 'Ekri nou sou WhatsApp pou peye fakti sa a.',
       scanner: 'Eskane pou peye', transport: 'Transpò', transportColis: 'Transpò koli',
       moyens: { paypal: 'PayPal', banque: 'Kont labank', azul: 'Azul',
-                moncash: 'MonCash', natcash: 'NatCash', especes: 'Kach' },
+                moncash: 'MonCash', natcash: 'NatCash', especes: 'Kach',
+                transfert: 'Transfè lajan', autre: 'Lòt mwayen' },
       moyensTitres: { banque: 'Vire labank', paypal: 'PayPal', transfert: 'Voye lajan' },
       champs: { nom: 'Non', compte: 'Nimewo kont', typeCompte: 'Kalite kont',
                 telephone: 'Telefòn', ville: 'Vil' },
@@ -223,7 +231,7 @@
       ? API.outils.totauxFacture(facture)
       : { colis: Number(facture.montant_usd) || 0, frais: 0,
           grandTotal: Number(facture.montant_usd) || 0, paye: 0,
-          balance: Number(facture.montant_usd) || 0 };
+          balance: Number(facture.montant_usd) || 0, etat: facture.statut || 'a_payer' };
   }
 
   function nombreLb(n) {
@@ -418,11 +426,13 @@
       bloc(dl, 'dt', null, libelle);
       bloc(dl, 'dd', null, valeur);
     }
+    // L'état vient de la base (payée, en partie, en retard…) : totauxFacture
+    // le reprend tel quel, comme à l'écran.
+    var ouverte = totaux.etat === 'a_payer' || totaux.etat === 'partielle' || totaux.etat === 'en_retard';
     ligneDate(T.etablie, date(fa.cree_le, langue));
-    ligneDate(T.echeance, fa.statut === 'a_payer' ? date(fa.echeance_le, langue) : '');
-    ligneDate(T.payeeLe, date(fa.payee_le, langue));
-    var etat = bloc(droite, 'span', 'fa__etat fa__etat--' + (fa.statut || 'a_payer'),
-                    T.statuts[fa.statut] || fa.statut || '');
+    ligneDate(T.echeance, ouverte ? date(fa.echeance_le, langue) : '');
+    ligneDate(T.payeeLe, totaux.etat === 'payee' ? date(fa.payee_le, langue) : '');
+    var etat = bloc(droite, 'span', 'fa__etat fa__etat--' + totaux.etat, T.statuts[totaux.etat] || totaux.etat);
     etat.setAttribute('role', 'status');
 
     // Le client
@@ -442,13 +452,16 @@
         bloc(tr, 'th', col[1], T.colonnes[col[0]]).setAttribute('scope', 'col');
       });
     var tbody = bloc(table, 'tbody');
-    function ligneDetail(quantite, poids, libelle, numero, montant) {
+    function ligneDetail(quantite, poids, libelle, numero, montant, tarif) {
       var r = bloc(tbody, 'tr');
       bloc(r, 'td', 'fa__centre', String(quantite || 1));
       bloc(r, 'td', 'fa__centre', poids != null && poids !== '' ? nombreLb(poids) : '—');
       var d = bloc(r, 'td');
       bloc(d, 'span', 'fa__desc', libelle);
-      if (numero) bloc(d, 'span', 'fa__colis', numero);
+      // Le tarif du jour de la facture, recopié sur la ligne : il explique le
+      // montant sans qu'on le recalcule
+      var sous = [numero, tarif != null && tarif !== '' ? argent(tarif, langue) + T.parLivre : ''].filter(Boolean);
+      if (sous.length) bloc(d, 'span', 'fa__colis', sous.join(' · '));
       bloc(r, 'td', 'fa__droite', argent(montant, langue));
     }
     if (lignes.length) {
@@ -460,7 +473,7 @@
         if (poids === null || poids === undefined || poids === '') {
           poids = l.colis && typeof l.colis === 'object' ? l.colis.poids_lb : null;
         }
-        ligneDetail(l.quantite || 1, poids, l.libelle || T.transport, numeroColis(l), l.montant_usd);
+        ligneDetail(l.quantite || 1, poids, l.libelle || T.transport, numeroColis(l), l.montant_usd, l.tarif_lb_usd);
       });
     } else {
       // Facture d'un seul montant, sans détail : la note en tient lieu
@@ -487,6 +500,7 @@
     ligneTotal(T.totalColis, totaux.colis);
     ligneTotal(T.fraisService, totaux.frais);
     ligneTotal(T.grandTotal, totaux.grandTotal, 'fa__totaux--grand');
+    if (totaux.paye > 0 && totaux.etat !== 'annulee') ligneTotal(T.dejaPaye, totaux.paye);
     ligneTotal(T.balance, totaux.balance, 'fa__totaux--balance');
 
     // Le paiement. Le code à scanner est dessiné d'abord, car c'est lui qui
@@ -494,19 +508,19 @@
     // lignes sur le papier. Il ne s'imprime donc plus que si le code n'a pas
     // pu être produit — sans quoi le client n'aurait aucun moyen de payer.
     var qr = null, codeDessine = false;
-    if (fa.statut === 'a_payer' && fa.lien_paiement) {
+    if (ouverte && fa.lien_paiement) {
       qr = el('div', 'fa__qr');
       codeDessine = !!dessinerCode(qr, 'qr', fa.lien_paiement, T.scanner + ' — ' + (fa.numero || ''));
       if (codeDessine) bloc(qr, 'span', 'fa__qr-texte', T.scanner);
     }
     bloc(paiement, 'span', 'fa__libelle', T.paiement);
-    if (fa.statut === 'payee') {
+    if (totaux.etat === 'payee') {
       bloc(paiement, 'p', null, T.reglee);
       ligneTexte(paiement, null, [
         T.moyens[fa.moyen] ? remplacer(T.regleePar, { moyen: T.moyens[fa.moyen] }) : '',
         fa.payee_le ? remplacer(T.regleeLe, { date: date(fa.payee_le, langue) }) : ''
       ]);
-    } else if (fa.statut === 'annulee') {
+    } else if (totaux.etat === 'annulee') {
       bloc(paiement, 'p', null, T.annulee);
     } else if (fa.lien_paiement) {
       bloc(paiement, 'p', null, codeDessine ? T.parCode : T.parCarte);
@@ -516,10 +530,22 @@
     }
     if (fa.note && lignes.length) bloc(paiement, 'p', 'fa__note', fa.note);
 
+    // Les paiements reçus, quand il y en a eu plusieurs ou qu'il reste à
+    // payer : date, moyen, montant. Les paiements annulés n'y figurent pas.
+    var recus = (fa.paiements || []).filter(function (p) { return !p.annule_le; });
+    if (recus.length && totaux.etat !== 'annulee' && (ouverte || recus.length > 1)) {
+      var groupeRecus = bloc(paiement, 'div', 'fa__moyen');
+      bloc(bloc(groupeRecus, 'p', 'fa__moyen-tete'), 'strong', null, T.recus);
+      recus.forEach(function (p) {
+        bloc(groupeRecus, 'p', 'fa__moyen-ligne', [date(p.paye_le, langue), T.moyens[p.moyen] || p.moyen,
+                                                   argent(p.montant_usd, langue)].filter(Boolean).join(' · '));
+      });
+    }
+
     // Les autres moyens de paiement, en texte simple : ni cadre, ni colonnes.
     // Seulement sur une facture à payer — les rappeler sur une facture déjà
     // réglée n'aiderait personne.
-    if (fa.statut === 'a_payer') {
+    if (ouverte) {
       PAIEMENTS.forEach(function (m) {
         var groupe = bloc(paiement, 'div', 'fa__moyen');
         var tete = bloc(groupe, 'p', 'fa__moyen-tete');

@@ -10,13 +10,15 @@ vérifie les deux, et vérifie qu'ils disent la même chose.
 python3 outils/essais-services/essai-services.py     # les règles métier (Phase 2)
 python3 outils/essais-services/essai-evenements.py   # le moteur d'événements (Phase 3)
 python3 outils/essais-services/essai-scanner.py      # le poste de scan, côté base (Phase 4)
+python3 outils/essais-services/essai-finances.py     # paiements, soldes, annulations (Phase 5)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
+node outils/essais-services/essai-finances.js        # les finances en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,
-`supabase-services.sql`, `supabase-evenements.sql` ou des règles dans
-`api.js`.**
+`supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`
+ou des règles dans `api.js`.**
 
 ## Ce que prouve `essai-services.py`
 
@@ -90,6 +92,35 @@ règles de sécurité des tables s'appliquent donc pour de bon.
 - **Scan → opération → événement → statut**, le double scan, le retry après
   coupure, les opérations refusées, le colis livré, l'action requise, deux
   postes en même temps, et une recherche parmi 20 000 colis par l'index.
+
+## Ce que prouve `essai-finances.py`
+
+- **La migration** : la base publiée (version `97f53f0`, variable
+  `GOSHIP_AVANT`) reçoit des factures à l'ancienne — payée par « Marquer
+  payée », à moitié payée, annulée avec de l'argent dessus, sans frais
+  (d'avant le 22/09), montant libre —, puis la nouvelle version s'installe
+  par-dessus, trois fois dans le désordre. Aucune facture ni ligne ne bouge ;
+  chaque montant payé devient un paiement « repris », une seule fois.
+- **La facture de 31 $** reste 31 $ partout : base, espace client, tableau de
+  bord, et `totauxFacture` d'`api.js` nourri des réponses de la base.
+- **Les tarifs** : 10 lb × 2,50 $ = 25 $ reste 25 $ quand le tarif par défaut
+  passe à 3 $ ; un nouveau colis prend le nouveau tarif.
+- **Le regroupement** : 20 + 15 + 30 + 10 = 75 $, aperçu compris ; refus
+  (paiement, deux clients, une seule facture, sans colis, annulée).
+- **Les paiements** : partiel (25 → payé 25, solde 50), multiples
+  (25 + 20 + 30), trop-payé (80 $ refusé), montant, moyen et date refusés,
+  double clic, même référence, **deux paiements de 50 $ simultanés sur 75 $**
+  (un seul passe), annulation motivée puis correction.
+- **La garde** : plus de « Marquer payée », de payé écrit à la main, de
+  suppression, de ligne ajoutée ou retirée ; un paiement ne se modifie ni ne
+  s'efface, même depuis le SQL Editor.
+- **Annuler une facture**, **numéros jamais réutilisés**, **RLS** (un client
+  ne voit que ses paiements, n'en écrit aucun), **en retard**, **résumé**,
+  **scanner et statuts sans effet sur la facture**, **journal et file
+  d'événements**, **rapport d'anomalies** qui signale sans rien modifier,
+  **volume** (3 000 factures), mêmes moyens de paiement que `api.js`.
+
+`essai-finances.js` rejoue les mêmes cas sur le mode démonstration.
 
 ## Ce que prouve `essai-demo.js`
 

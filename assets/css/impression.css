@@ -136,6 +136,8 @@ svg{display:block}
 .fa__etat--a_payer{background:var(--or-pale);color:var(--or-fonce);border:1.2pt solid var(--or)}
 .fa__etat--payee{background:#dff3e4;color:#14562a;border:1pt solid #1d7a3c}
 .fa__etat--annulee{background:#eef0f5;color:#4a5878;border:1pt solid #8a93ac}
+.fa__etat--partielle{background:#fdf3d8;color:#7a4b06;border:1pt solid #c98a12}
+.fa__etat--en_retard{background:#fde4e4;color:#8f1717;border:1.2pt solid #c42525}
 
 .fa__client{margin-top:6mm}
 .fa__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.14em;

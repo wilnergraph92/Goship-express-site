@@ -36,11 +36,17 @@
                             'pays_destination', 'destination', 'recu_le', 'tarif_lb_usd'];
   // À la création s'ajoutent le lieu et le message de l'événement initial.
   var CHAMPS_CREATION = CHAMPS_MODIFIABLES.concat(['lieu', 'note']);
-  var CHAMPS_FACTURE = ['client_id', 'montant_usd', 'statut', 'note', 'lien_paiement', 'moyen', 'echeance_le',
-                        'payee_le', 'frais_service_usd', 'montant_paye_usd'];
+  // Ce qu'une page peut encore changer sur une facture émise. Le payé, le
+  // statut, le moyen et la date de paiement suivent les paiements
+  // (outils/supabase-finances.sql, garde_facture) ; le total ne se change que
+  // sur une facture sans colis.
+  var CHAMPS_FACTURE = ['montant_usd', 'note', 'lien_paiement', 'echeance_le'];
   // Une nouvelle facture : le client, et ce que la base ne peut pas deviner.
   // Le montant n'est retenu que pour une facture sans colis.
   var CHAMPS_NOUVELLE_FACTURE = ['montant_usd', 'montant_paye_usd', 'echeance_le', 'lien_paiement', 'note'];
+  // Un paiement : ce que la page saisit. Le client, l'auteur et la date
+  // d'enregistrement sont ceux de la base.
+  var CHAMPS_PAIEMENT = ['montant_usd', 'moyen', 'reference', 'paye_le', 'note'];
 
   /* ---- Les tarifs ------------------------------------------------------------
      Le transport est facturé à la livre. Le tarif peut être remplacé colis par
@@ -51,6 +57,10 @@
      -------------------------------------------------------------------------- */
   var TARIF_LB_DEFAUT = 5;
   var FRAIS_SERVICE = 10;
+
+  // Les moyens de paiement acceptés : même liste que public.moyens_paiement()
+  // dans la base (outils/supabase-finances.sql), qui refuse tout autre.
+  var MOYENS_PAIEMENT = ['paypal', 'banque', 'azul', 'moncash', 'natcash', 'especes', 'transfert', 'autre'];
 
   // Au cent près, 0,005 montant — comme round() dans la base. Le détour par
   // toFixed corrige les nombres à virgule du navigateur : 2,25 × 1,5 y vaut
@@ -239,25 +249,79 @@
     return { code: null, detail: null, cible: c, nature: n };
   }
 
-  // Les quatre montants d'une facture. « montant_usd » reste le grand total,
-  // c'est lui qui sert aux liens de paiement et à l'espace client.
+  /* ---- Payé, solde, état d'une facture ------------------------------------
+     La base les calcule (outils/supabase-finances.sql : paye_usd, solde_usd,
+     etat_paiement) et les renvoie avec chaque facture ; les pages les
+     affichent tels quels. Les fonctions ci-dessous ne recalculent que ce que
+     la réponse ne porte pas : une facture du mode démonstration, ou une
+     réponse d'avant la Phase 5. Même règle que la base, au mot près.
+     -------------------------------------------------------------------------- */
+  // « Aujourd'hui » à Santo Domingo, comme public.aujourdhui()
+  function aujourdhui() {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo', year: 'numeric',
+                                                month: '2-digit', day: '2-digit' }).format(new Date());
+    } catch (e) {
+      return new Date(Date.now() - 4 * 36e5).toISOString().slice(0, 10);
+    }
+  }
+
+  function paiementsValides(f) {
+    return ((f || {}).paiements || []).filter(function (p) { return !p.annule_le; });
+  }
+
+  // Le payé : la somme des paiements valides
+  function payeDe(f) {
+    f = f || {};
+    if (f.paye_usd != null) return arrondi(f.paye_usd);
+    if (f.paiements) return arrondi(paiementsValides(f).reduce(function (s, p) { return s + (Number(p.montant_usd) || 0); }, 0));
+    return arrondi(f.montant_paye_usd);
+  }
+
+  // Le solde : ce qui reste dû ; rien sur une facture annulée
+  function soldeDe(f) {
+    f = f || {};
+    if (f.solde_usd != null) return arrondi(f.solde_usd);
+    if (f.statut === 'annulee') return 0;
+    return arrondi(Math.max((Number(f.montant_usd) || 0) - payeDe(f), 0));
+  }
+
+  // annulee, payee, en_retard (échue, solde > 0), partielle, a_payer
+  function etatFacture(f) {
+    f = f || {};
+    if (f.etat_paiement) return f.etat_paiement;
+    if (f.etat) return f.etat;
+    if (f.statut === 'annulee') return 'annulee';
+    if (soldeDe(f) <= 0) return 'payee';
+    if (f.echeance_le && String(f.echeance_le).slice(0, 10) < aujourdhui()) return 'en_retard';
+    return payeDe(f) > 0 ? 'partielle' : 'a_payer';
+  }
+
+  // Les montants d'une facture, pour l'écran et le papier. Le grand total est
+  // « montant_usd », arrêté à la création : on ne le refait pas à partir des
+  // lignes. Les colis valent le total moins les frais de service.
   function totauxFacture(facture) {
     var f = facture || {};
-    var lignes = f.lignes || f.facture_lignes || [];
     var frais = arrondi(f.frais_service_usd);
-    var colis = lignes.length
-      ? lignes.reduce(function (somme, l) { return somme + (Number(l.montant_usd) || 0); }, 0)
-      : (Number(f.montant_usd) || 0) - frais;
-    colis = arrondi(Math.max(colis, 0));
-    var grandTotal = arrondi(colis + frais);
-    var paye = arrondi(f.montant_paye_usd);
+    var grandTotal = arrondi(f.montant_usd);
     return {
-      colis: colis,
+      colis: arrondi(Math.max(grandTotal - frais, 0)),
       frais: frais,
       grandTotal: grandTotal,
-      paye: paye,
-      balance: arrondi(Math.max(grandTotal - paye, 0))
+      paye: payeDe(f),
+      balance: soldeDe(f),
+      etat: etatFacture(f)
     };
+  }
+
+  // Les paiements d'une facture, dans l'ordre où ils ont été reçus
+  function trierPaiements(f) {
+    if (f && f.paiements) {
+      f.paiements.sort(function (a, b) {
+        return new Date(a.paye_le) - new Date(b.paye_le) || new Date(a.cree_le) - new Date(b.cree_le);
+      });
+    }
+    return f;
   }
 
   // Regroupe colis et factures par client : une ligne par client ayant des
@@ -426,7 +490,7 @@
     // La fonction n'existe pas encore : le script SQL correspondant n'a pas été
     // lancé dans Supabase. Ce n'est pas une panne — la partie du site qui s'en
     // sert se contente de ne pas s'afficher.
-    if (code === 'PGRST202' || code === '42883') return Erreur('absent', e.message);
+    if (code === 'PGRST202' || code === '42883' || code === '42703') return Erreur('absent', e.message);
     if (e.name === 'TypeError' || msg.indexOf('failed to fetch') >= 0 || msg.indexOf('network') >= 0 ||
         msg.indexOf('load failed') >= 0) return Erreur('reseau');
     return Erreur('inconnu', e.message);
@@ -774,22 +838,31 @@
 
       /* ---- Factures ---------------------------------------------------- */
 
+      // Les factures, avec leur payé, leur solde et leur état calculés par la
+      // base (colonnes calculées de outils/supabase-finances.sql), leurs lignes
+      // et tous leurs paiements. o.etat : « a_payer » (tout ce qui reste dû),
+      // « partielle », « en_retard », « payee », « annulee », ou rien.
       factures: function (o) {
         o = o || {};
         var parPage = o.parPage || 50, page = o.page || 0;
         return sb().then(function (c) {
           var q = c.from('factures')
-            .select('*, clients(code, nom_complet, telephone, email, adresse, region, ville, pays, langue), ' +
-                    'facture_lignes(id, colis_id, libelle, montant_usd, quantite, poids_lb, ' +
-                    'colis(numero, description, poids_lb))',
+            .select('*, paye_usd, solde_usd, etat_paiement, ' +
+                    'clients(code, nom_complet, telephone, email, adresse, region, ville, pays, langue), ' +
+                    'facture_lignes(id, colis_id, libelle, montant_usd, quantite, poids_lb, tarif_lb_usd, ' +
+                    'colis(numero, description, poids_lb)), paiements(*)',
                     { count: 'exact' })
             .order('cree_le', { ascending: false })
             .range(page * parPage, page * parPage + parPage - 1);
-          if (o.statut) q = q.eq('statut', o.statut);
+          var etat = o.etat || o.statut;
+          if (etat === 'payee' || etat === 'annulee' || etat === 'a_payer') q = q.eq('statut', etat);
+          if (etat === 'partielle') q = q.eq('statut', 'a_payer').gt('montant_paye_usd', 0);
+          if (etat === 'en_retard') q = q.eq('statut', 'a_payer').lt('echeance_le', aujourdhui());
           if (o.client_id) q = q.eq('client_id', o.client_id);
           return q;
         }).then(function (res) {
           if (res.error) throw erreurSupabase(res.error);
+          (res.data || []).forEach(trierPaiements);
           return { lignes: res.data, total: res.count || 0 };
         });
       },
@@ -819,12 +892,14 @@
       factureDuColis: function (colisId) {
         return sb().then(function (c) {
           return c.from('facture_lignes')
-            .select('facture_id, factures!inner(*, clients(code, nom_complet, telephone, email, adresse, ville, region, pays, langue), facture_lignes(*, colis(numero, description, poids_lb)))')
+            .select('facture_id, factures!inner(*, paye_usd, solde_usd, etat_paiement, ' +
+                    'clients(code, nom_complet, telephone, email, adresse, ville, region, pays, langue), ' +
+                    'facture_lignes(*, colis(numero, description, poids_lb)), paiements(*))')
             .eq('colis_id', colisId);
         }).then(resultat).then(function (lignes) {
           var factures = (lignes || []).map(function (l) { return l.factures; }).filter(Boolean);
           factures.sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
-          return factures[0] || null;
+          return trierPaiements(factures[0]) || null;
         });
       },
 
@@ -839,7 +914,8 @@
           colis = r || [];
           return sb();
         }).then(function (c) {
-          return c.from('factures').select('id, client_id, montant_usd, frais_service_usd, montant_paye_usd, statut')
+          return c.from('factures')
+            .select('id, client_id, montant_usd, frais_service_usd, montant_paye_usd, statut, solde_usd')
             .neq('statut', 'annulee').limit(1000);
         }).then(resultat).then(function (r) {
           factures = r || [];
@@ -847,14 +923,65 @@
         });
       },
 
+      // Échéance, note, lien de paiement ; le total d'une facture sans colis.
+      // Le reste suit les paiements : la base refuse qu'on l'écrive ici.
       modifierFacture: function (id, champs) {
         return sb().then(function (c) {
           return c.from('factures').update(choisir(champs, CHAMPS_FACTURE)).eq('id', id).select().single();
         }).then(resultat);
       },
 
-      supprimerFacture: function (id) {
-        return sb().then(function (c) { return c.from('factures').delete().eq('id', id); }).then(resultat);
+      /* ---- Paiements (outils/supabase-finances.sql) -------------------- */
+
+      // Un encaissement : { montant_usd, moyen, reference, paye_le, note }.
+      // « cle » identifie la demande : renvoyée après une coupure, elle rend
+      // le paiement déjà enregistré. Réponse : { paiement, facture, deja }.
+      enregistrerPaiement: function (factureId, d, cle) {
+        return sb().then(function (c) {
+          return c.rpc('enregistrer_paiement', {
+            p_facture: factureId, p_paiement: choisir(d || {}, CHAMPS_PAIEMENT), p_cle: cle || null
+          });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Un paiement saisi par erreur, un chèque rejeté : il reste, barré, avec son motif
+      annulerPaiement: function (id, motif) {
+        return sb().then(function (c) {
+          return c.rpc('annuler_paiement', { p_paiement: id, p_motif: motif || '' });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Une facture ne se supprime plus : elle s'annule, avec son motif.
+      // Réponse : { facture, deja }.
+      annulerFacture: function (id, motif) {
+        return sb().then(function (c) {
+          return c.rpc('annuler_facture', { p_facture: id, p_motif: motif || '' });
+        }).then(resultat);
+      },
+
+      // Plusieurs factures d'un client en une : { facture, annulees, deja }
+      regrouperFactures: function (ids, cle) {
+        return sb().then(function (c) {
+          return c.rpc('regrouper_factures', { p_factures: ids, p_cle: cle || null });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Ce que la base facturerait pour ces colis, sans rien créer :
+      // { lignes, sous_total, frais_service, total }
+      calculerFacture: function (colisIds) {
+        return sb().then(function (c) { return c.rpc('calculer_facture', { p_colis: colisIds || [] }); })
+          .then(resultat);
+      },
+
+      // Les chiffres du haut de l'onglet Factures
+      resumeFacturation: function () {
+        return sb().then(function (c) { return c.rpc('resume_facturation'); }).then(resultat);
+      },
+
+      // Le rapport d'anomalies : [{ type, gravite, facture_id, numero, detail }]
+      anomaliesFacturation: function () {
+        return sb().then(function (c) { return c.rpc('rapport_anomalies_facturation'); }).then(resultat)
+          .then(function (r) { return r || []; });
       },
 
       // Copie le logo des e-mails dans le dossier public de Supabase s'il n'y est pas encore
@@ -1350,11 +1477,45 @@
     return c;
   }
 
-  // La facture telle que la renvoie la base (facture_json) : client et lignes
+  /* ---- Les finances, version démonstration ---------------------------------
+     La copie de outils/supabase-finances.sql : paiements, recalcul du payé et
+     du statut, annulations, regroupement. Mêmes contrôles, dans le même
+     ordre, mêmes codes et mêmes phrases ; outils/essais-services/
+     essai-finances.js rejoue les cas de essai-finances.py.
+     -------------------------------------------------------------------------- */
+  function montantTexte(n) { return (Number(n) || 0).toFixed(2); }
+
+  // La file des événements de facturation (evenements_facturation)
+  function noterEvenementDemo(d, type, f, p, donnees) {
+    d.evenementsFacturation = d.evenementsFacturation || [];
+    d.evenementsFacturation.push({ id: d.evenementsFacturation.length + 1, type: type, facture_id: f ? f.id : null,
+                                   paiement_id: p ? p.id : null, client_id: f ? f.client_id : null,
+                                   donnees: donnees || {}, cree_le: maintenant(), traite_le: null });
+  }
+
+  // recalculer_facture : payé, statut, date et moyen suivent les paiements valides
+  function recalculerFactureDemo(d, f) {
+    var valides = paiementsValides(f).sort(function (a, b) {
+      return new Date(a.paye_le) - new Date(b.paye_le) || new Date(a.cree_le) - new Date(b.cree_le);
+    });
+    var paye = arrondi(valides.reduce(function (s, p) { return s + p.montant_usd; }, 0));
+    var dernier = valides[valides.length - 1];
+    var avant = f.statut;
+    f.montant_paye_usd = paye;
+    if (f.statut !== 'annulee') f.statut = f.montant_usd > 0 && paye >= f.montant_usd ? 'payee' : 'a_payer';
+    f.payee_le = f.statut === 'payee' ? (dernier ? dernier.paye_le : maintenant()) : null;
+    f.moyen = paye > 0 && dernier && dernier.moyen !== 'autre' ? dernier.moyen : '';
+    if (f.statut === 'payee' && avant !== 'payee') {
+      noterEvenementDemo(d, 'FACTURE_PAYEE', f, null, { numero: f.numero, montant_usd: f.montant_usd });
+    }
+  }
+
+  // La facture telle que la renvoie la base (facture_complete) : client,
+  // lignes, payé, solde, état et paiements
   function factureComplete(d, f) {
     if (!f) return null;
     var client = d.comptes.filter(function (c) { return c.id === f.client_id; })[0];
-    return Object.assign({}, f, {
+    var sortie = Object.assign({}, f, {
       clients: client ? {
         code: client.code, nom_complet: client.nom_complet, telephone: client.telephone,
         email: client.email, adresse: client.adresse, region: client.region,
@@ -1365,8 +1526,14 @@
         return Object.assign({}, l, {
           colis: colis ? { numero: colis.numero, description: colis.description, poids_lb: colis.poids_lb } : null
         });
-      })
+      }),
+      paiements: (f.paiements || []).map(function (p) { return Object.assign({}, p); })
     });
+    sortie.paye_usd = payeDe({ paiements: f.paiements || [] });
+    sortie.solde_usd = soldeDe({ statut: f.statut, montant_usd: f.montant_usd, paye_usd: sortie.paye_usd });
+    sortie.etat_paiement = etatFacture({ statut: f.statut, montant_usd: f.montant_usd, echeance_le: f.echeance_le,
+                                         paye_usd: sortie.paye_usd, solde_usd: sortie.solde_usd });
+    return trierPaiements(sortie);
   }
 
   // La facture active (non annulée) qui porte ce colis, s'il y en a une
@@ -1377,27 +1544,112 @@
     }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })[0] || null;
   }
 
+  // Un numéro jamais attribué (preparer_facture + reserver_numero_facture)
+  function numeroFactureDemo(d) {
+    d.numerosFactures = d.numerosFactures || [];
+    var mois = new Date(), numero;
+    do {
+      numero = mois.getFullYear() + '-' + String(mois.getMonth() + 1).padStart(2, '0') + '-' +
+               String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    } while (d.numerosFactures.indexOf(numero) >= 0 ||
+             (d.factures || []).some(function (f) { return f.numero === numero; }));
+    d.numerosFactures.push(numero);
+    return numero;
+  }
+
+  // Une facture neuve (garde_facture à l'insertion, puis suivre_facture) : elle
+  // naît à payer ; ce qui est payé à sa création devient un paiement.
   function nouvelleFacture(d, moi, champs, colis) {
     d.factures = d.factures || [];
     d.numeroFacture = (d.numeroFacture || 0) + 1;
-    var mois = new Date();
+    var paye = arrondi(champs.montant_paye_usd || 0);
     var f = Object.assign({
       id: 'fac-' + d.numeroFacture,
-      // Même format que la base : année, mois, quatre chiffres au hasard
-      numero: mois.getFullYear() + '-' + String(mois.getMonth() + 1).padStart(2, '0') + '-' +
-              String(Math.floor(Math.random() * 10000)).padStart(4, '0'),
       statut: 'a_payer', note: '', lien_paiement: '', moyen: '', echeance_le: null,
-      frais_service_usd: 0, montant_paye_usd: 0, cle_idempotence: null,
-      cree_le: maintenant(), payee_le: null
-    }, champs);
+      frais_service_usd: 0, cle_idempotence: null, cree_le: maintenant(), payee_le: null,
+      annulee_le: null, annulee_par: null, motif_annulation: '', remplacee_par: null
+    }, choisir(champs, ['client_id', 'montant_usd', 'frais_service_usd', 'echeance_le', 'lien_paiement', 'note',
+                        'cle_idempotence']));
+    f.numero = numeroFactureDemo(d);
+    f.montant_paye_usd = 0;
+    if (f.montant_usd > 0 && paye >= f.montant_usd) f.statut = 'payee';
+    f.paiements = [];
     f.facture_lignes = (colis || []).map(function (c, i) {
       return { id: i + 1, facture_id: f.id, colis_id: c.id, libelle: c.description || 'Transport',
-               montant_usd: prixColis(c), quantite: 1, poids_lb: c.poids_lb != null ? c.poids_lb : null };
+               montant_usd: prixColis(c), quantite: 1, poids_lb: c.poids_lb != null ? c.poids_lb : null,
+               tarif_lb_usd: tarifDe(c) };
     });
     d.factures.push(f);
     journaliser(d, moi, 'facture.creation', 'facture', f.id, null,
                 choisir(f, ['numero', 'client_id', 'montant_usd', 'frais_service_usd', 'montant_paye_usd', 'statut']));
+    noterEvenementDemo(d, 'FACTURE_CREEE', f, null, { numero: f.numero, montant_usd: f.montant_usd });
+    if (paye > 0) {
+      ajouterPaiementDemo(d, moi, f, { montant_usd: paye, moyen: 'autre', note: 'Payé à la création de la facture.',
+                                       paye_le: maintenant() }, 'creation', null);
+    }
     return f;
+  }
+
+  // regles_paiement, puis l'écriture et suivre_paiement. Rien n'est écrit si
+  // une règle refuse.
+  function ajouterPaiementDemo(d, moi, f, v, origine, cle) {
+    var montant = arrondi(v.montant_usd);
+    var moyen = String(v.moyen || '').trim().toLowerCase();
+    if (!(montant > 0)) throw Erreur('INVALID_AMOUNT', 'Le montant du paiement doit être supérieur à zéro.');
+    if (MOYENS_PAIEMENT.indexOf(moyen) < 0) {
+      throw Erreur('INVALID_PAYMENT_METHOD', 'Moyen de paiement inconnu : ' + (moyen || '(vide)') + '.');
+    }
+    var date = v.paye_le ? new Date(v.paye_le) : new Date();
+    if (date.getTime() > Date.now() + 36e5) {
+      throw Erreur('INVALID_DATE', 'La date du paiement ne peut pas être dans le futur.');
+    }
+    if (f.statut === 'annulee') {
+      throw Erreur('INVOICE_CANCELLED', 'La facture ' + f.numero + ' est annulée : elle ne reçoit plus de paiement.');
+    }
+    var paye = payeDe({ paiements: f.paiements || [] });
+    if (paye >= f.montant_usd) throw Erreur('INVOICE_ALREADY_PAID', 'La facture ' + f.numero + ' est déjà entièrement payée.');
+    if (montant > arrondi(f.montant_usd - paye)) {
+      throw Erreur('OVERPAYMENT', 'Le paiement de ' + montantTexte(montant) + ' $ dépasse le solde de ' +
+                   montantTexte(f.montant_usd - paye) + ' $ de la facture ' + f.numero + '.');
+    }
+    var reference = String(v.reference || '').trim().slice(0, 100);
+    if (reference && paiementsValides(f).some(function (p) {
+      return p.moyen === moyen && p.reference.toLowerCase() === reference.toLowerCase();
+    })) {
+      throw Erreur('DUPLICATE_PAYMENT', 'Ce paiement (référence ' + reference + ') est déjà enregistré sur la facture ' +
+                   f.numero + '.');
+    }
+    d.numeroPaiement = (d.numeroPaiement || 0) + 1;
+    var p = {
+      id: 'pai-' + d.numeroPaiement, facture_id: f.id, client_id: f.client_id, montant_usd: montant, moyen: moyen,
+      reference: reference, paye_le: date.toISOString(), note: String(v.note || '').trim().slice(0, 300),
+      origine: origine || 'saisie', cle_idempotence: cle || null, cree_par: moi ? moi.id : null,
+      cree_le: maintenant(), annule_le: null, annule_par: null, motif_annulation: ''
+    };
+    f.paiements = f.paiements || [];
+    f.paiements.push(p);
+    recalculerFactureDemo(d, f);
+    var resume = { facture: f.numero, montant_usd: p.montant_usd, moyen: p.moyen, reference: p.reference,
+                   paye_le: p.paye_le, origine: p.origine };
+    journaliser(d, moi, 'paiement.enregistrement', 'paiement', p.id, null, resume);
+    noterEvenementDemo(d, 'PAIEMENT_ENREGISTRE', f, p, resume);
+    return p;
+  }
+
+  // Une facture de colis qui peut se regrouper, ou la raison du refus
+  function refusRegroupement(f) {
+    if (f.statut !== 'a_payer') {
+      return Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' est ' +
+                    (f.statut === 'payee' ? 'payée' : 'annulée') + ' : elle ne se regroupe pas.');
+    }
+    if (paiementsValides(f).length) {
+      return Erreur('INVOICE_HAS_PAYMENTS', 'La facture ' + f.numero + ' a déjà reçu un paiement : elle ne se regroupe pas.');
+    }
+    var lignes = f.facture_lignes || [];
+    if (!lignes.length || lignes.some(function (l) { return !l.colis_id; })) {
+      return Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' n’est pas une facture de colis : elle ne se regroupe pas.');
+    }
+    return null;
   }
 
   // facturer_colis : sa facture, ou celle qu'il a déjà
@@ -1519,20 +1771,30 @@
       var d = lireDonnees();
       var moi = compteConnecte(d);
       if (!moi) return echec('non-autorise');
+      // Les mêmes champs que public.mes_factures : payé, solde et état, le
+      // tarif de chaque ligne, les paiements reçus (pas ceux annulés)
       var lignes = (d.factures || []).filter(function (f) { return f.client_id === moi.id; })
         .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })
         .map(function (f) {
-          return Object.assign({}, f, {
+          var c = factureComplete(d, f);
+          return {
+            id: f.id, numero: f.numero, montant_usd: f.montant_usd, frais_service_usd: f.frais_service_usd,
+            montant_paye_usd: c.paye_usd, paye_usd: c.paye_usd, solde_usd: c.solde_usd, etat: c.etat_paiement,
+            statut: f.statut, note: f.note, lien_paiement: f.lien_paiement, moyen: f.moyen,
+            echeance_le: f.echeance_le, cree_le: f.cree_le, payee_le: f.payee_le, annulee_le: f.annulee_le || null,
             lignes: (f.facture_lignes || []).map(function (l) {
-              var colis = (d.colis || []).filter(function (c) { return c.id === l.colis_id; })[0];
+              var colis = trouverColisDemo(d, l.colis_id);
               return {
-                libelle: l.libelle, montant_usd: l.montant_usd,
-                quantite: l.quantite || 1,
+                libelle: l.libelle, montant_usd: l.montant_usd, quantite: l.quantite || 1,
                 poids_lb: l.poids_lb != null ? l.poids_lb : (colis ? colis.poids_lb : null),
+                tarif_lb_usd: l.tarif_lb_usd != null ? l.tarif_lb_usd : null,
                 colis: colis ? colis.numero : null
               };
+            }),
+            paiements: paiementsValides(c).map(function (p) {
+              return { montant_usd: p.montant_usd, moyen: p.moyen, paye_le: p.paye_le };
             })
-          });
+          };
         });
       return plusTard(lignes);
     },
@@ -1858,27 +2120,16 @@
         o = o || {};
         var d = lireDonnees();
         try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        var etat = o.etat || o.statut;
         var lignes = (d.factures || []).slice().sort(function (a, b) {
           return new Date(b.cree_le) - new Date(a.cree_le);
-        });
-        if (o.statut) lignes = lignes.filter(function (f) { return f.statut === o.statut; });
-        if (o.client_id) lignes = lignes.filter(function (f) { return f.client_id === o.client_id; });
-        lignes = lignes.map(function (f) {
-          var client = (d.comptes || []).filter(function (c) { return c.id === f.client_id; })[0];
-          // Mêmes champs que la requête Supabase : la facture imprimée porte
-          // l'adresse du client et le numéro de chaque colis facturé.
-          return Object.assign({}, f, {
-            clients: client ? {
-              code: client.code, nom_complet: client.nom_complet, telephone: client.telephone,
-              email: client.email, adresse: client.adresse, region: client.region,
-              ville: client.ville, pays: client.pays, langue: client.langue
-            } : null,
-            facture_lignes: (f.facture_lignes || []).map(function (l) {
-              var colis = (d.colis || []).filter(function (c) { return c.id === l.colis_id; })[0];
-              return Object.assign({}, l, { colis: colis ? { numero: colis.numero } : null });
-            })
-          });
-        });
+        }).filter(function (f) {
+          if (o.client_id && f.client_id !== o.client_id) return false;
+          if (etat === 'payee' || etat === 'annulee' || etat === 'a_payer') return f.statut === etat;
+          if (etat === 'partielle') return f.statut === 'a_payer' && f.montant_paye_usd > 0;
+          if (etat === 'en_retard') return f.statut === 'a_payer' && f.echeance_le && f.echeance_le < aujourdhui();
+          return true;
+        }).map(function (f) { return factureComplete(d, f); });
         return plusTard({ lignes: lignes, total: lignes.length });
       },
 
@@ -1924,10 +2175,8 @@
           var paye = lireNombre(champs.montant_paye_usd, 'INVALID_AMOUNT', 'Montant payé illisible.') || 0;
           if (paye < 0) throw Erreur('INVALID_AMOUNT', 'Le montant payé ne peut pas être négatif.');
           paye = Math.min(arrondi(paye), montant);
-          var payee = montant > 0 && paye >= montant;
           var f = nouvelleFacture(d, moi, {
             client_id: clientId, montant_usd: montant, frais_service_usd: frais, montant_paye_usd: paye,
-            statut: payee ? 'payee' : 'a_payer', payee_le: payee ? maintenant() : null,
             echeance_le: champs.echeance_le || null,
             lien_paiement: String(champs.lien_paiement || '').trim().slice(0, 500),
             note: String(champs.note || '').trim().slice(0, 500),
@@ -1957,10 +2206,7 @@
         var trouvees = (d.factures || []).filter(function (f) {
           return (f.facture_lignes || []).some(function (l) { return l.colis_id === colisId; });
         }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
-        var f = trouvees[0];
-        if (!f) return plusTard(null);
-        var client = d.comptes.filter(function (c) { return c.id === f.client_id; })[0];
-        return plusTard(Object.assign({}, f, { clients: client ? publicProfil(client) : null }));
+        return plusTard(trouvees[0] ? factureComplete(d, trouvees[0]) : null);
       },
 
       // Une ligne par client ayant des colis en cours.
@@ -1969,12 +2215,14 @@
         try { exigerAdmin(d); } catch (e) { return echec(e.code); }
         var colis = d.colis.filter(function (c) { return c.statut !== 'livre'; })
           .map(function (c) { return detailsColis(d, c); });
-        var factures = (d.factures || []).filter(function (f) { return f.statut !== 'annulee'; });
+        var factures = (d.factures || []).filter(function (f) { return f.statut !== 'annulee'; })
+          .map(function (f) { return factureComplete(d, f); });
         return plusTard(regrouperParClient(colis, factures));
       },
 
-      // Les garde-fous de regles_facture : frais, client et total d'une
-      // facture de colis sont arrêtés à sa création.
+      // garde_facture et regles_facture : seuls l'échéance, la note, le lien
+      // et le total d'une facture sans colis se changent ; une facture annulée
+      // ne se change plus.
       modifierFacture: function (id, champs) {
         var d = lireDonnees();
         try {
@@ -1982,48 +2230,277 @@
           var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
           if (!f) return echec('inconnu');
           var n = Object.assign({}, f, choisir(champs, CHAMPS_FACTURE));
-          ['montant_usd', 'montant_paye_usd', 'frais_service_usd'].forEach(function (k) {
-            if (n[k] != null) n[k] = arrondi(n[k]);
-          });
-          var avecColis = (f.facture_lignes || []).some(function (l) { return l.colis_id; });
-          if (n.frais_service_usd !== f.frais_service_usd) {
-            throw Erreur('INVOICE_LOCKED', 'Les frais de service sont fixés à la création de la facture.');
+          if (n.montant_usd != null) n.montant_usd = arrondi(n.montant_usd);
+          var change = CHAMPS_FACTURE.some(function (k) { return JSON.stringify(n[k]) !== JSON.stringify(f[k]); });
+          if (f.statut === 'annulee' && change) throw Erreur('INVOICE_LOCKED', 'Une facture annulée ne se modifie plus.');
+          if (n.montant_usd !== f.montant_usd) {
+            if (n.montant_usd < f.montant_paye_usd) {
+              throw Erreur('INVALID_AMOUNT', 'Le nouveau total est inférieur à ce qui est déjà payé (' +
+                           montantTexte(f.montant_paye_usd) + ' $).');
+            }
+            if ((f.facture_lignes || []).some(function (l) { return l.colis_id; })) {
+              throw Erreur('INVOICE_LOCKED', 'Le total d’une facture de colis est celui de ses colis et de ses frais : il ne se modifie pas.');
+            }
           }
-          if (n.client_id !== f.client_id) throw Erreur('INVOICE_LOCKED', 'Une facture émise ne change pas de client.');
-          if (n.montant_usd !== f.montant_usd && avecColis) {
-            throw Erreur('INVOICE_LOCKED', 'Le total d’une facture de colis est celui de ses colis et de ses frais : il ne se modifie pas.');
-          }
-          if ((n.montant_paye_usd !== f.montant_paye_usd || n.montant_usd !== f.montant_usd) &&
-              n.montant_paye_usd > n.montant_usd) {
-            throw Erreur('INVALID_AMOUNT', 'Le montant payé dépasse le total de la facture.');
-          }
-          if (f.statut === 'annulee' && n.statut !== 'annulee') {
-            (f.facture_lignes || []).forEach(function (l) {
-              var autre = l.colis_id && factureActiveDu(d, l.colis_id, f.id);
-              if (autre) {
-                throw Erreur('INVOICE_ALREADY_EXISTS', 'Un colis de cette facture a été refacturé depuis (facture ' +
-                             autre.numero + ').');
-              }
-            });
-          }
-          if (n.statut === 'payee' && !n.payee_le) n.payee_le = maintenant();
-          var diff = difference(f, n, ['montant_usd', 'montant_paye_usd', 'statut', 'moyen', 'payee_le']);
-          Object.assign(f, n);
-          if (diff) {
-            journaliser(d, moi, 'montant_paye_usd' in diff.apres || 'statut' in diff.apres || 'moyen' in diff.apres
-                        ? 'facture.paiement' : 'facture.modification', 'facture', f.id, diff.avant, diff.apres);
-          }
+          var diff = difference(f, n, ['montant_usd', 'note', 'lien_paiement', 'echeance_le']);
+          Object.assign(f, choisir(n, CHAMPS_FACTURE));
+          if (diff && 'montant_usd' in diff.apres) recalculerFactureDemo(d, f);
+          if (diff) journaliser(d, moi, 'facture.modification', 'facture', f.id, diff.avant, diff.apres);
           ecrireDonnees(d, 'factures');
-          return plusTard(f);
+          return plusTard(factureComplete(d, f));
         } catch (e) { return rejeter(e); }
       },
 
-      supprimerFacture: function (id) {
+      enregistrerPaiement: function (factureId, v, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exigerAdmin(d);
+          v = v || {};
+          if (cle) {
+            var deja = null;
+            (d.factures || []).forEach(function (f) {
+              (f.paiements || []).forEach(function (p) { if (p.cle_idempotence === cle) deja = p; });
+            });
+            if (deja) {
+              if (deja.facture_id !== factureId) {
+                throw Erreur('DUPLICATE_OPERATION', 'Cette requête a déjà servi pour une autre facture.');
+              }
+              var fd = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+              return plusTard({ paiement: Object.assign({}, deja), facture: factureComplete(d, fd), deja: true });
+            }
+          }
+          var montant = lireNombre(v.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+          if (montant == null || montant <= 0) {
+            throw Erreur('INVALID_AMOUNT', 'Le montant du paiement doit être supérieur à zéro.');
+          }
+          if (v.paye_le && isNaN(new Date(v.paye_le).getTime())) {
+            throw Erreur('INVALID_DATE', 'Date du paiement illisible.');
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          var p = ajouterPaiementDemo(d, moi, f, Object.assign({}, v, { montant_usd: montant }), 'saisie', cle);
+          ecrireDonnees(d, 'factures');
+          return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      annulerPaiement: function (id, motif) {
+        var d = lireDonnees();
+        try {
+          var moi = exigerAdmin(d);
+          var f = null, p = null;
+          (d.factures || []).forEach(function (x) {
+            (x.paiements || []).forEach(function (y) { if (y.id === id) { f = x; p = y; } });
+          });
+          if (!p) throw Erreur('PAYMENT_NOT_FOUND', 'Aucun paiement avec cet identifiant.');
+          if (p.annule_le) return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: true });
+          motif = String(motif || '').trim().slice(0, 300);
+          if (!motif) throw Erreur('REASON_REQUIRED', 'Indiquez pourquoi ce paiement est annulé.');
+          p.annule_le = maintenant();
+          p.annule_par = moi.id;
+          p.motif_annulation = motif;
+          recalculerFactureDemo(d, f);
+          var resume = { facture: f.numero, montant_usd: p.montant_usd, moyen: p.moyen, reference: p.reference,
+                         paye_le: p.paye_le, origine: p.origine };
+          journaliser(d, moi, 'paiement.annulation', 'paiement', p.id, resume, { motif: motif });
+          noterEvenementDemo(d, 'PAIEMENT_ANNULE', f, p, Object.assign({ motif: motif }, resume));
+          ecrireDonnees(d, 'factures');
+          return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      annulerFacture: function (id, motif) {
+        var d = lireDonnees();
+        try {
+          var moi = exigerAdmin(d);
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          if (f.statut === 'annulee') return plusTard({ facture: factureComplete(d, f), deja: true });
+          motif = String(motif || '').trim().slice(0, 300);
+          if (!motif) throw Erreur('REASON_REQUIRED', 'Indiquez pourquoi cette facture est annulée.');
+          var paye = payeDe({ paiements: f.paiements || [] });
+          if (paye > 0) {
+            throw Erreur('INVOICE_HAS_PAYMENTS', 'La facture ' + f.numero + ' a reçu ' + montantTexte(paye) +
+                         ' $ : annulez d’abord ses paiements, un par un, avec leur motif.');
+          }
+          var avant = f.statut;
+          Object.assign(f, { statut: 'annulee', payee_le: null, annulee_le: maintenant(), annulee_par: moi.id,
+                             motif_annulation: motif });
+          journaliser(d, moi, 'facture.annulation', 'facture', f.id, { statut: avant }, { statut: 'annulee', motif: motif });
+          noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+          ecrireDonnees(d, 'factures');
+          return plusTard({ facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      regrouperFactures: function (ids, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exigerAdmin(d);
+          if (cle) {
+            var existante = (d.factures || []).filter(function (f) { return f.cle_idempotence === cle; })[0];
+            if (existante) {
+              return plusTard({
+                facture: factureComplete(d, existante),
+                annulees: (d.factures || []).filter(function (f) { return f.remplacee_par === existante.id; })
+                  .map(function (f) { return f.numero; }).sort(),
+                deja: true
+              });
+            }
+          }
+          var uniques = (ids || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; }).sort();
+          if (uniques.length < 2) throw Erreur('INVALID_INPUT', 'Choisissez au moins deux factures à regrouper.');
+          if (uniques.length > 50) throw Erreur('INVALID_INPUT', 'Au plus 50 factures par regroupement.');
+          var choisies = uniques.map(function (i) { return (d.factures || []).filter(function (f) { return f.id === i; })[0]; });
+          if (choisies.some(function (f) { return !f; })) {
+            throw Erreur('INVOICE_NOT_FOUND', 'Une des factures choisies n’existe plus.');
+          }
+          var client = choisies[0].client_id, colis = [], echeance = null, numeros = [];
+          choisies.forEach(function (f) {
+            if (f.client_id !== client) {
+              throw Erreur('INVOICE_CLIENT_MISMATCH',
+                           'Les factures choisies appartiennent à plusieurs clients : on ne regroupe que celles d’un seul.');
+            }
+            var refus = refusRegroupement(f);
+            if (refus) throw refus;
+            (f.facture_lignes || []).forEach(function (l) { colis.push(trouverColisDemo(d, l.colis_id)); });
+            if (f.echeance_le && (!echeance || f.echeance_le < echeance)) echeance = f.echeance_le;
+            numeros.push(f.numero);
+          });
+          if (colis.some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
+          var motif = 'Regroupement des factures ' + numeros.join(', ');
+          choisies.forEach(function (f) {
+            Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
+            noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+          });
+          var montant = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0) + FRAIS_SERVICE);
+          var n = nouvelleFacture(d, moi, {
+            client_id: client, montant_usd: montant, frais_service_usd: FRAIS_SERVICE, echeance_le: echeance,
+            cle_idempotence: cle || null
+          }, colis.sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); }));
+          choisies.forEach(function (f) { f.remplacee_par = n.id; });
+          journaliser(d, moi, 'facture.regroupement', 'facture', n.id, { factures: numeros },
+                      { numero: n.numero, montant_usd: n.montant_usd });
+          ecrireDonnees(d, 'factures');
+          return plusTard({ facture: factureComplete(d, n), annulees: numeros, deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      calculerFacture: function (colisIds) {
         var d = lireDonnees();
         try { exigerAdmin(d); } catch (e) { return echec(e.code); }
-        d.factures = (d.factures || []).filter(function (x) { return x.id !== id; });
-        ecrireDonnees(d, 'factures');
-        return plusTard(true);
+        var colis = (colisIds || []).map(function (i) { return trouverColisDemo(d, i); }).filter(Boolean)
+          .sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); });
+        var sousTotal = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0));
+        var frais = colis.length ? FRAIS_SERVICE : 0;
+        return plusTard({
+          lignes: colis.map(function (c) {
+            return { colis_id: c.id, numero: c.numero, description: c.description, poids_lb: c.poids_lb,
+                     tarif_lb_usd: tarifDe(c), prix_usd: prixColis(c) };
+          }),
+          sous_total: sousTotal, frais_service: frais, total: arrondi(sousTotal + frais)
+        });
+      },
+
+      resumeFacturation: function () {
+        var d = lireDonnees();
+        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        var r = { a_encaisser: 0, ouvertes: 0, partielles: 0, en_retard: 0, montant_en_retard: 0, encaisse_mois: 0 };
+        var mois = aujourdhui().slice(0, 7);
+        (d.factures || []).forEach(function (f) {
+          (f.paiements || []).forEach(function (p) {
+            if (!p.annule_le && new Date(new Date(p.paye_le).getTime() - 4 * 36e5).toISOString().slice(0, 7) === mois) {
+              r.encaisse_mois = arrondi(r.encaisse_mois + p.montant_usd);
+            }
+          });
+          if (f.statut === 'annulee') return;
+          var c = factureComplete(d, f);
+          r.a_encaisser = arrondi(r.a_encaisser + c.solde_usd);
+          if (c.solde_usd > 0) r.ouvertes++;
+          if (c.solde_usd > 0 && c.paye_usd > 0) r.partielles++;
+          if (c.etat_paiement === 'en_retard') {
+            r.en_retard++;
+            r.montant_en_retard = arrondi(r.montant_en_retard + c.solde_usd);
+          }
+        });
+        return plusTard(r);
+      },
+
+      // Le même rapport que rapport_anomalies_facturation, sur les données du navigateur
+      anomaliesFacturation: function () {
+        var d = lireDonnees();
+        try { exigerAdmin(d); } catch (e) { return echec(e.code); }
+        var sortie = [];
+        function signaler(type, gravite, f, detail) {
+          sortie.push({ type: type, gravite: gravite, facture_id: f ? f.id : null, numero: f ? f.numero : null,
+                        detail: detail });
+        }
+        var factures = d.factures || [];
+        factures.forEach(function (f) {
+          var lignes = f.facture_lignes || [];
+          var avecColis = lignes.some(function (l) { return l.colis_id; });
+          var paye = payeDe({ paiements: f.paiements || [] });
+          lignes.forEach(function (l) {
+            var c = l.colis_id ? trouverColisDemo(d, l.colis_id) : null;
+            if (!l.colis_id) {
+              signaler('ligne_sans_colis', 'info', f, 'La ligne « ' + l.libelle + ' » (' + montantTexte(l.montant_usd) +
+                       ' $) n’a plus de colis.');
+              return;
+            }
+            if (!c) return;
+            if (c.client_id !== f.client_id) signaler('client_different', 'erreur', f, 'Le colis ' + c.numero + ' appartient à un autre client.');
+            if (f.statut === 'annulee') return;
+            var autres = factures.filter(function (x) {
+              return x.id !== f.id && x.statut !== 'annulee' &&
+                (x.facture_lignes || []).some(function (m) { return m.colis_id === l.colis_id; });
+            });
+            if (autres.length) {
+              signaler('colis_facture_deux_fois', 'erreur', f, 'Le colis ' + c.numero + ' est aussi sur la facture ' +
+                       autres.map(function (x) { return x.numero; }).join(', ') + '.');
+            }
+            if (c.prix_usd != null && arrondi(c.prix_usd) !== arrondi(l.montant_usd)) {
+              signaler('prix_colis_change', 'info', f, 'Le colis ' + c.numero + ' vaut aujourd’hui ' + montantTexte(c.prix_usd) +
+                       ' $ ; la facture garde ' + montantTexte(l.montant_usd) + ' $.');
+            }
+          });
+          var totalLignes = arrondi(lignes.reduce(function (s, l) { return s + l.montant_usd; }, 0));
+          if (f.statut !== 'annulee' && avecColis && arrondi(totalLignes + f.frais_service_usd) !== arrondi(f.montant_usd)) {
+            signaler('total_incoherent', 'erreur', f, 'Total ' + montantTexte(f.montant_usd) + ' $ ; lignes ' +
+                     montantTexte(totalLignes) + ' $ + frais ' + montantTexte(f.frais_service_usd) + ' $.');
+          }
+          if (paye > f.montant_usd || f.montant_paye_usd > f.montant_usd) {
+            signaler('paye_depasse_total', 'erreur', f, 'Payé ' + montantTexte(paye) + ' $ pour un total de ' +
+                     montantTexte(f.montant_usd) + ' $.');
+          }
+          if (arrondi(f.montant_paye_usd) !== paye) {
+            signaler('paye_different_paiements', 'erreur', f, 'La facture indique ' + montantTexte(f.montant_paye_usd) +
+                     ' $ payés, ses paiements font ' + montantTexte(paye) + ' $.');
+          }
+          if ((f.statut === 'payee' && paye < f.montant_usd) || (f.statut === 'a_payer' && f.montant_usd > 0 && paye >= f.montant_usd)) {
+            signaler('statut_incoherent', 'attention', f, f.statut === 'payee'
+              ? 'Marquée payée, mais il reste ' + montantTexte(f.montant_usd - paye) + ' $ à payer.'
+              : 'Marquée à payer, mais entièrement payée.');
+          }
+          if (f.statut === 'annulee' && paye > 0) {
+            signaler('paiement_sur_facture_annulee', 'attention', f, montantTexte(paye) +
+                     ' $ encaissés sur une facture annulée : à rembourser ou à reporter.');
+          }
+          if (f.statut !== 'annulee' && avecColis && !f.frais_service_usd && f.cree_le >= '2026-09-22T04:00:00.000Z') {
+            signaler('frais_absents', 'info', f, 'Facture de colis sans frais de service.');
+          }
+        });
+        d.colis.forEach(function (c) {
+          if (c.client_id && !factureActiveDu(d, c.id)) {
+            sortie.push({ type: 'colis_sans_facture', gravite: 'info', facture_id: null, numero: c.numero,
+                          detail: 'Le colis ' + c.numero + ' n’est sur aucune facture active.' });
+          }
+        });
+        var rang = { erreur: 0, attention: 1, info: 2 };
+        sortie.sort(function (a, b) {
+          return rang[a.gravite] - rang[b.gravite] || (a.type < b.type ? -1 : a.type > b.type ? 1 : 0) ||
+                 String(a.numero).localeCompare(String(b.numero));
+        });
+        return plusTard(sortie);
       },
 
       notifications: function (id) {
@@ -2081,7 +2558,23 @@
             historiser(d, c, c.maj_le);
           });
           c.cree_le = c.recu_le = date(p.etapes[0][1], -2);
+          c.tarif_lb_usd = TARIF_LB_DEFAUT;
+          c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
           d.colis.push(c);
+          // Chaque colis repart avec sa facture, comme en ligne. Le colis livré
+          // est payé ; l'ordinateur l'est à moitié ; les pièces auto sont en
+          // retard de paiement.
+          var f = facturerColisDemo(d, null, c).facture;
+          var fa = (d.factures || []).filter(function (x) { return x.id === f.id; })[0];
+          fa.cree_le = c.cree_le;
+          if (p.etapes[p.etapes.length - 1][0] === 'livre') {
+            ajouterPaiementDemo(d, null, fa, { montant_usd: fa.montant_usd, moyen: 'moncash', reference: 'MC-48213',
+                                               paye_le: date(10) }, 'saisie', null);
+          } else if (p.suivi === 'TBA305112233000') {
+            ajouterPaiementDemo(d, null, fa, { montant_usd: 20, moyen: 'especes', paye_le: date(2) }, 'saisie', null);
+          } else if (p.suivi === '1Z999AA10123456784') {
+            fa.echeance_le = date(2).slice(0, 10);
+          }
         });
         ecrireDonnees(d);
         return plusTard(true);
@@ -2242,7 +2735,8 @@
   api.outils = {
     texte: texte, date: date, nombre: nombre, argent: argent, etapeDe: etapeDe,
     remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier,
-    prixColis: prixColis, totauxFacture: totauxFacture, tarifDe: tarifDe, arrondi: arrondi
+    prixColis: prixColis, totauxFacture: totauxFacture, tarifDe: tarifDe, arrondi: arrondi,
+    etatFacture: etatFacture, soldeDe: soldeDe, payeDe: payeDe
   };
 
   // Gelés : une page qui écrirait « API.tarifs.fraisService = 0 » n'obtiendrait
@@ -2255,7 +2749,8 @@
     transitions: TRANSITIONS, transitionPermise: transitionPermise, statutPrecedent: statutPrecedent,
     prixTransport: prixTransport, typesEvenement: TYPES_EVENEMENT, natureTransition: natureTransition,
     typePourStatut: typePourStatut, validerOperation: validerOperation,
-    libellesStatut: Object.freeze(LIBELLES), operationsScanner: Object.freeze(OPERATIONS_SCANNER.slice())
+    libellesStatut: Object.freeze(LIBELLES), operationsScanner: Object.freeze(OPERATIONS_SCANNER.slice()),
+    moyensPaiement: Object.freeze(MOYENS_PAIEMENT.slice())
   });
   window.GoshipAPI = api;
 })();

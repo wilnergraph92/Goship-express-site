@@ -309,6 +309,8 @@
       </div>
     </div>
     <ul class="gs-facture__lignes" data-champ="lignes"></ul>
+    <p class="gs-facture__soldes" data-champ="soldes" hidden></p>
+    <ul class="gs-facture__paiements" data-champ="paiements" hidden></ul>
     <p class="gs-facture__note" data-champ="note" translate="no" hidden></p>
     <div class="gs-facture__actions">
       <a class="gs-bouton gs-bouton--petit gs-bouton--plein" data-champ="payer" target="_blank" rel="noopener" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>Pagar con tarjeta</a>
@@ -386,6 +388,12 @@
   <p data-t="facture-a_payer">Por pagar</p>
   <p data-t="facture-payee">Pagada</p>
   <p data-t="facture-annulee">Anulada</p>
+  <p data-t="facture-partielle">Pagada en parte</p>
+  <p data-t="facture-en_retard">Vencida</p>
+  <p data-t="facture-total">Total {montant}</p>
+  <p data-t="facture-paye">Pagado {montant}</p>
+  <p data-t="facture-reste">Saldo pendiente {montant}</p>
+  <p data-t="facture-paiement">{montant} recibidos el {date}</p>
   <p data-t="facture-etablie">Emitida el {date}</p>
   <p data-t="facture-echeance">a pagar antes del {date}</p>
   <p data-t="facture-payee-le">pagada el {date}</p>
@@ -397,6 +405,15 @@
   <p data-t="facture-moyen-moncash">Pagada con MonCash</p>
   <p data-t="facture-moyen-natcash">Pagada con NatCash</p>
   <p data-t="facture-moyen-especes">Pagada en efectivo</p>
+  <p data-t="facture-moyen-transfert">Pagada por transferencia de dinero</p>
+  <p data-t="moyen-paypal">PayPal</p>
+  <p data-t="moyen-banque">Transferencia bancaria</p>
+  <p data-t="moyen-azul">Azul</p>
+  <p data-t="moyen-moncash">MonCash</p>
+  <p data-t="moyen-natcash">NatCash</p>
+  <p data-t="moyen-especes">Efectivo</p>
+  <p data-t="moyen-transfert">Transferencia de dinero</p>
+  <p data-t="moyen-autre">Otro medio</p>
   <p data-t="factures-total">{n} por pagar</p>
   <p data-t="admin-avis">Esta es una cuenta de administrador.</p>
   <p data-t="admin-lien">Abrir el panel de control</p>
