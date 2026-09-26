@@ -156,6 +156,13 @@
             <h2>Mes factures</h2>
             <span class="gs-panneau__total" data-total-factures hidden></span>
           </div>
+          <!-- Mon solde : calculé par la base (mon_resume), comme chaque facture -->
+          <dl class="gs-solde" data-solde hidden>
+            <div><dt>Total facturé</dt><dd data-solde-champ="facture" translate="no"></dd></div>
+            <div><dt>Déjà payé</dt><dd data-solde-champ="paye" translate="no"></dd></div>
+            <div class="gs-solde__reste"><dt>Reste à payer</dt><dd data-solde-champ="solde" translate="no"></dd></div>
+          </dl>
+          <p class="gs-solde__note" data-solde-note hidden></p>
           <div class="gs-factures" data-liste-factures aria-busy="true">
             <div class="gs-squelette" aria-hidden="true"></div>
           </div>
@@ -189,6 +196,15 @@
             <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copier l'adresse</button>
             <span class="gs-copie-ok" data-copy-feedback hidden role="status">Adresse copiée ✓</span>
           </div>
+        </div>
+
+        <div class="gs-panneau" data-panneau-messages hidden>
+          <div class="gs-panneau__tete">
+            <h2>Mes messages</h2>
+          </div>
+          <p class="gs-panneau__intro">Les derniers e-mails et messages que Goship Express vous a envoyés.</p>
+          <ul class="gs-messages" data-messages></ul>
+          <p class="gs-panneau__intro" data-messages-vide hidden>Aucun message pour l'instant.</p>
         </div>
 
         <div class="gs-panneau" data-profil>
@@ -415,6 +431,16 @@
   <p data-t="moyen-transfert">Transfert d'argent</p>
   <p data-t="moyen-autre">Autre moyen</p>
   <p data-t="factures-total">{n} à payer</p>
+  <p data-t="solde-retard">Dont {montant} en retard.</p>
+  <p data-t="solde-echeance">Prochaine échéance : {date}.</p>
+  <p data-t="canal-email">E-mail</p>
+  <p data-t="canal-whatsapp">WhatsApp</p>
+  <p data-t="canal-push">Notification sur le téléphone</p>
+  <p data-t="message-recu">Colis reçu à Miami</p>
+  <p data-t="message-disponible">Colis disponible</p>
+  <p data-t="message-bienvenue">Bienvenue chez Goship Express</p>
+  <p data-t="message-maj">Suivi du colis mis à jour</p>
+  <p data-t="message-autre">Message de Goship Express</p>
   <p data-t="admin-avis">Ce compte est un compte de l'équipe Goship Express.</p>
   <p data-t="admin-lien">Ouvrir le tableau de bord</p>
 </template>

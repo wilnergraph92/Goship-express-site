@@ -163,9 +163,11 @@
 
   /* ---- État de l'affichage ------------------------------------------------ */
   var etat = {
-    vue: 'colis',
-    colis: { lignes: [], total: 0, pages: 1, statut: 'actifs', recherche: '', clientId: null, clientCode: '' },
-    clients: { lignes: [], total: 0, pages: 1, recherche: '' },
+    vue: 'apercu',
+    // page commence à 0 ; parPage : 10, 25, 50 ou 100 (barre de pagination)
+    colis: { lignes: [], total: 0, page: 0, parPage: 25, statut: 'actifs', recherche: '', clientId: null, clientCode: '',
+             service: '', pays: '', depuis: '', jusqua: '' },
+    clients: { lignes: [], total: 0, page: 0, parPage: 25, recherche: '', tri: 'recent', filtre: 'tous', finances: true },
     factures: { lignes: [], total: 0, pages: 1, statut: 'a_payer' },
     selection: [],
     vus: {}
@@ -245,6 +247,7 @@
       var jour = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
       $('[data-date-jour]').textContent = jour.charAt(0).toUpperCase() + jour.slice(1);
     } catch (e) { /* date facultative */ }
+    choisirVue(etat.vue);
     chargerStatistiques();
     chargerColis();
     if (peut('clients.view')) chargerClients();
@@ -260,6 +263,7 @@
         if (peut('clients.view') && (quoi === 'clients' || etat.vue === 'clients')) chargerClients();
         if (peut('invoices.view') && (quoi === 'factures' || etat.vue === 'factures')) chargerFactures();
         if (peut('users.view') && (quoi === 'clients' || etat.vue === 'equipe')) chargerEquipe();
+        if (etat.vue === 'apercu') rafraichirApercu();
       }, 350);
     }, { tout: true, etat: function (actif) { $('[data-direct]').hidden = !actif; } });
   }
@@ -278,11 +282,36 @@
   /* ---- Colis --------------------------------------------------------------- */
   var corpsColis = $('[data-lignes="colis"]');
 
+  // Un jour du filtre « Reçus du … au … », en heure de Santo Domingo (UTC−4
+  // toute l'année) : « au 12/09 » compte tout le 12, jusqu'à minuit.
+  function debutDuJour(jour) { return jour + 'T00:00:00-04:00'; }
+  function lendemain(jour) {
+    var t = new Date(jour + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() + 1);
+    return t.toISOString().slice(0, 10);
+  }
+
+  function colisFiltres() {
+    var c = etat.colis;
+    return c.statut !== 'actifs' || c.recherche || c.clientId || c.service || c.pays || c.depuis || c.jusqua;
+  }
+
   function chargerColis(enDirect) {
     var c = etat.colis;
+    if (c.depuis && c.jusqua && c.jusqua < c.depuis) {
+      toast('La date de fin est avant la date de début.', true);
+      return Promise.resolve();
+    }
     return API.admin.colis({
-      recherche: c.recherche, statut: c.statut, clientId: c.clientId, page: 0, parPage: PAR_PAGE * c.pages
+      recherche: c.recherche, statut: c.statut, clientId: c.clientId, service: c.service, pays: c.pays,
+      depuis: c.depuis ? debutDuJour(c.depuis) : null, jusqua: c.jusqua ? debutDuJour(lendemain(c.jusqua)) : null,
+      page: c.page, parPage: c.parPage
     }).then(function (r) {
+      // Une page vidée entre-temps (colis supprimés, filtre changé) : la dernière qui existe
+      if (!r.lignes.length && c.page > 0 && r.total > 0) {
+        c.page = Math.ceil(r.total / c.parPage) - 1;
+        return chargerColis(enDirect);
+      }
       var nouveaux = [];
       r.lignes.forEach(function (ligne) {
         if (enDirect && etat.vus[ligne.id] !== ligne.maj_le) nouveaux.push(ligne.id);
@@ -451,12 +480,13 @@
     var vide = $('[data-vide="colis"]');
     vide.hidden = c.lignes.length > 0;
     if (!c.lignes.length) {
-      vide.textContent = c.recherche || c.clientId || (c.statut && c.statut !== 'actifs')
-        ? 'Aucun colis ne correspond à cette recherche.'
+      vide.textContent = colisFiltres()
+        ? 'Aucun colis ne correspond à ces filtres.'
         : 'Aucun colis en cours. Cliquez sur « Enregistrer un colis » à la réception d’un paquet à Miami.';
     }
     $('.gs-tableau--colis').closest('.gs-tableau-cadre').hidden = !c.lignes.length;
-    $('[data-plus="colis"]').hidden = c.lignes.length >= c.total;
+    paginer('colis', c, c.total, function () { chargerColis(); });
+    $('[data-action="reinitialiser-colis"]').hidden = !colisFiltres();
     $('[data-total="colis"]').textContent = c.total ? String(c.total) : '';
     majSelection();
     $$('[data-filtre-statut]').forEach(function (b) {
@@ -470,34 +500,58 @@
     clearTimeout(delaiRecherche);
     delaiRecherche = setTimeout(function () {
       etat.colis.recherche = e.target.value.trim();
-      etat.colis.pages = 1;
+      etat.colis.page = 0;
       chargerColis();
     }, 300);
   });
   var filtre = $('[data-filtre-colis]');
   filtre.addEventListener('change', function () {
     etat.colis.statut = filtre.value;
-    etat.colis.pages = 1;
+    etat.colis.page = 0;
+    chargerColis();
+  });
+  // Service, destination, dates de réception : la base filtre, la page n'écarte rien
+  [['[data-filtre-service]', 'service'], ['[data-filtre-pays]', 'pays'], ['[data-filtre-depuis]', 'depuis'],
+   ['[data-filtre-jusqua]', 'jusqua']].forEach(function (x) {
+    $(x[0]).addEventListener('change', function (e) {
+      etat.colis[x[1]] = e.target.value || '';
+      etat.colis.page = 0;
+      chargerColis();
+    });
+  });
+  function viderFiltresColis() {
+    var c = etat.colis;
+    c.statut = 'actifs'; c.recherche = ''; c.service = ''; c.pays = ''; c.depuis = ''; c.jusqua = ''; c.page = 0;
+    filtre.value = 'actifs';
+    $('[data-recherche="colis"]').value = '';
+    $('[data-filtre-service]').value = '';
+    $('[data-filtre-pays]').value = '';
+    $('[data-filtre-depuis]').value = '';
+    $('[data-filtre-jusqua]').value = '';
+  }
+  $('[data-action="reinitialiser-colis"]').addEventListener('click', function () {
+    viderFiltresColis();
+    retirerFiltreClient(false);
     chargerColis();
   });
   $$('[data-filtre-statut]').forEach(function (b) {
     b.addEventListener('click', function () {
-      var statut = b.getAttribute('data-filtre-statut');
-      filtre.value = statut;
-      etat.colis.statut = statut;
-      etat.colis.recherche = '';
-      $('[data-recherche="colis"]').value = '';
-      retirerFiltreClient(false);
-      etat.colis.pages = 1;
-      choisirVue('colis');
-      chargerColis();
+      // La pastille compte tous les colis de ce statut : les autres filtres s'effacent
+      viderFiltresColis();
+      filtrerParStatut(b.getAttribute('data-filtre-statut'));
     });
   });
   $('[data-vue-cible="clients"]').addEventListener('click', function () { choisirVue('clients'); });
-  $('[data-plus="colis"]').addEventListener('click', function () {
-    etat.colis.pages += 1;
+
+  // La liste des colis, filtrée sur un statut (pastilles du haut, vue générale)
+  function filtrerParStatut(statut) {
+    filtre.value = statut;
+    etat.colis.statut = statut;
+    retirerFiltreClient(false);
+    etat.colis.page = 0;
+    choisirVue('colis');
     chargerColis();
-  });
+  }
 
   function filtrerParClient(client) {
     etat.colis.clientId = client.id;
@@ -506,7 +560,7 @@
     filtre.value = '';
     etat.colis.recherche = '';
     $('[data-recherche="colis"]').value = '';
-    etat.colis.pages = 1;
+    etat.colis.page = 0;
     $('[data-filtre-client-nom]').textContent = client.nom_complet + ' (' + client.code + ')';
     $('[data-filtre-client]').hidden = false;
     choisirVue('colis');
@@ -520,6 +574,7 @@
     if (recharger) {
       etat.colis.statut = 'actifs';
       filtre.value = 'actifs';
+      etat.colis.page = 0;
       chargerColis();
     }
   }
@@ -601,23 +656,33 @@
   /* ---- Clients ---------------------------------------------------------------- */
   var corpsClients = $('[data-lignes="clients"]');
 
-  // Résumé par client : nombre de colis en cours, poids, montant, balance.
-  // Chargé en même temps que la liste ; s'il échoue, la liste s'affiche quand
-  // même, simplement sans les chiffres.
-  var resumeParClient = {};
-
+  // Une page de clients avec leurs colis en cours et leurs montants, triée,
+  // filtrée et comptée par la base (clients_soldes) : juste pour 50 clients
+  // comme pour 50 000. Sans outils/supabase-tableau-de-bord.sql, la liste
+  // s'affiche quand même, sans les chiffres.
   function chargerClients() {
     var c = etat.clients;
-    return Promise.all([
-      API.admin.clients({ recherche: c.recherche, page: 0, parPage: PAR_PAGE * c.pages }),
-      API.admin.resumeClients().catch(function () { return []; })
-    ]).then(function (r) {
-      c.lignes = r[0].lignes;
-      c.total = r[0].total;
-      resumeParClient = {};
-      (r[1] || []).forEach(function (e) { resumeParClient[e.client_id] = e; });
-      afficherClients();
-    }).catch(function (err) { toast(messageErreur(err), true); });
+    return API.admin.clientsSoldes({ recherche: c.recherche, tri: c.tri, filtre: c.filtre, page: c.page, parPage: c.parPage })
+      .then(function (r) {
+        if (!r.lignes.length && c.page > 0 && r.total > 0) {
+          c.page = Math.ceil(r.total / c.parPage) - 1;
+          return chargerClients();
+        }
+        c.lignes = r.lignes || [];
+        c.total = r.total || 0;
+        c.finances = r.finances !== false;
+        c.sansChiffres = false;
+        afficherClients();
+      })
+      .catch(function (err) {
+        if (err.code !== 'absent') { toast(messageErreur(err), true); return; }
+        return API.admin.clients({ recherche: c.recherche, page: c.page, parPage: c.parPage }).then(function (r) {
+          c.lignes = r.lignes;
+          c.total = r.total;
+          c.sansChiffres = true;
+          afficherClients();
+        }).catch(function (e) { toast(messageErreur(e), true); });
+      });
   }
 
   // Les statuts d'un client, du plus avancé au moins avancé, en petites pastilles
@@ -636,14 +701,16 @@
 
   function afficherClients() {
     var c = etat.clients;
+    var montants = peut('invoices.view') && c.finances && !c.sansChiffres;
     corpsClients.textContent = '';
     c.lignes.forEach(function (client) {
       var tr = el('tr');
-      var resume = resumeParClient[client.id] || { nbColis: 0, poids: 0, montant: 0, balance: 0, statuts: {}, majLe: null };
-      if (resume.nbColis) tr.classList.add('is-actif-client');
+      var enCours = Number(client.colis_en_cours) || 0;
+      if (enCours) tr.classList.add('is-actif-client');
 
       var tdCode = cellule('Identifiant');
       tdCode.appendChild(el('span', 'gs-cellule-num', client.code || '—'));
+      if (client.cree_le) tdCode.appendChild(el('span', 'gs-cellule-sous', 'Inscrit le ' + O.date(client.cree_le)));
       tr.appendChild(tdCode);
 
       var tdNom = cellule('Client');
@@ -655,31 +722,40 @@
       tr.appendChild(tdNom);
 
       var tdNb = cellule('Colis en cours');
-      tdNb.appendChild(el('span', 'gs-cellule-principale', resume.nbColis ? String(resume.nbColis) : '—'));
-      if (client.cree_le) tdNb.appendChild(el('span', 'gs-cellule-sous', 'Inscrit le ' + O.date(client.cree_le)));
+      if (c.sansChiffres) {
+        tdNb.appendChild(el('span', 'gs-cellule-sous', 'Non disponible'));
+      } else if (enCours) {
+        tdNb.appendChild(el('span', 'gs-cellule-principale', String(enCours)));
+        tdNb.appendChild(pastillesStatuts(client.statuts || {}));
+      } else {
+        tdNb.appendChild(el('span', 'gs-cellule-sous', 'Aucun colis en cours'));
+      }
       tr.appendChild(tdNb);
 
-      var tdStatuts = cellule('Statut des colis');
-      if (resume.nbColis) tdStatuts.appendChild(pastillesStatuts(resume.statuts));
-      else tdStatuts.appendChild(el('span', 'gs-cellule-sous', 'Aucun colis en cours'));
-      tr.appendChild(tdStatuts);
-
-      var tdPoids = cellule('Poids total');
-      tdPoids.textContent = resume.poids ? O.nombre(resume.poids) + ' lb' : '—';
+      var tdPoids = cellule('Poids en cours');
+      tdPoids.textContent = Number(client.poids_en_cours) ? O.nombre(Number(client.poids_en_cours)) + ' lb' : '—';
       tr.appendChild(tdPoids);
 
-      var tdMontant = cellule('Montant total');
-      tdMontant.textContent = resume.montant ? argent(resume.montant) : '—';
-      tr.appendChild(tdMontant);
+      if (peut('invoices.view')) {
+        var tdFacture = cellule('Facturé');
+        tdFacture.textContent = montants && Number(client.facture_usd) ? argent(client.facture_usd) : (montants ? '—' : 'Non disponible');
+        tr.appendChild(tdFacture);
+        var tdPaye = cellule('Payé');
+        tdPaye.textContent = montants && Number(client.paye_usd) ? argent(client.paye_usd) : (montants ? '—' : 'Non disponible');
+        tr.appendChild(tdPaye);
+        var tdSolde = cellule('Solde');
+        var solde = Number(client.solde_usd) || 0;
+        tdSolde.appendChild(el('span', solde > 0 ? 'gs-cellule-principale gs-balance-due' : 'gs-cellule-sous',
+                               !montants ? 'Non disponible' : (solde > 0 ? argent(solde) : 'Rien à payer')));
+        if (montants && Number(client.factures_ouvertes) > 0) {
+          tdSolde.appendChild(el('span', 'gs-cellule-sous', client.factures_ouvertes +
+                                 (client.factures_ouvertes > 1 ? ' factures ouvertes' : ' facture ouverte')));
+        }
+        tr.appendChild(tdSolde);
+      }
 
-      var tdBalance = cellule('Balance');
-      var soldeur = el('span', resume.balance > 0 ? 'gs-cellule-principale gs-balance-due' : 'gs-cellule-sous',
-                       resume.balance > 0 ? argent(resume.balance) : 'Rien à payer');
-      tdBalance.appendChild(soldeur);
-      tr.appendChild(tdBalance);
-
-      var tdDate = cellule('Dernière mise à jour');
-      tdDate.textContent = resume.majLe ? O.date(resume.majLe, true) : '—';
+      var tdDate = cellule('Dernière activité');
+      tdDate.textContent = client.derniere_activite ? O.date(client.derniere_activite, true) : '—';
       tr.appendChild(tdDate);
 
       var tdActions = el('td', 'gs-cellule-actions');
@@ -709,11 +785,11 @@
     var vide = $('[data-vide="clients"]');
     vide.hidden = c.lignes.length > 0;
     if (!c.lignes.length) {
-      vide.textContent = c.recherche ? 'Aucun client ne correspond à cette recherche.'
+      vide.textContent = c.recherche || c.filtre !== 'tous' ? 'Aucun client ne correspond à cette recherche.'
         : 'Aucun client inscrit pour l’instant. Les comptes créés sur le site apparaissent ici, avec leur code GSE.';
     }
     $('.gs-tableau--clients').closest('.gs-tableau-cadre').hidden = !c.lignes.length;
-    $('[data-plus="clients"]').hidden = c.lignes.length >= c.total;
+    paginer('clients', c, c.total, function () { chargerClients(); });
     $('[data-total="clients"]').textContent = c.total ? String(c.total) : '';
   }
 
@@ -722,12 +798,18 @@
     clearTimeout(delaiClients);
     delaiClients = setTimeout(function () {
       etat.clients.recherche = e.target.value.trim();
-      etat.clients.pages = 1;
+      etat.clients.page = 0;
       chargerClients();
     }, 300);
   });
-  $('[data-plus="clients"]').addEventListener('click', function () {
-    etat.clients.pages += 1;
+  $('[data-filtre-clients]').addEventListener('change', function (e) {
+    etat.clients.filtre = e.target.value;
+    etat.clients.page = 0;
+    chargerClients();
+  });
+  $('[data-tri-clients]').addEventListener('change', function (e) {
+    etat.clients.tri = e.target.value;
+    etat.clients.page = 0;
     chargerClients();
   });
 
@@ -1616,7 +1698,9 @@
   var onglets = $$('[data-onglet-vue]');
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
-    if (!onglet || onglet.hasAttribute('data-interdit')) vue = 'colis';
+    if (!onglet || onglet.hasAttribute('data-interdit')) {
+      vue = $('[data-onglet-vue="apercu"]').hasAttribute('data-interdit') ? 'colis' : 'apercu';
+    }
     etat.vue = vue;
     onglets.forEach(function (b) {
       var actif = b.getAttribute('data-onglet-vue') === vue;
@@ -1627,6 +1711,7 @@
     // Les factures ne se rechargent qu'à leur propre changement : en ouvrant
     // l'onglet, on s'assure de ne pas regarder une liste d'il y a une heure.
     if (vue === 'factures') chargerFactures();
+    if (vue === 'apercu' && Date.now() - etatApercu.charge > 60000) chargerApercu();
   }
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
@@ -2375,6 +2460,698 @@
       bloc.hidden = false;
     }).catch(function () { /* liste facultative */ });
   }
+
+  /* ---- Pagination -------------------------------------------------------------
+     La même barre pour les colis, les clients et les colis à traiter :
+     « Lignes par page · 26–50 sur 340 · Précédente · Suivante ». La base
+     compte et découpe ; la page n'affiche que ce qu'elle reçoit. */
+  var TAILLES_PAGE = [10, 25, 50, 100];
+
+  function paginer(nom, p, total, recharger) {
+    var zone = $('[data-pagination="' + nom + '"]');
+    zone.textContent = '';
+    total = Number(total) || 0;
+    zone.hidden = !total || (total <= TAILLES_PAGE[0] && !p.page);
+    if (zone.hidden) return;
+    var taille = el('label', 'gs-pagination__taille');
+    taille.appendChild(el('span', '', 'Lignes par page'));
+    var choix = el('select', 'gs-admin-filtre gs-admin-filtre--petit');
+    TAILLES_PAGE.forEach(function (n) {
+      var o = new Option(String(n), String(n));
+      o.selected = n === p.parPage;
+      choix.add(o);
+    });
+    choix.addEventListener('change', function () { p.parPage = Number(choix.value); p.page = 0; recharger(); });
+    taille.appendChild(choix);
+    zone.appendChild(taille);
+    var premier = p.page * p.parPage + 1, dernier = Math.min(total, (p.page + 1) * p.parPage);
+    zone.appendChild(el('span', 'gs-pagination__texte', premier + '–' + dernier + ' sur ' + total));
+    var precedente = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Précédente');
+    precedente.type = 'button';
+    precedente.disabled = p.page === 0;
+    precedente.addEventListener('click', function () { p.page -= 1; recharger(); });
+    var suivante = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Suivante');
+    suivante.type = 'button';
+    suivante.disabled = dernier >= total;
+    suivante.addEventListener('click', function () { p.page += 1; recharger(); });
+    zone.appendChild(precedente);
+    zone.appendChild(suivante);
+  }
+
+  /* ---- Petits outils d'affichage ---------------------------------------------- */
+  function entier(n) { return O.nombre(Number(n) || 0); }
+  function pluriel(n, un, plusieurs) { return entier(n) + ' ' + ((Number(n) || 0) > 1 ? plusieurs : un); }
+  // « 2026-09-12 » → « 12/09/2026 », sans passer par un fuseau horaire
+  function jourLisible(jour, court) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(jour || ''));
+    if (!m) return '';
+    return m[3] + '/' + m[2] + (court ? '' : '/' + m[1]);
+  }
+  function heure(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+  function libelleTypeEvenement(type) {
+    var t = API.regles.typesEvenement[type];
+    return t ? t.libelle : (type || 'Étape');
+  }
+  var SOURCES = { scanner: 'scanner', tableau_de_bord: 'tableau de bord', creation: 'enregistrement' };
+
+  // Ouvrir un colis trouvé ailleurs (vue générale, recherche) dans la fenêtre
+  // « Mettre à jour » : la liste des colis le relit d'abord, pour avoir la
+  // fiche complète et à jour.
+  function ouvrirColisParNumero(numero) {
+    API.admin.colis({ recherche: numero, statut: '', parPage: 5 }).then(function (r) {
+      var colis = (r.lignes || []).filter(function (l) { return l.numero === numero; })[0];
+      if (colis) ouvrirStatut([colis.id], colis);
+      else toast('Ce colis n’existe plus.', true);
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  function ouvrirFactureParId(id) {
+    API.admin.factures({ id: id, etat: '', parPage: 1 }).then(function (r) {
+      var facture = (r.lignes || [])[0];
+      if (!facture) { toast('Cette facture n’existe plus.', true); return; }
+      choisirVue('factures');
+      ouvrirFacture(facture);
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  /* ---- Graphiques -----------------------------------------------------------------
+     Peu nombreux, et seulement ce qui se lit mieux en barres : par jour et par
+     statut. Les valeurs sont celles de la base ; la page ne fait que les
+     mettre à l'échelle. Chaque barre porte son chiffre (survol, lecteur
+     d'écran), et le résumé écrit dit l'essentiel sans le dessin. */
+  var SVG = 'http://www.w3.org/2000/svg';
+  function svg(balise, attributs) {
+    var n = document.createElementNS(SVG, balise);
+    Object.keys(attributs || {}).forEach(function (k) { n.setAttribute(k, attributs[k]); });
+    return n;
+  }
+
+  // series : [{ nom, cle, classe, total, format }] ; jours : [{ jour, <cle>: n }]
+  function grapheJours(zone, jours, series) {
+    zone.textContent = '';
+    jours = jours || [];
+    var max = 0;
+    jours.forEach(function (j) { series.forEach(function (s) { max = Math.max(max, Number(j[s.cle]) || 0); }); });
+    var legende = el('ul', 'gs-graphe__legende');
+    series.forEach(function (s) {
+      var li = el('li');
+      li.appendChild(el('i', 'gs-graphe__puce ' + s.classe));
+      li.appendChild(document.createTextNode(s.nom + ' : ' + s.format(s.total)));
+      legende.appendChild(li);
+    });
+    zone.appendChild(legende);
+    if (!jours.length || !max) {
+      zone.appendChild(el('p', 'gs-graphe__vide', 'Rien sur cette période.'));
+      return;
+    }
+    var L = 600, H = 160, n = jours.length, pas = L / n;
+    var largeur = Math.max(1, (pas * (n > 60 ? 0.9 : 0.72)) / series.length);
+    var dessin = svg('svg', { viewBox: '0 0 ' + L + ' ' + H, preserveAspectRatio: 'none', class: 'gs-graphe__svg',
+                              role: 'img', 'aria-label': series.map(function (s) { return s.nom + ' ' + s.format(s.total); }).join(', ') +
+                                ', du ' + jourLisible(jours[0].jour) + ' au ' + jourLisible(jours[n - 1].jour) + '.' });
+    dessin.appendChild(svg('line', { x1: 0, x2: L, y1: H - 0.5, y2: H - 0.5, class: 'gs-graphe__axe' }));
+    jours.forEach(function (j, i) {
+      series.forEach(function (s, k) {
+        var v = Number(j[s.cle]) || 0;
+        if (!v) return;
+        var h = Math.max(2, v / max * (H - 8));
+        var barre = svg('rect', { x: (i * pas + (pas - largeur * series.length) / 2 + k * largeur).toFixed(2),
+                                  y: (H - h).toFixed(2), width: largeur.toFixed(2), height: h.toFixed(2), class: s.classe });
+        var titre = svg('title');
+        titre.textContent = jourLisible(j.jour) + ' — ' + s.nom + ' : ' + s.format(v);
+        barre.appendChild(titre);
+        dessin.appendChild(barre);
+      });
+    });
+    var cadre = el('div', 'gs-graphe__cadre');
+    cadre.appendChild(el('span', 'gs-graphe__max', 'max. ' + series[0].format(max)));
+    cadre.appendChild(dessin);
+    zone.appendChild(cadre);
+    var axe = el('div', 'gs-graphe__dates');
+    axe.appendChild(el('span', '', jourLisible(jours[0].jour, true)));
+    if (n > 2) axe.appendChild(el('span', '', jourLisible(jours[Math.floor((n - 1) / 2)].jour, true)));
+    if (n > 1) axe.appendChild(el('span', '', jourLisible(jours[n - 1].jour, true)));
+    zone.appendChild(axe);
+  }
+
+  // Une répartition en barres horizontales : [{ libelle, nombre, classe }]
+  function repartition(liste, lignes, videTexte) {
+    liste.textContent = '';
+    var max = 0;
+    lignes.forEach(function (l) { max = Math.max(max, Number(l.nombre) || 0); });
+    if (!lignes.length) {
+      liste.appendChild(el('li', 'gs-repartition__vide', videTexte));
+      return;
+    }
+    lignes.forEach(function (l) {
+      var li = el('li', 'gs-repartition__ligne');
+      var nom = el('span', 'gs-repartition__nom');
+      if (l.pastille) nom.appendChild(el('i', 'gs-pastille gs-pastille--' + l.pastille));
+      nom.appendChild(document.createTextNode(l.libelle));
+      li.appendChild(nom);
+      var piste = el('span', 'gs-repartition__piste');
+      var barre = el('span', 'gs-repartition__barre' + (l.pastille ? ' gs-repartition__barre--' + l.pastille : ''));
+      barre.style.width = max ? Math.round((Number(l.nombre) || 0) / max * 100) + '%' : '0%';
+      piste.appendChild(barre);
+      li.appendChild(piste);
+      li.appendChild(el('strong', 'gs-repartition__nombre', entier(l.nombre)));
+      liste.appendChild(li);
+    });
+  }
+
+  /* ---- La vue générale ------------------------------------------------------------
+     Une requête (vue_generale) pour tous les chiffres de la période ; une
+     seconde (colis_a_traiter) pour la liste du bas. Mise à jour : le bouton
+     « Actualiser », l'ouverture de l'onglet si les chiffres ont plus d'une
+     minute, et les changements en direct — au plus une fois toutes les
+     quinze secondes, pour ne pas recompter la base à chaque scan. */
+  var etatApercu = { periode: '30j', debut: '', fin: '', donnees: null, charge: 0, demande: 0, prevu: null };
+  var traiter = { liste: 'action_requise', jours: 7, page: 0, parPage: 10, demande: 0 };
+  var corpsApercu = $('[data-apercu-corps]');
+  var messageApercu = $('[data-apercu-message]');
+
+  function texteErreurApercu(err) {
+    if (err && err.code === 'non-autorise') return 'Accès refusé : votre rôle ne permet pas de voir la vue générale.';
+    if (err && err.code === 'absent') {
+      return 'La vue générale n’est pas encore installée : lancez outils/supabase-tableau-de-bord.sql dans Supabase ' +
+             '(SQL Editor), puis « Actualiser ».';
+    }
+    if (err && err.code === 'reseau') return 'Connexion impossible : les chiffres n’ont pas pu être chargés. Vérifiez la connexion, puis « Actualiser ».';
+    return messageErreur(err);
+  }
+
+  function chargerApercu() {
+    if (!peut('shipments.view')) return Promise.resolve();
+    var numero = ++etatApercu.demande;
+    clearTimeout(etatApercu.prevu);
+    etatApercu.prevu = null;
+    etatApercu.charge = Date.now();
+    corpsApercu.setAttribute('aria-busy', 'true');
+    if (!etatApercu.donnees) $('[data-apercu-etat]').textContent = 'Chargement des chiffres…';
+    chargerTraiter();
+    return API.admin.vueGenerale({ periode: etatApercu.periode, debut: etatApercu.debut, fin: etatApercu.fin, jours: traiter.jours })
+      .then(function (v) {
+        if (numero !== etatApercu.demande) return;
+        etatApercu.donnees = v;
+        messageApercu.hidden = true;
+        corpsApercu.hidden = false;
+        afficherApercu(v);
+      }).catch(function (err) {
+        if (numero !== etatApercu.demande) return;
+        etatApercu.charge = 0;
+        messageApercu.textContent = texteErreurApercu(err);
+        messageApercu.hidden = false;
+        // Des chiffres déjà affichés restent, avec l'erreur au-dessus ; sinon rien plutôt que des zéros faux
+        corpsApercu.hidden = !etatApercu.donnees;
+        if (!etatApercu.donnees) $('[data-apercu-etat]').textContent = '';
+      }).then(function () {
+        if (numero === etatApercu.demande) corpsApercu.removeAttribute('aria-busy');
+      });
+  }
+
+  function rafraichirApercu() {
+    if (etatApercu.prevu) return;
+    var attente = Math.max(0, 15000 - (Date.now() - etatApercu.charge));
+    etatApercu.prevu = setTimeout(function () {
+      etatApercu.prevu = null;
+      if (etat.vue === 'apercu') chargerApercu();
+    }, attente);
+  }
+
+  function kpis(nom, cartes) {
+    var zone = $('[data-kpis="' + nom + '"]');
+    zone.textContent = '';
+    cartes.forEach(function (k) {
+      var carte = el(k.action ? 'button' : 'div', 'gs-kpi' + (k.ton ? ' gs-kpi--' + k.ton : ''));
+      if (k.action) {
+        carte.type = 'button';
+        carte.addEventListener('click', k.action);
+      }
+      carte.appendChild(el('span', 'gs-kpi__libelle', k.libelle));
+      carte.appendChild(el('strong', 'gs-kpi__valeur', k.valeur));
+      if (k.sous) carte.appendChild(el('span', 'gs-kpi__sous', k.sous));
+      zone.appendChild(carte);
+    });
+  }
+
+  function partie(nom, visible) {
+    $$('[data-apercu-partie="' + nom + '"]').forEach(function (n) { n.hidden = !visible; });
+  }
+
+  function afficherApercu(v) {
+    var p = v.periode || {};
+    $('[data-apercu-etat]').textContent = (p.debut === p.fin ? 'Le ' + jourLisible(p.debut) : 'Du ' + jourLisible(p.debut) +
+      ' au ' + jourLisible(p.fin)) + ' (jours de Santo Domingo) · chiffres de ' + heure(v.genere_le);
+
+    var c = v.colis || {};
+    kpis('colis', [
+      { libelle: 'Reçus', valeur: entier(c.recus_periode),
+        sous: Number(c.poids_periode) ? O.nombre(Number(c.poids_periode)) + ' lb sur la période' : 'sur la période' },
+      { libelle: 'Livrés', valeur: entier(c.livres_periode), sous: 'sur la période' },
+      { libelle: 'En cours', valeur: entier(c.actifs), sous: 'maintenant · ' + pluriel(c.total, 'colis au total', 'colis au total'),
+        action: function () { viderFiltresColis(); filtrerParStatut('actifs'); } },
+      { libelle: 'Action requise', valeur: entier(c.action_requise), sous: 'maintenant', ton: c.action_requise ? 'critique' : '',
+        action: function () { choisirListe('action_requise'); } },
+      { libelle: 'Sans mouvement', valeur: entier(c.sans_mouvement), sous: 'aucun événement depuis ' + v.jours_sans_mouvement + ' j ou plus',
+        ton: c.sans_mouvement ? 'attention' : '', action: function () { choisirListe('sans_mouvement'); } }
+    ]);
+
+    partie('clients', !!v.clients);
+    if (v.clients) {
+      kpis('clients', [
+        { libelle: 'Clients inscrits', valeur: entier(v.clients.total), sous: 'maintenant',
+          action: function () { choisirVue('clients'); } },
+        { libelle: 'Nouveaux', valeur: entier(v.clients.nouveaux_periode), sous: 'inscrits sur la période' },
+        { libelle: 'Avec des colis en cours', valeur: entier(v.clients.avec_colis_en_cours), sous: 'maintenant' }
+      ]);
+    }
+
+    var f = v.facturation;
+    partie('facturation', !!f);
+    if (f) {
+      kpis('facturation', [
+        { libelle: 'Facturé', valeur: argent(f.facture_periode),
+          sous: pluriel(f.emises_periode, 'facture', 'factures') + ' · payé ' + argent(f.paye_sur_periode) + ' · reste ' + argent(f.solde_sur_periode) },
+        { libelle: 'Encaissé', valeur: argent(f.encaisse_periode), sous: pluriel(f.paiements_periode, 'paiement reçu', 'paiements reçus') },
+        { libelle: 'À encaisser', valeur: argent(f.a_encaisser),
+          sous: pluriel(f.ouvertes, 'facture ouverte', 'factures ouvertes') + ' · ' + pluriel(f.clients_avec_solde, 'client', 'clients'),
+          action: function () { choisirFactures('a_payer'); } },
+        { libelle: 'En retard', valeur: argent(f.montant_en_retard), sous: pluriel((f.etats || {}).en_retard, 'facture échue', 'factures échues'),
+          ton: (f.etats || {}).en_retard ? 'attention' : '', action: function () { choisirFactures('en_retard'); } }
+      ]);
+      var etats = el('p', 'gs-apercu__etats');
+      ['a_payer', 'partielle', 'en_retard', 'payee', 'annulee'].forEach(function (k) {
+        var morceau = el('span', 'gs-apercu__etat-facture');
+        morceau.appendChild(badgeFacture(k));
+        morceau.appendChild(document.createTextNode(' ' + entier((f.etats || {})[k])));
+        etats.appendChild(morceau);
+      });
+      $('[data-kpis="facturation"]').appendChild(etats);
+      grapheJours($('[data-graphe="argent"] [data-graphe-zone]'), f.par_jour, [
+        { nom: 'Facturé', cle: 'facture', classe: 'gs-graphe--facture', total: f.facture_periode, format: argent },
+        { nom: 'Encaissé', cle: 'encaisse', classe: 'gs-graphe--encaisse', total: f.encaisse_periode, format: argent }
+      ]);
+    }
+
+    grapheJours($('[data-graphe="colis"] [data-graphe-zone]'), c.par_jour, [
+      { nom: 'Reçus', cle: 'recus', classe: 'gs-graphe--recus', total: c.recus_periode, format: entier },
+      { nom: 'Livrés', cle: 'livres', classe: 'gs-graphe--livres', total: c.livres_periode, format: entier }
+    ]);
+    var statuts = c.statuts || {};
+    var zoneStatuts = $('[data-graphe="statuts"] [data-graphe-zone]');
+    zoneStatuts.textContent = '';
+    var liste = el('ul', 'gs-repartition');
+    zoneStatuts.appendChild(liste);
+    repartition(liste, Object.keys(STATUTS).map(function (k) {
+      return { libelle: STATUTS[k], nombre: statuts[k] || 0, pastille: k };
+    }), '');
+
+    // Les alertes : celles que la base a levées, rien d'autre
+    var alertes = $('[data-alertes]');
+    alertes.textContent = '';
+    (v.alertes || []).forEach(function (a) {
+      var li = el('li', 'gs-alerte-ligne gs-alerte-ligne--' + a.gravite);
+      li.appendChild(el('span', 'gs-alerte-ligne__texte', a.message));
+      var aller = { action_requise: function () { choisirListe('action_requise'); },
+                    sans_mouvement: function () { choisirListe('sans_mouvement'); },
+                    factures_en_retard: function () { choisirFactures('en_retard'); },
+                    colis_sans_facture: peut('reports.view') ? function () { choisirVue('factures'); $('[data-action="controler-factures"]').click(); } : null }[a.code];
+      if (aller) {
+        var b = el('button', 'gs-lien-bouton', 'Voir');
+        b.type = 'button';
+        b.addEventListener('click', aller);
+        li.appendChild(b);
+      }
+      alertes.appendChild(li);
+    });
+    if (!(v.alertes || []).length) alertes.appendChild(el('li', 'gs-alerte-ligne gs-alerte-ligne--ok', 'Aucune alerte critique.'));
+
+    partie('activite', !!v.activite);
+    if (v.activite) {
+      var activite = $('[data-activite]');
+      activite.textContent = '';
+      v.activite.forEach(function (e) {
+        var li = el('li', 'gs-activite__ligne');
+        li.appendChild(el('time', 'gs-activite__date', O.date(e.cree_le, true)));
+        var corps = el('div', 'gs-activite__corps');
+        var tete = el('div', 'gs-activite__tete');
+        var numero = el('button', 'gs-lien-bouton gs-cellule-num', e.numero || '—');
+        numero.type = 'button';
+        numero.setAttribute('aria-label', 'Ouvrir le colis ' + (e.numero || ''));
+        if (e.numero) numero.addEventListener('click', function () { ouvrirColisParNumero(e.numero); });
+        tete.appendChild(numero);
+        tete.appendChild(el('strong', '', e.libelle || libelleTypeEvenement(e.type_evenement)));
+        tete.appendChild(badge(e.statut));
+        corps.appendChild(tete);
+        corps.appendChild(el('span', 'gs-cellule-sous', [e.client, e.lieu, e.auteur ? 'par ' + e.auteur : '',
+          SOURCES[e.source] ? 'via ' + SOURCES[e.source] : '', e.corrige ? 'annulé par une correction' : '']
+          .filter(Boolean).join(' · ')));
+        li.appendChild(corps);
+        activite.appendChild(li);
+      });
+      if (!v.activite.length) activite.appendChild(el('li', 'gs-activite__vide', 'Aucun événement pour l’instant.'));
+    }
+
+    partie('scanner', !!v.scanner);
+    if (v.scanner) {
+      var s = v.scanner, d = s.dernier;
+      kpis('scanner', [
+        { libelle: 'Opérations aujourd’hui', valeur: entier(s.aujourdhui), sous: 'enregistrées au poste de scan' },
+        { libelle: 'Sur la période', valeur: entier(s.periode), sous: 'opérations enregistrées' },
+        { libelle: 'Dernier scan', valeur: d ? O.date(d.cree_le, true) : 'Aucun',
+          sous: d ? [d.numero, libelleTypeEvenement(d.type_evenement), d.auteur ? 'par ' + d.auteur : ''].filter(Boolean).join(' · ') : 'aucune opération encore' }
+      ]);
+      repartition($('[data-scan-employes]'), (s.par_employe || []).map(function (x) {
+        return { libelle: x.nom + (x.role && ROLES[x.role] ? ' (' + ROLES[x.role].toLowerCase() + ')' : ''), nombre: x.nombre };
+      }), 'Aucune opération sur la période.');
+      repartition($('[data-scan-operations]'), (s.par_operation || []).map(function (x) {
+        return { libelle: x.libelle, nombre: x.nombre };
+      }), 'Aucune opération sur la période.');
+      grapheJours($('[data-graphe="scans"] [data-graphe-zone]'), s.par_jour, [
+        { nom: 'Opérations', cle: 'nombre', classe: 'gs-graphe--scans', total: s.periode, format: entier }
+      ]);
+    }
+
+    partie('paiements_recents', !!v.paiements_recents);
+    if (v.paiements_recents) {
+      var corpsPaiements = $('[data-lignes="paiements-recents"]');
+      corpsPaiements.textContent = '';
+      v.paiements_recents.forEach(function (x) {
+        var tr = el('tr');
+        cellulePleine(tr, 'Reçu le', O.date(x.paye_le, true));
+        var tdClient = cellule('Client');
+        tdClient.appendChild(el('span', 'gs-cellule-principale', (x.client && x.client.nom_complet) || '—'));
+        tdClient.appendChild(el('span', 'gs-cellule-sous', (x.client && x.client.code) || ''));
+        tr.appendChild(tdClient);
+        var tdFacture = cellule('Facture');
+        var lien = el('button', 'gs-lien-bouton gs-cellule-num', x.facture || '—');
+        lien.type = 'button';
+        lien.addEventListener('click', function () { ouvrirFactureParId(x.facture_id); });
+        tdFacture.appendChild(lien);
+        tr.appendChild(tdFacture);
+        cellulePleine(tr, 'Moyen', MOYENS[x.moyen] || x.moyen || '—');
+        cellulePleine(tr, 'Montant', argent(x.montant_usd)).classList.add('gs-cellule-montant');
+        corpsPaiements.appendChild(tr);
+      });
+      $('[data-vide="paiements-recents"]').hidden = v.paiements_recents.length > 0;
+      $('.gs-tableau--paiements').closest('.gs-tableau-cadre').hidden = !v.paiements_recents.length;
+    }
+  }
+
+  function cellulePleine(tr, libelle, texte) {
+    var td = cellule(libelle);
+    td.textContent = texte;
+    tr.appendChild(td);
+    return td;
+  }
+
+  function choisirFactures(etatFactures) {
+    var liste = $('[data-filtre-factures]');
+    liste.value = etatFactures;
+    liste.dispatchEvent(new Event('change', { bubbles: true }));
+    choisirVue('factures');
+  }
+
+  // La période : une liste, et deux dates pour « Personnalisée »
+  var choixPeriode = $('[data-apercu-periode]');
+  choixPeriode.addEventListener('change', function () {
+    var perso = choixPeriode.value === 'personnalise';
+    $('[data-apercu-dates]').hidden = !perso;
+    if (perso) {
+      var debut = $('[data-apercu-debut]'), fin = $('[data-apercu-fin]');
+      if (!debut.value && etatApercu.donnees) debut.value = etatApercu.donnees.periode.debut;
+      if (!fin.value && etatApercu.donnees) fin.value = etatApercu.donnees.periode.fin;
+      debut.focus();
+      return;
+    }
+    etatApercu.periode = choixPeriode.value;
+    chargerApercu();
+  });
+  $('[data-action="apercu-appliquer"]').addEventListener('click', function () {
+    var debut = $('[data-apercu-debut]').value, fin = $('[data-apercu-fin]').value;
+    if (!debut || !fin) { toast('Choisissez une date de début et une date de fin.', true); return; }
+    if (fin < debut) { toast('La date de fin est avant la date de début.', true); return; }
+    etatApercu.periode = 'personnalise';
+    etatApercu.debut = debut;
+    etatApercu.fin = fin;
+    chargerApercu();
+  });
+  $('[data-action="apercu-actualiser"]').addEventListener('click', function () {
+    chargerApercu();
+    chargerStatistiques();
+  });
+
+  /* ---- Les colis à traiter ----------------------------------------------------- */
+  var DEFINITIONS_TRAITER = {
+    action_requise: 'Colis au statut « Action requise » : le client ou l’équipe doit agir. Les plus anciens d’abord ; la note dit pourquoi.',
+    sans_mouvement: 'Colis pas encore livrés, sans aucun événement (scan, changement de statut, correction) depuis {n} jours ou plus. Les plus anciens d’abord.'
+  };
+
+  function choisirListe(liste) {
+    traiter.liste = liste;
+    traiter.page = 0;
+    $$('[data-traiter-liste]').forEach(function (r) { r.checked = r.value === liste; });
+    choisirVue('apercu');
+    chargerTraiter();
+    var bloc = $('#apercu-traiter-titre');
+    if (bloc && bloc.scrollIntoView) bloc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function chargerTraiter() {
+    if (!peut('shipments.view')) return Promise.resolve();
+    var numero = ++traiter.demande;
+    var corps = $('[data-lignes="traiter"]');
+    var vide = $('[data-vide="traiter"]');
+    $('[data-traiter-definition]').textContent = DEFINITIONS_TRAITER[traiter.liste].replace('{n}', traiter.jours);
+    corps.closest('.gs-tableau-cadre').setAttribute('aria-busy', 'true');
+    return API.admin.colisATraiter(traiter.liste, { jours: traiter.jours, page: traiter.page, parPage: traiter.parPage })
+      .then(function (r) {
+        if (numero !== traiter.demande) return;
+        if (!r.lignes.length && traiter.page > 0 && r.total > 0) {
+          traiter.page = Math.ceil(r.total / traiter.parPage) - 1;
+          return chargerTraiter();
+        }
+        afficherTraiter(r);
+      }).catch(function (err) {
+        if (numero !== traiter.demande) return;
+        corps.textContent = '';
+        corps.closest('.gs-tableau-cadre').hidden = true;
+        vide.textContent = texteErreurApercu(err);
+        vide.hidden = false;
+        $('[data-pagination="traiter"]').hidden = true;
+      }).then(function () { corps.closest('.gs-tableau-cadre').removeAttribute('aria-busy'); });
+  }
+
+  function afficherTraiter(r) {
+    var corps = $('[data-lignes="traiter"]');
+    corps.textContent = '';
+    (r.lignes || []).forEach(function (x) {
+      var tr = el('tr');
+      var tdNum = cellule('Colis');
+      tdNum.appendChild(el('span', 'gs-cellule-num', x.numero));
+      if (x.description) tdNum.appendChild(el('span', 'gs-cellule-sous', x.description));
+      tr.appendChild(tdNum);
+      var tdClient = cellule('Client');
+      tdClient.appendChild(el('span', 'gs-cellule-principale', x.client ? x.client.nom_complet || '—' : 'Client supprimé'));
+      if (x.client) tdClient.appendChild(el('span', 'gs-cellule-sous', [x.client.code, x.client.telephone].filter(Boolean).join(' · ')));
+      tr.appendChild(tdClient);
+      var tdStatut = cellule('Statut');
+      tdStatut.appendChild(badge(x.statut));
+      if (x.lieu) tdStatut.appendChild(el('span', 'gs-cellule-sous', x.lieu));
+      tr.appendChild(tdStatut);
+      var tdEv = cellule('Dernier événement');
+      var ev = x.action || x.dernier_evenement;
+      if (ev) {
+        tdEv.appendChild(el('span', '', libelleTypeEvenement(ev.type_evenement) + ' · ' + O.date(ev.cree_le, true)));
+        var details = [ev.note ? '« ' + ev.note + ' »' : '', ev.auteur ? 'par ' + ev.auteur : ''].filter(Boolean).join(' · ');
+        if (details) tdEv.appendChild(el('span', 'gs-cellule-sous', details));
+      } else {
+        tdEv.appendChild(el('span', 'gs-cellule-sous', 'Reçu le ' + O.date(x.recu_le, true)));
+      }
+      tr.appendChild(tdEv);
+      var tdDepuis = cellule('Depuis');
+      var jours = Number(x.jours) || 0;
+      tdDepuis.appendChild(el('span', 'gs-cellule-principale', jours ? pluriel(jours, 'jour', 'jours') : 'aujourd’hui'));
+      tr.appendChild(tdDepuis);
+      var tdActions = el('td', 'gs-cellule-actions');
+      var ouvrir = el('button', 'gs-bouton gs-bouton--petit gs-bouton--sombre', 'Ouvrir');
+      ouvrir.type = 'button';
+      ouvrir.setAttribute('aria-label', 'Ouvrir le colis ' + x.numero);
+      ouvrir.addEventListener('click', function () { ouvrirColisParNumero(x.numero); });
+      tdActions.appendChild(ouvrir);
+      tr.appendChild(tdActions);
+      corps.appendChild(tr);
+    });
+    var vide = $('[data-vide="traiter"]');
+    vide.hidden = (r.lignes || []).length > 0;
+    vide.textContent = traiter.liste === 'action_requise' ? 'Aucun colis en « action requise ».'
+      : 'Aucun colis sans mouvement depuis ' + traiter.jours + ' jours.';
+    corps.closest('.gs-tableau-cadre').hidden = !(r.lignes || []).length;
+    paginer('traiter', traiter, r.total, function () { chargerTraiter(); });
+  }
+
+  $$('[data-traiter-liste]').forEach(function (r) {
+    r.addEventListener('change', function () { if (r.checked) choisirListe(r.value); });
+  });
+  $('[data-traiter-jours]').addEventListener('change', function (e) {
+    traiter.jours = Number(e.target.value) || 7;
+    traiter.page = 0;
+    // Le chiffre « Sans mouvement » de la vue générale suit le même réglage
+    chargerApercu();
+  });
+
+  /* ---- La recherche rapide ------------------------------------------------------
+     La base cherche (recherche_rapide) : numéro de colis ou son début, suivi
+     du vendeur, code-barres, QR d'étiquette, code client, nom, fin du
+     téléphone, e-mail, numéro de facture. Rien n'est filtré dans la page. */
+  var formRapide = $('form[data-form="recherche-rapide"]');
+  var champRapide = $('[data-rapide-texte]');
+  var zoneRapide = $('[data-rapide-resultats]');
+  var demandeRapide = 0, delaiRapide = null;
+
+  function fermerRapide() {
+    ++demandeRapide;
+    zoneRapide.hidden = true;
+    zoneRapide.textContent = '';
+  }
+
+  function chercherRapide(texte) {
+    texte = String(texte || '').trim();
+    clearTimeout(delaiRapide);
+    if (texte.length < 2) { fermerRapide(); return; }
+    var numero = ++demandeRapide;
+    zoneRapide.hidden = false;
+    zoneRapide.setAttribute('aria-busy', 'true');
+    API.admin.rechercheRapide(texte).then(function (r) {
+      if (numero !== demandeRapide) return;
+      afficherRapide(r);
+    }).catch(function (err) {
+      if (numero !== demandeRapide) return;
+      zoneRapide.textContent = '';
+      zoneRapide.appendChild(teteRapide('Recherche impossible'));
+      zoneRapide.appendChild(el('p', 'gs-rapide__message', err.code === 'absent'
+        ? 'La recherche rapide attend outils/supabase-tableau-de-bord.sql dans Supabase (SQL Editor).' : texteErreurApercu(err)));
+    }).then(function () { zoneRapide.removeAttribute('aria-busy'); });
+  }
+
+  function teteRapide(titre) {
+    var tete = el('div', 'gs-rapide__tete');
+    tete.appendChild(el('h2', 'gs-rapide__titre', titre));
+    var fermer = el('button', 'gs-lien-bouton', 'Fermer');
+    fermer.type = 'button';
+    fermer.addEventListener('click', function () { fermerRapide(); champRapide.focus(); });
+    tete.appendChild(fermer);
+    return tete;
+  }
+
+  function carteRapide(lignes, actions) {
+    var li = el('li', 'gs-rapide__carte');
+    lignes.forEach(function (l) { if (l) li.appendChild(l); });
+    if (actions.length) {
+      var zone = el('div', 'gs-rapide__actions');
+      actions.forEach(function (a) {
+        var b = el('button', 'gs-bouton gs-bouton--petit ' + (a.classe || 'gs-bouton--contour'), a.texte);
+        b.type = 'button';
+        b.addEventListener('click', a.faire);
+        zone.appendChild(b);
+      });
+      li.appendChild(zone);
+    }
+    return li;
+  }
+
+  function ligneTexte(classe, morceaux) {
+    var texte = morceaux.filter(Boolean).join(' · ');
+    return texte ? el('p', classe, texte) : null;
+  }
+
+  function afficherRapide(r) {
+    zoneRapide.textContent = '';
+    var colis = r.colis || [], clients = r.clients || [], factures = r.factures || [];
+    var n = colis.length + clients.length + factures.length;
+    zoneRapide.appendChild(teteRapide(n ? pluriel(n, 'résultat', 'résultats') + ' pour « ' + r.texte + ' »'
+                                        : 'Aucun résultat pour « ' + r.texte + ' »'));
+    if (!n) {
+      zoneRapide.appendChild(el('p', 'gs-rapide__message', 'Essayez le numéro complet du colis ou de la facture, le code GSE du client, ' +
+        'le début de son nom ou les 4 derniers chiffres de son téléphone.'));
+      return;
+    }
+    function section(titre, elements) {
+      if (!elements.length) return;
+      zoneRapide.appendChild(el('h3', 'gs-rapide__section', titre));
+      var liste = el('ul', 'gs-rapide__liste');
+      elements.forEach(function (x) { liste.appendChild(x); });
+      zoneRapide.appendChild(liste);
+    }
+    section('Colis', colis.map(function (c) {
+      var tete = el('p', 'gs-rapide__ligne-tete');
+      tete.appendChild(el('strong', 'gs-cellule-num', c.numero));
+      tete.appendChild(badge(c.statut));
+      var ev = c.dernier_evenement;
+      var facture = c.facture;
+      var ligneFacture = null;
+      if (facture) {
+        ligneFacture = el('p', 'gs-rapide__ligne');
+        ligneFacture.appendChild(document.createTextNode('Facture ' + facture.numero + ' · '));
+        ligneFacture.appendChild(badgeFacture(facture.etat));
+        ligneFacture.appendChild(document.createTextNode(' · solde ' + argent(facture.solde_usd)));
+      } else if (peut('invoices.view')) {
+        ligneFacture = el('p', 'gs-rapide__ligne', 'Sur aucune facture active');
+      }
+      var actions = [{ texte: 'Ouvrir', classe: 'gs-bouton--sombre', faire: function () { ouvrirColisParNumero(c.numero); } }];
+      if (facture) actions.push({ texte: 'Voir la facture', faire: function () { ouvrirFactureParId(facture.id); } });
+      return carteRapide([
+        tete,
+        ligneTexte('gs-rapide__ligne', [c.client ? c.client.nom_complet + ' (' + c.client.code + ')' : 'Client supprimé',
+          [c.destination, PAYS[c.pays_destination]].filter(Boolean).join(', '),
+          c.poids_lb != null ? O.nombre(Number(c.poids_lb)) + ' lb' : 'poids non renseigné', c.description]),
+        ev ? ligneTexte('gs-rapide__ligne gs-cellule-sous', ['Dernier événement : ' + libelleTypeEvenement(ev.type_evenement),
+          O.date(ev.cree_le, true), ev.lieu, ev.auteur ? 'par ' + ev.auteur : '']) : null,
+        ligneFacture
+      ], actions);
+    }));
+    section('Clients', clients.map(function (cl) {
+      var tete = el('p', 'gs-rapide__ligne-tete');
+      tete.appendChild(el('strong', '', cl.nom_complet || '—'));
+      tete.appendChild(el('span', 'gs-cellule-num', cl.code || ''));
+      var actions = [{ texte: 'Ses colis', faire: function () { fermerRapide(); filtrerParClient(cl); } }];
+      if (peut('shipments.create')) actions.push({ texte: '+ Colis', faire: function () { ouvrirColis({ code: cl.code }); } });
+      return carteRapide([
+        tete,
+        ligneTexte('gs-rapide__ligne', [cl.telephone, [cl.ville, PAYS[cl.pays] || cl.pays].filter(Boolean).join(', '), cl.email]),
+        ligneTexte('gs-rapide__ligne gs-cellule-sous', [pluriel(cl.colis_en_cours, 'colis en cours', 'colis en cours'),
+          cl.solde_usd == null ? '' : (Number(cl.solde_usd) > 0 ? 'solde ' + argent(cl.solde_usd) : 'rien à payer')])
+      ], actions);
+    }));
+    section('Factures', factures.map(function (f) {
+      var tete = el('p', 'gs-rapide__ligne-tete');
+      tete.appendChild(el('strong', 'gs-cellule-num', f.numero));
+      tete.appendChild(badgeFacture(f.etat));
+      return carteRapide([
+        tete,
+        ligneTexte('gs-rapide__ligne', [f.client && f.client.nom_complet, f.client && f.client.code, O.date(f.cree_le)]),
+        ligneTexte('gs-rapide__ligne gs-cellule-sous', ['total ' + argent(f.montant_usd), 'payé ' + argent(f.paye_usd),
+          'solde ' + argent(f.solde_usd)])
+      ], [{ texte: 'Ouvrir', classe: 'gs-bouton--sombre', faire: function () { ouvrirFactureParId(f.id); } }]);
+    }));
+  }
+
+  formRapide.addEventListener('submit', function (e) {
+    e.preventDefault();
+    chercherRapide(champRapide.value);
+  });
+  champRapide.addEventListener('input', function () {
+    clearTimeout(delaiRapide);
+    var texte = champRapide.value;
+    delaiRapide = setTimeout(function () { chercherRapide(texte); }, 400);
+  });
+  champRapide.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { champRapide.value = ''; fermerRapide(); }
+  });
 
   /* ---- Démonstration --------------------------------------------------------- */
   $('[data-action="exemples"]').addEventListener('click', function () {

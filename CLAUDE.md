@@ -159,6 +159,21 @@ sur une facture active (`INVOICE_ALREADY_EXISTS`).
 Les factures antérieures au 22/09/2026 portent `frais_service_usd = 0`,
 volontairement : leur total ne devait pas changer rétroactivement.
 
+### Le tableau de bord
+
+`outils/supabase-tableau-de-bord.sql` : fonctions de **lecture** seulement
+(`vue_generale`, `colis_a_traiter`, `recherche_rapide`, `clients_soldes`,
+`mon_resume`) et leurs index. Tout chiffre affiché par la vue générale, la
+liste des clients ou « Mon compte » vient de là : **aucun total ne se fait
+dans une page** (pas de `reduce` sur une liste pour un KPI), et une donnée
+que la base ne connaît pas (dépenses, scans échoués) n'a pas de case plutôt
+qu'un zéro. Les parties (`tableau_colis`, `tableau_facturation`…) ne sont
+ouvertes à aucun compte : `vue_generale` vérifie les permissions et ne rend
+que les parties que le rôle peut voir. Périodes en jours de Santo Domingo
+(`bornes_periode`). Copie démo dans `api.js` (`vueGenerale`,
+`bornesPeriode`, `jourSD`…) ; `essai-tableau.py` compare la forme des
+réponses des deux côtés.
+
 ## Base de données
 
 Tables : `clients`, `colis`, `colis_historique`, `notifications`,
@@ -170,8 +185,8 @@ Les migrations sont dans `outils/*.sql`, à exécuter dans Supabase >
 SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
 donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
-`supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`
-— relancer l'un impose
+`supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
+`supabase-tableau-de-bord.sql` — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.
