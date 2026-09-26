@@ -184,6 +184,23 @@ que les parties que le rôle peut voir. Périodes en jours de Santo Domingo
 `bornesPeriode`, `jourSD`…) ; `essai-tableau.py` compare la forme des
 réponses des deux côtés.
 
+### Analytics
+
+`outils/supabase-analytics.sql` (onglet `admin.html#analytics`) : ce qui
+s'est passé, période contre période précédente — le tableau de bord dit ce
+qui se passe maintenant. Fonctions de **lecture** (`analytics_synthese`,
+`_serie`, `_operations`, `_clients`, `_finances`, `_routes`, `_scanner`,
+`_qualite`), toutes sous `reports.view` ; les aides (`bornes_analytics`,
+`analytics_mesures`, `creances_au`, `statistiques_durees`…) ne sont ouvertes
+à personne. Mêmes définitions que la vue générale pour les mêmes chiffres
+(`essai-analytics.py` le vérifie). Une variation contre zéro vaut `null`,
+jamais Infinity ; une donnée non suivie (dépenses, dettes, résultat, scans
+échoués, origine, cause d'action requise) porte `suivi: false` plutôt qu'un
+zéro. Aucune prévision, aucun classement du personnel. Copie démo dans
+`api.js` (`analyticsDemo`, `bornesAnalytics`, `comparerValeurs`…),
+comparée par `essai-analytics.js --formes` / `--periodes`. La page garde une
+réponse une minute (`lireAnalytics`), pas de temps réel.
+
 ## Base de données
 
 Tables : `clients`, `colis`, `colis_historique`, `notifications`,
@@ -196,7 +213,7 @@ SQL Editor, copiés depuis GitHub avec « Copy raw file » (un aperçu tronqué
 donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql` — relancer l'un impose
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql` — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
 suppression. Garde cette propriété pour toute nouvelle migration.

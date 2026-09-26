@@ -45,6 +45,7 @@
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis">[[ico:package]]<span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients">[[ico:users]]<span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1" title="Factures">[[ico:file-text]]<span class="gs-td__libelle">Factures</span><span class="gs-admin-onglets__total" data-total="factures"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics">[[ico:chart]]<span class="gs-td__libelle">Analytics</span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan">[[ico:barcode]]<span class="gs-td__libelle">Scanner</span></button>
       <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe">[[ico:shield]]<span class="gs-td__libelle">Équipe</span></button>
     </div>
@@ -440,6 +441,61 @@
           <p class="gs-champ__aide" data-scan-journal-vide>Aucun scan pour l'instant.</p>
         </aside>
       </div>
+    </div>
+
+    <!-- Analytics (outils/supabase-analytics.sql) : ce qui s'est passé et
+         comment cela évolue, période contre période précédente. Réservé à
+         reports.view (gérant, administrateur) ; la base le vérifie. Chargé à
+         l'ouverture et sur « Actualiser », jamais en direct. -->
+    <div class="gs-admin-vue gs-analytics" data-vue="analytics" data-permission="reports.view" role="tabpanel" hidden>
+      <div class="gs-apercu__barre gs-analytics__barre">
+        <label class="gs-apercu__choix">
+          <span>Période</span>
+          <select class="gs-admin-filtre" data-analytics-periode>
+            <option value="aujourdhui">Aujourd'hui</option>
+            <option value="7j">7 derniers jours</option>
+            <option value="30j" selected>30 derniers jours</option>
+            <option value="mois">Ce mois-ci</option>
+            <option value="mois_precedent">Mois précédent</option>
+            <option value="3m">3 derniers mois</option>
+            <option value="6m">6 derniers mois</option>
+            <option value="12m">12 derniers mois</option>
+            <option value="annee">Cette année</option>
+            <option value="personnalise">Personnalisée…</option>
+          </select>
+        </label>
+        <div class="gs-apercu__dates" data-analytics-dates hidden>
+          <label class="gs-apercu__choix"><span>Du</span><input type="date" class="gs-admin-date" data-analytics-debut></label>
+          <label class="gs-apercu__choix"><span>Au</span><input type="date" class="gs-admin-date" data-analytics-fin></label>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--sombre" data-action="analytics-appliquer">Appliquer</button>
+        </div>
+        <label class="gs-apercu__choix">
+          <span>Découpage</span>
+          <select class="gs-admin-filtre" data-analytics-decoupage>
+            <option value="jour">Par jour</option>
+            <option value="semaine">Par semaine</option>
+            <option value="mois">Par mois</option>
+          </select>
+        </label>
+        <div class="gs-analytics__actions">
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="analytics-actualiser">[[ico:refresh]]Actualiser</button>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="analytics-csv">[[ico:file-text]]CSV / Excel</button>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="analytics-imprimer">[[ico:printer]]Imprimer / PDF</button>
+        </div>
+        <p class="gs-apercu__etat" data-analytics-etat role="status"></p>
+      </div>
+      <div class="gs-analytics__onglets" role="tablist" aria-label="Rubriques Analytics">
+        <button type="button" role="tab" aria-selected="true" data-analytics-module="synthese">Synthèse</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="expeditions" tabindex="-1">Expéditions</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="operations" tabindex="-1">Opérations</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="clients" tabindex="-1">Clients</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="finances" tabindex="-1">Finances</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="routes" tabindex="-1">Routes</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="scanner" tabindex="-1">Scanner</button>
+        <button type="button" role="tab" aria-selected="false" data-analytics-module="qualite" tabindex="-1">Qualité des données</button>
+      </div>
+      <p class="gs-apercu__message" data-analytics-message role="alert" hidden></p>
+      <div class="gs-analytics__corps" data-analytics-corps aria-live="polite"></div>
     </div>
 
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>

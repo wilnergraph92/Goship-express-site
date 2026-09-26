@@ -13,16 +13,19 @@ python3 outils/essais-services/essai-scanner.py      # le poste de scan, côté 
 python3 outils/essais-services/essai-finances.py     # paiements, soldes, annulations (Phase 5)
 python3 outils/essais-services/essai-permissions.py  # rôles, permissions, isolation des clients (Phase 6)
 python3 outils/essais-services/essai-tableau.py      # le tableau de bord : chiffres, rôles, périodes (Phase 7)
+python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes, délais, créances, volume (Phase 8)
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
 node outils/essais-services/essai-permissions.js     # les rôles en démonstration
 node outils/essais-services/essai-tableau.js         # le tableau de bord en démonstration
+node outils/essais-services/essai-analytics.js       # les Analytics en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql` ou des règles dans `api.js`.**
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql` ou des règles dans
+`api.js`.**
 
 ## Ce que prouve `essai-services.py`
 
@@ -175,6 +178,33 @@ version publiée sans qu'une donnée bouge :
   chaque recherche servie par un index.
 - **Les deux côtés d'accord** : même forme de réponse et mêmes jours de
   période en démonstration (`essai-tableau.js --formes`, `--periodes`).
+
+## Ce que prouve `essai-analytics.py`
+
+Les Analytics (`supabase-analytics.sql`), installées par-dessus la version
+publiée sans qu'une donnée bouge :
+
+- **Rôles** : administrateur et gérant lisent les huit rubriques ; employée,
+  client et visiteur sont refusés ; les aides internes ne s'appellent pas.
+- **Périodes** : les dix, avec leur période précédente, et les mêmes jours
+  que le tableau de bord pour les codes communs ; une période à l'envers,
+  trop longue ou inconnue est refusée ; à Santo Domingo, 23 h 59 le 31 mars et
+  0 h 00 le 1er avril, 23 h 59 le 31 décembre et 0 h 00 le 1er janvier tombent
+  chacun dans leur jour ; une variation contre zéro ne donne jamais Infinity.
+- **Un mois contrôlé** (mars 2026) : chaque chiffre attendu à la main — reçus,
+  poids, livrés, délais (moyenne, médiane, extrêmes), transitions, retours en
+  arrière et corrections.
+- **Finances** : 75 $ payé 25 puis 50 → 0 ; 75 $ payé 25 → 50 ; facturé ≠
+  encaissé ; créances reconstituées à une date passée égales au solde du
+  moment ; âge des créances.
+- **Tarif historique** : un colis à 3 $/lb reste à 3 $/lb quand le tarif passe
+  à 4 $.
+- **Les mêmes chiffres que la vue générale** (reçus, livrés, facturé,
+  encaissé, statuts, créances).
+- **Volume** : 10 000 colis, 100 000 événements, 5 000 factures — chaque
+  fonction en moins de 3 secondes (1,5 en pratique).
+- **Les deux côtés d'accord** : même forme de réponse et mêmes jours de
+  période en démonstration (`essai-analytics.js --formes`, `--periodes`).
 
 ## Ce que prouve `essai-demo.js`
 
