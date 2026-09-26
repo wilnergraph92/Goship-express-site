@@ -1,0 +1,49 @@
+# ==========================================================================
+#  Surveillance de la production
+# ==========================================================================
+#  Toutes les 30 minutes : le site répond-il, la base répond-elle, la file
+#  des notifications avance-t-elle ? (outils/production/surveiller.sh, lecture
+#  seule, clé publique du site seulement). Un échec fait échouer le workflow :
+#  GitHub envoie alors un e-mail au propriétaire du dépôt (réglable dans
+#  Settings > Notifications > Actions). Voir docs/production/monitoring.md.
+#
+#  GitHub suspend les workflows planifiés d'un dépôt sans activité pendant
+#  60 jours : il suffit alors de le réactiver (onglet Actions).
+# ==========================================================================
+
+name: Surveillance de la production
+
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/surveillance.yml'
+      - 'outils/production/surveiller.sh'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: surveillance
+  cancel-in-progress: false
+
+jobs:
+  surveiller:
+    name: Site, base, file des notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            assets/js/config.js
+            outils/production
+          sparse-checkout-cone-mode: false
+      - name: Contrôler la production
+        env:
+          # Sur une pull request, la nouvelle version n'est pas encore publiée : ce
+          # qui en dépend (fichiers retirés, sante()) n'est qu'un avertissement
+          SURVEILLANCE_TOLERANTE: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: bash outils/production/surveiller.sh

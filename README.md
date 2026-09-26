@@ -71,7 +71,7 @@ Trois protections tiennent l'ensemble : la **base de données** décide qui voit
 
 Ils ne peuvent se faire que depuis vos propres écrans Supabase (ils touchent à votre compte) :
 
-1. **Lancez `outils/supabase-securite.sql`** — SQL Editor > New query > coller > Run. Sans risque, relançable.
+1. **Lancez la chaîne des migrations** (`outils/migrations.txt`, dans l'ordre) puis `outils/production/controle-securite.sql` — SQL Editor > New query > coller > Run. Sans risque, relançable ; le contrôle ne modifie rien. (L'ancien `supabase-securite.sql` est inclus dans `supabase.sql` et refuse désormais de s'exécuter.)
 2. **Authentication > URL Configuration — à faire le jour de la mise en ligne.** Aujourd'hui seul `http://localhost:8000/**` est autorisé (c'est pourquoi les liens fonctionnent sur votre ordinateur) et le *Site URL* est resté `http://localhost:3000`, l'adresse d'essai par défaut. Dès que le site a son adresse, mettez-la dans *Site URL* et ajoutez `https://votre-site.com/**` dans *Redirect URLs*, puis retirez les lignes `localhost` — sinon **les liens « mot de passe oublié » et « confirmez votre adresse » renverront vos clients dans le vide**. N'y mettez jamais une adresse qui ne vous appartient pas : cette liste est ce qui empêche un faux site de récupérer les sessions de vos clients.
 3. **Authentication > Sign In / Providers > Email > Confirm email : activé.** Aujourd'hui, n'importe qui peut créer un compte avec l'adresse e-mail de quelqu'un d'autre sans avoir à la prouver. Le site et l'application affichent déjà le message « ouvrez le lien reçu par e-mail ». Un détail à ne pas rater : tant que l'expéditeur est une adresse Gmail réécrite par Brevo, ces e-mails peuvent tomber dans les indésirables — et un client qui ne les reçoit pas ne peut plus entrer. Faites d'abord un essai avec une adresse personnelle ; si l'e-mail arrive mal, authentifiez d'abord votre domaine dans Brevo.
 4. **Même écran, section Password** — longueur minimale **6**. Le site et l'application demandent déjà 6 caractères, mais c'est ici que la règle devient réellement appliquée. 6 est le plus petit nombre que Supabase accepte : sa console refuse en dessous, et régler le site plus bas ne servirait qu'à faire accepter un mot de passe que le serveur rejetterait ensuite. Activez aussi *Prevent use of leaked passwords* si votre offre le permet (Pro ou plus) : Supabase refuse alors les mots de passe déjà connus des pirates, ce qui compte d'autant plus avec 6 caractères.
@@ -85,7 +85,7 @@ Ils ne peuvent se faire que depuis vos propres écrans Supabase (ils touchent à
   curl -L "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" -o assets/js/vendor/supabase-2.NOUVELLE.js
   ```
 - **Les clés.** Celle du site (`supabaseKey`, dans `config.js`) est publique : elle est faite pour être lue par les navigateurs et ne donne accès qu'à ce que les règles de la base autorisent. Les vraies clés secrètes — `service_role`, Brevo, WhatsApp — ne doivent **jamais** entrer dans un fichier du site : elles se rangent dans le coffre-fort de Supabase avec `select public.definir_reglage(…)` (voir « Prévenir les clients »).
-- **Les numéros de colis se suivent** (GSE-1001, GSE-1002…) : quelqu'un peut donc essayer les numéros voisins sur la page de suivi et observer l'activité de l'entreprise — jamais les noms ni les adresses, mais le volume, oui. La fin de `outils/supabase-securite.sql` contient, prêt à l'emploi, le réglage qui donne aux nouveaux colis un numéro tiré au hasard.
+- **Les numéros de colis se suivent** (GSE-1001, GSE-1002…) : quelqu'un peut donc essayer les numéros voisins sur la page de suivi et observer l'activité de l'entreprise — jamais les noms ni les adresses, mais le volume, oui. La fin de `outils/supabase.sql` (partie « Facultatif : numéros de colis imprévisibles ») contient, prêt à l'emploi mais désactivé, le réglage qui donne aux nouveaux colis un numéro tiré au hasard.
 - **Le champ « lieu »** d'une étape s'affiche dans le suivi public : n'y écrivez pas le nom ni l'adresse d'un client.
 
 ### Le format des codes clients
@@ -94,9 +94,16 @@ Un code client est « GSE- » suivi de **4 chiffres** : `GSE-4323`. Il est tiré
 
 **Ce format tient 9 000 clients** (de 1000 à 9999). C'est confortable longtemps, mais ce n'est pas illimité, et il faut le savoir maintenant plutôt que le découvrir plus tard : au-delà d'environ 8 000 clients, la base met de plus en plus d'essais à trouver un numéro libre, et quand il n'y en a plus elle refuse la création du compte avec un message explicite (elle ne tourne pas en boucle sans fin). Le jour où vous en approchez, une seule ligne à changer dans `public.nouveau_code_client()` : `1000 + floor(random() * 9000)` devient `10000 + floor(random() * 90000)`, et vous passez à 90 000 codes à 5 chiffres. Les anciens codes à 4 chiffres continuent de fonctionner.
 
-Pour savoir où vous en êtes, la requête de contrôle est à la fin de `outils/supabase-code-client.sql`.
+Pour savoir où vous en êtes (lecture seule, dans le SQL Editor) :
 
-**Changer de format ne touche que les nouveaux comptes.** Les codes déjà attribués restent tels quels, et c'est voulu : un client a pu donner le sien à Amazon, et des colis peuvent déjà porter son ancien code. Le même fichier contient, prêt à l'emploi mais désactivé, le bloc qui les renumérote — à n'utiliser que si vous êtes sûr qu'aucun colis n'est en route.
+```sql
+select count(*) filter (where code is not null)                        as codes_attribues,
+       count(*) filter (where code !~ '^GSE-[1-9][0-9]{3}$')           as a_l_ancien_format,
+       9000 - count(*) filter (where code is not null)                 as codes_encore_libres
+from public.clients;
+```
+
+**Changer de format ne touche que les nouveaux comptes.** Les codes déjà attribués restent tels quels, et c'est voulu : un client a pu donner le sien à Amazon, et des colis peuvent déjà porter son ancien code. Les renuméroter (`update public.clients set code = public.nouveau_code_client() where code !~ '^GSE-[1-9][0-9]{3}$'`) n'est à faire que si vous êtes sûr qu'aucun colis n'est en route — et après une sauvegarde (docs/production/backup.md).
 
 **Essayer un script SQL avant de le lancer sur la vraie base.** Les fichiers de `outils/` s'exécutent sur la base de production : une erreur s'y voit sur de vrais clients. `outils/essais-sql/` permet de les faire tourner d'abord sur un PostgreSQL local jetable, qui se crée tout seul. Voir `outils/essais-sql/LISEZ-MOI.md`. Les règles métier (`supabase-services.sql`) ont leur propre banc : `outils/essais-services/`.
 
@@ -148,7 +155,7 @@ Dès qu'un compte est créé — depuis le site ou depuis l'application —, le 
 
 Ils partent de la base, pas du tableau de bord : l'ordinateur de l'équipe peut être éteint. Si la confirmation des adresses e-mail est activée (section « Sécurité »), ils attendent que le client ait cliqué sur le lien de confirmation — inutile d'envoyer une adresse à quelqu'un qui n'a pas prouvé la sienne. Ils ne partent jamais deux fois, et **un e-mail qui échoue n'empêche pas la création du compte**.
 
-Pour les installer, une seule fois : Supabase > *SQL Editor* > *New query* > coller `outils/supabase-bienvenue.sql` > *Run*. Puis deux réglages, dans la même fenêtre :
+Ils sont installés par `outils/supabase.sql` (partie 14), donc par la chaîne des migrations. Restent deux réglages, une seule fois, dans Supabase > *SQL Editor* :
 
 ```sql
 select public.definir_reglage('site_url', 'https://www.goshipexpress.com');
@@ -371,9 +378,9 @@ disparaît d'elle-même. Pensez aussi à remplacer les deux logos dessinés (`LO
 `LOGO_POMME` dans `build.py`) par les **badges officiels** d'Apple et de Google : les deux
 boutiques les fournissent et demandent qu'on utilise les leurs dès que l'application est en ligne.
 
-**Avant le premier essai**, ouvrez le SQL Editor de Supabase et exécutez `outils/supabase-application.sql`
-(il ajoute les pré-alertes, les factures, les notifications du téléphone et les nouveaux statuts de colis ;
-il peut être relancé sans risque).
+**Avant le premier essai**, la base doit avoir reçu toute la chaîne des migrations (`outils/migrations.txt`) :
+les pré-alertes, les factures, les notifications du téléphone et `creer_prealerte` en font partie.
+L'ancien `supabase-application.sql` y est inclus et refuse désormais de s'exécuter.
 
 **Essayer l'application sur votre téléphone :**
 
@@ -486,7 +493,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, `outils/supabase-finances.sql`, `outils/supabase-tableau-de-bord.sql`, `outils/supabase-analytics.sql`, puis `outils/supabase-mobile.sql`. **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les neuf, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql` ; `tableau_sur_12 = 12`, `index_sur_8 = 8` et `ouvertes_aux_visiteurs = 0` à la fin de `supabase-tableau-de-bord.sql` ; `analytics_sur_15 = 15`, `ouvertes_aux_visiteurs = 0` et `creances_egales = true` à la fin de `supabase-analytics.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false`, `index_sur_2 = 2` et `colonne = 1` à la fin de `supabase-mobile.sql`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, `outils/supabase-finances.sql`, `outils/supabase-tableau-de-bord.sql`, `outils/supabase-analytics.sql`, `outils/supabase-mobile.sql`, `outils/supabase-notifications.sql`, puis `outils/supabase-production.sql` (la liste fait foi dans `outils/migrations.txt`). **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les onze, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql` ; `tableau_sur_12 = 12`, `index_sur_8 = 8` et `ouvertes_aux_visiteurs = 0` à la fin de `supabase-tableau-de-bord.sql` ; `analytics_sur_15 = 15`, `ouvertes_aux_visiteurs = 0` et `creances_egales = true` à la fin de `supabase-analytics.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false`, `index_sur_2 = 2` et `colonne = 1` à la fin de `supabase-mobile.sql` ; `regles = 13`, `declencheurs = 2`, `ancien_push = 0`, `ouvertes_aux_visiteurs = false` et `planificateur = 2` à la fin de `supabase-notifications.sql` ; `status = ok` et `pret = true` à la fin de `supabase-production.sql` (si `planificateur` vaut 0, activez l'extension **pg_cron** dans Database > Extensions et relancez ce fichier : sans elle, les e-mails et notifications du téléphone attendent). Les notifications — règles, canaux, clés à poser, dépannage — sont décrites dans `docs/notifications.md`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 
@@ -704,7 +711,7 @@ de se connecter ou de créer un compte.
 - **Le numéro** : année, mois, puis quatre chiffres tirés au hasard — `2026-09-0417`. 10 000
   numéros par mois, et le compteur repart à chaque mois. Le tirage est borné à 200 essais et lève
   une erreur explicite plutôt que de tourner sans fin sur un mois saturé. Voir
-  `outils/supabase-numero-facture.sql`. Les factures déjà remises gardent leur ancien numéro
+  `reserver_numero_facture` dans `outils/supabase-finances.sql`. Les factures déjà remises gardent leur ancien numéro
   (`FAC-2026-0003`) : c'est celui que le client a sous les yeux.
 - **Une ligne par colis** : quantité, poids en livres, description, numéro du colis et total. Le
   poids est celui recopié sur la ligne au moment de la facture ; pour les factures d'avant cette
@@ -804,10 +811,9 @@ Côté site, les ajouts servent aussi dans le navigateur : raccourcis clavier, b
 - **Application mobile** : adresses des agences de Port-au-Prince et Santo Domingo, numéros de compte bancaire, Azul, MonCash et NatCash (`application-mobile/config.js`), puis publication sur les deux boutiques. Une fois publiée : `appStoreLien` et `googlePlayLien` dans `assets/js/config.js`, et les badges officiels des boutiques (voir « Sa promotion sur le site »).
 - **Paiement par carte** : contrat commerçant Azul demandé ; en attendant, les factures passent par PayPal (voir « Paiement des factures »).
 - **Espace client** : suivre les étapes « Activer l'espace client » ci-dessus (Supabase, puis e-mails de réinitialisation).
-- **Notifications** : configurer l'envoi des e-mails (Brevo) et, si vous le souhaitez, WhatsApp automatique (voir « Prévenir les clients »). Puis exécuter `outils/supabase-bienvenue.sql` et ses deux réglages, pour les e-mails de bienvenue.
-- **Codes clients** : exécuter `outils/supabase-code-client.sql` pour le passage au format court `GSE-4323` (voir « Le format des codes clients »).
-- **Numéros de facture** : exécuter `outils/supabase-numero-facture.sql` pour le format `2026-09-0417`. Sans lui, les nouvelles factures continuent en `FAC-2026-0004`.
-- **Factures et étiquettes** : exécuter `outils/supabase-factures.sql`. Sans lui, le client ne verra pas ses factures dans « Mon compte », et les étiquettes s'imprimeront sans l'adresse du destinataire.
+- **Notifications** : configurer l'envoi des e-mails (Brevo) et, si vous le souhaitez, WhatsApp automatique (voir « Prévenir les clients »). Puis les deux réglages des e-mails de bienvenue (`site_url`, `courriel_logo`).
+- **Base de production** : appliquer la chaîne `outils/migrations.txt` (codes clients courts, numéros de facture `2026-09-0417`, factures dans « Mon compte », notifications, `sante()`…) en suivant `docs/production/deployment.md` — sauvegarde vérifiée d'abord. Les anciens fichiers isolés (`supabase-code-client.sql`, `-numero-facture.sql`, `-factures.sql`, `-bienvenue.sql`, `-application.sql`, `-securite.sql`) sont inclus dans la chaîne et refusent de s'exécuter sur une base à jour.
+- **Mise en production** : l'état GO / NO-GO et ses bloqueurs sont dans `docs/production/go-no-go.md`.
 - **Termes et conditions** : quatre valeurs n'ont jamais été renseignées dans le document d'origine — `[devise locale]`, `[pourcentage %]`, `[nombre de jours]` et `[montant maximal ou norme en vigueur]`.
 - **Instagram et TikTok** : les icônes du pied de page n'ont pas encore de lien (`href="#top"`).
 - **Nom de domaine** : voir « Nom de domaine » ci-dessus.
