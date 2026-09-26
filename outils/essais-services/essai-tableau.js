@@ -286,7 +286,12 @@ function cles(v, chemin) {
   var nb = resultats.filter(Boolean).length;
   if (process.argv[2] === '--formes') {
     await comme('admin');
-    await A.envoyerEmail(c1.id, 'recu', {});
+    // Un message déjà envoyé (ancienne ligne de notifications, comme côté base) : en
+    // démonstration rien ne part, on l'écrit donc directement pour comparer sa forme
+    var donnees = JSON.parse(memoire['gse-demo-donnees']);
+    donnees.notifications = (donnees.notifications || []).concat([{ colis_id: c1.id, canal: 'email', evenement: 'recu',
+      destinataire: '', envoye_le: new Date().toISOString() }]);
+    memoire['gse-demo-donnees'] = JSON.stringify(donnees);
     var formes = {
       'vue générale': cles(await A.vueGenerale({})),
       'colis à traiter': cles(await A.colisATraiter('action_requise')),

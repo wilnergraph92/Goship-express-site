@@ -83,6 +83,19 @@ create index if not exists notifications_app_idx
 create index if not exists notifications_non_lues_idx
   on public.notifications (client_id) where canal = 'app' and lu_le is null;
 
+-- Le badge se met à jour tout seul (temps réel de Supabase, filtré par les règles
+-- de sécurité ci-dessous : chacun ne reçoit que ses propres lignes)
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables
+                 where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications') then
+    alter publication supabase_realtime add table public.notifications;
+  end if;
+exception
+  when undefined_object then
+    raise notice 'Publication supabase_realtime absente : badge sans mise à jour en direct.';
+end $$;
+
 -- Le client lit ses propres notifications (l'équipe les lit déjà : shipments.view).
 -- Il ne les modifie pas en direct : « lu » passe par marquer_notifications_lues.
 drop policy if exists notifications_client on public.notifications;

@@ -648,6 +648,39 @@
       }).then(resultat);
     },
 
+    // Les notifications du client (mes_notifications, outils/supabase-notifications.sql) :
+    // la base les écrit, les traduit et compte les non lues ; la page les affiche.
+    // o : { filtre: toutes | non_lues | colis | factures | paiements, page, parPage, langue }
+    mesNotifications: function (o) {
+      o = o || {};
+      return sb().then(function (c) {
+        return c.rpc('mes_notifications', { p_filtre: o.filtre || 'toutes', p_page: o.page || 0,
+                                            p_par_page: o.parPage || 20, p_langue: o.langue || LANGUE });
+      }).then(resultat);
+    },
+
+    notificationsNonLues: function () {
+      return sb().then(function (c) { return c.rpc('notifications_non_lues'); }).then(resultat).then(Number);
+    },
+
+    // ids : les notifications à marquer lues ; rien = toutes
+    marquerNotificationsLues: function (ids) {
+      return sb().then(function (c) {
+        return c.rpc('marquer_notifications_lues', { p_ids: ids && ids.length ? ids : null });
+      }).then(resultat);
+    },
+
+    // { canaux: { push: { configure }, email…, sms… }, preferences: [{ categorie, push, email, whatsapp, sms }] }
+    mesPreferencesNotifications: function () {
+      return sb().then(function (c) { return c.rpc('mes_preferences_notifications'); }).then(resultat);
+    },
+
+    reglerPreferenceNotification: function (categorie, canal, actif) {
+      return sb().then(function (c) {
+        return c.rpc('regler_preference_notification', { p_categorie: categorie, p_canal: canal, p_actif: !!actif });
+      }).then(resultat);
+    },
+
     // Mises à jour en direct. options.tout : tous les colis et clients (administrateur)
     surveiller: function (rappel, options) {
       options = options || {};
@@ -664,6 +697,11 @@
         canal = c.channel('gse-' + Math.random().toString(36).slice(2))
           .on('postgres_changes', filtre, function () { rappel('colis'); })
           .on('postgres_changes', filtreFactures, function () { rappel('factures'); });
+        if (!options.tout) {
+          // Une nouvelle notification (supabase-notifications.sql) : le badge se met à jour
+          canal.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications',
+                                         filter: 'client_id=eq.' + s.id }, function () { rappel('notifications'); });
+        }
         if (options.tout) {
           canal.on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, function () { rappel('clients'); });
         }
@@ -872,26 +910,46 @@
         return sb().then(function (c) { return c.from('colis').delete().eq('id', id); }).then(resultat);
       },
 
-      // Notifications : la base envoie le message au client du colis avec les
-      // clés enregistrées dans Supabase ; réponse « envoye », « non-configure »…
-      envoyerEmail: function (id, evenement, message) {
+      /* ---- Notifications (outils/supabase-notifications.sql) ------------------
+         La base prévient le client à chaque étape, selon ses règles : aucune page
+         n'envoie d'e-mail ni de WhatsApp. Ici, on regarde ce qui est parti. */
+
+      // Les envois d'un colis (fiche « Mettre à jour », dialogue d'enregistrement)
+      envoisColis: function (id) {
+        return sb().then(function (c) { return c.rpc('envois_colis', { p_colis: id }); }).then(resultat);
+      },
+
+      // Le centre des envois : totaux par statut et canal, alertes, liste paginée.
+      // o : { debut, fin, type, canal, statut, page, parPage }
+      centreNotifications: function (o) {
+        o = o || {};
         return sb().then(function (c) {
-          return c.rpc('envoyer_email_client', {
-            p_colis: id, p_evenement: evenement, p_sujet: message.sujet, p_html: message.html, p_texte: message.texte
+          return c.rpc('centre_notifications', {
+            p_debut: o.debut || null, p_fin: o.fin || null, p_type: o.type || null, p_canal: o.canal || null,
+            p_statut: o.statut || null, p_page: o.page || 0, p_par_page: o.parPage || 25
           });
         }).then(resultat);
       },
 
-      envoyerWhatsApp: function (id, evenement, modele) {
+      // Événement → notification → envois, pour une notification
+      suiviNotification: function (id) {
+        return sb().then(function (c) { return c.rpc('suivi_notification', { p_notification: id }); }).then(resultat);
+      },
+
+      // { modifiable, canaux: { push: true… }, regles: [...] }
+      reglesNotifications: function () {
+        return sb().then(function (c) { return c.rpc('regles_notifications'); }).then(resultat);
+      },
+
+      modifierRegleNotification: function (type, actif, canaux) {
         return sb().then(function (c) {
-          return c.rpc('envoyer_whatsapp_client', {
-            p_colis: id, p_evenement: evenement, p_modele: modele.nom, p_langue: modele.langue, p_parametres: modele.parametres
-          });
+          return c.rpc('modifier_regle_notification', { p_type: type, p_actif: !!actif, p_canaux: canaux || [] });
         }).then(resultat);
       },
 
-      notifications: function (id) {
-        return sb().then(function (c) { return c.rpc('notifications_colis', { p_colis: id }); }).then(resultat);
+      // Un essai vers son propre compte (une fois par minute), pour vérifier un canal
+      testerNotification: function (canal) {
+        return sb().then(function (c) { return c.rpc('tester_notification', { p_canal: canal }); }).then(resultat);
       },
 
       /* ---- Factures ---------------------------------------------------- */
@@ -1317,6 +1375,7 @@
       metadonnees: avant ? {} : { source: 'creation' }, cle_idempotence: null, visibilite: 'publique',
       corrige_id: null, cree_le: date || maintenant()
     });
+    notifierEtapeDemo(d, d.historique[d.historique.length - 1]);
   }
 
   // Les opérations du poste de scan, et la fiche qu'il affiche : même
@@ -1468,6 +1527,7 @@
       cle_idempotence: cle, visibilite: t.visibilite, corrige_id: corrige, cree_le: maintenant()
     };
     d.historique.push(e);
+    notifierEtapeDemo(d, e);
     if (cible !== c.statut || t.special === 'mise_a_jour') {
       var avant = { statut: c.statut, lieu: c.lieu || '', note: c.note || '' };
       c.statut = cible;
@@ -1636,9 +1696,241 @@
     d.evenementsFacturation.push({ id: d.evenementsFacturation.length + 1, type: type, facture_id: f ? f.id : null,
                                    paiement_id: p ? p.id : null, client_id: f ? f.client_id : null,
                                    donnees: donnees || {}, cree_le: maintenant(), traite_le: null });
+    notifierFacturationDemo(d, d.evenementsFacturation[d.evenementsFacturation.length - 1]);
+  }
+
+  /* ---- Les notifications, version démonstration ---------------------------
+     La copie de outils/supabase-notifications.sql : mêmes règles, mêmes textes,
+     mêmes clés d'idempotence. Une étape publique d'un colis ou un événement de
+     facturation crée une notification (espace client) et un envoi par canal.
+     En démonstration aucune clé n'est posée : l'e-mail, WhatsApp et le SMS
+     sont « annule, NON_CONFIGURE » et le téléphone « SANS_APPAREIL », comme
+     sur une base sans réglages — rien n'est jamais présenté comme envoyé.
+     essai-notifications.py compare ces règles et ces textes avec la base.
+     -------------------------------------------------------------------------- */
+  var REGLES_NOTIFICATIONS = [
+    { type: 'shipment_received', source: 'colis', evenement: 'COLIS_RECU', categorie: 'colis', priorite: 'normale', canaux: ['push', 'email', 'whatsapp'], sensible: false, libelle: 'Colis reçu à l\'entrepôt' },
+    { type: 'shipment_packed', source: 'colis', evenement: 'COLIS_EMBALLE', categorie: 'colis', priorite: 'normale', canaux: ['push'], sensible: false, libelle: 'Colis emballé' },
+    { type: 'shipment_shipped', source: 'colis', evenement: 'COLIS_EXPEDIE', categorie: 'colis', priorite: 'normale', canaux: ['push'], sensible: false, libelle: 'Colis expédié' },
+    { type: 'shipment_arrived', source: 'colis', evenement: 'COLIS_ARRIVE', categorie: 'colis', priorite: 'normale', canaux: ['push'], sensible: false, libelle: 'Arrivé au centre de distribution' },
+    { type: 'shipment_transferred', source: 'colis', evenement: 'COLIS_TRANSFERE', categorie: 'colis', priorite: 'normale', canaux: ['push'], sensible: false, libelle: 'Transféré à la succursale' },
+    { type: 'shipment_available', source: 'colis', evenement: 'COLIS_DISPONIBLE', categorie: 'colis', priorite: 'haute', canaux: ['push', 'email', 'whatsapp'], sensible: false, libelle: 'Colis disponible' },
+    { type: 'shipment_delivered', source: 'colis', evenement: 'COLIS_LIVRE', categorie: 'colis', priorite: 'normale', canaux: ['push'], sensible: false, libelle: 'Colis livré' },
+    { type: 'action_required', source: 'colis', evenement: 'ACTION_REQUISE', categorie: 'colis', priorite: 'haute', canaux: ['push', 'email'], sensible: true, libelle: 'Action requise' },
+    { type: 'action_resolved', source: 'colis', evenement: 'ACTION_RESOLUE', categorie: 'colis', priorite: 'normale', canaux: ['push'], sensible: false, libelle: 'Action résolue' },
+    { type: 'invoice_created', source: 'facturation', evenement: 'FACTURE_CREEE', categorie: 'factures', priorite: 'normale', canaux: ['push', 'email'], sensible: true, libelle: 'Nouvelle facture' },
+    { type: 'payment_received', source: 'facturation', evenement: 'PAIEMENT_ENREGISTRE', categorie: 'paiements', priorite: 'normale', canaux: ['push', 'email'], sensible: true, libelle: 'Paiement enregistré' },
+    { type: 'invoice_paid', source: 'facturation', evenement: 'FACTURE_PAYEE', categorie: 'factures', priorite: 'normale', canaux: ['push'], sensible: true, libelle: 'Facture payée' },
+    { type: 'invoice_overdue', source: 'planifie', evenement: 'FACTURE_EN_RETARD', categorie: 'factures', priorite: 'normale', canaux: ['push', 'email'], sensible: true, libelle: 'Facture en retard' }
+  ];
+  var CANAUX_NOTIFICATIONS = ['push', 'email', 'whatsapp', 'sms'];
+
+  // notification_textes() : titre et message dans les quatre langues
+  var TEXTES_NOTIFICATIONS = {
+    shipment_received: {
+      fr: { titre: "Colis reçu", message: "Votre colis {{numero}} a été reçu à notre entrepôt de Miami." },
+      en: { titre: "Package received", message: "Your package {{numero}} has been received at our Miami warehouse." },
+      es: { titre: "Paquete recibido", message: "Su paquete {{numero}} fue recibido en nuestro almacén de Miami." },
+      ht: { titre: "Koli resevwa", message: "Nou resevwa koli ou {{numero}} nan depo nou an Miami." }
+    },
+    shipment_packed: {
+      fr: { titre: "Colis emballé", message: "Votre colis {{numero}} est emballé et prêt à partir." },
+      en: { titre: "Package packed", message: "Your package {{numero}} is packed and ready to ship." },
+      es: { titre: "Paquete embalado", message: "Su paquete {{numero}} está embalado y listo para salir." },
+      ht: { titre: "Koli anbale", message: "Koli ou {{numero}} anbale, li pare pou l pati." }
+    },
+    shipment_shipped: {
+      fr: { titre: "Colis expédié", message: "Votre colis {{numero}} a été expédié." },
+      en: { titre: "Package shipped", message: "Your package {{numero}} has been shipped." },
+      es: { titre: "Paquete enviado", message: "Su paquete {{numero}} fue enviado." },
+      ht: { titre: "Koli voye", message: "Koli ou {{numero}} pati." }
+    },
+    shipment_arrived: {
+      fr: { titre: "Colis arrivé", message: "Votre colis {{numero}} est arrivé au centre de distribution." },
+      en: { titre: "Package arrived", message: "Your package {{numero}} has arrived at the distribution centre." },
+      es: { titre: "Paquete llegó", message: "Su paquete {{numero}} llegó al centro de distribución." },
+      ht: { titre: "Koli rive", message: "Koli ou {{numero}} rive nan sant distribisyon an." }
+    },
+    shipment_transferred: {
+      fr: { titre: "Colis transféré", message: "Votre colis {{numero}} a été transféré à la succursale." },
+      en: { titre: "Package transferred", message: "Your package {{numero}} has been transferred to the branch." },
+      es: { titre: "Paquete transferido", message: "Su paquete {{numero}} fue transferido a la sucursal." },
+      ht: { titre: "Koli transfere", message: "Koli ou {{numero}} transfere nan sikisal la." }
+    },
+    shipment_available: {
+      fr: { titre: "Colis disponible", message: "Votre colis {{numero}} est disponible. Présentez votre code client pour le retirer." },
+      en: { titre: "Package ready for pickup", message: "Your package {{numero}} is ready for pickup. Please show your customer code." },
+      es: { titre: "Paquete disponible", message: "Su paquete {{numero}} está disponible. Presente su código de cliente para retirarlo." },
+      ht: { titre: "Koli disponib", message: "Koli ou {{numero}} disponib. Montre kòd kliyan ou pou w vin chèche l." }
+    },
+    shipment_delivered: {
+      fr: { titre: "Colis livré", message: "Votre colis {{numero}} a été livré." },
+      en: { titre: "Package delivered", message: "Your package {{numero}} has been delivered." },
+      es: { titre: "Paquete entregado", message: "Su paquete {{numero}} fue entregado." },
+      ht: { titre: "Koli livre", message: "Koli ou {{numero}} livre." }
+    },
+    action_required: {
+      fr: { titre: "Action requise", message: "Une action est requise concernant votre colis {{numero}}. Ouvrez votre espace pour en savoir plus." },
+      en: { titre: "Action required", message: "An action is required regarding your package {{numero}}. Open your account to learn more." },
+      es: { titre: "Acción requerida", message: "Se requiere una acción sobre su paquete {{numero}}. Abra su cuenta para más detalles." },
+      ht: { titre: "Aksyon nesesè", message: "Gen yon aksyon pou fè sou koli ou {{numero}}. Louvri espas ou pou w konnen plis." }
+    },
+    action_resolved: {
+      fr: { titre: "Action résolue", message: "Le point en attente sur votre colis {{numero}} est réglé." },
+      en: { titre: "Action resolved", message: "The pending issue with your package {{numero}} has been resolved." },
+      es: { titre: "Acción resuelta", message: "El asunto pendiente de su paquete {{numero}} fue resuelto." },
+      ht: { titre: "Aksyon regle", message: "Pwoblèm ki te genyen sou koli ou {{numero}} an regle." }
+    },
+    invoice_created: {
+      fr: { titre: "Nouvelle facture", message: "Une nouvelle facture ({{facture}}, {{montant}}) est disponible dans votre espace GoShip Express." },
+      en: { titre: "New invoice", message: "A new invoice ({{facture}}, {{montant}}) is available in your GoShip Express account." },
+      es: { titre: "Nueva factura", message: "Una nueva factura ({{facture}}, {{montant}}) está disponible en su cuenta GoShip Express." },
+      ht: { titre: "Nouvo fakti", message: "Yon nouvo fakti ({{facture}}, {{montant}}) disponib nan espas GoShip Express ou." }
+    },
+    payment_received: {
+      fr: { titre: "Paiement enregistré", message: "Votre paiement de {{montant}} sur la facture {{facture}} a été enregistré." },
+      en: { titre: "Payment recorded", message: "Your payment of {{montant}} on invoice {{facture}} has been recorded." },
+      es: { titre: "Pago registrado", message: "Su pago de {{montant}} de la factura {{facture}} fue registrado." },
+      ht: { titre: "Peman anrejistre", message: "Nou anrejistre peman ou {{montant}} sou fakti {{facture}}." }
+    },
+    invoice_paid: {
+      fr: { titre: "Facture payée", message: "Votre facture {{facture}} est entièrement payée. Merci !" },
+      en: { titre: "Invoice paid", message: "Your invoice {{facture}} is fully paid. Thank you!" },
+      es: { titre: "Factura pagada", message: "Su factura {{facture}} está totalmente pagada. ¡Gracias!" },
+      ht: { titre: "Fakti peye", message: "Fakti ou {{facture}} peye nèt. Mèsi !" }
+    },
+    invoice_overdue: {
+      fr: { titre: "Facture en retard", message: "Votre facture {{facture}} a dépassé sa date d'échéance. Consultez-la dans votre espace." },
+      en: { titre: "Invoice overdue", message: "Your invoice {{facture}} is past its due date. Please check it in your account." },
+      es: { titre: "Factura vencida", message: "Su factura {{facture}} superó su fecha de vencimiento. Consúltela en su cuenta." },
+      ht: { titre: "Fakti an reta", message: "Fakti ou {{facture}} depase dat li te dwe peye a. Gade l nan espas ou." }
+    },
+    test: {
+      fr: { titre: "Notification d'essai", message: "Ceci est un essai des notifications GoShip Express." },
+      en: { titre: "Test notification", message: "This is a test of GoShip Express notifications." },
+      es: { titre: "Notificación de prueba", message: "Esta es una prueba de las notificaciones de GoShip Express." },
+      ht: { titre: "Notifikasyon esè", message: "Sa se yon esè notifikasyon GoShip Express." }
+    },
+    verrou: {
+      fr: { titre: "GoShip Express", message: "Une mise à jour concernant votre compte est disponible." },
+      en: { titre: "GoShip Express", message: "An update about your account is available." },
+      es: { titre: "GoShip Express", message: "Hay una actualización sobre su cuenta." },
+      ht: { titre: "GoShip Express", message: "Gen yon nouvèl sou kont ou." }
+    },
+    email: {
+      fr: { salutation: "Bonjour {{nom}},", bouton: "OUVRIR MON ESPACE", pied: "Vous recevez ce message car vous avez un compte client Goship Express. Réglez vos notifications dans votre espace." },
+      en: { salutation: "Hello {{nom}},", bouton: "OPEN MY ACCOUNT", pied: "You receive this message because you have a Goship Express customer account. Manage your notifications in your account." },
+      es: { salutation: "Estimado/a {{nom}}:", bouton: "ABRIR MI CUENTA", pied: "Recibe este mensaje porque tiene una cuenta de cliente Goship Express. Configure sus notificaciones en su cuenta." },
+      ht: { salutation: "Bonjou {{nom}},", bouton: "LOUVRI ESPAS MWEN", pied: "Ou resevwa mesaj sa a paske ou gen yon kont kliyan Goship Express. Regle notifikasyon ou nan espas ou." }
+    }
+  };
+
+  // Les règles de la démo : celles de départ, avec les réglages de l'administrateur
+  function reglesNotificationsDemo(d) {
+    var reglees = d.reglesNotifications || {};
+    return REGLES_NOTIFICATIONS.map(function (r) {
+      var x = JSON.parse(JSON.stringify(r));
+      if (reglees[r.type]) { x.actif = reglees[r.type].actif; x.canaux = reglees[r.type].canaux; x.maj_le = reglees[r.type].maj_le; }
+      if (x.actif === undefined) x.actif = true;
+      return x;
+    });
+  }
+
+  function langueNotification(l) { return ['fr', 'en', 'es', 'ht'].indexOf(l) >= 0 ? l : 'fr'; }
+
+  // montant_notification : 40,00 $ en français et en créole, $40.00 en anglais et en espagnol
+  function montantNotification(n, langue) {
+    if (n == null || n === '') return '';
+    var t = (Math.round(Number(n) * 100) / 100).toFixed(2);
+    return langue === 'en' || langue === 'es' ? '$' + t : t.replace('.', ',') + ' $';
+  }
+
+  // rendre_notification : seules {{numero}}, {{facture}} et {{montant}} sont remplacées
+  function rendreNotification(modele, vars) {
+    return String(modele || '').replace('{{numero}}', vars.numero || '').replace('{{facture}}', vars.facture || '')
+      .replace('{{montant}}', vars.montant || '').replace(/\{\{[a-z_]*\}\}/g, '');
+  }
+
+  function texteNotification(type, langue, donnees) {
+    var l = langueNotification(langue);
+    var t = (TEXTES_NOTIFICATIONS[type] || {})[l] || { titre: 'GoShip Express', message: '' };
+    var vars = Object.assign({}, donnees || {}, { montant: montantNotification((donnees || {}).montant_usd, l) });
+    return { titre: rendreNotification(t.titre, vars), message: rendreNotification(t.message, vars) };
+  }
+
+  // canal_configure : en démonstration, seul le téléphone l'est (et aucun n'est enregistré)
+  function canalConfigureDemo(canal) { return canal === 'push'; }
+
+  // creer_notification : une notification par clé ; ses envois, ou la raison de ne pas envoyer
+  function creerNotificationDemo(d, type, clientId, cle, liens, donnees, canauxEssai) {
+    var client = d.comptes.filter(function (c) { return c.id === clientId; })[0];
+    if (!client) return null;
+    var categorie = 'compte', priorite = 'normale', canaux = canauxEssai;
+    if (!canauxEssai) {
+      var regle = reglesNotificationsDemo(d).filter(function (r) { return r.type === type; })[0];
+      if (!regle || !regle.actif) return null;
+      categorie = regle.categorie;
+      priorite = regle.priorite;
+      canaux = regle.canaux;
+    }
+    d.notificationsApp = d.notificationsApp || [];
+    if (cle && d.notificationsApp.some(function (n) { return n.cle === cle; })) return null; // déjà traitée
+    d.seqNotification = (d.seqNotification || 0) + 1;
+    var n = {
+      id: d.seqNotification, client_id: clientId, type: type, categorie: categorie, priorite: priorite, cle: cle,
+      colis_id: liens.colis_id || null, facture_id: liens.facture_id || null, paiement_id: liens.paiement_id || null,
+      historique_id: liens.historique_id || null, donnees: donnees || {}, cree_le: maintenant(), lu_le: null
+    };
+    d.notificationsApp.push(n);
+    d.envoisNotifications = d.envoisNotifications || [];
+    var prefs = d.preferencesNotifications || {};
+    canaux.forEach(function (canal) {
+      var raison = prefs[clientId + ':' + categorie + ':' + canal] === false ? 'PREFERENCE'
+        : !canalConfigureDemo(canal) ? 'NON_CONFIGURE'
+        : canal === 'push' ? 'SANS_APPAREIL' : null;
+      d.seqEnvoi = (d.seqEnvoi || 0) + 1;
+      d.envoisNotifications.push({
+        id: d.seqEnvoi, notification_id: n.id, canal: canal, cible: canal, statut: raison ? 'annule' : 'attente',
+        code_erreur: raison, tentative: 0, priorite: priorite, fournisseur: { push: 'expo', email: 'brevo', whatsapp: 'meta' }[canal] || '',
+        cree_le: n.cree_le, envoye_le: null
+      });
+    });
+    return n.id;
+  }
+
+  // notifier_etape_colis : une étape publique d'un colis de client
+  function notifierEtapeDemo(d, e) {
+    if (!e || e.visibilite !== 'publique' || !e.type_evenement) return;
+    var regle = REGLES_NOTIFICATIONS.filter(function (r) { return r.source === 'colis' && r.evenement === e.type_evenement; })[0];
+    var c = trouverColisDemo(d, e.colis_id);
+    if (!regle || !c || !c.client_id) return;
+    creerNotificationDemo(d, regle.type, c.client_id, 'etape:' + e.id + ':' + regle.type,
+                          { colis_id: c.id, historique_id: e.id }, { numero: c.numero, statut: e.statut });
+  }
+
+  // notifier_evenement_facturation : un paiement qui solde la facture ne donne
+  // que « facture payée », notée juste avant dans la même opération
+  var payeeALInstant = null;
+  function notifierFacturationDemo(d, evt) {
+    var regle = REGLES_NOTIFICATIONS.filter(function (r) { return r.source === 'facturation' && r.evenement === evt.type; })[0];
+    if (regle && evt.client_id) {
+      var cle = regle.type === 'invoice_created' ? 'facture:' + evt.facture_id
+        : regle.type === 'payment_received' ? 'paiement:' + evt.paiement_id : 'facturation:' + evt.id;
+      var donnees = { facture: evt.donnees.numero || evt.donnees.facture || null,
+                      montant_usd: evt.donnees.montant_usd != null ? Number(evt.donnees.montant_usd).toFixed(2) : null };
+      if (regle.type === 'payment_received' && payeeALInstant === evt.facture_id) {
+        payeeALInstant = null; // regroupé dans « facture payée »
+      } else {
+        creerNotificationDemo(d, regle.type, evt.client_id, cle,
+                              { facture_id: evt.facture_id, paiement_id: evt.paiement_id }, donnees);
+        payeeALInstant = regle.type === 'invoice_paid' ? evt.facture_id : null;
+      }
+    }
+    evt.traite_le = maintenant();
   }
 
   // recalculer_facture : payé, statut, date et moyen suivent les paiements valides
+
   function recalculerFactureDemo(d, f) {
     var valides = paiementsValides(f).sort(function (a, b) {
       return new Date(a.paye_le) - new Date(b.paye_le) || new Date(a.cree_le) - new Date(b.cree_le);
@@ -2666,6 +2958,90 @@
       return plusTard(r);
     },
 
+    // mes_notifications : les siennes, traduites, les plus récentes d'abord
+    mesNotifications: function (o) {
+      o = o || {};
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var filtre = o.filtre || 'toutes';
+      if (['toutes', 'non_lues', 'colis', 'factures', 'paiements', 'compte'].indexOf(filtre) < 0) {
+        return rejeter(Erreur('INVALID_FILTER', 'Filtre inconnu.'));
+      }
+      var langue = ['fr', 'en', 'es', 'ht'].indexOf(o.langue) >= 0 ? o.langue : langueNotification(moi.langue);
+      var miennes = (d.notificationsApp || []).filter(function (n) { return n.client_id === moi.id; });
+      var liste = miennes.filter(function (n) {
+        return filtre === 'toutes' || (filtre === 'non_lues' ? !n.lu_le : n.categorie === filtre);
+      }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; });
+      var parPage = Math.min(Math.max(Number(o.parPage) || 20, 1), 100), page = Math.max(Number(o.page) || 0, 0);
+      return plusTard({
+        total: liste.length,
+        non_lues: miennes.filter(function (n) { return !n.lu_le; }).length,
+        elements: liste.slice(page * parPage, page * parPage + parPage).map(function (n) {
+          var t = texteNotification(n.type, langue, n.donnees);
+          return { id: n.id, type: n.type, categorie: n.categorie, priorite: n.priorite, titre: t.titre, message: t.message,
+                   lu: !!n.lu_le, date: n.cree_le, colis_id: n.colis_id, numero: n.donnees.numero || null,
+                   facture_id: n.facture_id, facture_numero: n.donnees.facture || null };
+        })
+      });
+    },
+
+    notificationsNonLues: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      return plusTard((d.notificationsApp || []).filter(function (n) { return n.client_id === moi.id && !n.lu_le; }).length);
+    },
+
+    marquerNotificationsLues: function (ids) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var nb = 0;
+      (d.notificationsApp || []).forEach(function (n) {
+        if (n.client_id === moi.id && !n.lu_le && (!ids || !ids.length || ids.indexOf(n.id) >= 0)) {
+          n.lu_le = maintenant();
+          nb++;
+        }
+      });
+      ecrireDonnees(d);
+      return plusTard(nb);
+    },
+
+    mesPreferencesNotifications: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var prefs = d.preferencesNotifications || {};
+      var canaux = {};
+      CANAUX_NOTIFICATIONS.forEach(function (c) {
+        canaux[c] = { configure: canalConfigureDemo(c), appareils: c === 'push' ? 0 : null };
+      });
+      return plusTard({
+        canaux: canaux,
+        preferences: ['colis', 'factures', 'paiements'].map(function (cat) {
+          var p = { categorie: cat };
+          CANAUX_NOTIFICATIONS.forEach(function (c) { p[c] = prefs[moi.id + ':' + cat + ':' + c] !== false; });
+          return p;
+        })
+      });
+    },
+
+    reglerPreferenceNotification: function (categorie, canal, actif) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      if (['colis', 'factures', 'paiements'].indexOf(categorie) < 0 || CANAUX_NOTIFICATIONS.indexOf(canal) < 0) {
+        return rejeter(Erreur('INVALID_PREFERENCE', 'Réglage de notification inconnu.'));
+      }
+      d.preferencesNotifications = d.preferencesNotifications || {};
+      d.preferencesNotifications[moi.id + ':' + categorie + ':' + canal] = !!actif;
+      journaliser(d, moi, 'notification.preference', 'client', moi.id, null,
+                  { categorie: categorie, canal: canal, actif: !!actif });
+      ecrireDonnees(d);
+      return plusTard(null);
+    },
+
     surveiller: function (rappel, options) {
       options = options || {};
       abonnes.push(rappel);
@@ -2968,22 +3344,143 @@
         return plusTard(true);
       },
 
-      // En démonstration, rien n'est envoyé : l'e-mail est seulement noté (aperçu
-      // dans le tableau de bord) et WhatsApp passe par l'envoi en un clic.
-      envoyerEmail: function (id, evenement) {
+      /* ---- Notifications (copie de supabase-notifications.sql, partie 12) ---- */
+      envoisColis: function (id) {
         var d = lireDonnees();
-        try { exiger(d, 'shipments.change_status'); } catch (e) { return echec(e.code); }
-        var c = detailsColis(d, d.colis.filter(function (x) { return x.id === id; })[0] || {});
-        d.notifications = d.notifications || [];
-        d.notifications.push({ colis_id: id, canal: 'email', evenement: evenement, destinataire: c.email_client || '',
-                               envoye_le: maintenant(), code_http: null, erreur: null });
-        ecrireDonnees(d);
-        return plusTard('demo');
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var lignes = [];
+        (d.notificationsApp || []).filter(function (n) { return n.colis_id === id; })
+          .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })
+          .forEach(function (n) {
+            (d.envoisNotifications || []).filter(function (e) { return e.notification_id === n.id; }).forEach(function (e) {
+              lignes.push({ notification_id: n.id, type: n.type, cree_le: n.cree_le, canal: e.canal, statut: e.statut,
+                            code_erreur: e.code_erreur, tentative: e.tentative });
+            });
+          });
+        return plusTard(lignes);
       },
 
-      envoyerWhatsApp: function () {
-        try { exiger(lireDonnees(), 'shipments.change_status'); } catch (e) { return echec(e.code); }
-        return plusTard('non-configure');
+      centreNotifications: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
+        var fin = o.fin ? new Date(o.fin) : new Date(), debut = o.debut ? new Date(o.debut) : new Date(fin - 30 * 864e5);
+        var notifs = {};
+        (d.notificationsApp || []).forEach(function (n) { notifs[n.id] = n; });
+        var dans = function (date) { var t = new Date(date); return t >= debut && t < fin; };
+        var e = (d.envoisNotifications || []).filter(function (x) {
+          var n = notifs[x.notification_id];
+          return n && dans(x.cree_le) && (!o.type || n.type === o.type) && (!o.canal || x.canal === o.canal) &&
+                 (!o.statut || x.statut === o.statut);
+        });
+        var parStatut = {}, parCanal = {};
+        e.forEach(function (x) {
+          parStatut[x.statut] = (parStatut[x.statut] || 0) + 1;
+          var c = parCanal[x.canal] = parCanal[x.canal] || { total: 0, envoye: 0, echec: 0, attente: 0, annule: 0, taux_echec: null };
+          c.total++;
+          if (x.statut === 'envoye' || x.statut === 'livre') c.envoye++;
+          else if (x.statut === 'echec') c.echec++;
+          else if (x.statut === 'attente' || x.statut === 'envoi') c.attente++;
+          else if (x.statut === 'annule') c.annule++;
+        });
+        Object.keys(parCanal).forEach(function (k) {
+          var c = parCanal[k];
+          c.taux_echec = c.envoye + c.echec ? Math.round(1000 * c.echec / (c.envoye + c.echec)) / 10 : null;
+        });
+        var parPage = Math.min(Math.max(Number(o.parPage) || 25, 1), 100), page = Math.max(Number(o.page) || 0, 0);
+        var tries = e.slice().sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; });
+        var enPeriode = (d.notificationsApp || []).filter(function (n) { return dans(n.cree_le) && (!o.type || n.type === o.type); });
+        return plusTard({
+          periode: { debut: debut.toISOString(), fin: fin.toISOString() },
+          notifications: enPeriode.length,
+          non_lues: (d.notificationsApp || []).filter(function (n) { return dans(n.cree_le) && !n.lu_le; }).length,
+          envois: e.length, par_statut: parStatut, par_canal: parCanal, delai_moyen_s: null, alertes: [], total: e.length,
+          elements: tries.slice(page * parPage, page * parPage + parPage).map(function (x) {
+            var n = notifs[x.notification_id];
+            var cl = d.comptes.filter(function (c) { return c.id === n.client_id; })[0];
+            return { id: x.id, notification_id: n.id, type: n.type, canal: x.canal, fournisseur: x.fournisseur,
+                     statut: x.statut, tentative: x.tentative, code_erreur: x.code_erreur, cree_le: x.cree_le,
+                     envoye_le: x.envoye_le, client_code: cl ? cl.code : null, numero: n.donnees.numero || null,
+                     facture: n.donnees.facture || null };
+          })
+        });
+      },
+
+      suiviNotification: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
+        var n = (d.notificationsApp || []).filter(function (x) { return x.id === Number(id); })[0];
+        if (!n) return rejeter(Erreur('NOTIFICATION_NOT_FOUND', 'Notification introuvable.'));
+        var cl = d.comptes.filter(function (c) { return c.id === n.client_id; })[0];
+        var h = n.historique_id ? d.historique.filter(function (x) { return x.id === n.historique_id; })[0] : null;
+        var regle = reglesNotificationsDemo(d).filter(function (r) { return r.type === n.type; })[0];
+        var evtF = !h && n.facture_id ? (d.evenementsFacturation || []).filter(function (f) {
+          return f.facture_id === n.facture_id && regle && f.type === regle.evenement &&
+                 (!n.paiement_id || f.paiement_id === n.paiement_id);
+        })[0] : null;
+        return plusTard({
+          notification: { id: n.id, type: n.type, categorie: n.categorie, priorite: n.priorite, cree_le: n.cree_le,
+                          lu_le: n.lu_le, cle: n.cle, client_code: cl ? cl.code : null, numero: n.donnees.numero || null,
+                          facture: n.donnees.facture || null },
+          evenement: h ? { source: 'colis', id: h.id, type: h.type_evenement, statut: h.statut, date: h.cree_le }
+            : evtF ? { source: 'facturation', id: evtF.facture_id, type: evtF.type, date: evtF.cree_le } : null,
+          regle: regle ? { actif: regle.actif, canaux: regle.canaux, sensible: regle.sensible } : null,
+          envois: (d.envoisNotifications || []).filter(function (e) { return e.notification_id === n.id; }).map(function (e) {
+            return { canal: e.canal, fournisseur: e.fournisseur, statut: e.statut, tentative: e.tentative,
+                     code_erreur: e.code_erreur, erreur: null, message_id: null, cree_le: e.cree_le, envoye_le: e.envoye_le,
+                     prochain_essai_le: null };
+          })
+        });
+      },
+
+      reglesNotifications: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
+        var canaux = {};
+        CANAUX_NOTIFICATIONS.forEach(function (c) { canaux[c] = canalConfigureDemo(c); });
+        var ordre = { colis: 0, facturation: 1, planifie: 2 };
+        return plusTard({
+          modifiable: peutCompte(compteConnecte(d), 'settings.manage'),
+          canaux: canaux,
+          regles: reglesNotificationsDemo(d).sort(function (a, b) {
+            return ordre[a.source] - ordre[b.source] || (a.type < b.type ? -1 : 1);
+          }).map(function (r) {
+            return { type: r.type, libelle: r.libelle, evenement: r.evenement, categorie: r.categorie, priorite: r.priorite,
+                     canaux: r.canaux, sensible: r.sensible, actif: r.actif, maj_le: r.maj_le || null };
+          })
+        });
+      },
+
+      modifierRegleNotification: function (type, actif, canaux) {
+        var d = lireDonnees();
+        var moi;
+        try { moi = exiger(d, 'settings.manage'); } catch (e) { return echec(e.code); }
+        var avant = reglesNotificationsDemo(d).filter(function (r) { return r.type === type; })[0];
+        if (!avant) return rejeter(Erreur('RULE_NOT_FOUND', 'Règle de notification inconnue.'));
+        canaux = canaux || [];
+        if (canaux.some(function (c) { return CANAUX_NOTIFICATIONS.indexOf(c) < 0; })) {
+          return rejeter(Erreur('INVALID_RULE', 'Canaux de notification inconnus.'));
+        }
+        d.reglesNotifications = d.reglesNotifications || {};
+        d.reglesNotifications[type] = { actif: !!actif, canaux: canaux.filter(function (c, i) { return canaux.indexOf(c) === i; }).sort(),
+                                        maj_le: maintenant() };
+        journaliser(d, moi, 'notification.regle', 'notification_regle', type,
+                    { actif: avant.actif, canaux: avant.canaux }, { actif: !!actif, canaux: canaux });
+        ecrireDonnees(d);
+        return plusTard(null);
+      },
+
+      testerNotification: function (canal) {
+        var d = lireDonnees();
+        var moi;
+        try { moi = exiger(d, 'settings.manage'); } catch (e) { return echec(e.code); }
+        if (CANAUX_NOTIFICATIONS.indexOf(canal) < 0) return rejeter(Erreur('INVALID_CHANNEL', 'Canal inconnu.'));
+        var minute = new Date().toISOString().slice(0, 16);
+        var id = creerNotificationDemo(d, 'test', moi.id, 'test:' + moi.id + ':' + canal + ':' + minute, {}, {}, [canal]);
+        if (!id) return rejeter(Erreur('TOO_MANY_TESTS', 'Un essai par minute au plus.'));
+        journaliser(d, moi, 'notification.test', 'notification', id, null, { canal: canal });
+        ecrireDonnees(d);
+        return demoAPI.admin.suiviNotification(id);
       },
 
       // L'équipe et ses rôles (equipe() de la base)
@@ -3850,13 +4347,6 @@
         } catch (e) { return rejeter(e); }
       },
 
-      notifications: function (id) {
-        var d = lireDonnees();
-        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
-        return plusTard((d.notifications || []).filter(function (n) { return n.colis_id === id; })
-          .sort(function (a, b) { return new Date(b.envoye_le) - new Date(a.envoye_le); }));
-      },
-
       // Clients et colis d'exemple, pour découvrir le tableau de bord
       exemples: function () {
         var d = lireDonnees();
@@ -3948,6 +4438,8 @@
     surSessionPerdue: function () { return function () {}; },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
     changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme, monResume: ferme,
+    mesNotifications: ferme, notificationsNonLues: ferme, marquerNotificationsLues: ferme,
+    mesPreferencesNotifications: ferme, reglerPreferenceNotification: ferme,
     surveiller: function () { return function () {}; },
     suivre: ferme, estAdmin: function () { return Promise.resolve(false); },
     permissions: function () { return Promise.resolve({ role: null, equipe: false, permissions: [] }); },
@@ -4100,7 +4592,12 @@
     typePourStatut: typePourStatut, validerOperation: validerOperation,
     libellesStatut: Object.freeze(LIBELLES), operationsScanner: Object.freeze(OPERATIONS_SCANNER.slice()),
     moyensPaiement: Object.freeze(MOYENS_PAIEMENT.slice()),
-    permissionsDesRoles: Object.freeze(PERMISSIONS_DES_ROLES), rolesEquipe: Object.freeze(ROLES_EQUIPE.slice())
+    permissionsDesRoles: Object.freeze(PERMISSIONS_DES_ROLES), rolesEquipe: Object.freeze(ROLES_EQUIPE.slice()),
+    // Copie des règles et textes de notification (supabase-notifications.sql) : libellés
+    // du tableau de bord, et comparaison avec la base (essai-notifications.py)
+    notifications: Object.freeze({ regles: JSON.parse(JSON.stringify(REGLES_NOTIFICATIONS)),
+                                   textes: JSON.parse(JSON.stringify(TEXTES_NOTIFICATIONS)),
+                                   canaux: CANAUX_NOTIFICATIONS.slice() })
   });
   window.GoshipAPI = api;
 })();

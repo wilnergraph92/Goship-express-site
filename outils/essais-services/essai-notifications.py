@@ -14,6 +14,7 @@ Voir LISEZ-MOI.md.
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -110,6 +111,17 @@ def main():
     controle = db.sql('select regles, declencheurs, ancien_push, ouvertes_aux_visiteurs from (' + requete + ') x;')
     verifier('rejouable ; contrôle : 13 règles, 2 déclencheurs, ancien push retiré, rien aux visiteurs',
              controle.splitlines()[-1], '13|2|0|f')
+    # La copie démo (assets/js/api.js) : mêmes règles et mêmes textes que la base
+    js = os.path.join(ICI, 'essai-notifications.js')
+    modele = json.loads(subprocess.run(['node', js, '--modele'], capture_output=True, text=True, check=True).stdout)
+    champs = ('type', 'source', 'evenement', 'categorie', 'priorite', 'canaux', 'sensible', 'libelle')
+    base_regles = json.loads(un(db, "select json_agg(json_build_object(%s) order by type) from notification_regles;"
+                                % ', '.join("'%s', %s" % (c, c) for c in champs)))
+    verifier('mêmes règles (type, événement, catégorie, priorité, canaux, sensible, libellé)',
+             [dict(r, canaux=sorted(r['canaux'])) for r in sorted(modele['regles'], key=lambda r: r['type'])],
+             [dict(r, canaux=sorted(r['canaux'])) for r in base_regles])
+    verifier('mêmes textes, dans les quatre langues',
+             modele['textes'] == json.loads(un(db, 'select public.notification_textes();')), True)
     db.sql("update notification_regles set actif = false where type = 'shipment_packed';")
     db.fichier(os.path.join(RACINE, 'outils', 'supabase-notifications.sql'))
     verifier('relancer la migration garde une règle coupée par l\'équipe',
@@ -480,7 +492,28 @@ def main():
     verifier('… sans les notifications « app » (inconnues des versions installées)',
              any(x['canal'] == 'app' for x in messages), False)
 
-    print('M. Volume')
+    print('M. La copie démo répond sous la même forme que la base')
+    rf = creer(db, ADMIN, dict(BASE_COLIS, client_id=MARIE, suivi_transporteur='TBANOTIF0099'))
+    nf = un(db, "select id from notifications where colis_id = '%s';" % rf['colis']['id'])
+    js = os.path.join(ICI, 'essai-notifications.js')
+    formes_demo = json.loads(subprocess.run(['node', js, '--formes'], capture_output=True, text=True, check=True).stdout)
+    cles = lambda o: sorted(o.keys())
+    ctr = jsonq(db, ADMIN, 'select public.centre_notifications(now() - interval \'1 day\', now() + interval \'1 day\');')
+    rg = jsonq(db, ADMIN, 'select public.regles_notifications();')
+    sv = jsonq(db, ADMIN, 'select public.suivi_notification(%s);' % nf)
+    mn = jsonq(db, JEAN, 'select public.mes_notifications();')
+    pf = jsonq(db, MARIE, 'select public.mes_preferences_notifications();')
+    formes_base = {
+        'centre': cles(ctr), 'centre, élément': cles(ctr['elements'][0]), 'règles': cles(rg), 'règle': cles(rg['regles'][0]),
+        "envois d'un colis": cles(jsonq(db, ADMIN, "select public.envois_colis('%s');" % rf['colis']['id'])[0]),
+        'suivi': cles(sv), 'suivi, notification': cles(sv['notification']), 'suivi, envoi': cles(sv['envois'][0]),
+        'mes notifications': cles(mn), 'mes notifications, élément': cles(mn['elements'][0]),
+        'préférences': cles(pf), 'préférences, catégorie': cles(pf['preferences'][0]),
+        'préférences, canal': cles(pf['canaux']['push'])}
+    for nom in formes_base:
+        verifier('même forme : %s' % nom, formes_demo.get(nom), formes_base[nom])
+
+    print('N. Volume')
     db.sql("delete from notification_envois; delete from net.envois;")
     t = time.time()
     db.sql("""insert into notifications (client_id, canal, evenement, destinataire, type, categorie, cle, donnees)
