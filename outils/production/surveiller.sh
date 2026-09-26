@@ -111,7 +111,7 @@ else
     if [ "$code" = 200 ]; then ok "authentification (auth/v1/health)"; else echec "authentification : code $code"; fi
 
     code="$(curl -sS -o "$tmp/sante" -w '%{http_code}' --max-time 20 -X POST -H "apikey: $CLE" \
-            -H "Authorization: Bearer $CLE" -H 'Content-Type: application/json' -d '{}' \
+            -H 'Content-Type: application/json' -d '{}' \
             "$URL/rest/v1/rpc/sante" 2>/dev/null || echo 000)"
     if [ "$code" = 200 ]; then
       etat="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('status'),d.get('pret'),d.get('notifications'))" "$tmp/sante" 2>/dev/null)"
@@ -126,9 +126,11 @@ else
       echec "base : sante() répond $code"
     fi
 
+    # (apikey seule, sans « Authorization » : la passerelle joue alors le visiteur,
+    # avec une clé publishable comme avec l'ancienne clé anon JWT)
     # Le suivi public (ce que voit un visiteur) : un numéro qui n'existe pas → null
     code="$(curl -sS -o "$tmp/suivi" -w '%{http_code}' --max-time 20 -X POST -H "apikey: $CLE" \
-            -H "Authorization: Bearer $CLE" -H 'Content-Type: application/json' \
+            -H 'Content-Type: application/json' \
             -d '{"p_numero":"GSE-0000-ZZ"}' "$URL/rest/v1/rpc/suivre_colis" 2>/dev/null || echo 000)"
     if [ "$code" = 200 ]; then ok "suivi public (suivre_colis)"; else echec "suivi public : code $code"; fi
   fi

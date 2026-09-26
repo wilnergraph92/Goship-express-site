@@ -39,7 +39,10 @@ jobs:
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
                notifications, mobile, production]
     steps:
+      # Tout l'historique : plusieurs bancs rejouent la migration depuis une
+      # version publiée plus ancienne (git show <commit>:outils/…)
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       # pgserver 0.1.4 n'a de paquets que jusqu'à Python 3.12
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }

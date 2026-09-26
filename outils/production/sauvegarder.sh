@@ -9,8 +9,10 @@
 #                                             règles, données), chiffré
 #   goship-AAAA-MM-JJTHHMMZ.comptes.dump.age  données des comptes (auth.users,
 #                                             auth.identities), chiffrées
-#   goship-AAAA-MM-JJTHHMMZ.manifeste.json    date, versions, empreintes, nombre de
-#                                             lignes par table — aucune donnée
+#   goship-AAAA-MM-JJTHHMMZ.manifeste.json.age  date, versions, empreintes, nombre de
+#                                             lignes par table, chiffré lui aussi : le
+#                                             dépôt est public, et le nombre de clients,
+#                                             de colis ou de factures ne regarde personne
 #
 # Le fichier en clair ne touche jamais le disque plus longtemps que le chiffrement :
 # il est effacé aussitôt. Seule la clé PRIVÉE correspondant à SAUVEGARDE_DESTINATAIRE
@@ -83,7 +85,7 @@ empreinte() { sha256sum "$1" | cut -d' ' -f1; }
 for partie in public comptes; do
   age -r "$SAUVEGARDE_DESTINATAIRE" -o "$sortie/$nom.$partie.dump.age" "$travail/$partie.dump"
 done
-python3 - "$sortie/$nom.manifeste.json" <<PY
+python3 - "$travail/manifeste.json" <<PY
 import json, sys
 json.dump({
   "sauvegarde": "$nom",
@@ -99,4 +101,5 @@ json.dump({
   "lignes_par_table": json.loads('''$lignes''')
 }, open(sys.argv[1], 'w'), ensure_ascii=False, indent=2)
 PY
+age -r "$SAUVEGARDE_DESTINATAIRE" -o "$sortie/$nom.manifeste.json.age" "$travail/manifeste.json"
 echo "Sauvegarde $nom : $(du -h "$sortie/$nom.public.dump.age" | cut -f1) (public), $(du -h "$sortie/$nom.comptes.dump.age" | cut -f1) (comptes), chiffrée pour ${SAUVEGARDE_DESTINATAIRE:0:12}…"

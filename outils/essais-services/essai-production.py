@@ -242,9 +242,10 @@ def main():
     verifier('sauvegarder.sh réussit', (r.returncode, r.stderr.strip()[-200:]), (0, ''))
     fichiers = sorted(os.listdir(os.path.join(travail, 'sortie')))
     nom = fichiers[0].split('.')[0]
-    verifier('trois fichiers : deux chiffrés, un manifeste', [f[len(nom):] for f in fichiers],
-             ['.comptes.dump.age', '.manifeste.json', '.public.dump.age'])
-    manifeste = json.load(open(os.path.join(travail, 'sortie', nom + '.manifeste.json')))
+    verifier('trois fichiers, tous chiffrés (le manifeste aussi : le dépôt est public)', [f[len(nom):] for f in fichiers],
+             ['.comptes.dump.age', '.manifeste.json.age', '.public.dump.age'])
+    manifeste = json.loads(subprocess.run(['age', '-d', '-i', cle, os.path.join(travail, 'sortie', nom + '.manifeste.json.age')],
+                                          capture_output=True, text=True, check=True).stdout)
     verifier('le manifeste compte les lignes (27 colis)', manifeste['lignes_par_table'].get('colis'), 27)
     brut = open(os.path.join(travail, 'sortie', nom + '.public.dump.age'), 'rb').read()
     verifier('rien de lisible dans le fichier chiffré (ni e-mail, ni numéro)',

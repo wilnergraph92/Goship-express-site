@@ -310,6 +310,20 @@ Déploiement : **GitHub Pages depuis `main`**. Un `git push origin main`
 met le site en ligne. Les commits vont directement sur `main` — pas de
 branche pour un changement ordinaire.
 
+### La production (`docs/production/`, `outils/production/`)
+
+Tout ce qui sert à mettre en ligne, surveiller, sauvegarder, restaurer et
+revenir en arrière. **L'état GO / NO-GO est dans `docs/production/go-no-go.md`** :
+le lire avant de toucher à la base de production. `deploy.yml` refuse de
+publier un fichier de travail (`.md`, `.sql`, `.py`, clés, sauvegardes) ou une
+clé secrète, puis vérifie le site publié (`surveiller.sh`). Les contrôles
+`controle-securite.sql` et `controle-integrite.sql` sont en lecture seule ;
+`sante()` (`supabase-production.sql`) est la seule fonction ajoutée pour la
+surveillance. Une migration qui ajoute une fonction ouverte aux visiteurs doit
+l'ajouter à la liste blanche de `controle-securite.sql` (section 6), sinon le
+contrôle la signale. `essai-production.py` éprouve tout cela, sauvegarde et
+restauration comprises. Changements notables : `CHANGELOG.md` (non publié).
+
 Messages de commit : une phrase en français qui dit ce que ça change
 pour l'utilisateur, pas un préfixe technique. Voir `git log`.
 

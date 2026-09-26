@@ -42,8 +42,7 @@ compter_lignes() {
   "$PSQL" "$1" -X -A -t -v ON_ERROR_STOP=1 -c "$requete"
 }
 
-manifeste="$dossier/$nom.manifeste.json"
-[ -f "$manifeste" ] || { echo "Manifeste introuvable : $manifeste" >&2; exit 1; }
+[ -f "$dossier/$nom.manifeste.json.age" ] || { echo "Manifeste introuvable : $dossier/$nom.manifeste.json.age" >&2; exit 1; }
 
 # Refuser une base qui a déjà des colis : ce n'est pas une cible de restauration
 deja=0
@@ -58,6 +57,10 @@ fi
 travail="$(mktemp -d)"
 chmod 700 "$travail"
 trap 'rm -rf "$travail"' EXIT
+
+# Le manifeste est chiffré comme le reste : une mauvaise clé s'arrête ici
+manifeste="$travail/manifeste.json"
+age -d -i "$cle" -o "$manifeste" "$dossier/$nom.manifeste.json.age"
 
 for partie in comptes public; do
   age -d -i "$cle" -o "$travail/$partie.dump" "$dossier/$nom.$partie.dump.age"
