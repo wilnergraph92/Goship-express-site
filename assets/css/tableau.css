@@ -1,0 +1,268 @@
+/* ==========================================================================
+   Goship Express — le tableau de bord (admin.html)
+   ==========================================================================
+   Chargé après site.css, par admin.html seulement : le site public n'en
+   dépend pas. Le cadre (menu latéral, barre du haut) et l'habillage des
+   cartes, aux couleurs de la marque — bleu nuit (--ink #061a3f, --ink2
+   #0d2b6b), orange (--accent #f4600d), bleu (--accent2 #1f5fe0). Aucune
+   règle ici ne décide de ce qui s'affiche : les permissions et les données
+   restent l'affaire de admin.js et de la base.
+   Mêmes seuils que le site : 1023 px (le menu devient un tiroir), 759 px et
+   639 px (téléphone).
+   ========================================================================== */
+
+.gs-admin-body{
+  --app-fond:#f3f6fb;
+  --app-bord:#e6ebf3;
+  --app-ombre:0 1px 2px rgba(6,26,63,.04),0 18px 40px -30px rgba(6,26,63,.4);
+  --app-rayon:20px;
+  --app-menu:268px;
+  --app-menu-reduit:84px;
+  background:var(--app-fond);
+}
+
+/* ---- Le cadre ------------------------------------------------------------------ */
+.gs-td{display:flex;min-height:100vh;min-height:100dvh}
+.gs-td__principal{display:flex;flex:1;flex-direction:column;min-width:0}
+
+/* Le menu latéral : seulement dans le tableau de bord (classe is-app) */
+.gs-td__menu{display:none}
+.is-app .gs-td__menu{position:sticky;top:0;z-index:60;display:flex;flex:none;flex-direction:column;width:var(--app-menu);height:100vh;height:100dvh;padding:22px 16px 18px;overflow-y:auto;background:radial-gradient(420px 280px at 0 0,rgba(31,95,224,.32),transparent 70%),radial-gradient(360px 260px at 100% 100%,rgba(244,96,13,.16),transparent 70%),linear-gradient(180deg,#0a2150 0%,#061a3f 55%,#04122e 100%);color:#c9d4ec;transition:width .25s cubic-bezier(.2,.7,.3,1)}
+.gs-td__marque{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 4px 24px}
+.gs-td__logo{display:inline-flex;flex:none;align-items:center;padding:7px 12px;border-radius:12px;background:#fff;box-shadow:0 10px 24px -14px rgba(0,0,0,.5)}
+.gs-td__logo img{display:block;width:auto;height:30px}
+.gs-td__replier{display:grid;flex:none;place-items:center;width:36px;height:36px;padding:0;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.05);color:#c9d4ec;cursor:pointer;transition:background-color .2s ease,color .2s ease}
+.gs-td__replier:hover{background:rgba(255,255,255,.12);color:#fff}
+.gs-td__replier .gs-ico{width:18px;height:18px}
+.gs-td__rubrique{padding:0 14px 10px;font-size:11.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#7f8fb3;white-space:nowrap}
+.gs-td__nav{display:flex;flex-direction:column;gap:4px}
+.gs-td__nav button,.gs-td__lien{display:flex;align-items:center;gap:12px;width:100%;min-height:46px;padding:10px 14px;border:0;border-radius:14px;background:none;color:#c9d4ec;font:inherit;font-size:15px;font-weight:600;text-align:left;text-decoration:none;cursor:pointer;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.gs-td__nav button:hover,.gs-td__menu .gs-td__lien:hover{background:rgba(255,255,255,.08);color:#fff}
+.gs-td__nav button:focus-visible,.gs-td__lien:focus-visible,.gs-td__replier:focus-visible{outline:2px solid #ff9a5c;outline-offset:2px}
+.gs-td__nav button[aria-selected="true"]{background:linear-gradient(135deg,#f4600d,#ff7b2f);color:#fff;box-shadow:0 14px 26px -14px rgba(244,96,13,.9)}
+.gs-td__nav .gs-ico,.gs-td__lien .gs-ico{flex:none;width:20px;height:20px}
+.gs-td__libelle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gs-td__nav .gs-admin-onglets__total{flex:none;padding:1px 9px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:700}
+.gs-td__nav button[aria-selected="true"] .gs-admin-onglets__total{background:rgba(255,255,255,.25)}
+.gs-td__pied{display:flex;flex-direction:column;gap:2px;margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.1)}
+.gs-td__voile{display:none}
+
+/* Menu réduit (réglage « Menu latéral réduit ») : les icônes seulement, sur ordinateur */
+@media (min-width:1024px){
+  .is-menu-reduit .gs-td__menu{width:var(--app-menu-reduit);padding-inline:14px}
+  .is-menu-reduit .gs-td__libelle,.is-menu-reduit .gs-td__rubrique,.is-menu-reduit .gs-td__nav .gs-admin-onglets__total,
+  .is-menu-reduit .gs-td__marque .gs-td__logo{display:none}
+  .is-menu-reduit .gs-td__marque{justify-content:center}
+  .is-menu-reduit .gs-td__nav button,.is-menu-reduit .gs-td__lien{justify-content:center;padding:10px}
+}
+
+/* ---- La barre du haut ------------------------------------------------------------ */
+.gs-td__barre{position:sticky;top:12px;z-index:40;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:12px 24px 0;padding:10px 14px 10px 18px;border:1px solid var(--app-bord);border-radius:var(--app-rayon);background:rgba(255,255,255,.94);box-shadow:var(--app-ombre);-webkit-backdrop-filter:saturate(1.4) blur(12px);backdrop-filter:saturate(1.4) blur(12px)}
+.gs-td__logo--barre{padding:5px 10px;border:1px solid var(--app-bord);box-shadow:none}
+.gs-td__logo--barre img{height:28px}
+.is-app .gs-td__logo--barre{display:none}
+.gs-td__titre{display:flex;flex-direction:column;gap:3px;min-width:0;margin-right:auto}
+.gs-td__titre-texte{display:flex;align-items:center;gap:10px;font-family:'Archivo','Manrope',sans-serif;font-size:21px;font-weight:800;line-height:1.1;letter-spacing:-.015em;color:var(--ink)}
+.gs-td__demo{padding:3px 9px;border-radius:999px;background:var(--accent);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+.gs-horloge{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13.5px;color:#5b6782}
+.gs-horloge__date--courte{display:none}
+.gs-horloge__heure{padding:2px 8px;border-radius:8px;background:#eef2fb;color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+
+.gs-td__barre .gs-rapide{flex:1 1 220px;max-width:480px;margin:0}
+.gs-td__barre .gs-recherche{height:44px;border-radius:14px;background:#f5f7fb;border-color:#e3e8f2}
+.gs-td__barre .gs-recherche:focus-within{background:#fff}
+.gs-td__barre .gs-rapide__bouton{min-height:44px;padding:0 16px;border-radius:14px;font-size:14.5px}
+.gs-admin-body:not(.is-app) .gs-rapide{display:none}
+
+.gs-td__outils{display:flex;align-items:center;gap:8px}
+.gs-td__icone{position:relative;display:grid;flex:none;place-items:center;width:44px;height:44px;padding:0;border:1px solid var(--app-bord);border-radius:14px;background:#fff;color:var(--ink);cursor:pointer;transition:border-color .2s ease,background-color .2s ease,color .2s ease}
+.gs-td__icone:hover,.gs-td__icone[aria-expanded="true"]{border-color:var(--ink);background:var(--ink);color:#fff}
+.gs-td__icone .gs-ico{width:20px;height:20px}
+.gs-td__barre .gs-td__burger{display:none}
+.gs-td__compteur{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;border:2px solid #fff;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:800;line-height:16px;text-align:center}
+.gs-td__compteur.is-critique{background:#dc2626}
+.gs-td__nouveau{min-height:44px;padding:0 16px;border-radius:14px;font-size:14.5px;white-space:nowrap}
+.gs-td__nouveau .gs-ico{width:18px;height:18px}
+.gs-td__compte{display:flex;align-items:center;gap:10px;max-width:260px;height:44px;padding:0 10px 0 4px;border:1px solid var(--app-bord);border-radius:14px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.gs-td__compte:hover,.gs-td__compte[aria-expanded="true"]{border-color:var(--ink)}
+.gs-td__compte .gs-ico{flex:none;width:16px;height:16px;color:#6b7690}
+.gs-td__avatar{display:grid;flex:none;place-items:center;width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#0d2b6b,#1f5fe0);color:#fff;font-size:13px;font-weight:800;letter-spacing:.02em}
+.gs-td__qui{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.gs-td__email{overflow:hidden;font-size:13.5px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+.gs-td__role{align-self:flex-start;margin-top:2px;padding:1px 7px;border-radius:999px;background:rgba(244,96,13,.12);color:#c4500b;font-size:11px;font-weight:800}
+
+/* Les panneaux qui s'ouvrent sous la barre : alertes et compte */
+.gs-td__deroulant{position:relative}
+.gs-td__panneau{position:absolute;top:calc(100% + 10px);right:0;z-index:70;width:min(360px,calc(100vw - 32px));padding:14px;border:1px solid var(--app-bord);border-radius:18px;background:#fff;box-shadow:0 30px 60px -24px rgba(6,26,63,.45);animation:gs-dialogue .2s ease both}
+.gs-td__panneau--compte{width:240px;padding:8px}
+.gs-td__panneau-titre{margin:2px 4px 10px;overflow:hidden;font-size:13px;font-weight:800;letter-spacing:.06em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap;color:#6b7690}
+.gs-td__panneau--compte .gs-td__panneau-titre{display:flex;flex-direction:column;gap:2px;margin:6px 10px 8px;padding-bottom:10px;border-bottom:1px solid #eef2f8;letter-spacing:0;text-transform:none;color:var(--ink)}
+.gs-td__panneau-role{font-size:12.5px;font-weight:700;color:#c4500b}
+.gs-td__panneau .gs-td__lien{min-height:42px;border-radius:12px;color:var(--ink);font-size:14.5px}
+.gs-td__panneau .gs-td__lien:hover{background:#f3f6fb;color:var(--ink)}
+.gs-td__panneau .gs-alertes{max-height:min(60vh,420px);overflow-y:auto}
+
+/* Le contenu */
+.gs-td .gs-admin{width:100%;max-width:1600px;margin:0 auto;padding:20px 24px 90px}
+.gs-td__principal>.gs-rapide__resultats{margin:14px 24px 0}
+.gs-admin-demo{border-radius:16px}
+
+/* ---- Cartes ------------------------------------------------------------------------ */
+.gs-apercu__barre{padding:12px 16px;border:1px solid var(--app-bord);border-radius:var(--app-rayon);background:#fff;box-shadow:var(--app-ombre)}
+.gs-apercu__titre{display:flex;align-items:center;gap:10px;font-size:19px}
+.gs-apercu__titre::before{content:"";flex:none;width:4px;height:18px;border-radius:4px;background:var(--accent)}
+.gs-kpis{gap:14px}
+.gs-kpi{position:relative;gap:8px;min-height:128px;padding:18px 18px 16px;border-color:var(--app-bord);border-radius:var(--app-rayon);box-shadow:var(--app-ombre)}
+.gs-kpi__libelle{padding-right:52px;font-size:12px;letter-spacing:.05em;color:#6b7690}
+.gs-kpi__valeur{font-size:28px;letter-spacing:-.02em}
+.gs-kpi__picto{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:44px;height:44px;border-radius:14px}
+.gs-kpi__picto--bleu{background:#e8efff;color:#1f5fe0}
+.gs-kpi__picto--marine{background:#e7edf9;color:#0d2b6b}
+.gs-kpi__picto--vert{background:#dcfce7;color:#15803d}
+.gs-kpi__picto--orange{background:rgba(244,96,13,.12);color:#f4600d}
+.gs-kpi__picto--rouge{background:#fee2e2;color:#dc2626}
+button.gs-kpi:hover{border-color:#cfd8e8}
+.gs-kpi--critique{border-color:#f7caca;background:linear-gradient(180deg,#fff,#fff6f6)}
+.gs-kpi--attention{border-color:#fbd5ad;background:linear-gradient(180deg,#fff,#fff8f1)}
+.gs-kpi--fort{border-color:transparent;background:radial-gradient(260px 160px at 100% 0,rgba(244,96,13,.38),transparent 70%),linear-gradient(135deg,#0d2b6b,#061a3f);color:#fff;box-shadow:0 24px 44px -26px rgba(6,26,63,.85)}
+.gs-kpi--fort .gs-kpi__libelle{color:#b9c6e4}
+.gs-kpi--fort .gs-kpi__valeur{color:#fff}
+.gs-kpi--fort .gs-kpi__sous{color:#c9d4ec}
+.gs-kpi--fort .gs-kpi__picto{background:rgba(255,255,255,.12);color:#ffb285}
+button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px rgba(6,26,63,.95)}
+.gs-apercu__etats{padding:12px 16px;border:1px solid var(--app-bord);border-radius:16px;background:#fff}
+
+.gs-graphe,.gs-apercu__panneau{border-color:var(--app-bord);border-radius:var(--app-rayon);box-shadow:var(--app-ombre)}
+.gs-graphe{padding:18px 18px 16px}
+.gs-graphe__titre{font-size:15.5px}
+.gs-graphe__svg{height:170px}
+.gs-graphe--recus{fill:#0d2b6b;background:#0d2b6b}
+.gs-graphe--livres{fill:#f4600d;background:#f4600d}
+.gs-graphe--facture{fill:#0d2b6b;background:#0d2b6b}
+.gs-graphe--encaisse{fill:#f4600d;background:#f4600d}
+.gs-graphe--scans{fill:#1f5fe0;background:#1f5fe0}
+.gs-graphe__svg rect{transition:opacity .15s ease}
+.gs-graphe__svg rect:hover{opacity:.75}
+.gs-repartition__piste{height:9px}
+
+.gs-tableau-cadre{border-color:var(--app-bord);border-radius:var(--app-rayon);box-shadow:var(--app-ombre)}
+.gs-tableau th{background:#f7f9fd}
+.gs-admin-vide{border-radius:var(--app-rayon)}
+.gs-stats{gap:12px;margin-bottom:18px}
+.gs-stat{border-color:var(--app-bord);border-radius:18px;box-shadow:var(--app-ombre)}
+.gs-stat__nombre{font-size:26px}
+.gs-scan__fiche,.gs-scan__journal,.gs-finances__case{border-radius:var(--app-rayon)}
+.gs-admin-outils .gs-recherche,.gs-admin-filtre,.gs-admin-date{border-radius:14px}
+
+/* Les listes à côté du menu : des cellules un peu plus serrées, et les boutons
+   d'une ligne empilés dans leur colonne plutôt que de pousser le tableau */
+@media (min-width:860px){
+  .gs-tableau td{padding:12px 11px}
+  .gs-tableau th{padding:12px 11px}
+  .gs-cellule-actions{width:1%;white-space:normal}
+  .gs-cellule-actions .gs-bouton{display:flex;justify-content:center;width:100%;white-space:nowrap}
+  .gs-cellule-actions .gs-bouton+.gs-bouton{margin:6px 0 0}
+}
+
+/* ---- Les réglages ------------------------------------------------------------------ */
+.gs-reglages{width:min(860px,calc(100vw - 24px))}
+.gs-reglages__corps{display:grid;grid-template-columns:200px minmax(0,1fr);gap:22px;align-items:start}
+.gs-reglages__nav{position:sticky;top:0;display:flex;flex-direction:column;gap:4px}
+.gs-reglages__nav button{display:flex;align-items:center;gap:10px;min-height:44px;padding:9px 12px;border:0;border-radius:12px;background:none;color:#5b6782;font:inherit;font-size:14.5px;font-weight:700;text-align:left;cursor:pointer}
+.gs-reglages__nav button:hover{background:#f3f6fb;color:var(--ink)}
+.gs-reglages__nav button[aria-selected="true"]{background:var(--ink);color:#fff}
+.gs-reglages__nav .gs-ico{flex:none;width:18px;height:18px}
+.gs-reglages__section h3{font-size:18px}
+.gs-reglages__aide{margin:6px 0 10px;font-size:14px;line-height:1.5;color:#6b7690}
+.gs-reglage{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;padding:14px 0;border-bottom:1px solid #eef2f8;cursor:pointer}
+.gs-reglage:last-child{border-bottom:0}
+.gs-reglage__texte{display:flex;flex-direction:column;gap:3px;min-width:0}
+.gs-reglage__texte strong{font-size:15px;color:var(--ink)}
+.gs-reglage__texte small{font-size:13.5px;line-height:1.45;color:#6b7690}
+.gs-reglage select{flex:none;min-width:170px}
+.gs-interrupteur{position:relative;flex:none;width:46px;height:26px;margin:0;border-radius:999px;background:#d6ddec;-webkit-appearance:none;appearance:none;cursor:pointer;transition:background-color .2s ease}
+.gs-interrupteur::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(6,26,63,.3);transition:transform .2s ease}
+.gs-interrupteur:checked{background:var(--accent)}
+.gs-interrupteur:checked::after{transform:translateX(20px)}
+.gs-interrupteur:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.gs-reglages__infos{display:grid;gap:0;margin:10px 0 4px}
+.gs-reglages__infos div{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid #eef2f8;font-size:14.5px}
+.gs-reglages__infos dt{font-weight:700;color:#6b7690}
+.gs-reglages__infos dd{margin:0;overflow-wrap:anywhere;color:var(--ink)}
+.gs-reglages__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.gs-reglages__actions .gs-ico{width:16px;height:16px}
+.gs-reglages__pied{display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+/* La barre sur une seule ligne : sous 1600 px, l'e-mail, le rôle et le mot « En direct »
+   laissent la place à la recherche (ils restent dans le menu du compte et les réglages) */
+@media (max-width:1599px){
+  .gs-td__qui,.gs-direct__texte,.gs-td__barre .gs-rapide__bouton{display:none}
+  .gs-td__compte{padding:0 8px 0 4px}
+  .gs-direct{padding:6px}
+}
+
+/* Petit ordinateur (1024 à 1279 px) : date courte et bouton « Enregistrer un colis » en
+   icône, pour garder la barre sur une ligne à côté du menu */
+@media (min-width:1024px) and (max-width:1279px){
+  .gs-horloge__date{display:none}
+  .gs-horloge__date--courte{display:inline}
+  .gs-td__nouveau span{display:none}
+  .gs-td__nouveau{width:44px;padding:0;justify-content:center}
+  .gs-td__barre .gs-rapide{flex-basis:160px}
+}
+
+/* ---- Tablette et téléphone : le menu devient un tiroir ------------------------------- */
+@media (max-width:1023px){
+  .is-app .gs-td__menu{position:fixed;top:0;bottom:0;left:0;width:min(300px,86vw);height:auto;transform:translateX(-105%);transition:transform .28s cubic-bezier(.2,.7,.3,1);box-shadow:30px 0 60px -30px rgba(0,0,0,.55)}
+  .is-menu-ouvert .gs-td__menu{transform:none}
+  .gs-td__voile{position:fixed;inset:0;z-index:55;display:block;background:rgba(6,26,63,.45);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .gs-td__replier{display:none}
+  .is-app .gs-td__barre .gs-td__burger{display:grid}
+  .is-app .gs-td__logo--barre{display:inline-flex}
+  .gs-td__barre{margin:10px 14px 0;padding:10px 12px}
+  .gs-td__barre .gs-rapide{order:5;flex:1 1 100%;max-width:none}
+  .gs-td__titre-texte{font-size:19px}
+  .gs-td__nouveau span{display:none}
+  .gs-td__nouveau{width:44px;padding:0;justify-content:center}
+  .gs-td__qui,.gs-td__compte>.gs-ico{display:none}
+  .gs-td__compte{padding:0 4px}
+  .gs-td .gs-admin{padding:16px 14px 80px}
+  .gs-td__principal>.gs-rapide__resultats{margin:12px 14px 0}
+  .gs-reglages__corps{grid-template-columns:minmax(0,1fr)}
+  .gs-reglages__nav{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none}
+  .gs-reglages__nav::-webkit-scrollbar{display:none}
+  .gs-reglages__nav button{flex:none}
+}
+@media (max-width:759px){
+  .is-app .gs-td__logo--barre{display:none}
+  .gs-direct__texte{display:none}
+  .gs-direct{padding:6px}
+}
+@media (max-width:639px){
+  .gs-td__barre{top:8px;gap:8px 10px}
+  .gs-horloge__date{display:none}
+  .gs-horloge__date--courte{display:inline}
+  .gs-td__outils{gap:6px}
+  .gs-td__outils>[data-action="ouvrir-reglages"],.gs-td__outils>.gs-direct{display:none}
+  .gs-td__barre{padding:10px}
+  .gs-td__titre{flex:1 1 0}
+  .gs-td__titre-texte{font-size:17px;white-space:nowrap}
+  .gs-td__titre-texte>[data-titre-vue]{overflow:hidden;text-overflow:ellipsis}
+  .gs-td__outils{flex:none}
+  .gs-td__demo{display:none}
+  .gs-horloge{flex-wrap:nowrap;white-space:nowrap}
+  .gs-td__icone,.gs-td__nouveau,.gs-td__compte{width:40px;height:40px;min-height:40px;border-radius:12px}
+  .gs-td__avatar{width:30px;height:30px;border-radius:10px}
+  .gs-td__barre .gs-rapide__bouton{display:none}
+  .gs-kpi{min-height:0;padding:14px}
+  .gs-kpi__picto{top:12px;right:12px;width:36px;height:36px;border-radius:11px}
+  .gs-kpi__picto svg{width:18px;height:18px}
+  .gs-kpi__libelle{padding-right:40px}
+  .gs-kpi__valeur{font-size:22px}
+  .gs-reglage{flex-wrap:wrap}
+  .gs-reglage select{flex:1 1 100%}
+  .gs-reglages__infos div{grid-template-columns:minmax(0,1fr);gap:2px}
+}
+@media (prefers-reduced-motion:reduce){
+  .is-app .gs-td__menu,.gs-td__panneau{transition:none;animation:none}
+}

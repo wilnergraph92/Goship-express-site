@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
 <link rel="stylesheet" href="assets/css/site.css">
+<link rel="stylesheet" href="assets/css/tableau.css">
 <script src="assets/js/config.js" defer></script>
 <script src="assets/js/api.js" defer></script>
 <script src="assets/js/notifications.js" defer></script>
@@ -27,18 +28,76 @@
 <body class="gs-admin-body">
 <a class="gs-skip" href="#contenu-principal">Aller au contenu</a>
 
-<header class="gs-admin-barre">
-  <div class="gs-admin-barre__wrap">
-    <a class="gs-admin-barre__logo" href="index.html" aria-label="Goship Express — voir le site"><span><img src="assets/img/logo-goship.png" alt="" width="360" height="120"></span></a>
-    <p class="gs-admin-barre__titre">Tableau de bord<span class="gs-admin-barre__demo" data-demo-badge hidden>Démo</span></p>
-    <div class="gs-admin-barre__actions" data-barre-connecte hidden>
-      <span class="gs-direct gs-direct--clair" data-direct hidden><span class="gs-direct__point" aria-hidden="true"></span>En direct</span>
-      <span class="gs-admin-barre__email" data-email></span>
-      <span class="gs-admin-barre__role" data-role-compte hidden></span>
-      <button type="button" class="gs-admin-barre__bouton" data-action="deconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Déconnexion</span></button>
+<!-- Le cadre du tableau de bord : un menu à gauche (les onglets), une barre en
+     haut (titre, recherche rapide, date et heure, alertes, réglages, compte).
+     Avant la connexion, seuls le logo et l'horloge s'affichent (classe
+     « is-app » posée par admin.js). Sur téléphone et tablette, le menu
+     devient un tiroir qui s'ouvre par le bouton ☰. -->
+<div class="gs-td">
+  <aside class="gs-td__menu" id="menu-admin" data-app-menu aria-label="Menu du tableau de bord">
+    <div class="gs-td__marque">
+      <a class="gs-td__logo" href="index.html" aria-label="Goship Express — voir le site"><img src="assets/img/logo-goship.png" alt="" width="360" height="120"></a>
+      <button type="button" class="gs-td__replier" data-action="replier-menu" aria-label="Réduire le menu" aria-pressed="false" title="Réduire le menu"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></svg></button>
     </div>
-  </div>
-</header>
+    <p class="gs-td__rubrique">Vue d'ensemble</p>
+    <div class="gs-td__nav" role="tablist" aria-label="Affichage" aria-orientation="vertical">
+      <button type="button" role="tab" aria-selected="true" data-onglet-vue="apercu" data-permission="shipments.view" title="Vue générale"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="gs-td__libelle">Vue générale</span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1" title="Factures"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg><span class="gs-td__libelle">Factures</span><span class="gs-admin-onglets__total" data-total="factures"></span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg><span class="gs-td__libelle">Scanner</span></button>
+      <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
+    </div>
+    <div class="gs-td__pied">
+      <button type="button" class="gs-td__lien" data-action="ouvrir-reglages" title="Réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="gs-td__libelle">Réglages</span></button>
+      <a class="gs-td__lien" href="index.html" title="Voir le site"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg><span class="gs-td__libelle">Voir le site</span></a>
+      <button type="button" class="gs-td__lien" data-action="deconnexion" title="Déconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span class="gs-td__libelle">Déconnexion</span></button>
+    </div>
+  </aside>
+  <div class="gs-td__voile" data-action="fermer-menu" hidden></div>
+
+  <div class="gs-td__principal">
+    <header class="gs-td__barre">
+      <button type="button" class="gs-td__icone gs-td__burger" data-action="ouvrir-menu" aria-controls="menu-admin" aria-expanded="false" aria-label="Ouvrir le menu"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <a class="gs-td__logo gs-td__logo--barre" href="index.html" aria-label="Goship Express — voir le site"><img src="assets/img/logo-goship.png" alt="" width="360" height="120"></a>
+      <div class="gs-td__titre">
+        <p class="gs-td__titre-texte"><span data-titre-vue>Tableau de bord</span><span class="gs-td__demo" data-demo-badge hidden>Démo</span></p>
+        <p class="gs-horloge" data-horloge><span class="gs-horloge__date" data-horloge-date></span><span class="gs-horloge__date gs-horloge__date--courte" data-horloge-date-courte></span><time class="gs-horloge__heure" data-horloge-heure></time></p>
+      </div>
+      <!-- Recherche rapide (recherche_rapide, outils/supabase-tableau-de-bord.sql) :
+           la base cherche par ses index ; un scanner en mode clavier y tape
+           aussi un code-barres ou le lien du QR d'une étiquette. -->
+      <form class="gs-rapide" data-form="recherche-rapide" role="search" novalidate>
+        <label class="gs-recherche gs-rapide__champ"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" name="texte" data-rapide-texte maxlength="200" placeholder="Colis, facture, suivi, code-barres, nom, téléphone…" aria-label="Recherche rapide : colis, clients, factures" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+        <button type="submit" class="gs-bouton gs-bouton--sombre gs-rapide__bouton">Chercher</button>
+      </form>
+      <div class="gs-td__outils" data-barre-connecte hidden>
+        <span class="gs-direct" data-direct hidden><span class="gs-direct__point" aria-hidden="true"></span><span class="gs-direct__texte">En direct</span></span>
+        <button type="button" class="gs-bouton gs-bouton--plein gs-td__nouveau" data-action="nouveau-colis" data-permission="shipments.create" title="Enregistrer un colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg><span>Enregistrer un colis</span></button>
+        <div class="gs-td__deroulant">
+          <button type="button" class="gs-td__icone" data-action="alertes" aria-expanded="false" aria-controls="panneau-alertes" aria-label="Alertes" title="Alertes"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="gs-td__compteur" data-alertes-nombre hidden></span></button>
+          <div class="gs-td__panneau gs-td__panneau--alertes" id="panneau-alertes" data-panneau-alertes hidden>
+            <p class="gs-td__panneau-titre">Alertes</p>
+            <ul class="gs-alertes" data-alertes-cloche></ul>
+          </div>
+        </div>
+        <button type="button" class="gs-td__icone" data-action="ouvrir-reglages" aria-label="Réglages" title="Réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></button>
+        <div class="gs-td__deroulant">
+          <button type="button" class="gs-td__compte" data-action="menu-compte" aria-expanded="false" aria-controls="menu-compte" aria-label="Mon compte">
+            <span class="gs-td__avatar" data-avatar aria-hidden="true"></span>
+            <span class="gs-td__qui"><span class="gs-td__email" data-email></span><span class="gs-td__role" data-role-compte hidden></span></span>
+            <svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <div class="gs-td__panneau gs-td__panneau--compte" id="menu-compte" data-menu-compte hidden>
+            <p class="gs-td__panneau-titre"><span data-email></span><span class="gs-td__panneau-role" data-role-texte></span></p>
+            <button type="button" class="gs-td__lien" data-action="ouvrir-reglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span>Réglages</span></button>
+            <a class="gs-td__lien" href="index.html"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg><span>Voir le site</span></a>
+            <button type="button" class="gs-td__lien" data-action="deconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Déconnexion</span></button>
+          </div>
+        </div>
+      </div>
+    </header>
+    <section class="gs-rapide__resultats" data-rapide-resultats aria-label="Résultats de la recherche rapide" aria-live="polite" hidden></section>
 
 <main id="contenu-principal" tabindex="-1" class="gs-admin">
   <div class="gs-admin-demo" data-demo hidden>
@@ -91,44 +150,6 @@
   </section>
 
   <section class="gs-admin-ecran gs-admin-tableau" data-ecran="tableau" hidden>
-    <div class="gs-admin-entete">
-      <div>
-        <h1>Colis et clients</h1>
-        <p class="gs-admin-entete__date" data-date-jour></p>
-      </div>
-      <button type="button" class="gs-bouton gs-bouton--plein" data-action="nouveau-colis" data-permission="shipments.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un colis</button>
-    </div>
-
-    <!-- Recherche rapide (recherche_rapide, outils/supabase-tableau-de-bord.sql) :
-         la base cherche par ses index ; un scanner en mode clavier y tape
-         aussi un code-barres ou le lien du QR d'une étiquette. -->
-    <form class="gs-rapide" data-form="recherche-rapide" role="search" novalidate>
-      <label class="gs-recherche gs-rapide__champ"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" name="texte" data-rapide-texte maxlength="200" placeholder="Recherche rapide : n° de colis ou de facture, suivi, code-barres, nom, téléphone, e-mail…" aria-label="Recherche rapide : colis, clients, factures" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-      <button type="submit" class="gs-bouton gs-bouton--sombre">Chercher</button>
-    </form>
-    <section class="gs-rapide__resultats" data-rapide-resultats aria-label="Résultats de la recherche rapide" aria-live="polite" hidden></section>
-
-    <div class="gs-stats">
-      <button type="button" class="gs-stat" data-filtre-statut="recu"><span class="gs-stat__nombre" data-stat="recu">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--recu"></i>Reçus</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="emballe"><span class="gs-stat__nombre" data-stat="emballe">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--emballe"></i>Emballés</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="embarque"><span class="gs-stat__nombre" data-stat="embarque">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--embarque"></i>Embarqués</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="distribution"><span class="gs-stat__nombre" data-stat="distribution">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--distribution"></i>Centre de distribution</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="succursale"><span class="gs-stat__nombre" data-stat="succursale">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--succursale"></i>Transférés à la succursale</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="disponible"><span class="gs-stat__nombre" data-stat="disponible">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--disponible"></i>Disponibles</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="incident"><span class="gs-stat__nombre" data-stat="incident">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--incident"></i>Action requise</span></button>
-      <button type="button" class="gs-stat" data-filtre-statut="livre"><span class="gs-stat__nombre" data-stat="livres_30j">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--livre"></i>Livrés (30 jours)</span></button>
-      <button type="button" class="gs-stat" data-vue-cible="clients"><span class="gs-stat__nombre" data-stat="clients">–</span><span class="gs-stat__libelle"><i class="gs-pastille"></i>Clients inscrits</span></button>
-    </div>
-
-    <div class="gs-admin-onglets" role="tablist" aria-label="Affichage">
-      <button type="button" role="tab" aria-selected="true" data-onglet-vue="apercu" data-permission="shipments.view">Vue générale</button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1">Colis<span class="gs-admin-onglets__total" data-total="colis"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1">Clients<span class="gs-admin-onglets__total" data-total="clients"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1">Factures<span class="gs-admin-onglets__total" data-total="factures"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1">Scanner</button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1">Équipe</button>
-    </div>
-
     <!-- La vue générale (vue_generale, colis_a_traiter). Chaque chiffre vient
          de la base ; une partie que le rôle ne peut pas voir n'est pas dans la
          réponse, et ne s'affiche donc pas. -->
@@ -267,6 +288,18 @@
     </div>
 
     <div class="gs-admin-vue" data-vue="colis" role="tabpanel" hidden>
+      <div class="gs-stats">
+        <button type="button" class="gs-stat" data-filtre-statut="recu"><span class="gs-stat__nombre" data-stat="recu">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--recu"></i>Reçus</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="emballe"><span class="gs-stat__nombre" data-stat="emballe">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--emballe"></i>Emballés</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="embarque"><span class="gs-stat__nombre" data-stat="embarque">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--embarque"></i>Embarqués</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="distribution"><span class="gs-stat__nombre" data-stat="distribution">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--distribution"></i>Centre de distribution</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="succursale"><span class="gs-stat__nombre" data-stat="succursale">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--succursale"></i>Transférés à la succursale</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="disponible"><span class="gs-stat__nombre" data-stat="disponible">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--disponible"></i>Disponibles</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="incident"><span class="gs-stat__nombre" data-stat="incident">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--incident"></i>Action requise</span></button>
+        <button type="button" class="gs-stat" data-filtre-statut="livre"><span class="gs-stat__nombre" data-stat="livres_30j">–</span><span class="gs-stat__libelle"><i class="gs-pastille gs-pastille--livre"></i>Livrés (30 jours)</span></button>
+        <button type="button" class="gs-stat" data-vue-cible="clients"><span class="gs-stat__nombre" data-stat="clients">–</span><span class="gs-stat__libelle"><i class="gs-pastille"></i>Clients inscrits</span></button>
+      </div>
+
       <div class="gs-admin-outils">
         <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche="colis" placeholder="N° de colis, code client, nom, suivi vendeur…" aria-label="Rechercher un colis" autocomplete="off" spellcheck="false"></label>
         <select class="gs-admin-filtre" data-filtre-colis aria-label="Filtrer par statut">
@@ -500,6 +533,8 @@
     </div>
   </section>
 </main>
+  </div>
+</div>
 
 <dialog class="gs-dialogue" data-dialogue="colis" aria-labelledby="dlg-colis-titre">
   <form class="gs-form" data-form="colis" novalidate>
@@ -919,6 +954,106 @@
   <option value="Gonaïves"></option>
   <option value="Jacmel"></option>
 </datalist>
+
+<!-- Les réglages : des préférences d'affichage gardées sur cet appareil
+     (jamais dans la base), le compte connecté, le poste de scan et l'état du
+     système. Aucun réglage ne change une donnée ni une permission. -->
+<dialog class="gs-dialogue gs-dialogue--large gs-reglages" data-dialogue="reglages" aria-labelledby="dlg-reglages-titre">
+  <div class="gs-dialogue__tete">
+    <h2 id="dlg-reglages-titre">Réglages</h2>
+    <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="gs-dialogue__corps gs-reglages__corps">
+    <div class="gs-reglages__nav" role="tablist" aria-label="Rubriques des réglages">
+      <button type="button" role="tab" aria-selected="true" data-reglages-rubrique="affichage"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Affichage</span></button>
+      <button type="button" role="tab" aria-selected="false" data-reglages-rubrique="compte" tabindex="-1"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Mon compte</span></button>
+      <button type="button" role="tab" aria-selected="false" data-reglages-rubrique="scanner" data-permission="shipments.scan" tabindex="-1"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg><span>Poste de scan</span></button>
+      <button type="button" role="tab" aria-selected="false" data-reglages-rubrique="apropos" tabindex="-1"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Système</span></button>
+    </div>
+    <div class="gs-reglages__contenu">
+      <section class="gs-reglages__section" data-reglages-section="affichage" role="tabpanel" aria-label="Affichage">
+        <h3>Affichage</h3>
+        <p class="gs-reglages__aide">Gardés sur cet appareil seulement : chaque membre de l'équipe règle le sien.</p>
+        <label class="gs-reglage">
+          <span class="gs-reglage__texte"><strong>Période de la vue générale</strong><small>Celle qui s'affiche à l'ouverture du tableau de bord.</small></span>
+          <select class="gs-admin-filtre gs-admin-filtre--petit" data-reglage="periode">
+            <option value="aujourdhui">Aujourd'hui</option>
+            <option value="7j">7 derniers jours</option>
+            <option value="30j">30 derniers jours</option>
+            <option value="mois">Ce mois-ci</option>
+            <option value="mois_precedent">Mois précédent</option>
+            <option value="annee">Cette année</option>
+          </select>
+        </label>
+        <label class="gs-reglage">
+          <span class="gs-reglage__texte"><strong>Lignes par page</strong><small>Listes des colis, des clients et des colis à traiter.</small></span>
+          <select class="gs-admin-filtre gs-admin-filtre--petit" data-reglage="parPage">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+        <label class="gs-reglage">
+          <span class="gs-reglage__texte"><strong>Colis « sans mouvement »</strong><small>Aucun événement depuis ce nombre de jours : chiffre, alerte et liste à traiter.</small></span>
+          <select class="gs-admin-filtre gs-admin-filtre--petit" data-reglage="jours">
+            <option value="3">3 jours</option>
+            <option value="7">7 jours</option>
+            <option value="14">14 jours</option>
+            <option value="30">30 jours</option>
+          </select>
+        </label>
+        <label class="gs-reglage gs-reglage--case">
+          <span class="gs-reglage__texte"><strong>Menu latéral réduit</strong><small>Les icônes seulement, pour laisser plus de place aux listes (ordinateur).</small></span>
+          <input type="checkbox" class="gs-interrupteur" role="switch" data-reglage="menuReduit">
+        </label>
+        <label class="gs-reglage gs-reglage--case">
+          <span class="gs-reglage__texte"><strong>Secondes dans l'horloge</strong><small>L'heure en haut de l'écran, à la seconde près.</small></span>
+          <input type="checkbox" class="gs-interrupteur" role="switch" data-reglage="secondes">
+        </label>
+      </section>
+      <section class="gs-reglages__section" data-reglages-section="compte" role="tabpanel" aria-label="Mon compte" hidden>
+        <h3>Mon compte</h3>
+        <dl class="gs-reglages__infos">
+          <div><dt>E-mail</dt><dd data-email></dd></div>
+          <div><dt>Rôle</dt><dd data-reglages-role></dd></div>
+          <div><dt>Permissions</dt><dd data-reglages-permissions></dd></div>
+        </dl>
+        <p class="gs-reglages__aide">Un rôle ne se change que depuis l'onglet « Équipe », par un administrateur. La base vérifie chaque permission à chaque action : un menu masqué ici n'est qu'un confort.</p>
+        <div class="gs-reglages__actions">
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="reglages-equipe" data-permission="users.view"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>Voir ce que chaque rôle peut faire</button>
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="deconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>Se déconnecter</button>
+        </div>
+      </section>
+      <section class="gs-reglages__section" data-reglages-section="scanner" role="tabpanel" aria-label="Poste de scan" data-permission="shipments.scan" hidden>
+        <h3>Poste de scan</h3>
+        <dl class="gs-reglages__infos">
+          <div><dt>Lieu de ce poste</dt><dd data-reglages-scan-lieu></dd></div>
+          <div><dt>Mode</dt><dd data-reglages-scan-mode></dd></div>
+          <div><dt>Son</dt><dd data-reglages-scan-son></dd></div>
+        </dl>
+        <p class="gs-reglages__aide">Ils se règlent dans l'onglet « Scanner », là où l'on scanne, et restent sur cet appareil. Un scanner USB ou Bluetooth en mode clavier fonctionne sans autre réglage ; admin.html#scanner ouvre directement le poste.</p>
+        <div class="gs-reglages__actions">
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--sombre" data-action="reglages-scanner"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg>Ouvrir le poste de scan</button>
+        </div>
+      </section>
+      <section class="gs-reglages__section" data-reglages-section="apropos" role="tabpanel" aria-label="Système" hidden>
+        <h3>Système</h3>
+        <dl class="gs-reglages__infos">
+          <div><dt>Données</dt><dd data-reglages-mode></dd></div>
+          <div><dt>Mises à jour en direct</dt><dd data-reglages-direct></dd></div>
+          <div><dt>Périodes</dt><dd>Comptées en jours de Santo Domingo</dd></div>
+          <div><dt>Date et heure affichées</dt><dd>Celles de cet appareil</dd></div>
+        </dl>
+        <p class="gs-reglages__aide">Tarif, frais de service, statuts, permissions : ces règles vivent dans la base de données et ne se changent pas depuis cet écran.</p>
+      </section>
+    </div>
+  </div>
+  <div class="gs-dialogue__pied gs-reglages__pied">
+    <button type="button" class="gs-lien-bouton" data-action="reglages-defaut">Rétablir l'affichage par défaut</button>
+    <button type="button" class="gs-bouton gs-bouton--plein" data-action="fermer">Terminé</button>
+  </div>
+</dialog>
 
 <div class="gs-toast" data-toast role="status" aria-live="polite" hidden></div>
 </body>
