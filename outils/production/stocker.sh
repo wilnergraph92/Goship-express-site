@@ -14,6 +14,8 @@
 #   RCLONE_CONFIG          chemin du fichier rclone.conf qui décrit ces remotes (ses
 #                          clés d'accès : un secret, jamais dans le dépôt)
 # Les destinations ne sont jamais affichées en entier : « destination A », « B ».
+# A est obligatoire. B non configurée : « Destination B : SKIPPED » (jamais « réussi »).
+# B configurée : exactement les mêmes exigences que A — son échec est un échec (code 1).
 #
 # envoyer   copie les six fichiers de <nom> vers A (et B), sans jamais écraser un
 #           fichier existant (identique : sauté ; différent : échec), puis RELIT chaque fichier envoyé et compare son SHA-256
@@ -111,6 +113,7 @@ case "$action" in
       done
       echo "Destination $d : 6 fichiers envoyés et relus (SHA-256 identiques)"
     done
+    [ -n "${SAUVEGARDE_STOCKAGE_B:-}" ] || echo "Destination B : SKIPPED (non configurée)"
     ;;
 
   lister)
@@ -171,6 +174,7 @@ case "$action" in
       [ "$restantes" -ge "$garder" ] || { echo "Destination $d : seulement $restantes sauvegardes complètes après rétention" >&2; exit 1; }
       echo "Destination $d : $restantes sauvegardes complètes gardées"
     done
+    [ -n "${SAUVEGARDE_STOCKAGE_B:-}" ] || echo "Destination B : SKIPPED (non configurée)"
     ;;
 
   *)

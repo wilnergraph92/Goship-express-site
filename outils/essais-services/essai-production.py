@@ -479,6 +479,138 @@ def main():
     sys.exit(0 if all(S.RESULTATS) else 1)
 
 
+# Un rclone en panne sur commande, placé devant le vrai (essais seulement). PANNE contient
+# des « opération:remote » : « copyto:stock_b » fait échouer un envoi vers stock_b,
+# « lsf:stock_b » sa lecture, « cat-altere:stock_a » altère ce que la relecture de A reçoit.
+RCLONE_EN_PANNE = """#!/bin/bash
+cmd=""
+for a in "$@"; do case "$a" in copyto|cat|lsf|deletefile) cmd="$a"; break ;; esac; done
+for p in ${PANNE:-}; do
+  op="${p%%:*}"; remote="${p#*:}"; touche=0
+  for a in "$@"; do case "$a" in "$remote":*) touche=1 ;; esac; done
+  [ "$touche" = 1 ] || continue
+  if [ "$op" = "$cmd" ]; then echo "panne simulée : rclone $cmd sur $remote" >&2; exit 1; fi
+  if [ "$op" = cat-altere ] && [ "$cmd" = cat ]; then "$VRAI_RCLONE" "$@" | sed '1s/^/X/'; exit "${PIPESTATUS[0]}"; fi
+done
+exec "$VRAI_RCLONE" "$@"
+"""
+
+
+def etape_stockage(travail, sortie, nom, conf):
+    """TEST 2, 3, 4 (D2) : l'étape « Stockage externe » de sauvegarde.yml, extraite telle
+    quelle et lancée comme GitHub lance une étape « shell: bash »
+    (bash --noprofile --norc -eo pipefail), vers de vrais dossiers par le vrai rclone. A est
+    obligatoire, B facultative : B absente → SKIPPED et vert ; toute destination
+    configurée qui échoue (inaccessible, envoi, relecture, rétention) → l'étape échoue,
+    donc le job et le workflow. Le même essai sous « bash -e » (le shell par défaut de
+    GitHub, sans pipefail) montre le défaut corrigé : l'échec de B y passait en vert."""
+    import yaml
+    flux = {f: yaml.safe_load(open(os.path.join(RACINE, '.github', 'workflows', f), encoding='utf-8'))
+            for f in ('sauvegarde.yml', 'restauration-test.yml')}
+    for f, w in flux.items():
+        verifier('D2 : %s — toutes les étapes sous « shell: bash » (bash -eo pipefail)' % f,
+                 ((w.get('defaults') or {}).get('run') or {}).get('shell'), 'bash')
+    etape = [e for e in flux['sauvegarde.yml']['jobs']['sauvegarder']['steps'] if e.get('id') == 'stockage'][0]
+    verifier('… l\'étape « Stockage externe » ne tolère aucun échec (pas de continue-on-error, ni sur le job)',
+             (etape.get('continue-on-error', False), flux['sauvegarde.yml']['jobs']['sauvegarder'].get('continue-on-error', False)),
+             (False, False))
+    script = etape['run'].replace('${{ steps.copie.outputs.nom }}', nom)
+    faux_bin = os.path.join(travail, 'faux-bin')
+    os.makedirs(faux_bin, exist_ok=True)
+    open(os.path.join(faux_bin, 'rclone'), 'w').write(RCLONE_EN_PANNE)
+    os.chmod(os.path.join(faux_bin, 'rclone'), 0o755)
+    n = [0]
+
+    def lancer_etape(a, b, panne='', shell=('-eo', 'pipefail')):
+        n[0] += 1
+        runner = os.path.join(travail, 'runner-%d' % n[0])
+        os.makedirs(runner)
+        shutil.copytree(sortie, os.path.join(runner, 'goship-backup'))
+        open(os.path.join(runner, 'etape.sh'), 'w').write(script)
+        dest = lambda x: '' if x == '' else (x if ':' in x else 'stock_%s:%s' % (x[0], os.path.join(runner, x)))
+        env = dict(os.environ, RUNNER_TEMP=runner, SAUVEGARDE_RCLONE_CONFIG=open(conf).read(),
+                   SAUVEGARDE_STOCKAGE=dest(a), SAUVEGARDE_STOCKAGE_B=dest(b), PANNE=panne,
+                   VRAI_RCLONE=shutil.which('rclone'), PATH=faux_bin + os.pathsep + os.environ['PATH'])
+        r = subprocess.run(['bash', '--noprofile', '--norc'] + list(shell) + [os.path.join(runner, 'etape.sh')],
+                           cwd=RACINE, env=env, capture_output=True, text=True)
+        return r.returncode, r.stdout + r.stderr
+
+    rouge = lambda c: 'FAILED' if c else 'SUCCESS'
+    c, s = lancer_etape('a-ok', '')
+    verifier('TEST 3 : A correcte, B non configurée → B SKIPPED, étape SUCCESS',
+             (rouge(c), 'Destination A : 6 fichiers envoyés et relus' in s, 'Destination B : SKIPPED' in s,
+              'Destination B : 6 fichiers' in s), ('SUCCESS', True, True, False))
+    c, s = lancer_etape('a-ok', 'b-ok')
+    verifier('A et B correctes → les deux envoyées, relues et retenues, SUCCESS',
+             (rouge(c), s.count('6 fichiers envoyés et relus'), 'SKIPPED' in s), ('SUCCESS', 2, False))
+    for libelle, a, panne in (('A inaccessible (remote absent)', 'absente_a:goship', ''),
+                              ('envoi vers A refusé (copyto)', 'a-ok', 'copyto:stock_a'),
+                              ('relecture de A altérée (SHA-256)', 'a-ok', 'cat-altere:stock_a')):
+        c, s = lancer_etape(a, '', panne)
+        verifier('TEST 2 : %s → étape FAILED' % libelle, rouge(c), 'FAILED')
+    for libelle, b, panne in (('B inaccessible (remote absent)', 'absente_b:goship', ''),
+                              ('envoi vers B refusé (copyto)', 'b-ok', 'copyto:stock_b'),
+                              ('relecture de B altérée (SHA-256)', 'b-ok', 'cat-altere:stock_b'),
+                              ('B illisible à la rétention (lsf)', 'b-ok', 'lsf:stock_b')):
+        c, s = lancer_etape('a-ok', b, panne)
+        verifier('TEST 4 : %s, A correcte → étape FAILED (jamais SUCCESS)' % libelle,
+                 (rouge(c), 'Destination A : 6 fichiers envoyés et relus' in s), ('FAILED', True))
+    c, s = lancer_etape('a-ok', 'absente_b:goship', shell=('-e',))
+    verifier('le défaut D2 reproduit : sous « bash -e » (sans pipefail), B en échec passait en SUCCESS', rouge(c), 'SUCCESS')
+
+
+def serveur_neuf(recue, nom, cle, comptes_source, lancer):
+    """TEST 1 (D1) : un serveur PostgreSQL NEUF, créé pour l'essai, sans aucun rôle de
+    Supabase (ni anon, ni authenticated, ni service_role, ni authenticator), comme le
+    conteneur postgres:17 des workflows. La vraie procédure (epreuve-restauration.sh,
+    PREPARER_CIBLE=1) doit y réussir seule : rôles, tables, fonctions, RLS, données,
+    séquences, déclencheurs, comptes."""
+    import pgserver
+    dossier = tempfile.mkdtemp(prefix='goship-neuf-')
+    serveur = pgserver.get_server(os.path.join(dossier, 'pgdata'), cleanup_mode='delete')
+    try:
+        uri = serveur.get_uri()
+        su, socket = re.match(r'postgresql://([^:@/]+)[^/]*/[^?]*\?host=(.+)$', uri).groups()
+        adresse = lambda base: 'postgresql://%s@/%s?host=%s' % (su, base, socket)
+        q = lambda base, sql: subprocess.run([str(S.PSQL), adresse(base), '-X', '-A', '-t', '-v', 'ON_ERROR_STOP=1', '-c', sql],
+                                             capture_output=True, text=True, check=True).stdout.strip()
+        ROLES = "('anon', 'authenticated', 'service_role', 'authenticator')"
+        verifier('TEST 1 : serveur neuf — aucun des quatre rôles de Supabase au départ',
+                 q('postgres', 'select count(*) from pg_roles where rolname in %s;' % ROLES), '0')
+        q('postgres', 'create database goship_neuf;')
+        r = lancer('epreuve-restauration.sh', recue, nom, cle, url=adresse('goship_neuf'), CIBLE_DB_URL=adresse('goship_neuf'),
+                   RESTORE_TARGET='essai', PREPARER_CIBLE='1')
+        print('     ' + '\n     '.join(l for l in r.stdout.strip().splitlines() if re.match(r'^[A-Z][A-Z ()]+:', l)))
+        if r.returncode:
+            print(r.stdout[-800:], r.stderr[-800:])
+        lignes = ('TABLE COUNT', 'RLS', 'FUNCTION COUNT', 'CONSTRAINT CHECK', 'BUSINESS LOCKS', 'DATA CHECK',
+                  'SEQUENCES', 'AUTH ACCOUNTS', 'AUTH DETAILS', 'RESTORE')
+        verifier('TEST 1 : la vraie procédure sur le serveur neuf → PASS',
+                 (r.returncode, r.stdout.count('FINAL RESULT:      PASS')), (0, 3))
+        verifier('… tables, RLS, fonctions, contraintes, verrous, données, séquences, comptes : tous OK',
+                 [l for l in lignes if not re.search(r'^%s: +OK' % re.escape(l), r.stdout, re.M)], [])
+        verifier('… les quatre rôles existent, avec les attributs de Supabase',
+                 q('postgres', "select string_agg(rolname || ':' || rolcanlogin || ':' || rolbypassrls, ' ' order by rolname) "
+                               "from pg_roles where rolname in %s;" % ROLES),
+                 'anon:false:false authenticated:false:false authenticator:false:false service_role:false:true')
+        verifier('… déclencheurs recréés sur auth.users (profil client, bienvenue)',
+                 q('goship_neuf', "select string_agg(tgname, ' ' order by tgname) from pg_trigger "
+                                  "where tgrelid = 'auth.users'::regclass and not tgisinternal;"),
+                 'courriels_bienvenue_confirmation creer_profil_client')
+        verifier('… comptes restaurés avec identités et empreintes de mot de passe',
+                 (q('goship_neuf', 'select count(*) from auth.users;'), q('goship_neuf', 'select count(*) from auth.identities;'),
+                  q('goship_neuf', "select count(*) from auth.users where coalesce(encrypted_password, '') <> '';"),
+                  q('goship_neuf', 'select count(*) from auth.users u where not exists '
+                                   '(select 1 from auth.identities i where i.user_id = u.id);')),
+                 (comptes_source['comptes'], comptes_source['identites'], comptes_source['mdp'], '0'))
+        verifier('… les droits de Supabase reposés (anon et authenticated lisent le schéma public)',
+                 q('goship_neuf', "select has_schema_privilege('anon', 'public', 'usage') and "
+                                  "has_schema_privilege('authenticated', 'public', 'usage');"), 't')
+    finally:
+        serveur.cleanup()
+        shutil.rmtree(dossier, ignore_errors=True)
+
+
 def sauvegarde_autonome(db):
     """L. La sauvegarde autonome (Supabase Free) de bout en bout, sur une base jetable qui
     porte le vrai schéma GoShip (chaîne complète) et des données d'essai : sauvegarde,
@@ -511,11 +643,63 @@ def sauvegarde_autonome(db):
              (r.returncode, 'Connexion à la base impossible' in r.stderr, 'motdepasse-essai-42' in r.stdout + r.stderr),
              (1, True, False))
 
+    # TEST 5. L'adresse de la base (m1) : jamais de vrai secret, aucune connexion tentée
+    faux = 'motdepasse-essai-42'
+    adresses = [
+        ('connexion directe', 'postgresql://postgres:%s@db.abcdefghijklmnopqrst.supabase.co:5432/postgres' % faux, 1),
+        ('Transaction pooler (6543)', 'postgresql://postgres.abcdefghijklmnopqrst:%s@aws-0-us-east-1.pooler.supabase.com:6543/postgres' % faux, 1),
+        ('Session pooler (5432)', 'postgresql://postgres.abcdefghijklmnopqrst:%s@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require' % faux, 0),
+        ('Session pooler, port implicite', 'postgresql://postgres.abcdefghijklmnopqrst:%s@aws-1-eu-west-3.pooler.supabase.com/postgres' % faux, 0),
+        ('pooler sans .<ref>', 'postgresql://postgres:%s@aws-0-us-east-1.pooler.supabase.com:5432/postgres' % faux, 1),
+        ('pooler sans mot de passe', 'postgresql://postgres.abcdefghijklmnopqrst@aws-0-us-east-1.pooler.supabase.com:5432/postgres', 1),
+        ('sslmode=disable', 'postgresql://postgres.abcdefghijklmnopqrst:%s@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=disable' % faux, 1),
+        ('chaîne clé=valeur', 'host=aws-0-us-east-1.pooler.supabase.com port=5432 user=postgres.x password=%s' % faux, 1),
+        ('base jetable (socket)', source, 0),
+    ]
+    for libelle, adresse, attendu in adresses:
+        r = lancer('verifier-adresse.sh', SUPABASE_DB_URL=adresse)
+        verifier('adresse %s : %s, sans rien en afficher' % (libelle, 'ACCEPTED' if attendu == 0 else 'REFUSED'),
+                 (r.returncode, ('ACCEPTÉE' if attendu == 0 else 'REFUSÉE') in r.stdout + r.stderr, faux in r.stdout + r.stderr,
+                  'abcdefghijklmnopqrst' in r.stdout + r.stderr), (attendu, True, False, False))
+    r = lancer('sauvegarder.sh', sortie, SUPABASE_DB_URL=adresses[0][1], SAUVEGARDE_DESTINATAIRE=pub(proprio))
+    verifier('sauvegarder.sh avec la connexion directe : refusé AVANT toute connexion, rien écrit',
+             (r.returncode, 'REFUSÉE' in r.stderr, 'Connexion à la base impossible' in r.stderr, os.path.isdir(sortie) and os.listdir(sortie)),
+             (1, True, False, []))
+    r = lancer('sauvegarder.sh', sortie, SUPABASE_DB_URL=adresses[1][1], SAUVEGARDE_DESTINATAIRE=pub(proprio))
+    verifier('sauvegarder.sh avec le port 6543 : refusé avant toute connexion', (r.returncode, 'port 6543' in r.stderr), (1, True))
+
+    # Les comptes de la base d'essai prennent ce que porte un vrai projet et que la
+    # restauration doit rendre (m5) : l'empreinte du mot de passe et une identité
+    # (auth.identities, de la forme posée par la section K), sur la doublure d'Auth de ce
+    # banc seulement
+    psql_dans(db, S.BASE, """
+        alter table auth.users add column if not exists encrypted_password text;
+        update auth.users set encrypted_password = '$2a$10$' || md5(id::text) where encrypted_password is null;
+        create table if not exists auth.identities (id text primary key, user_id uuid,
+               provider text, identity_data jsonb, cree_le timestamptz default now());
+        insert into auth.identities (id, user_id, provider, identity_data)
+          select id::text, id, 'email', jsonb_build_object('sub', id) from auth.users u
+           where not exists (select 1 from auth.identities i where i.user_id = u.id)
+          on conflict do nothing;
+        update auth.users set email_confirmed_at = coalesce(email_confirmed_at, now())
+          where id in (select id from auth.users order by id limit 2);""")
+    comptes_source = {k: psql_dans(db, S.BASE, q).strip() for k, q in (
+        ('comptes', 'select count(*) from auth.users;'), ('identites', 'select count(*) from auth.identities;'),
+        ('mdp', "select count(*) from auth.users where coalesce(encrypted_password, '') <> '';"))}
+
     # 2. La sauvegarde, puis sa vérification sans et avec la clé
     r = lancer('sauvegarder.sh', sortie, SUPABASE_DB_URL=source, SAUVEGARDE_DESTINATAIRE=pub(proprio),
                RESTAURATION_DESTINATAIRE=pub(epreuve))
     verifier('sauvegarder.sh : base jointe, copie relue, chiffrée, empreintes', (r.returncode, 'Base jointe' in r.stdout,
              'Copie relue' in r.stdout, 'empreintes SHA-256 : faits' in r.stdout), (0, True, True, True))
+    annonce = re.search(r'Copie relue : (\d+) tables avec données, (\d+) fonctions, (\d+) déclencheurs, (\d+) règles RLS', r.stdout)
+    reel = psql_dans(db, S.BASE, "select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace "
+                     "where n.nspname = 'public' and c.relkind = 'r') || ' ' || (select count(*) from pg_proc p join pg_namespace n "
+                     "on n.oid = p.pronamespace where n.nspname = 'public' and p.prokind = 'f') || ' ' || (select count(*) from pg_trigger g "
+                     "join pg_class c on c.oid = g.tgrelid join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' "
+                     "and not g.tgisinternal) || ' ' || (select count(*) from pg_policies where schemaname = 'public');").split()
+    verifier('m4 : le journal annonce le vrai nombre de tables, fonctions, déclencheurs et règles RLS (%s)' % ' / '.join(reel),
+             list(annonce.groups()) if annonce else None, reel)
     nom = sorted(os.listdir(sortie))[0].split('.')[0]
     verifier('nom horodaté à la seconde (goship-AAAA-MM-JJTHHMMSSZ)', re.match(r'^goship-\d{4}-\d\d-\d\dT\d{6}Z$', nom) is not None, True)
     r = lancer('verifier-sauvegarde.sh', sortie, nom)
@@ -565,6 +749,7 @@ def sauvegarde_autonome(db):
              hashlib.sha256(open(os.path.join(sortie, nom + '.public.dump.age'), 'rb').read()).hexdigest())
     r = lancer('stocker.sh', 'lister', **stock)
     verifier('lister : la sauvegarde complète', r.stdout.split(), [nom])
+    etape_stockage(travail, sortie, nom, conf)
 
     # 5. La rétention : 10 sauvegardes plus anciennes (dont une à l'ancien format), une
     # incomplète et un fichier étranger ; on garde les 7 plus récentes, 3 suppressions au plus
@@ -644,7 +829,14 @@ def sauvegarde_autonome(db):
     print('     ' + '\n     '.join(r.stdout.strip().splitlines()))
     verifier('verifier-restauration.sh : connexion, tables, fonctions, contraintes, verrous, données, comptes : PASS',
              (r.returncode, r.stdout.count(' OK '), 'identiques au manifeste' in r.stdout,
-              'comme dans la sauvegarde' in r.stdout, r.stdout.strip().endswith('PASS')), (0, 8, True, True, True))
+              'comme dans la sauvegarde' in r.stdout, r.stdout.strip().endswith('PASS')), (0, 10, True, True, True))
+    verifier('… séquences (valeurs) et détail des comptes (identités, mots de passe, confirmés) comme dans la sauvegarde',
+             ('SEQUENCES:         OK' in r.stdout, 'AUTH DETAILS:      OK' in r.stdout,
+              'identités : %s, avec mot de passe : %s' % (comptes_source['identites'], comptes_source['mdp']) in r.stdout), (True, True, True))
+    # Une séquence remise à zéro sur la base restaurée : la vérification le voit
+    psql_dans(db, EPREUVE, "select setval('public.numero_colis_seq', 1001, false);")
+    r2 = lancer('verifier-restauration.sh', manifeste, url=cible, CIBLE_DB_URL=cible)
+    verifier('… une séquence remise à zéro : SEQUENCES FAIL', (r2.returncode, 'SEQUENCES:         FAIL' in r2.stdout), (1, True))
     print('     RESTORE DURATION (base d\'essai, %s lignes) : téléchargement %.1f s + vérification/déchiffrement %.1f s + '
           'restauration %.1f s + chaîne %.1f s + validation %.1f s = %.1f s'
           % (json.load(open(manifeste))['lignes_par_table'] and sum(json.load(open(manifeste))['lignes_par_table'].values()),
@@ -668,6 +860,11 @@ def sauvegarde_autonome(db):
         print(r.stdout[-800:], r.stderr[-800:])
     r = lancer('epreuve-restauration.sh', recue, nom, epreuve, url=nue, CIBLE_DB_URL=nue, RESTORE_TARGET='production')
     verifier('… il refuse RESTORE_TARGET=production', (r.returncode, 'jamais production' in r.stderr), (1, True))
+    r = lancer('epreuve-restauration.sh', recue, nom, epreuve, url=nue, RESTORE_TARGET='essai', PREPARER_CIBLE='1',
+               CIBLE_DB_URL='postgresql://postgres.abcdefghijklmnopqrst:x@aws-0-us-east-1.pooler.supabase.com:5432/postgres')
+    verifier('… PREPARER_CIBLE sur une adresse Supabase : refusé (aucun rôle créé dans un vrai projet)',
+             (r.returncode, 'PREPARER_CIBLE refusé' in r.stderr), (1, True))
+    serveur_neuf(recue, nom, epreuve, comptes_source, lancer)
     psql_dans(db, 'postgres', 'drop database if exists goship_workflow with (force);')
     # Le piège d'une restauration ratée : le bon schéma, mais aucune donnée. Jamais PASS.
     vide_mais_migree = cible_neuve()
