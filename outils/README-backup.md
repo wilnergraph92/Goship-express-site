@@ -61,16 +61,21 @@ restauration dans un projet Supabase neuf). `pg_dump` 17 lit les serveurs 15 à 
 
 | Script | Rôle |
 |---|---|
-| `sauvegarder.sh <dossier>` | la copie : connexion vérifiée, `pg_dump`, relecture, chiffrement, SHA-256 |
+| `verifier-adresse.sh [VARIABLE]` | l'adresse de la base (`SUPABASE_DB_URL` par défaut) convient-elle à `pg_dump` depuis GitHub ? Session pooler 5432 accepté ; connexion directe, port 6543, `sslmode=disable`, utilisateur sans `.<ref>` refusés. N'affiche jamais l'adresse, ne se connecte pas |
+| `sauvegarder.sh <dossier>` | la copie : adresse vérifiée, connexion vérifiée, `pg_dump`, relecture, chiffrement, SHA-256 ; le manifeste garde aussi la valeur des séquences et le détail des comptes (identités, mots de passe, confirmés) |
 | `verifier-sauvegarde.sh <dossier> <nom> [clé]` | sans clé : fichiers, tailles, SHA-256, chiffrement ; avec clé : déchiffrement, manifeste, structure. `FINAL RESULT: PASS/FAIL` |
-| `stocker.sh envoyer\|lister\|recuperer\|retention` | le stockage externe par rclone (A, B), relecture après envoi, rétention |
+| `stocker.sh envoyer\|lister\|recuperer\|retention` | le stockage externe par rclone (A, B), relecture après envoi, rétention. A obligatoire ; B non configurée : `Destination B : SKIPPED` ; B configurée qui échoue : échec |
 | `restaurer.sh <dossier> <nom> <clé>` | la restauration ; `RESTORE_TARGET` obligatoire |
-| `verifier-restauration.sh [manifeste]` | la base restaurée, en lecture seule : tables, fonctions, contraintes, verrous, données, comptes |
-| `epreuve-restauration.sh <dossier> <nom> <clé> [s]` | l'épreuve complète (les quatre précédents enchaînés) et son rapport chronométré |
+| `verifier-restauration.sh [manifeste]` | la base restaurée, en lecture seule : tables, fonctions, contraintes, verrous, données, séquences, comptes et leur détail |
+| `epreuve-restauration.sh <dossier> <nom> <clé> [s]` | l'épreuve complète (les quatre précédents enchaînés) et son rapport chronométré ; avec `PREPARER_CIBLE=1` (base jetable seulement, refusé sur une adresse Supabase), crée d'abord les rôles de Supabase qui manquent (`anon`, `authenticated`, `service_role`, `authenticator`…) et les doublures |
 | `alerter.sh "<texte>"` | prévient une seconde personne par `ALERTE_WEBHOOK` |
 
 Workflows : `.github/workflows/sauvegarde.yml` (quotidien + manuel) et
-`.github/workflows/restauration-test.yml` (manuel).
+`.github/workflows/restauration-test.yml` (manuel). Tous deux posent
+`defaults: run: shell: bash` : chaque étape tourne sous `bash -eo pipefail`, si bien
+qu'une commande qui échoue devant un tube (`stocker.sh … | tee`) fait échouer l'étape.
+Sans cela, GitHub lance `bash -e` et l'échec était masqué par `tee`. Ne jamais retirer
+cette ligne.
 
 ## B. Secrets
 
@@ -80,7 +85,7 @@ journal. Seuls les noms figurent ici.
 
 | Secret | Obligatoire | Contenu (nature, jamais la valeur) |
 |---|---|---|
-| `SUPABASE_DB_URL` | oui | chaîne de connexion **Session pooler** (Supabase > Connect > Session pooler, port 5432) avec le mot de passe de la base |
+| `SUPABASE_DB_URL` | oui | chaîne de connexion **Session pooler** (Supabase > Connect > Session pooler), de la forme `postgresql://postgres.<ref>:<mot de passe>@aws-…pooler.supabase.com:5432/postgres` ; `verifier-adresse.sh` refuse toute autre forme avant de se connecter (voir L) |
 | `SAUVEGARDE_DESTINATAIRE` | oui | clé **publique** age du propriétaire (`age1…`) |
 | `RESTAURATION_DESTINATAIRE` | oui | clé **publique** age de l'épreuve |
 | `RESTAURATION_CLE` | oui | clé **privée** age de l'épreuve (tout le fichier) |
@@ -177,6 +182,32 @@ RCLONE_CONFIG=~/.config/rclone/rclone.conf SAUVEGARDE_STOCKAGE='goship-a:goship-
 RESTORE_TARGET=staging CIBLE_DB_URL='postgresql://…projet-neuf…' \
   bash outils/production/restaurer.sh /tmp/restauration goship-… goship-sauvegarde.key
 ```
+
+**Restauration dans un vrai projet Supabase : deux points à trancher sur goship-staging**
+(ils ne peuvent pas l'être sur un PostgreSQL ordinaire) :
+
+- *Droits du schéma public (m2).* Le dump du schéma public contient, en plus des
+  objets GoShip : `COMMENT ON SCHEMA public`, les `GRANT … ON SCHEMA public`, les
+  `GRANT` de chaque table, fonction et séquence à `anon`, `authenticated` et
+  `service_role`, et les `ALTER DEFAULT PRIVILEGES [FOR ROLE …] IN SCHEMA public`.
+  Dans un projet Supabase, on restaure en tant que `postgres`, qui n'est pas
+  superutilisateur. Si le dump contient un `ALTER DEFAULT PRIVILEGES FOR ROLE
+  supabase_admin` ou une ligne sur le schéma que `postgres` n'a pas le droit
+  d'écrire, `pg_restore` le refuse. Or `restaurer.sh` ne tolère que l'erreur
+  `schema "public" already exists` : la restauration s'arrêterait en échec, sans
+  rien laisser passer en silence. **NON PROUVÉ** : sur une base jetable ces lignes
+  passent (le restaurateur y est superutilisateur). Aucune correction préventive
+  n'est faite. Si le test staging échoue sur ces lignes, la correction envisagée
+  (sauter les entrées `DEFAULT ACL`, `COMMENT - SCHEMA public` et `ACL - SCHEMA
+  public`, qu'un projet neuf porte déjà) sera faite et éprouvée à ce moment-là.
+- *Comptes (m5).* `auth.users` et `auth.identities` se restaurent en données seules
+  dans le schéma `auth` du projet. `verifier-restauration.sh` (lancé par le test de
+  restauration) compare alors au manifeste : nombre de comptes, chaque profil client
+  avec son compte, nombre d'identités, de comptes avec empreinte de mot de passe et
+  de comptes confirmés (`AUTH ACCOUNTS`, `AUTH DETAILS`). Ensuite, se connecter à la
+  main à goship-staging avec un compte d'essai connu. **NON PROUVÉ** tant que ce test
+  n'a pas tourné sur goship-staging (il a tourné sur une base jetable portant les
+  vraies tables des comptes de la sauvegarde).
 
 Ensuite, dans le projet restauré : activer `pg_cron` et `pg_net`, rejouer la chaîne
 `outils/migrations.txt` (`appliquer-chaine.sh`), reposer le Vault et la configuration
@@ -281,7 +312,19 @@ part : `docs/production/environment.md`, « Domaine de production ».
   système les remplace pour la base, avec un RPO d'environ 24 h.
 - Connexion directe (`db.<ref>.supabase.co`) en IPv6 seulement : GitHub Actions n'a pas
   d'IPv6. Utiliser l'adresse **Session pooler** (port 5432 ; pas le *Transaction
-  pooler* 6543, incompatible avec `pg_dump`).
+  pooler* 6543, incompatible avec `pg_dump`). `verifier-adresse.sh` l'impose :
+
+  | Adresse | Résultat |
+  |---|---|
+  | `…@db.<ref>.supabase.co:5432/postgres` (directe) | REFUSÉE |
+  | `postgres.<ref>:…@aws-…pooler.supabase.com:6543/postgres` (transaction) | REFUSÉE |
+  | `postgres.<ref>:…@aws-…pooler.supabase.com:5432/postgres` (session) | ACCEPTÉE |
+  | pooler sans `.<ref>` dans l'utilisateur, sans mot de passe, `sslmode=disable` ou `allow`, chaîne `clé=valeur` | REFUSÉE |
+  | hors Supabase (base jetable d'un essai) | ACCEPTÉE |
+
+  Le message dit seulement quel type d'adresse est attendu : jamais l'adresse, ni
+  l'utilisateur, ni le mot de passe. L'accès réel au pooler depuis un runner n'est
+  prouvé qu'au premier passage (section C.5).
 - Un projet gratuit inactif est **mis en pause** par Supabase : `pg_dump` échoue alors,
   le workflow devient rouge et l'alerte part. Rien ici ne garantit que la sauvegarde
   quotidienne suffise à éviter la mise en pause.
@@ -298,4 +341,23 @@ jamais de remplacement, rétention (minimum 7, 3 suppressions au plus, fichier
 étranger épargné), téléchargement, copie distante altérée refusée, garde-fous de
 restauration, restauration chronométrée, vérification de la base, le script des
 workflows de bout en bout, une base vide jamais déclarée PASS, aucun secret dans les
-journaux. Lancé à chaque modification par `essais.yml` (banc « production »).
+journaux. Et, depuis la revue du 27/09/2026 :
+
+- **serveur PostgreSQL neuf** : un second serveur, créé par l'essai, sans aucun rôle de
+  Supabase, où la vraie procédure (`epreuve-restauration.sh`, `PREPARER_CIBLE=1`) doit
+  réussir seule. Rôles, tables, RLS, fonctions, données, séquences, déclencheurs sur
+  `auth.users` et comptes y sont vérifiés ;
+- **l'étape « Stockage externe » de `sauvegarde.yml`, extraite telle quelle** et lancée
+  comme GitHub la lance (`bash --noprofile --norc -eo pipefail`), avec un rclone en
+  panne sur commande. Résultats attendus :
+  - A absente, envoi ou relecture de A en panne : échec ;
+  - B non configurée : `SKIPPED` et succès ;
+  - B absente, envoi, relecture ou rétention de B en panne : échec ;
+  - sous `bash -e` seul, la panne de B passe en succès, ce qui reproduit le défaut
+    corrigé ;
+- **les adresses** : directe et 6543 refusées, Session pooler 5432 acceptée, rien
+  affiché ;
+- **le compteur** du journal : le vrai nombre de tables, fonctions, déclencheurs et
+  règles RLS.
+
+Lancé à chaque modification par `essais.yml` (banc « production »).

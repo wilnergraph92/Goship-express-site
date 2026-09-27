@@ -4,6 +4,11 @@ Date : 27/09/2026. Branche de travail partie de `main` (`f0fdcdf`). Rien n'a ét
 contre la base de production : aucune connexion, aucune migration, aucune donnée lue
 ou modifiée. Ce conteneur ne peut d'ailleurs pas joindre la production (réseau bloqué).
 
+**Mise à jour du 27/09/2026 (revue technique ciblée)** : la revue a trouvé deux défauts
+réels que les 106 essais d'origine ne voyaient pas (le banc était trop favorable). Ils
+sont corrigés, avec deux correctifs mineurs, sur la branche `sauvegarde-free` : voir la
+section 0. Rien n'est publié sur `main`.
+
 Niveaux de preuve utilisés :
 
 - **IMPLEMENTED** : le code existe ;
@@ -12,6 +17,220 @@ Niveaux de preuve utilisés :
   qui porte toute la chaîne de migrations GoShip et des données d'essai ;
 - **TESTED ON STAGING** : sur goship-staging (le projet n'existe pas encore) ;
 - **VERIFIED ON PRODUCTION** : sur la vraie base.
+
+## 0. Revue du 27/09/2026 : correctifs et preuves
+
+Statuts, sans exagération :
+
+- **IMPLEMENTED** : le code est écrit ;
+- **TESTED** : exécuté par un essai automatique qui passe (base jetable, banc
+  `essai-production.py`, localement et dans GitHub Actions) ;
+- **PROVEN** : démontré dans les conditions réelles visées par le point (image
+  `postgres:17` du workflow, journal réel de GitHub Actions), **hors production** ;
+- **NOT YET PROVEN** : pas encore démontré là où cela compte (production, goship-staging,
+  vrai fournisseur de stockage).
+
+| # | Point | IMPLEMENTED | TESTED | PROVEN | NOT YET PROVEN |
+|---|---|---|---|---|---|
+| 1 | D1 — restauration d'épreuve sur un PostgreSQL neuf | oui | oui | oui (`postgres:17` neuf, clients 17.11) | un passage réel de `sauvegarde.yml` avec une vraie sauvegarde |
+| 2 | D2 — échec de stockage masqué par `tee` | oui | oui (9 cas) | le shell réel de GitHub (`bash -e -o pipefail`) | une vraie panne chez un vrai fournisseur |
+| 3 | m1 — validation de `SUPABASE_DB_URL` | oui | oui (9 adresses) | — | la connexion réelle au Session pooler depuis un runner |
+| 4 | m4 — compteur de fonctions | oui | oui | oui (`pg_dump` 17.11) | — |
+| 5 | m2 — droits PostgreSQL à la restauration dans Supabase | documenté, **aucune correction** | — | — | **oui** : à trancher sur goship-staging |
+| 6 | m5 — `auth.users` et `auth.identities` | contrôles ajoutés | oui (base jetable) | — | **oui** : à prouver sur goship-staging |
+| 7 | Essais sur PostgreSQL neuf | oui | oui | oui | — |
+| 8 | Essais destinations A / B | oui | oui | — | un vrai fournisseur |
+| 9 | Storage (Supabase) | — | vérifié dans le code | — | non sauvegardé (voir 0.9) |
+| 10 | Domaine du site | — | oui | — | — |
+| 11 | Secrets | — | oui | — | — |
+
+### 0.1 D1 — restauration sur PostgreSQL neuf : corrigé
+
+- **Défaut.** `epreuve-restauration.sh` (`PREPARER_CIBLE=1`) ne créait que les rôles
+  d'administration de Supabase. `anon`, `authenticated`, `service_role` et
+  `authenticator` n'étaient créés que par le banc d'essai, qui partageait son serveur :
+  le banc passait, mais le conteneur `postgres:17` neuf du job `restaurer` aurait
+  échoué chaque jour sur `role "anon" does not exist`.
+- **Correctif.** Le script crée ces quatre rôles s'ils manquent, avec les attributs de
+  Supabase : sans connexion, et `service_role` qui passe la RLS. Il le fait seulement
+  pour une base jetable (`RESTORE_TARGET=essai` et `PREPARER_CIBLE=1`), et **refuse**
+  toute adresse Supabase : jamais de rôle créé ni modifié dans un vrai projet.
+- **Preuves.**
+  - Banc, second serveur PostgreSQL créé par l'essai (0 rôle au départ) : la vraie
+    procédure donne PASS. Les quatre rôles existent ; tables, RLS, fonctions,
+    contraintes, verrous, données, **séquences**, comptes et **détail des comptes**
+    sont OK ; les déclencheurs sur `auth.users` sont recréés ; `anon` et
+    `authenticated` lisent le schéma public.
+  - Conteneur **`postgres:17` neuf** (l'image du workflow, même mot de passe jetable),
+    clients `pg_dump` / `pg_restore` / `psql` **17.11** : 0 rôle au départ, puis
+    `FINAL RESULT: PASS`. Relevé de ce passage :
+    - 16 tables et 16 règles RLS actives, 174 fonctions, 4 verrous métier ;
+    - 20 lignes identiques au manifeste ;
+    - 9 séquences identiques (numéros de colis et de factures : 4242 → 4242) ;
+    - 3 comptes, 3 identités, 3 empreintes de mot de passe ;
+    - restauration en 3 s.
+  - Contre-épreuve sur le même conteneur neuf : la version d'avant correctif échoue
+    (code 3, `role "anon" does not exist`).
+
+### 0.2 D2 — échec rclone / `tee` masqué : corrigé
+
+- **Défaut.** Sans `shell:`, GitHub lance chaque étape avec `bash -e {0}`, sans
+  `pipefail`. Journal réel : exécution 36298048867, `shell: /usr/bin/bash -e {0}`.
+  Dans `stocker.sh envoyer … | tee`, l'étape prenait le code de `tee`. Une panne de B
+  laissait donc tout le workflow **vert**.
+- **Correctif.**
+  - `defaults: run: shell: bash` dans `sauvegarde.yml` et `restauration-test.yml`.
+    GitHub lance alors `bash --noprofile --norc -e -o pipefail {0}` : c'est prouvé par
+    un journal réel du dépôt (`bureau.yml`, qui utilise déjà ce réglage : job
+    108556396045, exécution 36296564740).
+  - `stocker.sh` écrit `Destination B : SKIPPED (non configurée)` quand B n'est pas
+    posée. Une B configurée a exactement les mêmes exigences que A.
+  - Dans `restauration-test.yml`, `lister | head` devient une lecture complète, puis un
+    affichage, pour que `pipefail` ne coupe pas le tube à tort.
+- **Règle obtenue.**
+  - A en échec : l'étape échoue, le job aussi, le workflow finit **FAILED**.
+  - B non configurée : `B SKIPPED`, et le workflow est **SUCCESS** si A est bonne.
+  - B configurée en échec : **FAILED**.
+- **Preuves** (banc) : l'étape « Stockage externe » est **extraite telle quelle** de
+  `sauvegarde.yml`, lancée avec les options de GitHub, vers de vrais dossiers par le
+  vrai rclone, avec un rclone en panne sur commande placé devant.
+
+  | Cas | Résultat |
+  |---|---|
+  | TEST 3 — A correcte, B non configurée | SUCCESS, `Destination B : SKIPPED` |
+  | A et B correctes | SUCCESS, 2 destinations relues |
+  | TEST 2 — A inaccessible | FAILED |
+  | TEST 2 — envoi vers A refusé (`copyto`) | FAILED |
+  | TEST 2 — relecture de A altérée (SHA-256) | FAILED |
+  | TEST 4 — B inaccessible | FAILED (A pourtant réussie) |
+  | TEST 4 — envoi vers B refusé (`copyto`) | FAILED |
+  | TEST 4 — relecture de B altérée (SHA-256) | FAILED |
+  | TEST 4 — B illisible à la rétention (`lsf`) | FAILED |
+  | Contre-épreuve : B inaccessible sous `bash -e` seul (l'ancien comportement) | SUCCESS : le défaut est bien reproduit |
+
+  Le banc vérifie aussi qu'aucun `continue-on-error` ne couvre l'étape ni le job.
+
+### 0.3 m1 — validation de `SUPABASE_DB_URL` : corrigé
+
+- **Correctif.** Nouveau script `verifier-adresse.sh`, appelé par `sauvegarder.sh`
+  **avant** toute connexion, et par `restauration-test.yml` pour `STAGING_DB_URL`.
+  - Il lit l'adresse dans l'environnement, jamais en argument.
+  - Il n'en affiche rien : ni l'hôte, ni l'utilisateur, ni la référence du projet, ni
+    le mot de passe.
+  - Il dit seulement le type d'adresse attendu.
+- **Preuves** (banc, fausses adresses, aucun vrai secret) :
+
+  | Adresse | Attendu | Obtenu |
+  |---|---|---|
+  | directe `db.<ref>.supabase.co` | REFUSED | REFUSED |
+  | pooler port 6543 | REFUSED | REFUSED |
+  | Session pooler 5432 | ACCEPTED | ACCEPTED |
+  | Session pooler, port implicite | ACCEPTED | ACCEPTED |
+  | pooler sans `.<ref>` | REFUSED | REFUSED |
+  | pooler sans mot de passe | REFUSED | REFUSED |
+  | `sslmode=disable` | REFUSED | REFUSED |
+  | chaîne `clé=valeur` | REFUSED | REFUSED |
+  | base jetable (socket) | ACCEPTED | ACCEPTED |
+
+  Dans chaque cas, ni le faux mot de passe ni la fausse référence n'apparaissent.
+  `sauvegarder.sh` avec la connexion directe ou le port 6543 s'arrête avant toute
+  tentative de connexion et n'écrit aucun fichier.
+- **NOT YET PROVEN** : la connexion réelle au Session pooler de la production depuis
+  un runner GitHub. C'est le premier passage manuel.
+
+### 0.4 m4 — compteur de fonctions : corrigé
+
+- **Défaut.** Le journal annonçait 348 fonctions : il comptait aussi les lignes de
+  droits (`ACL public FUNCTION …`). Le contenu du dump était juste.
+- **Correctif.** Seul l'affichage change : on compte les entrées
+  « `TYPE public nom` » de la liste de `pg_restore`. Le dump n'est pas modifié.
+- **Preuves.** Le banc compare l'annonce au catalogue de la base : 16 tables,
+  174 fonctions, 25 déclencheurs, 27 règles RLS, identiques. Avec `pg_dump` 17.11 :
+  « 174 fonctions ».
+
+### 0.5 m2 — droits PostgreSQL : NOT YET PROVEN (aucune correction)
+
+- **Ce que contient le dump.** Le dump du schéma public contient :
+  - `COMMENT ON SCHEMA public` ;
+  - `GRANT USAGE ON SCHEMA public` à `anon`, `authenticated` et `service_role` ;
+  - 214 `GRANT` sur les tables, fonctions et séquences ;
+  - 3 `ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public` (sur la base
+    jetable).
+- **Le risque dans un vrai projet Supabase.**
+  - On y restaure en tant que `postgres`, qui n'est pas superutilisateur.
+  - Si la production contient un `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin`,
+    ou une ligne sur le schéma que `postgres` ne peut pas écrire, `pg_restore` la
+    refuse.
+  - `restaurer.sh` ne tolère que `schema "public" already exists` : la restauration
+    s'arrêterait donc **en échec visible**, jamais en fausse réussite.
+- **Ce qui est prouvé.** Rien sur Supabase : sur une base jetable, ces lignes passent,
+  car le restaurateur y est superutilisateur.
+- **Décision.** Aucune correction préventive, conformément à la consigne. La correction
+  envisagée, si le test staging échoue sur ces lignes : sauter les entrées
+  `DEFAULT ACL`, `COMMENT - SCHEMA public` et `ACL - SCHEMA public`, qu'un projet neuf
+  porte déjà. Elle ne sera faite et éprouvée qu'à ce moment-là.
+
+### 0.6 m5 — `auth.users` et `auth.identities` : NOT YET PROVEN sur Supabase
+
+- **Ajouté.**
+  - Le manifeste garde :
+    - le nombre d'identités (`auth.identities`) ;
+    - le nombre de comptes qui ont une empreinte de mot de passe (`encrypted_password`
+      non vide) ;
+    - le nombre de comptes confirmés ;
+    - la valeur de chaque séquence du schéma public.
+  - `verifier-restauration.sh` compare ces valeurs au manifeste : lignes `SEQUENCES` et
+    `AUTH DETAILS`, en plus de `AUTH ACCOUNTS` (chaque profil client a son compte).
+  - Un manifeste plus ancien, sans ces données, donne « non comparé », jamais OK.
+- **TESTED** (base jetable portant de vraies tables `auth.users` et `auth.identities`
+  dans la sauvegarde) :
+  - banc : 4 comptes, 4 identités, 4 empreintes restaurés ; chaque compte a son
+    identité ;
+  - `postgres:17` : 3 / 3 / 3 ;
+  - une séquence remise à zéro après restauration est détectée (`SEQUENCES FAIL`).
+- **NOT YET PROVEN** : la restauration dans le schéma `auth` d'un vrai projet Supabase
+  (goship-staging), et une connexion réussie avec un compte restauré. Procédure :
+  `outils/README-backup.md`, section E.
+
+### 0.7 Tests sur PostgreSQL neuf
+
+Voir 0.1 : banc (serveur créé par l'essai) et conteneur `postgres:17` neuf, tous deux
+PASS. La version d'avant correctif échoue sur le même conteneur.
+
+### 0.8 Tests A / B
+
+Voir 0.2 : neuf cas, dont la contre-épreuve. Un vrai fournisseur (Backblaze B2, Drive,
+R2…) n'est **pas** éprouvé : c'est le premier passage manuel.
+
+### 0.9 Storage
+
+- GoShip n'a qu'un bucket Supabase Storage, `site` (public), avec un seul fichier : le
+  logo des e-mails. Il est déposé par le tableau de bord (`api.js`, `preparerLogo`), qui
+  le redépose seul s'il manque.
+- Aucune autre utilisation n'existe :
+  - site et bureau : vérifié par recherche ;
+  - application mobile : vérifié par recherche dans sa branche principale et dans sa
+    PR #2.
+- **Le Storage n'est pas sauvegardé** : c'est acceptable aujourd'hui, et documenté. Le
+  jour où des fichiers métier (photos de colis, pièces jointes) y seraient stockés, la
+  sauvegarde ne serait **plus complète**.
+
+### 0.10 Domaine
+
+Aucun script de sauvegarde ni workflow de sauvegarde ne contient
+`wilnergraph92.github.io`, `/Goship-express-site/` ou `goshipexpress.net`
+(recherche). La seule référence fixe est celle du projet Supabase de production, dans
+les garde-fous qui refusent de la viser.
+
+### 0.11 Secrets
+
+- **Dépôt et historique.** Aucun fichier `.env`, `.age`, `.key`, `.dump` ou
+  `rclone.conf` n'est suivi. Aucune clé privée age et aucun jeton dans **tout
+  l'historique Git**. La seule URL avec mot de passe est celle de la base jetable du
+  runner (`epreuve-jetable`).
+- **Journaux.** Pas de `set -x`, aucun `echo` de secret. Le banc vérifie que ni la clé
+  privée, ni le faux mot de passe, ni la destination n'apparaissent dans ce que les
+  scripts écrivent. `verifier-adresse.sh` n'affiche jamais l'adresse.
 
 ## 1. Résumé
 
@@ -24,7 +243,7 @@ au premier vrai passage (publication `supabase_realtime` créée deux fois).
 
 Il est maintenant complété, sans changer de technologie (Supabase Free, PostgreSQL,
 GitHub Actions, age, rclone). Toute la chaîne est **éprouvée sur une base jetable**,
-106 vérifications sur 106. Il **n'est pas encore en service** : aucune sauvegarde de
+141 vérifications sur 141 depuis la revue du 27/09/2026 (106 avant elle). Il **n'est pas encore en service** : aucune sauvegarde de
 production n'existe tant que les actions manuelles (section 16) ne sont pas faites et
 qu'un passage n'est pas vert de bout en bout.
 
@@ -229,8 +448,11 @@ perdues. Chaque passage publie l'âge réel de la copie vérifiée (`BACKUP AGE 
    l'alerte partira, rien ne se fera en silence.
 4. Une seule destination tant que B n'est pas posée : une fermeture de compte chez le
    fournisseur emporterait les 7 copies (l'artefact GitHub de 7 jours reste).
-5. Restauration dans un vrai projet Supabase jamais faite.
-6. La documentation du site cite par endroits `goshipexpress.com` (README : exemples de
+5. Restauration dans un vrai projet Supabase jamais faite : m2 (droits du schéma
+   public) et m5 (comptes) restent à trancher sur goship-staging (section 0).
+6. La preuve des correctifs D1 et D2 est faite hors production. Le premier passage réel
+   (connexion au Session pooler, fournisseur de stockage réel) reste à faire.
+7. La documentation du site cite par endroits `goshipexpress.com` (README : exemples de
    `site_url`, expéditeur) alors que le domaine annoncé est `goshipexpress.net` : à
    harmoniser le jour du passage (hors du périmètre des sauvegardes).
 

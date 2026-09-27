@@ -24,6 +24,18 @@ Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backu
   la production, SHA-256 vérifié avant de déchiffrer.
 - Domaine de production (`www.goshipexpress.net`) : configuration Auth décrite à part
   (`docs/production/environment.md`).
+- Revue du 27/09/2026 (rapport, section 0) :
+  - l'épreuve de restauration réussit sur un PostgreSQL neuf : elle crée elle-même
+    `anon`, `authenticated`, `service_role` et `authenticator` ; elle aurait échoué
+    chaque jour dans le conteneur du workflow ;
+  - un envoi raté vers le stockage fait maintenant échouer le workflow : chaque étape
+    tourne sous `pipefail`, alors que `| tee` masquait l'échec et qu'une destination B
+    en panne laissait le workflow vert. Une B non configurée s'affiche `SKIPPED` ;
+  - `SUPABASE_DB_URL` est vérifiée avant toute connexion (`verifier-adresse.sh`) :
+    Session pooler 5432 seulement, adresse jamais affichée ;
+  - le journal annonce le vrai nombre de fonctions ;
+  - le manifeste garde la valeur des séquences et le détail des comptes (identités,
+    mots de passe, confirmés), comparés après restauration.
 
 ## site-2026.09.27.2 — tableau de bord : filtres, apparence, direct, disposition (publié le 27/09/2026)
 

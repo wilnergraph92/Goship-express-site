@@ -18,7 +18,13 @@
 #     le nombre de lignes table par table est comparé ; les liens principaux
 #     (colis → clients, événements → colis, lignes → factures, paiements → factures)
 #     se suivent sans orphelin ;
-#   - les comptes (auth.users) : autant de profils clients que de comptes liés.
+#   - les séquences (numéros de colis, de factures, codes clients) : avec le manifeste,
+#     la valeur de chacune est celle de la sauvegarde ;
+#   - les comptes (auth.users) : autant de profils clients que de comptes liés ; avec le
+#     manifeste, autant de comptes, d'identités (auth.identities), de comptes avec un
+#     mot de passe et de comptes confirmés que dans la sauvegarde.
+# Un manifeste plus ancien, sans séquences ni détail des comptes : « non comparé »,
+# écrit tel quel, jamais OK.
 # Dernière ligne : FINAL RESULT: PASS ou FAIL ; code de sortie 0 ou 1. Aucune donnée
 # affichée : des nombres.
 # =============================================================================
@@ -118,6 +124,21 @@ for t in clients colis colis_historique factures paiements notifications; do
   printf '   %-18s %s lignes\n' "$t" "$(q "select count(*) from public.$t;")"
 done
 
+# Les séquences : la valeur de chacune, comme dans la sauvegarde
+seq_attendues=""
+[ -n "$manifeste" ] && seq_attendues="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(json.dumps(d['sequences']) if 'sequences' in d else '')" "$manifeste" 2> /dev/null)"
+if [ -n "$seq_attendues" ]; then
+  seq_obtenues="$(q "select coalesce(json_object_agg(sequencename, last_value order by sequencename), '{}') from pg_sequences where schemaname = 'public';")"
+  seq_ecarts="$(python3 -c "
+import json, sys
+a = json.loads(sys.argv[1]); b = json.loads(sys.argv[2])
+print(', '.join(sorted(s for s in set(a) | set(b) if a.get(s) != b.get(s))) or '-')" "$seq_attendues" "$seq_obtenues" 2> /dev/null || echo 'comparaison impossible')"
+  if [ "$seq_ecarts" = "-" ]; then ok "SEQUENCES" "$(python3 -c "import json,sys;print(len(json.loads(sys.argv[1])))" "$seq_attendues") séquences, valeurs identiques à la sauvegarde"
+  else rate "SEQUENCES" "valeurs différentes de la sauvegarde : $seq_ecarts"; fi
+else
+  echo "SEQUENCES:         —    non comparées (pas de manifeste, ou manifeste sans séquences)"
+fi
+
 # Les comptes : chaque profil client pointe un compte d'authentification
 if [ "$(q "select to_regclass('auth.users') is not null;")" = "t" ]; then
   comptes="$(q "select count(*) from auth.users;")"
@@ -129,6 +150,28 @@ if [ "$(q "select to_regclass('auth.users') is not null;")" = "t" ]; then
   else ok "AUTH ACCOUNTS" "$comptes comptes (auth.users)$( [ -n "$attendus" ] && echo ', comme dans la sauvegarde'), chaque profil a son compte"; fi
 else
   rate "AUTH ACCOUNTS" "auth.users absente"
+fi
+# Ce qu'il faut à un compte restauré pour se reconnecter : identités, mot de passe,
+# confirmation — mêmes nombres que dans la sauvegarde
+auth_attendu=""
+[ -n "$manifeste" ] && auth_attendu="$(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(json.dumps(d['auth']) if 'auth' in d else '')" "$manifeste" 2> /dev/null)"
+if [ -n "$auth_attendu" ]; then
+  if [ "$(q "select to_regclass('auth.identities') is not null;")" = "t" ]; then identites="$(q 'select count(*) from auth.identities;')"; else identites="null"; fi
+  if [ "$(q "select exists (select 1 from information_schema.columns where table_schema = 'auth' and table_name = 'users' and column_name = 'encrypted_password');")" = "t" ]; then
+    avec_mdp="$(q "select count(*) from auth.users where coalesce(encrypted_password, '') <> '';")"
+  else avec_mdp="null"; fi
+  confirmes="$(q 'select count(*) from auth.users where email_confirmed_at is not null;')"
+  auth_ecarts="$(python3 -c "
+import json, sys
+a = json.loads(sys.argv[1]); b = {'identites': sys.argv[2], 'avec_mot_de_passe': sys.argv[3], 'confirmes': sys.argv[4]}
+b = {k: (None if v == 'null' else int(v)) for k, v in b.items()}
+e = ['%s %s au lieu de %s' % (k, b[k], a[k]) for k in ('identites', 'avec_mot_de_passe', 'confirmes') if k in a and a[k] is not None and a[k] != b[k]]
+print('; '.join(e) or '-')" "$auth_attendu" "$identites" "$avec_mdp" "$confirmes" 2> /dev/null || echo 'comparaison impossible')"
+  if [ "$auth_ecarts" = "-" ]; then
+    ok "AUTH DETAILS" "identités : $identites, avec mot de passe : $avec_mdp, confirmés : $confirmes (null : table ou colonne absente), comme dans la sauvegarde"
+  else rate "AUTH DETAILS" "$auth_ecarts"; fi
+else
+  echo "AUTH DETAILS:      —    non comparés (pas de manifeste, ou manifeste sans détail des comptes)"
 fi
 
 if [ "$echec" = 0 ]; then echo "FINAL RESULT:      PASS"; exit 0; fi

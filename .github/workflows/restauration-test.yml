@@ -37,6 +37,13 @@ on:
 permissions:
   contents: read
 
+# Chaque étape sous « bash -eo pipefail » (shell: bash explicite). Sans cela, GitHub lance
+# « bash -e » : dans « stocker.sh envoyer … | tee », l'échec de l'envoi serait masqué par
+# tee et l'étape resterait verte. Une commande qui échoue avant un tube fait échouer l'étape.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: restauration-test
   cancel-in-progress: false
@@ -99,8 +106,11 @@ jobs:
           umask 077
           printf '%s\n' "$SAUVEGARDE_RCLONE_CONFIG" > "$RUNNER_TEMP/rclone.conf"
           export RCLONE_CONFIG="$RUNNER_TEMP/rclone.conf"
-          echo "Sauvegardes complètes dans la destination $SOURCE :"
-          bash outils/production/stocker.sh lister | head -10
+          # Liste lue en entier d'abord : sous pipefail, « lister | head » échouerait dès
+          # que head referme le tube, et un échec de lecture ne doit pas passer inaperçu
+          liste="$(bash outils/production/stocker.sh lister)"
+          echo "Sauvegardes complètes dans la destination $SOURCE : $(printf '%s\n' "$liste" | grep -c . || true)"
+          printf '%s\n' "$liste" | sed -n '1,10p'
           debut=$(date +%s)
           nom="$(bash outils/production/stocker.sh recuperer "$QUOI" "$RUNNER_TEMP/restauration" | tail -1)"
           echo "duree=$(( $(date +%s) - debut ))" >> "$GITHUB_OUTPUT"
@@ -118,6 +128,8 @@ jobs:
           printf '%s\n' "$RESTAURATION_CLE" > "$cle"
           trap 'rm -f "$cle"' EXIT
           if [ "$CIBLE" = staging ]; then
+            # Même exigence que SUPABASE_DB_URL : Session pooler, port 5432 (jamais affichée)
+            bash outils/production/verifier-adresse.sh STAGING_DB_URL
             export CIBLE_DB_URL="$STAGING_DB_URL"
             RESTORE_TARGET=staging bash outils/production/epreuve-restauration.sh "$RUNNER_TEMP/restauration" "$NOM" "$cle" "$TELECHARGEMENT"
           else

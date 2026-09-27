@@ -44,6 +44,7 @@ destinataires=()
 for r in $(echo "$SAUVEGARDE_DESTINATAIRE ${RESTAURATION_DESTINATAIRE:-}" | tr ',' ' '); do
   case "$r" in age1*) destinataires+=(-r "$r") ;; *) echo "Destinataire invalide : une clé publique age commence par age1"; exit 1 ;; esac
 done
+ICI="$(cd "$(dirname "$0")" && pwd)"
 PG_DUMP="${PG_DUMP:-pg_dump}"
 PG_RESTORE="${PG_RESTORE:-pg_restore}"
 PSQL="${PSQL:-psql}"
@@ -76,7 +77,11 @@ chmod 700 "$travail"
 trap 'rm -rf "$travail"' EXIT
 echo "Sauvegarde $nom : début"
 
-# 0. La base répond-elle ? (lecture seule : select 1)
+# 0. L'adresse convient-elle (Session pooler, pas la connexion directe ni le port 6543) ?
+# Rien n'est affiché de l'adresse, seulement le type reconnu ou la raison du refus.
+bash "$ICI/verifier-adresse.sh" SUPABASE_DB_URL
+
+# La base répond-elle ? (lecture seule : select 1)
 if ! "$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c 'select 1;' > /dev/null 2> "$travail/connexion.txt"; then
   echo "Connexion à la base impossible. Sur Supabase Free, utiliser l'adresse « Session pooler »" >&2
   echo "(port 5432) : la connexion directe n'est joignable qu'en IPv6. Détail :" >&2
@@ -116,12 +121,28 @@ done
 grep -q "TABLE DATA auth users " "$travail/comptes.liste" || { echo "Sauvegarde incomplète : pas de données pour auth.users" >&2; exit 1; }
 taille_min=20000   # un schéma public GoShip vide pèse déjà bien plus : en dessous, le dump est suspect
 [ "$(stat -c %s "$travail/public.dump")" -ge "$taille_min" ] || { echo "Sauvegarde suspecte : schéma public de moins de $taille_min octets" >&2; exit 1; }
-echo "Copie relue : $(grep -c ' TABLE DATA ' "$travail/public.liste") tables avec données, $(grep -c ' FUNCTION ' "$travail/public.liste") fonctions, $(grep -c ' POLICY ' "$travail/public.liste") règles RLS"
+# Les entrées de la liste de pg_restore s'écrivent « TYPE schéma nom » : on compte les
+# FUNCTION du schéma public, pas les lignes de droits (« ACL public FUNCTION … »)
+compter() { grep -c " $1 public " "$travail/public.liste" || true; }
+echo "Copie relue : $(compter 'TABLE DATA') tables avec données, $(compter FUNCTION) fonctions, $(compter TRIGGER) déclencheurs, $(compter POLICY) règles RLS, $(compter 'SEQUENCE SET') séquences"
 
 # 4. Le manifeste : ce qu'il faudra retrouver après une restauration
 lignes="$(compter_lignes "$SUPABASE_DB_URL")"
 comptes="$("$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c 'select count(*) from auth.users;')"
 version_serveur="$("$PSQL" "$SUPABASE_DB_URL" -X -A -t -c 'show server_version;')"
+lire() { "$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "$1"; }
+# La valeur de chaque séquence du schéma public (numéros de colis, de factures, codes
+# clients) : une restauration qui les remettrait à zéro redonnerait des numéros déjà pris
+sequences="$(lire "select coalesce(json_object_agg(sequencename, last_value order by sequencename), '{}') from pg_sequences where schemaname = 'public';")"
+# Ce qu'il faut pour qu'un compte restauré puisse se reconnecter : ses identités et
+# l'empreinte de son mot de passe. None (null dans le manifeste) quand la table ou la
+# colonne n'existe pas dans la base sauvegardée.
+identites=None
+[ "$(lire "select to_regclass('auth.identities') is not null;")" = t ] && identites="$(lire 'select count(*) from auth.identities;')"
+avec_mot_de_passe=None
+[ "$(lire "select exists (select 1 from information_schema.columns where table_schema = 'auth' and table_name = 'users' and column_name = 'encrypted_password');")" = t ] \
+  && avec_mot_de_passe="$(lire "select count(*) from auth.users where coalesce(encrypted_password, '') <> '';")"
+confirmes="$(lire 'select count(*) from auth.users where email_confirmed_at is not null;')"
 empreinte() { sha256sum "$1" | cut -d' ' -f1; }
 
 # 5. Chiffrer, puis effacer le clair
@@ -142,7 +163,9 @@ json.dump({
                 "entrees": $(wc -l < "$travail/comptes.liste")}
   },
   "lignes_par_table": json.loads('''$lignes'''),
-  "comptes_auth": $comptes
+  "comptes_auth": $comptes,
+  "auth": {"identites": $identites, "avec_mot_de_passe": $avec_mot_de_passe, "confirmes": $confirmes},
+  "sequences": json.loads('''$sequences''')
 }, open(sys.argv[1], 'w'), ensure_ascii=False, indent=2)
 PY
 age "${destinataires[@]}" -o "$sortie/$nom.manifeste.json.age" "$travail/manifeste.json"

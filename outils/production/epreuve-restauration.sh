@@ -7,8 +7,11 @@
 #
 # Dans l'ordre, le premier échec arrête tout (code 1) :
 #   0. (essai seulement, PREPARER_CIBLE=1) habiller la base jetable en projet Supabase
-#      neuf : rôles d'administration de Supabase, puis doublures (auth, vault, net,
-#      storage, publication supabase_realtime, rôles anon / authenticated) ;
+#      neuf : rôles de Supabase (administration, puis anon, authenticated,
+#      service_role, authenticator : un PostgreSQL neuf, comme le conteneur du
+#      workflow, n'en a aucun), puis doublures (auth, vault, net, storage,
+#      publication supabase_realtime). Refusé sur une adresse Supabase : un vrai
+#      projet a déjà tout cela, et on n'y crée jamais de rôle ;
 #   1. verifier-sauvegarde.sh avec la clé : SHA-256, déchiffrement, manifeste, structure ;
 #   2. restaurer.sh (RESTORE_TARGET) : comptes puis schéma public, lignes = manifeste ;
 #   3. appliquer-chaine.sh : la chaîne de migrations rejouée (elle refuse la production) ;
@@ -34,6 +37,14 @@ trap 'rm -rf "$travail"' EXIT
 rapport="$travail/rapport.txt"
 
 if [ "$RESTORE_TARGET" = essai ] && [ "${PREPARER_CIBLE:-}" = 1 ]; then
+  case "$CIBLE_DB_URL" in
+    *supabase.co*)   # couvre aussi supabase.com
+      echo "PREPARER_CIBLE refusé : la cible est un projet Supabase (rôles et schémas déjà là, jamais recréés)" >&2
+      exit 1 ;;
+  esac
+  # Les rôles vivent dans le serveur, pas dans la base : on ne crée que ceux qui manquent,
+  # avec les attributs de Supabase (anon et authenticated sans connexion, service_role
+  # qui passe la RLS, authenticator qui les endosse)
   "${PSQL:-psql}" "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1 <<'SQL'
 do $$ declare r text; begin
   foreach r in array array['supabase_admin', 'supabase_auth_admin', 'supabase_storage_admin',
@@ -43,7 +54,20 @@ do $$ declare r text; begin
       execute format('create role %I nologin', r);
     end if;
   end loop;
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin noinherit;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin noinherit;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin noinherit bypassrls;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticator') then
+    create role authenticator nologin noinherit;   -- personne ne s'y connecte ici
+  end if;
 end $$;
+grant anon, authenticated, service_role to authenticator;
 SQL
   python3 "$ICI/doublures-supabase.py" | "${PSQL:-psql}" "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1
 fi

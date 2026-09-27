@@ -38,6 +38,13 @@ on:
 permissions:
   contents: read
 
+# Chaque étape sous « bash -eo pipefail » (shell: bash explicite). Sans cela, GitHub lance
+# « bash -e » : dans « stocker.sh envoyer … | tee », l'échec de l'envoi serait masqué par
+# tee et l'étape resterait verte. Une commande qui échoue avant un tube fait échouer l'étape.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: sauvegarde
   cancel-in-progress: false
