@@ -194,12 +194,24 @@ function taillePdf(octets) {
       var l = (await A.admin.colis({ statut: 'recu' })).lignes;
       return l.map(function (c) { return c.numero; });
     });
+    var etatScan = async function () { return (await page.textContent('[data-scan-etat]')).replace(/\s+/g, ' ').trim(); };
     async function scanner(code) {
+      var avant = await etatScan();
       await page.focus('[data-scan-code]');
       await page.keyboard.type(code, { delay: 4 });           // le rythme d'un scanner
       await page.keyboard.press('Enter');
-      await attendre(900);
-      return (await page.textContent('[data-scan-etat]')).replace(/\s+/g, ' ').trim();
+      // Le résultat de CE scan, pas une durée fixe : sur une machine lente (macOS Intel
+      // en CI), la réponse arrivait parfois après 900 ms et l'essai lisait l'état du scan
+      // précédent. On attend un état final (ni « Recherche… » ni « Enregistrement… »),
+      // différent de celui d'avant, resté le même 500 ms de suite ; 15 s au plus.
+      var dernier = null, depuis = Date.now(), limite = Date.now() + 15000;
+      while (Date.now() < limite) {
+        var t = await etatScan();
+        if (t !== dernier) { dernier = t; depuis = Date.now(); }
+        else if (t !== avant && !/Recherche…|Enregistrement…/.test(t) && Date.now() - depuis >= 500) return t;
+        await attendre(100);
+      }
+      return dernier;
     }
     var premier = await scanner(colis[0]);
     ok('scan d\'un colis : ' + premier.slice(0, 70), premier.indexOf(colis[0]) >= 0);
