@@ -528,9 +528,9 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
   .gs-direct{padding:6px}
 }
 
-/* Petit ordinateur (1024 à 1279 px) : date courte et bouton « Enregistrer un colis » en
+/* Petit ordinateur (1024 à 1365 px) : date courte et bouton « Enregistrer un colis » en
    icône, pour garder la barre sur une ligne à côté du menu */
-@media (min-width:1024px) and (max-width:1279px){
+@media (min-width:1024px) and (max-width:1365px){
   .gs-horloge__date{display:none}
   .gs-horloge__date--courte{display:inline}
   .gs-td__nouveau span{display:none}
