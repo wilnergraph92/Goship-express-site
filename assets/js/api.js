@@ -2096,13 +2096,13 @@
     if (f == null) return r;
     if (typeof f !== 'object' || Array.isArray(f)) throw Erreur('INVALID_INPUT', 'Les filtres forment un objet.');
     Object.keys(f).forEach(function (k) {
-      if (['pays', 'ville', 'service', 'statut', 'lieu'].indexOf(k) < 0) {
+      if (['pays', 'ville', 'service', 'statut', 'lieu', 'agence'].indexOf(k) < 0) {
         throw Erreur('INVALID_INPUT', 'Filtre inconnu : ' + k.slice(0, 20) + '.');
       }
       if (f[k] != null && typeof f[k] !== 'string') throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » est un texte.');
       var v = String(f[k] == null ? '' : f[k]).trim().toLowerCase();
       if (!v) return;
-      if (k === 'pays') {
+      if (k === 'pays' || k === 'agence') {
         v = v.toUpperCase();
         if (['HT', 'DO', 'US'].indexOf(v) < 0) throw Erreur('INVALID_INPUT', 'Pays inconnu : ' + v.slice(0, 10) + '.');
       } else if (k === 'service' && SERVICES_COLIS.indexOf(v) < 0) {
@@ -2120,31 +2120,51 @@
     return (!f.pays || c.pays_destination === f.pays) && (!f.service || c.service === f.service) &&
            (!f.statut || c.statut === f.statut || (f.statut === 'actifs' && c.statut !== 'livre')) &&
            (!f.ville || String(c.destination || '').trim().toLowerCase() === f.ville) &&
-           (!f.lieu || String(c.lieu || '').trim().toLowerCase() === f.lieu);
+           (!f.lieu || String(c.lieu || '').trim().toLowerCase() === f.lieu) &&
+           (!f.agence || agenceDuColis(c) === f.agence);
+  }
+  // L'agence où se trouve un colis (colis_filtre) : US au dépôt de Miami, HT ou DO une
+  // fois arrivé dans le pays ; aucune en route, livré ou en action requise
+  function agenceDuColis(c) {
+    if (c.statut === 'recu' || c.statut === 'emballe') return 'US';
+    if (['distribution', 'succursale', 'disponible'].indexOf(c.statut) >= 0 &&
+        (c.pays_destination === 'HT' || c.pays_destination === 'DO')) return c.pays_destination;
+    return null;
   }
   function optionsFiltresDemo(d) {
-    function compter(cle, texte) {
+    // parPays : les villes se comptent par ville et par pays (une même ville peut
+    // exister dans deux pays), jusqu'à 300 ; les lieux jusqu'à 60
+    function compter(cle, texte, parPays) {
       var t = {};
       d.colis.forEach(function (c) {
         var brut = String(c[cle] == null ? '' : c[cle]).trim(), v = texte ? brut.toLowerCase() : brut;
         if (!v) return;
-        var x = t[v] || (t[v] = { valeur: v, colis: 0, ecritures: {} });
+        var k = parPays ? v + '\u0000' + c.pays_destination : v;
+        var x = t[k] || (t[k] = { valeur: v, pays: c.pays_destination, colis: 0, ecritures: {} });
         x.colis++;
         if (texte) x.ecritures[brut] = (x.ecritures[brut] || 0) + 1;
       });
       var liste = Object.keys(t).map(function (k) { return t[k]; })
-        .sort(function (a, b) { return b.colis - a.colis || (a.valeur < b.valeur ? -1 : 1); });
+        .sort(function (a, b) {
+          return b.colis - a.colis || (a.valeur < b.valeur ? -1 : a.valeur > b.valeur ? 1 : 0) ||
+                 (parPays ? (a.pays < b.pays ? -1 : a.pays > b.pays ? 1 : 0) : 0);
+        });
       if (!texte) return liste.map(function (x) { return { valeur: x.valeur, colis: x.colis }; });
       // L'écriture la plus fréquente (à égalité, la première dans l'ordre), comme mode() dans la base
-      return liste.slice(0, 60).map(function (x) {
+      return liste.slice(0, parPays ? 300 : 60).map(function (x) {
         var libelle = Object.keys(x.ecritures).sort(function (a, b) {
           return x.ecritures[b] - x.ecritures[a] || (a < b ? -1 : 1);
         })[0];
-        return { valeur: x.valeur, libelle: libelle, colis: x.colis };
+        var r = { valeur: x.valeur, libelle: libelle, colis: x.colis };
+        if (parPays) r.pays = x.pays;
+        return r;
       });
     }
+    var agences = { US: 0, HT: 0, DO: 0 };
+    d.colis.forEach(function (c) { var a = agenceDuColis(c); if (a) agences[a]++; });
     return { pays: compter('pays_destination'), services: compter('service'), statuts: compter('statut'),
-             villes: compter('destination', true), lieux: compter('lieu', true) };
+             villes: compter('destination', true, true), lieux: compter('lieu', true),
+             agences: ['US', 'HT', 'DO'].map(function (a) { return { valeur: a, colis: agences[a] }; }) };
   }
 
   // vue_generale, calculée sur les données d : une période → ce que le rôle a le droit

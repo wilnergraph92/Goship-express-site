@@ -395,6 +395,7 @@
   function boutonEtiquette(colis, classe) {
     var b = el('button', classe, 'Étiquette');
     b.type = 'button';
+    b.setAttribute('data-imprimer', '');
     b.setAttribute('aria-label', 'Imprimer l\'étiquette du colis ' + colis.numero);
     b.addEventListener('click', function () { imprimerEtiquettes([colis]); });
     return b;
@@ -988,6 +989,7 @@
         tdActions.appendChild(petitBouton('Encaisser', 'gs-bouton--plein', function () { ouvrirPaiement(facture); }));
       }
       var imprimerBouton = petitBouton('Imprimer', null, function () { imprimerFacture(facture); });
+      imprimerBouton.setAttribute('data-imprimer', '');
       imprimerBouton.setAttribute('aria-label', 'Imprimer la facture ' + facture.numero);
       tdActions.appendChild(imprimerBouton);
       tdActions.appendChild(petitBouton(t.etat === 'annulee' ? 'Voir' : 'Détails', null,
@@ -2544,13 +2546,12 @@
   }
   var SOURCES = { scanner: 'scanner', tableau_de_bord: 'tableau de bord', creation: 'enregistrement' };
 
-  // Ouvrir un colis trouvé ailleurs (vue générale, recherche) dans la fenêtre
-  // « Mettre à jour » : la liste des colis le relit d'abord, pour avoir la
-  // fiche complète et à jour.
+  // Ouvrir un colis trouvé ailleurs (vue générale, recherche, poste de scan) dans sa
+  // fiche : la liste des colis le relit d'abord, pour l'avoir complet et à jour.
   function ouvrirColisParNumero(numero) {
     API.admin.colis({ recherche: numero, statut: '', parPage: 5 }).then(function (r) {
       var colis = (r.lignes || []).filter(function (l) { return l.numero === numero; })[0];
-      if (colis) ouvrirStatut([colis.id], colis);
+      if (colis) ouvrirFicheColis(colis);
       else toast('Ce colis n’existe plus.', true);
     }).catch(function (err) { toast(messageErreur(err), true); });
   }
@@ -3210,6 +3211,7 @@
     var lignes = v.activite.slice(0, 8);
     lignes.forEach(function (e) {
       var tr = el('tr');
+      if (e.numero) FICHES.set(tr, { numero: e.numero });
       var tdNum = cellule('Colis');
       var numero = el('button', 'gs-lien-bouton gs-cellule-num', e.numero || '—');
       numero.type = 'button';
@@ -3559,15 +3561,27 @@
   $('[data-action="vg-tous-colis"]').addEventListener('click', function () { viderFiltresColis(); choisirVue('colis'); });
 
   /* ---- Les filtres de la vue générale ----------------------------------------------
-     vue_generale_filtree (outils/supabase-analytics.sql) : pays, ville de destination,
-     mode de transport, statut, lieu actuel (l'agence où attend un colis « Disponible » ;
-     la base n'a pas de table d'agences). Les choix sont ceux que les colis portent,
-     comptés par la base. Les filtres découpent ce qui se compte en colis ; l'argent,
-     les clients, le poste de scan et les colis à traiter restent entiers, et le disent.
-     Gardés le temps de la visite seulement : un tableau de bord rouvert montre tout. */
+     vue_generale_filtree (outils/supabase-analytics.sql). Des listes fixes :
+       Pays         Haïti, Santo Domingo (République dominicaine), USA
+       Destination  toutes les villes du pays choisi (assets/js/lieux.js : communes
+                    d'Haïti, municipalités dominicaines), plus celles que les colis
+                    portent sans être dans la liste ; pour les USA, celles des colis
+       Mode         Aérienne, Maritime, Terrestre
+       Statut       les huit étapes, ou « En cours »
+       Agence       USA (au dépôt de Miami : reçu, emballé), Haïti, Santo Domingo
+                    (arrivé dans le pays : centre de distribution, succursale,
+                    disponible) ; la règle vit dans colis_filtre, pas ici
+     Chaque choix porte le nombre de colis que la base lui compte (options_filtres).
+     Les filtres découpent ce qui se compte en colis ; l'argent, les clients, le poste de
+     scan et les colis à traiter restent entiers, et le disent. Gardés le temps de la
+     visite seulement : un tableau de bord rouvert montre tout. */
   var etatFiltres = { valeurs: {}, disponible: true };
   var formFiltres = $('[data-vg-filtres]');
-  var LIBELLES_FILTRES = { pays: 'Tous', ville: 'Toutes', service: 'Tous', statut: 'Tous', lieu: 'Toutes' };
+  var LIBELLES_FILTRES = { pays: 'Tous', ville: 'Toutes', service: 'Tous', statut: 'Tous', agence: 'Toutes' };
+  var PAYS_FILTRE = [['HT', 'Haïti'], ['DO', 'Santo Domingo'], ['US', 'USA']];
+  var MODES_FILTRE = [['aerien', 'Aérienne'], ['maritime', 'Maritime'], ['terrestre', 'Terrestre']];
+  var AGENCES_FILTRE = [['US', 'USA'], ['HT', 'Haïti'], ['DO', 'Santo Domingo']];
+  var LIEUX = window.GoshipLieux || { REGIONS: {} };
   // Les cartes que les filtres ne découpent pas
   var PARTIES_ENTIERES = '[data-apercu-partie="facturation"], [data-apercu-partie="clients"], ' +
     '[data-apercu-partie="scanner"], [data-apercu-partie="paiements_recents"], [data-vg-bloc="traiter"], [data-vg-bloc="surveiller"]';
@@ -3576,15 +3590,28 @@
     return Object.keys(etatFiltres.valeurs).some(function (k) { return etatFiltres.valeurs[k]; });
   }
 
-  function remplirFiltre(cle, choix) {
+  // La même mise en forme que la base (filtres_colis) : casse et espaces ignorés
+  function cleVille(v) { return String(v || '').trim().toLowerCase(); }
+
+  // choix : des options { valeur, libelle, colis } ou des groupes { groupe, choix: [...] }
+  function remplirFiltre(cle, choix, invite) {
     var liste = $('[data-vg-filtre="' + cle + '"]', formFiltres);
     var garde = etatFiltres.valeurs[cle] || '';
     liste.textContent = '';
-    liste.add(new Option(LIBELLES_FILTRES[cle], ''));
+    liste.add(new Option(invite || LIBELLES_FILTRES[cle], ''));
     var vus = {};
-    choix.forEach(function (x) {
+    function option(x, parent) {
       vus[x.valeur] = true;
-      liste.add(new Option(x.libelle + (x.colis != null ? ' (' + entier(x.colis) + ')' : ''), x.valeur));
+      var o = new Option(x.libelle + (x.colis ? ' (' + entier(x.colis) + ')' : ''), x.valeur);
+      parent.appendChild(o);
+    }
+    choix.forEach(function (x) {
+      if (!x.groupe) { option(x, liste); return; }
+      if (!x.choix.length) return;
+      var g = document.createElement('optgroup');
+      g.label = x.groupe;
+      x.choix.forEach(function (y) { option(y, g); });
+      liste.appendChild(g);
     });
     // Un choix qui n'a plus de colis reste affiché tant qu'il est choisi
     if (garde && !vus[garde]) liste.add(new Option(garde, garde));
@@ -3592,21 +3619,57 @@
     liste.closest('.gs-vg__filtre').classList.toggle('is-actif', !!garde);
   }
 
+  // Les villes du pays choisi : sa liste (lieux.js), rangée par département ou province,
+  // puis celles des colis qui n'y sont pas (écrites autrement, ou hors liste)
+  function villesDuPays(pays, villesBase) {
+    var comptes = {}, connues = {};
+    villesBase.forEach(function (x) {
+      // Une base d'avant le 27/09/2026 ne dit pas le pays de chaque ville : on les garde toutes
+      if (x.pays && x.pays !== pays) return;
+      comptes[x.valeur] = (comptes[x.valeur] || 0) + x.colis;
+    });
+    var groupes = [];
+    var regions = LIEUX.REGIONS[pays] || {};
+    Object.keys(regions).sort(function (a, b) { return a.localeCompare(b, 'fr'); }).forEach(function (r) {
+      groupes.push({ groupe: r, choix: regions[r].slice().sort(function (a, b) { return a.localeCompare(b, 'fr'); })
+        .map(function (v) {
+          var k = cleVille(v);
+          connues[k] = true;
+          return { valeur: k, libelle: v, colis: comptes[k] || 0 };
+        }) });
+    });
+    var autres = villesBase.filter(function (x) { return (!x.pays || x.pays === pays) && !connues[x.valeur]; })
+      .map(function (x) { return { valeur: x.valeur, libelle: x.libelle, colis: comptes[x.valeur] }; })
+      .filter(function (x, i, t) { return t.map(function (y) { return y.valeur; }).indexOf(x.valeur) === i; })
+      .sort(function (a, b) { return a.libelle.localeCompare(b.libelle, 'fr'); });
+    groupes.push({ groupe: groupes.length ? 'Autres villes des colis' : 'Villes des colis', choix: autres });
+    return groupes;
+  }
+
+  function nombreDe(liste, valeur) {
+    var x = (liste || []).filter(function (y) { return y.valeur === valeur; })[0];
+    return x ? x.colis : 0;
+  }
+
   function majFiltres(v) {
     var o = v.options;
     var actifs = filtresActifs();
+    var agencesConnues = !!(o && o.agences);
     $$('select', formFiltres).forEach(function (s) { s.disabled = !etatFiltres.disponible || !o; });
     if (o) {
-      remplirFiltre('pays', (o.pays || []).map(function (x) { return { valeur: x.valeur, libelle: nomPays(x.valeur), colis: x.colis }; }));
-      remplirFiltre('ville', (o.villes || []).map(function (x) { return { valeur: x.valeur, libelle: x.libelle, colis: x.colis }; }));
-      remplirFiltre('service', (o.services || []).map(function (x) { return { valeur: x.valeur, libelle: nomService(x.valeur), colis: x.colis }; }));
+      remplirFiltre('pays', PAYS_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.pays, x[0]) }; }));
+      var pays = etatFiltres.valeurs.pays;
+      remplirFiltre('ville', pays ? villesDuPays(pays, o.villes || []) : [], pays ? 'Toutes' : 'Choisir un pays');
+      $('[data-vg-filtre="ville"]', formFiltres).disabled = !etatFiltres.disponible || !pays;
+      remplirFiltre('service', MODES_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.services, x[0]) }; }));
       // « En cours » n'a pas de nombre : ce serait une somme faite dans la page
       remplirFiltre('statut', [{ valeur: 'actifs', libelle: 'En cours (tous sauf livrés)', colis: null }].concat(
         CHAINE.concat(['incident']).map(function (k) {
-          var x = (o.statuts || []).filter(function (y) { return y.valeur === k; })[0];
-          return { valeur: k, libelle: STATUTS[k], colis: x ? x.colis : 0 };
+          return { valeur: k, libelle: STATUTS[k], colis: nombreDe(o.statuts, k) };
         })));
-      remplirFiltre('lieu', (o.lieux || []).map(function (x) { return { valeur: x.valeur, libelle: x.libelle, colis: x.colis }; }));
+      remplirFiltre('agence', AGENCES_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.agences, x[0]) }; }));
+      // Une base d'avant le 27/09/2026 ne connaît pas l'agence : le filtre attend sa mise à jour
+      $('[data-vg-filtre="agence"]', formFiltres).disabled = !etatFiltres.disponible || !agencesConnues;
     }
     $('[data-action="vg-filtres-effacer"]').hidden = !actifs;
     var c = v.colis || {};
@@ -3614,13 +3677,16 @@
       ? pluriel(c.total, 'colis correspond', 'colis correspondent') + ' aux filtres'
       : pluriel(c.total, 'colis', 'colis') + ' dans la vue';
     var note = $('[data-vg-filtres-note]');
+    var attente = o && !agencesConnues;
     if (!etatFiltres.disponible) {
       note.textContent = 'Filtres indisponibles : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).';
     } else if (actifs) {
       note.textContent = 'Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, ' +
         'poste de scan et colis à traiter restent entiers.';
+    } else if (attente) {
+      note.textContent = 'Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).';
     }
-    note.hidden = !(actifs || !etatFiltres.disponible);
+    note.hidden = !(actifs || !etatFiltres.disponible || attente);
     $$(PARTIES_ENTIERES).forEach(function (n) { n.classList.toggle('is-entier', actifs); });
     document.body.classList.toggle('is-vg-filtree', actifs);
   }
@@ -3630,6 +3696,8 @@
     if (!cle) return;
     if (e.target.value) etatFiltres.valeurs[cle] = e.target.value; else delete etatFiltres.valeurs[cle];
     e.target.closest('.gs-vg__filtre').classList.toggle('is-actif', !!e.target.value);
+    // Un autre pays : la destination choisie n'est plus la sienne
+    if (cle === 'pays') delete etatFiltres.valeurs.ville;
     chargerApercu();
   });
   formFiltres.addEventListener('submit', function (e) { e.preventDefault(); });
@@ -3863,6 +3931,7 @@
     corps.textContent = '';
     (r.lignes || []).forEach(function (x) {
       var tr = el('tr');
+      if (x.numero) FICHES.set(tr, { numero: x.numero });
       var tdNum = cellule('Colis');
       tdNum.appendChild(el('span', 'gs-cellule-num', x.numero));
       if (x.description) tdNum.appendChild(el('span', 'gs-cellule-sous', x.description));
@@ -5122,6 +5191,266 @@
       toast('Impression impossible : autorisez les fenêtres de ce site.', true);
     });
   });
+
+  /* ---- La fiche d'une ligne ----------------------------------------------------------
+     Un clic (ou Entrée) sur une ligne de n'importe quel tableau ouvre sa fiche
+     (<dialog data-dialogue="fiche">). Un colis y montre tout ce que la liste en sait, son
+     parcours en sept étapes (datées par son historique, lu dans la base) et ses actions :
+     « Mettre à jour », « Voir la facture », « Étiquette », « Voir le client ». Les autres
+     lignes (clients, factures, équipe, vue générale, analytics…) montrent leurs colonnes,
+     titre compris, et les boutons de la ligne, qui font exactement ce qu'ils font dans la
+     ligne. Un bouton, un lien, une case ou une liste de la ligne gardent leur rôle : ils
+     n'ouvrent pas la fiche. Rien ne se calcule ici : la fiche relit ce qui est affiché. */
+  var dlgFiche = $('[data-dialogue="fiche"]');
+  var FICHES = new WeakMap();
+  var champsFiche = $('[data-fiche-champs]', dlgFiche);
+  var actionsFiche = $('[data-fiche-actions]', dlgFiche);
+  var liensFiche = $('[data-fiche-liens]', dlgFiche);
+  var parcoursFiche = $('[data-fiche-parcours]', dlgFiche);
+  var ficheColisId = null;
+
+  function preparerFiche(type, titre, sousTitre, badgeNoeud) {
+    $('[data-fiche-type]', dlgFiche).textContent = type;
+    $('[data-fiche-titre]', dlgFiche).textContent = titre || '—';
+    var b = $('[data-fiche-badge]', dlgFiche);
+    b.textContent = '';
+    if (badgeNoeud) b.appendChild(badgeNoeud);
+    var st = $('[data-fiche-sous-titre]', dlgFiche);
+    st.textContent = sousTitre || '';
+    st.hidden = !sousTitre;
+    champsFiche.textContent = '';
+    actionsFiche.textContent = '';
+    liensFiche.textContent = '';
+    parcoursFiche.hidden = true;
+    ficheColisId = null;
+  }
+
+  // Un champ : un libellé et une ou plusieurs lignes de texte (vides ignorées)
+  function champFiche(libelle, lignes, large) {
+    lignes = (Array.isArray(lignes) ? lignes : [lignes]).filter(function (l) { return l != null && String(l).trim() !== ''; });
+    if (!lignes.length) return;
+    var bloc = el('div', 'gs-fiche__champ' + (large ? ' gs-fiche__champ--large' : ''));
+    bloc.appendChild(el('dt', '', libelle));
+    var dd = el('dd');
+    lignes.forEach(function (l, i) { dd.appendChild(el('span', i ? 'gs-fiche__sous' : 'gs-fiche__valeur', l)); });
+    bloc.appendChild(dd);
+    champsFiche.appendChild(bloc);
+  }
+
+  // Un bouton de la fiche : fermer la fiche, puis agir (sauf « garder » : l'impression)
+  function boutonFiche(texte, classe, action, garder) {
+    var b = el('button', 'gs-bouton ' + (classe || 'gs-bouton--contour'), texte);
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      if (!garder) dlgFiche.close();
+      action(b);
+    });
+    return b;
+  }
+
+  function montrerFiche() {
+    if (!dlgFiche.open) dlgFiche.showModal();
+    var premier = $('.gs-fiche__actions .gs-bouton', dlgFiche) || $('[data-action="fermer"]', dlgFiche);
+    premier.focus();
+  }
+
+  /* Le colis */
+  function ouvrirFicheColis(colis) {
+    preparerFiche('Détail du colis', colis.numero, colis.description || '', badge(colis.statut));
+    ficheColisId = colis.id;
+    var poids = colis.poids_lb != null && colis.poids_lb !== '' ? Number(colis.poids_lb) : null;
+    champFiche('Client', [colis.nom_client || 'Client supprimé', [colis.code_client, colis.telephone_client].filter(Boolean).join(' · ')]);
+    champFiche('Route', ['Miami → ' + [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', ')]);
+    champFiche('Mode', SERVICES[colis.service] || colis.service);
+    champFiche('Poids', poids != null ? [O.nombre(poids) + ' lb', O.nombre(Math.round(poids * 0.45359237 * 10) / 10) + ' kg'] : '—');
+    if (colis.prix_usd != null && colis.prix_usd !== '') {
+      champFiche('Montant du transport', [argent(colis.prix_usd),
+        colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '']);
+    }
+    champFiche('Lieu actuel', colis.lieu || '—');
+    champFiche('Reçu le', O.date(colis.recu_le || colis.cree_le, true));
+    champFiche('Mis à jour', O.date(colis.maj_le, true));
+    champFiche('Expéditeur', colis.expediteur);
+    champFiche('Suivi du vendeur', colis.suivi_transporteur);
+    champFiche('Note', colis.note, true);
+
+    var maj = boutonFiche('Mettre à jour', 'gs-bouton--plein', function () { ouvrirStatut([colis.id], colis); });
+    maj.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
+    actionsFiche.appendChild(maj);
+    if (peut('invoices.view')) {
+      var fac = boutonFactureDuColis(colis);
+      fac.className = 'gs-bouton gs-bouton--contour';
+      fac.addEventListener('click', function () { dlgFiche.close(); });
+      actionsFiche.appendChild(fac);
+    }
+    actionsFiche.appendChild(boutonEtiquette(colis, 'gs-bouton gs-bouton--contour'));
+    if (colis.client_id && peut('clients.view')) {
+      liensFiche.appendChild(boutonFiche('Voir le client', 'gs-lien-bouton', function () {
+        choisirVue('clients');
+        var r = $('[data-recherche="clients"]');
+        r.value = colis.code_client || colis.nom_client || '';
+        r.dispatchEvent(new Event('input', { bubbles: true }));
+      }));
+    }
+    if (colis.client_id) {
+      liensFiche.appendChild(boutonFiche('Ses colis', 'gs-lien-bouton', function () {
+        filtrerParClient({ id: colis.client_id, code: colis.code_client, nom_complet: colis.nom_client });
+      }));
+    }
+    parcoursColis(colis, null);
+    montrerFiche();
+    // Les dates du parcours : l'historique du colis, tel que la base l'a gardé
+    API.admin.historique(colis.id).then(function (h) {
+      if (ficheColisId === colis.id) parcoursColis(colis, h || []);
+    }).catch(function () { /* le parcours reste sans dates */ });
+  }
+
+  // Les sept étapes : faites, en cours, à venir. « Action requise » n'est pas une étape :
+  // le parcours reste sur la dernière étape atteinte, et l'alerte dit pourquoi.
+  function parcoursColis(colis, historique) {
+    var dates = {}, derniere = null;
+    (historique || []).forEach(function (h) {
+      if (CHAINE.indexOf(h.statut) >= 0) {
+        if (!dates[h.statut] || h.cree_le > dates[h.statut]) dates[h.statut] = h.cree_le;
+        derniere = h.statut;
+      }
+    });
+    var ici = CHAINE.indexOf(colis.statut);
+    if (ici < 0) ici = derniere ? CHAINE.indexOf(derniere) : -1;
+    var ol = $('[data-fiche-etapes]', dlgFiche);
+    ol.textContent = '';
+    CHAINE.forEach(function (k, i) {
+      var li = el('li', 'gs-fiche__etape ' + (i < ici ? 'is-fait' : i === ici ? 'is-actuel' : 'is-avenir'));
+      if (i === ici) li.setAttribute('aria-current', 'step');
+      li.appendChild(el('span', 'gs-fiche__point'));
+      li.appendChild(el('span', 'gs-fiche__etape-nom', STATUTS[k]));
+      li.appendChild(el('span', 'gs-fiche__etape-date', dates[k] ? O.date(dates[k], true) : ''));
+      ol.appendChild(li);
+    });
+    var alerte = $('[data-fiche-alerte]', dlgFiche);
+    alerte.hidden = colis.statut !== 'incident';
+    alerte.textContent = colis.statut === 'incident' ? 'Action requise' + (colis.note ? ' : ' + colis.note : '') : '';
+    parcoursFiche.hidden = false;
+  }
+
+  /* Toute autre ligne : ses colonnes (libellé de la cellule, ou titre de la colonne) et
+     ses boutons, qui déclenchent ceux de la ligne */
+  function textesCellule(td) {
+    var enfants = Array.prototype.filter.call(td.children, function (n) { return !n.matches('.gs-bouton, input, select'); });
+    // Un élément fait de plusieurs pastilles (statuts d'un client…) : ses morceaux, séparés
+    var lignes = enfants.length ? enfants.map(function (n) {
+      return n.children.length > 1 && !n.matches('span.gs-cellule-sous, span.gs-cellule-principale')
+        ? Array.prototype.map.call(n.children, function (x) { return x.textContent.trim(); }).filter(Boolean).join(' · ')
+        : n.textContent.trim();
+    }) : [td.textContent.trim()];
+    return lignes.filter(Boolean);
+  }
+
+  // Ce qu'est une ligne, selon son tableau (sinon la légende du tableau, le titre de sa
+  // carte ou celui de l'onglet)
+  var TYPES_FICHE = { clients: 'Client', factures: 'Facture', equipe: 'Membre de l’équipe', paiements: 'Paiement reçu',
+                      routes: 'Route', activite: 'Activité récente', traiter: 'Colis à traiter' };
+  function typeDeLigne(table) {
+    var m = /gs-tableau--([a-z]+)/.exec(table.className);
+    if (m && TYPES_FICHE[m[1]]) return TYPES_FICHE[m[1]];
+    if (table.caption && table.caption.textContent.trim()) return table.caption.textContent.trim();
+    var carte = table.closest('.gs-vg__carte, section');
+    var titre = carte && $('h2, h3', carte);
+    if (titre && titre.textContent.trim()) return titre.textContent.trim();
+    var vue = table.closest('[data-vue]');
+    var onglet = vue && $('[data-onglet-vue="' + vue.getAttribute('data-vue') + '"] .gs-td__libelle');
+    return onglet ? onglet.textContent.trim() : 'Détail';
+  }
+
+  function ouvrirFicheLigne(tr) {
+    var table = tr.closest('table');
+    var titres = $$('thead th', table).map(function (th) { return th.textContent.trim(); });
+    var colonnes = [], boutons = [];
+    Array.prototype.forEach.call(tr.cells, function (td, i) {
+      if (td.classList.contains('gs-tableau__case')) return;
+      $$('button, a[href]', td).forEach(function (b) { if (!b.disabled && !b.hidden && b.textContent.trim()) boutons.push(b); });
+      if (td.classList.contains('gs-cellule-actions')) return;
+      var lignes = textesCellule(td);
+      if (lignes.length) colonnes.push({ libelle: td.getAttribute('data-libelle') || titres[i] || '', lignes: lignes });
+    });
+    if (!colonnes.length) return;
+    // La première colonne fait le titre ; les autres, les champs
+    var tete = colonnes.shift();
+    preparerFiche(typeDeLigne(table), tete.lignes[0], tete.lignes.slice(1).join(' · '), null);
+    colonnes.forEach(function (c) { champFiche(c.libelle, c.lignes); });
+    boutons.forEach(function (b, i) {
+      // Un lien de la ligne (numéro de facture…) devient « Ouvrir … »
+      var texte = b.classList.contains('gs-bouton') ? b.textContent.trim()
+        : (b.getAttribute('aria-label') || 'Ouvrir ' + b.textContent.trim());
+      // Une impression (data-imprimer) laisse la fiche ouverte
+      var copie = boutonFiche(texte, i === 0 ? 'gs-bouton--plein' : 'gs-bouton--contour', function () { b.click(); },
+                              b.hasAttribute('data-imprimer'));
+      if (b.getAttribute('aria-label')) copie.setAttribute('aria-label', b.getAttribute('aria-label'));
+      actionsFiche.appendChild(copie);
+    });
+    montrerFiche();
+  }
+
+  // Le clic sur une ligne : la fiche du colis si la ligne en est un, sinon la fiche générique
+  function ouvrirFicheDe(tr) {
+    var d = FICHES.get(tr);
+    if (d && d.colis) { ouvrirFicheColis(d.colis); return; }
+    if (tr.hasAttribute('data-id') && tr.closest('.gs-tableau--colis')) {
+      var colis = etat.colis.lignes.filter(function (l) { return l.id === tr.getAttribute('data-id'); })[0];
+      if (colis) { ouvrirFicheColis(colis); return; }
+    }
+    if (d && d.numero) { ouvrirColisParNumero(d.numero); return; }
+    ouvrirFicheLigne(tr);
+  }
+
+  function ligneCliquable(cible) {
+    if (cible.closest('button, a, input, select, textarea, label, summary, details, [data-fiche-ignorer]')) return null;
+    var tr = cible.closest('tbody tr');
+    if (!tr || tr.closest('dialog') || !tr.closest('[data-vue]') || tr.cells.length < 2) return null;
+    if (tr.closest('.gs-tableau--roles')) return null;
+    return tr;
+  }
+  document.addEventListener('click', function (e) {
+    var tr = ligneCliquable(e.target);
+    if (!tr) return;
+    // Un texte qu'on sélectionne à la souris n'est pas un clic
+    var sel = window.getSelection && window.getSelection();
+    if (sel && String(sel).trim() && tr.contains(sel.anchorNode)) return;
+    ouvrirFicheDe(tr);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.matches || !e.target.matches('tbody tr.is-cliquable')) return;
+    e.preventDefault();
+    ouvrirFicheDe(e.target);
+  });
+  // Les lignes se désignent (curseur, focus au clavier) dès qu'elles apparaissent
+  function marquerLignes(racine) {
+    $$('tbody tr', racine).forEach(function (tr) {
+      if (tr.classList.contains('is-cliquable') || tr.cells.length < 2 || tr.closest('dialog, .gs-tableau--roles')) return;
+      tr.classList.add('is-cliquable');
+      tr.tabIndex = 0;
+      tr.title = tr.title || 'Ouvrir la fiche';
+    });
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) { if (m.target.nodeType === 1) marquerLignes(m.target); });
+    }).observe($('.gs-admin-body') || document.body, { childList: true, subtree: true });
+  }
+  marquerLignes(document);
+
+  // Le journal du poste de scan : un scan ouvre la fiche de son colis
+  var journalScan = $('[data-scan-journal]');
+  if (journalScan) {
+    journalScan.addEventListener('click', function (e) {
+      var li = e.target.closest('li[data-numero]');
+      if (li) ouvrirColisParNumero(li.getAttribute('data-numero'));
+    });
+    journalScan.addEventListener('keydown', function (e) {
+      var li = e.target.closest && e.target.closest('li[data-numero]');
+      if (li && e.key === 'Enter') ouvrirColisParNumero(li.getAttribute('data-numero'));
+    });
+  }
 
   /* ---- Démonstration --------------------------------------------------------- */
   $('[data-action="exemples"]').addEventListener('click', function () {

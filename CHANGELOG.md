@@ -7,6 +7,28 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.27.3 — tableau de bord : filtres fixes, fiche d'une ligne, langue (publié le 27/09/2026)
+
+Migration en lecture seule **à relancer par le propriétaire**, sans urgence :
+`supabase-analytics.sql` puis `supabase-mobile.sql` (SQL Editor, « Copy raw file »).
+Elle ajoute la clé de filtre `agence` et, dans les choix des filtres, le pays de
+chaque ville et le nombre de colis par agence ; aucune table, aucune donnée, aucune
+règle ne change. Tant qu'elle n'est pas passée, le filtre « Agence » reste désactivé
+(la page le dit) et les villes des colis s'ajoutent sous chaque pays.
+
+- Filtres de la vue générale : Pays (Haïti, Santo Domingo, USA), Destination (toutes
+  les villes du pays choisi : communes d'Haïti, municipalités dominicaines, plus
+  celles des colis), Mode (aérienne, maritime, terrestre), Statut (inchangé), Agence
+  (USA : au dépôt de Miami ; Haïti, Santo Domingo : arrivé dans le pays).
+- Un clic sur une ligne ouvre sa fiche, dans tous les onglets. Un colis : client,
+  route, mode, poids, montant, lieu, dates, parcours en sept étapes datées, et
+  « Mettre à jour », « Voir la facture », « Étiquette », « Voir le client ». Clients,
+  factures, paiements, équipe, analytics, scanner : leurs colonnes et leurs boutons.
+  La recherche rapide et les « Ouvrir » de la vue générale ouvrent aussi la fiche.
+- Sélecteur de langue dans la barre (FR, EN, ES, HT), gardé sur l'appareil.
+- Les régions et villes de l'espace client passent dans `assets/js/lieux.js`,
+  partagé avec le tableau de bord (aucun changement visible).
+
 ## site-2026.09.27.2 — tableau de bord : filtres, apparence, direct, disposition (publié le 27/09/2026)
 
 Migration en lecture seule, appliquée en production le 27/09/2026 avant la
