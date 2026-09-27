@@ -329,6 +329,10 @@ Environnement GitHub `production` : `SUPABASE_DB_URL` (Session pooler),
 | `sauvegarde.yml` réel dans GitHub Actions, sans secrets (lancé à la main sur la branche) | GitHub Actions, sans base | **rouge** à « Secrets posés ? », rien tenté contre la base, job « Alerte en cas d'échec » lancé ; exécution 36298048867 |
 | Recherche de secrets (`git grep` : clés age privées, chaînes de connexion avec mot de passe, `sb_secret_`, jetons GitHub, clés AWS) | TESTED LOCALLY | aucun |
 | Recherche du domaine du site dans les scripts et workflows de sauvegarde | TESTED LOCALLY | aucun (`github.io`, `/Goship-express-site/`, `goshipexpress`) |
+| Revue du 27/09 : `essai-production.py` complet, dont serveur PostgreSQL neuf (TEST 1), étape de stockage du workflow avec pannes (TEST 2, 3, 4), adresses (TEST 5), compteur (m4), séquences et détail des comptes (m5) | TESTED ON DISPOSABLE DATABASE | **141/141** |
+| Le même essai dans GitHub Actions (`essais.yml`, banc « Base — production », ubuntu-latest), commit `36c46f2` (branche de la PR #13, qui porte `05cf24e` de `sauvegarde-free`) | TESTED ON DISPOSABLE DATABASE (CI) | **141/141**, job 108590584732 ; les 10 autres bancs verts |
+| TEST 1 dans un conteneur `postgres:17` neuf (l'image du workflow), clients 17.11 ; puis la version d'avant correctif sur un conteneur neuf | TESTED ON DISPOSABLE DATABASE | PASS ; avant correctif : code 3, `role "anon" does not exist` |
+| Shell de GitHub pour `shell: bash` | journal réel (job 108556396045) | `bash --noprofile --norc -e -o pipefail {0}` |
 | Sauvegarde, stockage, restauration sur staging | TESTED ON STAGING | **non exécutable** : goship-staging n'existe pas |
 | Sauvegarde réelle de la production, envoi, restauration | VERIFIED ON PRODUCTION | **non exécuté** : secrets et stockage non posés |
 
@@ -475,13 +479,37 @@ perdues. Chaque passage publie l'âge réel de la copie vérifiée (`BACKUP AGE 
 
 ## 17. Verdict
 
-**READY WITH MANUAL ACTIONS**
+**READY WITH MANUAL ACTIONS** (revue du 27/09/2026)
 
-Le système est écrit, relu (`shellcheck`, `actionlint`) et éprouvé de bout en bout sur
-une base jetable portant le vrai schéma GoShip (106/106). Il ne protège **rien** tant
-que les actions 1 à 4 ne sont pas faites et qu'un passage de `sauvegarde.yml` n'est pas
-**vert en production**. D'ici là, rien ici ne doit être lu comme « BACKUP VERIFIED » ou
-« RESTORE VERIFIED » pour la production.
+Ce verdict tient à trois choses :
+
+- les deux défauts de la revue sont corrigés, preuves à l'appui :
+  - D1 : `postgres:17` neuf, et la version d'avant correctif qui y échoue ;
+  - D2 : l'étape réelle du workflow, pannes de A et de B, shell réel de GitHub ;
+- m1 et m4 sont corrigés et éprouvés ;
+- tous les essais de la branche passent : 141/141 en local et dans GitHub Actions.
+
+Aucune autre erreur critique n'est connue.
+
+Ce verdict ne dit **pas** que la production est sauvegardée :
+
+- aucune sauvegarde de la vraie base n'existe encore ;
+- la connexion au Session pooler depuis un runner, le fournisseur de stockage réel et
+  la restauration dans un vrai projet Supabase ne sont **pas prouvés** ;
+- m2 (droits du schéma public) et m5 (comptes Auth) restent **NOT YET PROVEN** jusqu'au
+  test sur goship-staging.
+
+Rien ici ne doit être lu comme « BACKUP VERIFIED » ou « RESTORE VERIFIED » pour la
+production.
+
+Prochaines étapes, dans l'ordre, sans autre développement d'ici là :
+
+1. configurer les secrets GitHub ;
+2. configurer le stockage externe ;
+3. faire le premier backup réel ;
+4. vérifier ce backup ;
+5. tester la restauration sur goship-staging (tranche m2 et m5) ;
+6. seulement ensuite, préparer la mise en production.
 
 Critères de la mission :
 
@@ -491,14 +519,14 @@ Critères de la mission :
 | C2 | compressé | oui (format custom de `pg_dump`) — base jetable |
 | C3 | chiffré avec age | TESTED ON DISPOSABLE DATABASE |
 | C4 | stocké hors du dépôt | TESTED ON DISPOSABLE DATABASE (rclone, stockage local) ; fournisseur réel : non |
-| C5 | checksum vérifié | TESTED ON DISPOSABLE DATABASE (y compris refus d'un fichier altéré) |
-| C6 | rétention | TESTED ON DISPOSABLE DATABASE |
+| C5 | checksum vérifié | TESTED ON DISPOSABLE DATABASE (y compris refus d'un fichier altéré, relecture distante altérée) |
+| C6 | rétention | TESTED ON DISPOSABLE DATABASE (minimum 7, 3 suppressions au plus ; aucune règle d'âge) |
 | C7 | téléchargement | TESTED ON DISPOSABLE DATABASE |
 | C8 | déchiffrement | TESTED ON DISPOSABLE DATABASE |
-| C9 | restauration | TESTED ON DISPOSABLE DATABASE |
-| C10 | restauration vérifiée | TESTED ON DISPOSABLE DATABASE |
-| C11 | secrets jamais exposés | TESTED ON DISPOSABLE DATABASE (journaux inspectés) + recherche dans le dépôt |
+| C9 | restauration | TESTED ON DISPOSABLE DATABASE, dont `postgres:17` neuf |
+| C10 | restauration vérifiée | TESTED ON DISPOSABLE DATABASE (tables, RLS, fonctions, contraintes, verrous, données, séquences, comptes) |
+| C11 | secrets jamais exposés | TESTED ON DISPOSABLE DATABASE (journaux inspectés, adresse jamais affichée) + recherche dans tout l'historique |
 | C12 | lancement manuel | lancé à la main dans GitHub Actions (exécution 36298048867) |
 | C13 | planification | IMPLEMENTED (`cron` quotidien, depuis `main`) |
-| C14 | échec réel du workflow | secrets absents : **rouge dans GitHub Actions** (exécution 36298048867) ; chaque autre échec : TESTED ON DISPOSABLE DATABASE (codes de sortie des scripts) |
+| C14 | échec réel du workflow | secrets absents : **rouge dans GitHub Actions** (exécution 36298048867) ; destination A ou B configurée en panne : l'étape échoue (étape réelle, shell réel de GitHub, banc) |
 | C15 | documentation reproductible | `outils/README-backup.md` |
