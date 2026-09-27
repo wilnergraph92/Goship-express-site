@@ -168,9 +168,17 @@ Habillage : `assets/css/tableau.css`, chargé par `admin.html` seulement —
 menu latéral (les onglets `data-onglet-vue`), barre du haut (titre de la
 vue, date et heure de l'appareil, recherche rapide, cloche des alertes,
 réglages, compte). Préfixe `gs-td__` (`gs-app` est déjà pris par la section
-de l'application mobile du site). Les réglages sont des préférences
-d'affichage gardées en `localStorage` (`gse-tableau-reglages`) : aucune
-donnée, aucune permission.
+de l'application mobile du site). Menu en trois groupes (Opérations,
+Finance, Gestion) ; un groupe dont le rôle ne peut rien ouvrir disparaît.
+Les réglages sont des préférences d'affichage gardées en `localStorage`
+(`gse-tableau-reglages`, dont l'apparence clair / sombre / système et les
+animations ; `gse-tableau-disposition` pour les blocs de la vue générale et
+leur ordre) : aucune donnée, aucune permission. `assets/js/apparence.js`,
+chargé sans `defer`, pose `data-apparence` sur `<html>` avant le premier
+affichage ; l'apparence sombre est la fin de `tableau.css` (la contrepartie de
+chaque couleur claire, puis des retouches) : une nouvelle règle claire du
+tableau de bord demande sa ligne sombre. La vue générale n'a jamais la classe
+`gs-apercu` (celle de l'aperçu d'e-mail, à hauteur fixe).
 
 `outils/supabase-tableau-de-bord.sql` : fonctions de **lecture** seulement
 (`vue_generale`, `colis_a_traiter`, `recherche_rapide`, `clients_soldes`,
@@ -184,6 +192,19 @@ que les parties que le rôle peut voir. Périodes en jours de Santo Domingo
 (`bornes_periode`). Copie démo dans `api.js` (`vueGenerale`,
 `bornesPeriode`, `jourSD`…) ; `essai-tableau.py` compare la forme des
 réponses des deux côtés.
+
+Les filtres de la vue générale (pays, ville, mode de transport, statut, lieu
+actuel — « agence ») : `vue_generale_filtree`, section 11 de
+`supabase-analytics.sql`, sous `shipments.view` (comparaison et routes sous
+`reports.view`). C'est `vue_generale` entière dont les parties qui se
+comptent en colis (`colis`, `activite`, plus `comparaison` et `routes`) sont
+recalculées sur les colis filtrés, par des copies filtrées de
+`tableau_colis`, `tableau_activite` et `analytics_routes` : sans filtre,
+chaque partie vaut l'originale (`essai-analytics.py`, section M). L'argent,
+les clients, le scanner et les alertes ne se découpent pas par colis et
+restent entiers. Une base sans cette fonction répond « absent » : la page
+reprend `vue_generale` et désactive les filtres. Copie démo :
+`vueGeneraleFiltree`, `filtresColisDemo`, `optionsFiltresDemo`.
 
 ### Analytics
 

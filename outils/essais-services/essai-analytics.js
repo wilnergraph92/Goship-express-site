@@ -108,6 +108,7 @@ function cles(v, chemin) {
     if (f0 && !(f0.paye_usd > 0)) await A.annulerFacture(f0.id, 'Essai de forme');
     var formes = {};
     for (var m of MODULES) formes[m] = cles(await A.analytics(m, { periode: '30j' }));
+    formes.vue_filtree = cles(await A.vueGeneraleFiltree({ periode: '30j', filtres: { pays: 'HT' } }));
     fs.writeSync(1, JSON.stringify(formes));
     process.exit(0);
   }
@@ -226,6 +227,45 @@ function cles(v, chemin) {
             sc.echecs_suivis], [1, true, false]);
   var ro = await A.analytics('routes', { periode: '30j' });
   verifier('routes : une seule origine, Miami', [ro.origine, ro.origines_distinctes], ['Miami (Medley), FL', 1]);
+
+  console.log('\nF. La vue générale filtrée');
+  for (var per2 of ['30j', 'aujourdhui', 'annee']) {
+    var vg = await A.vueGenerale({ periode: per2 });
+    var vf = await A.vueGeneraleFiltree({ periode: per2, filtres: {} });
+    var sy = await A.analytics('synthese', { periode: per2 });
+    verifier(per2 + ' sans filtre : colis, activité, facturation, alertes = vue générale',
+             [vf.colis, vf.activite, vf.facturation, vf.alertes], [vg.colis, vg.activite, vg.facturation, vg.alertes]);
+    verifier(per2 + ' sans filtre : routes, comparaison = Analytics',
+             [vf.routes, vf.comparaison.recus, vf.comparaison.poids, vf.comparaison.livres],
+             [await A.analytics('routes', { periode: per2 }), sy.mesures.recus, sy.mesures.poids, sy.mesures.livres]);
+  }
+  var tous = (await A.colis({ parPage: 100 })).lignes;
+  function compte(f) { return tous.filter(f).length; }
+  for (var cas of [[{ pays: 'do' }, function (c) { return c.pays_destination === 'DO'; }],
+                   [{ service: 'maritime' }, function (c) { return c.service === 'maritime'; }],
+                   [{ statut: 'actifs' }, function (c) { return c.statut !== 'livre'; }],
+                   [{ pays: 'HT', statut: 'recu' }, function (c) { return c.pays_destination === 'HT' && c.statut === 'recu'; }]]) {
+    var r2 = await A.vueGeneraleFiltree({ periode: 'annee', filtres: cas[0] });
+    verifier(JSON.stringify(cas[0]) + ' : total = les colis qui passent le filtre', r2.colis.total, compte(cas[1]));
+    verifier('   … routes et événements filtrés aussi',
+             r2.routes.routes.every(function (x) { return !cas[0].pays || x.pays === cas[0].pays.toUpperCase(); }) &&
+             r2.activite.every(function (e) { return tous.some(function (c) { return c.numero === e.numero && cas[1](c); }); }), true);
+  }
+  var villeDemo = tous.filter(function (c) { return c.destination; })[0];
+  var rv = await A.vueGeneraleFiltree({ periode: 'annee', filtres: { ville: '  ' + villeDemo.destination.toUpperCase() + ' ' } });
+  verifier('ville : casse et espaces ignorés', [rv.filtres.ville, rv.colis.total],
+           [villeDemo.destination.trim().toLowerCase(), compte(function (c) { return String(c.destination || '').trim().toLowerCase() === villeDemo.destination.trim().toLowerCase(); })]);
+  verifier('options : les pays comptent tous les colis', rv.options.pays.reduce(function (t, x) { return t + x.colis; }, 0), tous.length);
+  for (var mauvais of [{ agence: 'x' }, { pays: 'FR' }, { service: 'fusee' }, { statut: 'perdu' }, { pays: 3 }]) {
+    verifier('refusé : ' + JSON.stringify(mauvais), await code(A.vueGeneraleFiltree({ filtres: mauvais })), 'INVALID_INPUT');
+  }
+  await comme('employe');
+  var ve = await A.vueGeneraleFiltree({ periode: '30j', filtres: { pays: 'HT' } });
+  verifier('un employé : colis et activité filtrés, ni comparaison ni routes', [ve.filtrees, 'comparaison' in ve, 'routes' in ve],
+           [['colis', 'activite'], false, false]);
+  await comme('client');
+  verifier('un client : refusé', await code(A.vueGeneraleFiltree({})), 'non-autorise');
+  await comme('admin');
 
   var nb = resultats.filter(Boolean).length;
   console.log('\n' + resultats.length + ' vérifications, ' + nb + ' réussies.');

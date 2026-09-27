@@ -161,6 +161,11 @@ ICONES = {
     'chevron-down': '<path d="m6 9 6 6 6-6"/>',
     'calendar': '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
     'arrow-up-right': '<path d="M7 17 17 7M7 7h10v10"/>',
+    'wallet': '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    'activity': '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    'filter': '<path d="M3 5h18M6 12h12M10 19h4"/>',
+    'arrow-up': '<path d="m18 15-6-6-6 6"/>',
+    'arrow-down': '<path d="m6 9 6 6 6-6"/>',
     'chart': '<path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/>',
     'globe': '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/>',
 }

@@ -7,6 +7,29 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — tableau de bord : filtres, apparence, direct, disposition
+
+Migration facultative, en lecture seule : relancer `supabase-analytics.sql` puis
+`supabase-mobile.sql` (la chaîne veut qu'on relance ce qui suit) ajoute
+`vue_generale_filtree` et ses aides. Aucune table, aucune donnée, aucune règle ne
+change. Sans elle, le site publié fonctionne : les filtres sont désactivés et le
+disent.
+
+- Correction : le menu latéral défilait avec la page et laissait un blanc dessous
+  (la vue générale portait par erreur la classe à hauteur fixe de l'aperçu d'e-mail,
+  depuis `site-2026.09.27`). Il reste fixe sur toute la hauteur.
+- Menu en trois groupes : Opérations, Finance (dont « Encaissements », le module
+  Finances des Analytics), Gestion.
+- Vue générale : filtres par pays, destination, mode de transport, statut et agence
+  (lieu actuel du colis), comptés par la base ; les cartes que les filtres ne
+  découpent pas le disent.
+- Direct : état (en direct, mise à jour chaque minute, en pause), heure des chiffres,
+  « Suspendre / Reprendre le direct ».
+- « Personnaliser » : blocs affichés et leur ordre, gardés sur l'appareil.
+- Apparence claire, sombre ou système (engrenage de la barre, ou Réglages), et
+  animations au défilement avec un léger relief, coupées par le réglage
+  « Animations » ou quand le système demande moins d'animations.
+
 ## site-2026.09.27 — nouvelle vue générale du tableau de bord (publié le 27/09/2026)
 
 Aucune migration, aucune donnée modifiée : la page ne lit que `vue_generale` et les

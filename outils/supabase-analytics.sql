@@ -34,6 +34,13 @@
 -- la facturation depuis la Phase 6. Aucune permission nouvelle. Un employé,
 -- un client ou un visiteur est refusé.
 --
+-- La vue générale filtrée (section 11, ajoutée le 27/09/2026) est la vue
+-- générale du tableau de bord découpée par pays, ville, mode de transport,
+-- statut ou lieu : elle demande shipments.view, comme vue_generale, et ne
+-- rend ses comparaisons et ses routes qu'avec reports.view. Elle n'ajoute que
+-- des fonctions de lecture : une base qui ne l'a pas encore garde un tableau
+-- de bord entier, sans les filtres.
+--
 -- Contenu :
 --    1. index
 --    2. périodes et comparaison
@@ -45,7 +52,8 @@
 --    8. routes et destinations
 --    9. scanner
 --   10. qualité des données
---   11. droits et contrôle
+--   11. la vue générale filtrée
+--   12. droits et contrôle
 -- =============================================================================
 
 
@@ -968,7 +976,338 @@ end;
 $$;
 
 
--- 11. Droits -------------------------------------------------------------------------------
+-- 11. La vue générale filtrée (27/09/2026) -----------------------------------------------
+-- Les filtres de la vue générale : pays de destination, ville, mode de transport
+-- (service), statut actuel, lieu actuel (l'agence où attend un colis « Disponible », le
+-- lieu de sa dernière étape pour les autres : la base n'a pas de table d'agences). Ils
+-- ne portent que sur des colonnes du colis, donc sur ce qui se compte en colis : reçus,
+-- livrés, en cours, poids, jours, statuts, sans mouvement, action requise, l'activité,
+-- les routes, et la comparaison à la période précédente. L'argent et les clients ne se
+-- découpent pas par colis (une facture en porte plusieurs, parfois vers deux pays) :
+-- ces parties restent celles de vue_generale, entières, de même que les alertes, et la
+-- réponse dit lesquelles sont filtrées (« filtrees »).
+-- Sans filtre, chaque partie filtrée vaut exactement celle de vue_generale,
+-- d'analytics_mesures et d'analytics_routes : essai-analytics.py le vérifie. Les parties
+-- ci-dessous sont des copies filtrées de tableau_colis, tableau_activite et
+-- analytics_routes plutôt que des modifications de celles-ci : rien de ce qui est déjà
+-- en service ne change.
+
+-- Les filtres reçus → les mêmes, vérifiés et mis en forme (une clé vide est absente).
+--   pays     HT, DO ou US            service  aerien, maritime ou terrestre
+--   statut   l'un des huit, ou « actifs » (tout sauf livré)
+--   ville    la destination saisie, casse et espaces ignorés (comme les routes)
+--   lieu     le lieu actuel du colis, casse et espaces ignorés
+create or replace function public.filtres_colis(p_filtres jsonb)
+returns jsonb
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  k text;
+  v text;
+  r jsonb := '{}'::jsonb;
+begin
+  if p_filtres is null or p_filtres = 'null'::jsonb then
+    return r;
+  end if;
+  if jsonb_typeof(p_filtres) <> 'object' then
+    perform public.erreur_metier('INVALID_INPUT', 'Les filtres forment un objet.');
+  end if;
+  for k in select jsonb_object_keys(p_filtres) loop
+    if k not in ('pays', 'ville', 'service', 'statut', 'lieu') then
+      perform public.erreur_metier('INVALID_INPUT', 'Filtre inconnu : ' || left(k, 20) || '.');
+    end if;
+    if jsonb_typeof(p_filtres -> k) not in ('string', 'null') then
+      perform public.erreur_metier('INVALID_INPUT', 'Le filtre « ' || k || ' » est un texte.');
+    end if;
+    v := nullif(lower(trim(coalesce(p_filtres ->> k, ''))), '');
+    continue when v is null;
+    if k = 'pays' then
+      v := upper(v);
+      if v not in ('HT', 'DO', 'US') then
+        perform public.erreur_metier('INVALID_INPUT', 'Pays inconnu : ' || left(v, 10) || '.');
+      end if;
+    elsif k = 'service' and v not in ('aerien', 'maritime', 'terrestre') then
+      perform public.erreur_metier('INVALID_INPUT', 'Mode de transport inconnu : ' || left(v, 20) || '.');
+    elsif k = 'statut' and v not in ('actifs', 'recu', 'emballe', 'embarque', 'distribution', 'succursale',
+                                     'disponible', 'livre', 'incident') then
+      perform public.erreur_metier('INVALID_INPUT', 'Statut inconnu : ' || left(v, 20) || '.');
+    elsif k in ('ville', 'lieu') and length(v) > 120 then
+      perform public.erreur_metier('INVALID_INPUT', 'Le filtre « ' || k || ' » fait 120 caractères au plus.');
+    end if;
+    r := r || jsonb_build_object(k, v);
+  end loop;
+  return r;
+end;
+$$;
+
+-- Un colis passe-t-il les filtres (déjà mis en forme par filtres_colis) ?
+create or replace function public.colis_filtre(p_colis public.colis, p_filtres jsonb)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select (p_filtres ->> 'pays' is null or p_colis.pays_destination = p_filtres ->> 'pays')
+     and (p_filtres ->> 'service' is null or p_colis.service = p_filtres ->> 'service')
+     and (p_filtres ->> 'statut' is null or p_colis.statut = p_filtres ->> 'statut'
+          or (p_filtres ->> 'statut' = 'actifs' and p_colis.statut <> 'livre'))
+     and (p_filtres ->> 'ville' is null or lower(trim(p_colis.destination)) = p_filtres ->> 'ville')
+     and (p_filtres ->> 'lieu' is null or lower(trim(p_colis.lieu)) = p_filtres ->> 'lieu')
+$$;
+
+-- Les colis de la vue générale (tableau_colis), pour les seuls colis filtrés
+create or replace function public.tableau_colis_filtre(p_debut timestamptz, p_fin timestamptz, p_jour_debut date,
+                                                       p_jour_fin date, p_jours integer, p_filtres jsonb)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  with co as materialized (
+    select c.id, c.statut, c.recu_le, c.poids_lb from public.colis c where public.colis_filtre(c, p_filtres)
+  ), stock as (
+    select count(*) as total,
+           count(*) filter (where statut <> 'livre') as actifs,
+           count(*) filter (where statut = 'recu') as recu,
+           count(*) filter (where statut = 'emballe') as emballe,
+           count(*) filter (where statut = 'embarque') as embarque,
+           count(*) filter (where statut = 'distribution') as distribution,
+           count(*) filter (where statut = 'succursale') as succursale,
+           count(*) filter (where statut = 'disponible') as disponible,
+           count(*) filter (where statut = 'livre') as livre,
+           count(*) filter (where statut = 'incident') as incident,
+           count(*) filter (where recu_le >= p_debut and recu_le < p_fin) as recus_periode,
+           coalesce(sum(poids_lb) filter (where recu_le >= p_debut and recu_le < p_fin), 0) as poids_periode
+    from co
+  ), livraisons as materialized (
+    select h.colis_id, min((h.cree_le at time zone 'America/Santo_Domingo')::date) as jour
+    from public.colis_historique h
+    where h.statut = 'livre' and h.statut_precedent is distinct from 'livre'
+      and h.cree_le >= p_debut and h.cree_le < p_fin
+      and h.colis_id in (select id from co)
+      and not exists (select 1 from public.colis_historique x where x.corrige_id = h.id)
+    group by h.colis_id
+  ), receptions as (
+    select (recu_le at time zone 'America/Santo_Domingo')::date as jour, count(*) as n
+    from co where recu_le >= p_debut and recu_le < p_fin
+    group by 1
+  ), immobiles as (
+    select count(*) as n
+    from co c
+    where c.statut <> 'livre'
+      and coalesce((select max(h.cree_le) from public.colis_historique h where h.colis_id = c.id), c.recu_le)
+          < now() - make_interval(days => p_jours)
+  )
+  select jsonb_build_object(
+    'total', s.total,
+    'actifs', s.actifs,
+    'statuts', jsonb_build_object('recu', s.recu, 'emballe', s.emballe, 'embarque', s.embarque,
+                                  'distribution', s.distribution, 'succursale', s.succursale,
+                                  'disponible', s.disponible, 'livre', s.livre, 'incident', s.incident),
+    'action_requise', s.incident,
+    'sans_mouvement', (select n from immobiles),
+    'recus_periode', s.recus_periode,
+    'poids_periode', s.poids_periode,
+    'livres_periode', (select count(*) from livraisons),
+    'par_jour', (select coalesce(jsonb_agg(jsonb_build_object(
+                          'jour', j.jour,
+                          'recus', coalesce(r.n, 0),
+                          'livres', coalesce(l.n, 0)) order by j.jour), '[]'::jsonb)
+                 from (select generate_series(p_jour_debut, p_jour_fin, interval '1 day')::date as jour) j
+                 left join receptions r on r.jour = j.jour
+                 left join (select jour, count(*) as n from livraisons group by jour) l on l.jour = j.jour))
+  from stock s
+$$;
+
+-- L'activité récente (tableau_activite), pour les seuls colis filtrés
+create or replace function public.tableau_activite_filtree(p_limite integer, p_filtres jsonb)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select coalesce(jsonb_agg(public.evenement_json(d.id)
+                            || jsonb_build_object('numero', d.numero, 'client', d.client,
+                                                  'libelle', public.types_evenement() -> d.type_evenement ->> 'libelle',
+                                                  'source', coalesce(d.metadonnees ->> 'source', ''))
+                            order by d.cree_le desc, d.id desc), '[]'::jsonb)
+  from (select h.id, h.cree_le, h.type_evenement, h.metadonnees, co.numero,
+               (select cl.code from public.clients cl where cl.id = co.client_id) as client
+        from public.colis_historique h join public.colis co on co.id = h.colis_id
+        where public.colis_filtre(co, p_filtres)
+        order by h.cree_le desc, h.id desc
+        limit p_limite) d
+$$;
+
+-- Reçus, poids et livrés d'une période (mêmes définitions qu'analytics_mesures), pour
+-- les seuls colis filtrés
+create or replace function public.mesures_colis_filtre(p_debut timestamptz, p_fin timestamptz, p_filtres jsonb)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'recus', (select count(*) from public.colis c
+              where c.recu_le >= p_debut and c.recu_le < p_fin and public.colis_filtre(c, p_filtres)),
+    'poids', (select coalesce(sum(c.poids_lb), 0) from public.colis c
+              where c.recu_le >= p_debut and c.recu_le < p_fin and public.colis_filtre(c, p_filtres)),
+    'livres', (select count(distinct e.colis_id)
+               from public.evenements_de_statut(p_debut, p_fin) e join public.colis c on c.id = e.colis_id
+               where e.vers = 'livre' and public.colis_filtre(c, p_filtres)))
+$$;
+
+-- Les routes et destinations (analytics_routes), pour les seuls colis filtrés
+create or replace function public.routes_filtrees(p_code text, p_jour_debut date, p_jour_fin date, p_debut timestamptz,
+                                                  p_fin timestamptz, p_prec_debut timestamptz, p_prec_fin timestamptz,
+                                                  p_filtres jsonb)
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  with periode as (
+    select c.id, c.pays_destination, c.service, c.poids_lb, c.statut, c.recu_le,
+           nullif(lower(trim(c.destination)), '') as ville
+    from public.colis c
+    where c.recu_le >= p_debut and c.recu_le < p_fin and public.colis_filtre(c, p_filtres)
+  ), livraisons as (
+    select e.colis_id, min(e.cree_le) as t
+    from public.evenements_de_statut(p_debut, 'infinity') e
+    where e.vers = 'livre' and e.colis_id in (select id from periode) group by e.colis_id
+  ), lignes as (
+    select l.colis_id, sum(l.montant_usd) as montant
+    from public.facture_lignes l join public.factures f on f.id = l.facture_id
+    where f.statut <> 'annulee' and l.colis_id in (select id from periode) group by l.colis_id
+  ), co as (
+    select pe.*, li.montant as facture, extract(epoch from lv.t - pe.recu_le) / 3600.0 as delai
+    from periode pe left join livraisons lv on lv.colis_id = pe.id left join lignes li on li.colis_id = pe.id
+  ), co_prec as (
+    select c.pays_destination, c.service, nullif(lower(trim(c.destination)), '') as ville
+    from public.colis c
+    where c.recu_le >= p_prec_debut and c.recu_le < p_prec_fin and public.colis_filtre(c, p_filtres)
+  )
+  select jsonb_build_object(
+    'periode', jsonb_build_object('code', p_code, 'debut', p_jour_debut, 'fin', p_jour_fin),
+    'origine', 'Miami (Medley), FL',
+    'origines_distinctes', 1,
+    'routes', coalesce((select jsonb_agg(jsonb_build_object(
+                'pays', x.pays_destination, 'service', x.service, 'colis', x.n, 'poids', x.poids,
+                'facture', x.facture, 'livres', x.livres,
+                'taux_livre', case when x.n > 0 then round(x.livres * 100.0 / x.n, 1) end,
+                'delai_moyen_h', round(x.delai::numeric, 1),
+                'colis_precedents', (select count(*) from co_prec cp
+                                     where cp.pays_destination = x.pays_destination and cp.service = x.service))
+              order by x.n desc, x.pays_destination, x.service)
+            from (select pays_destination, service, count(*) as n, coalesce(sum(poids_lb), 0) as poids,
+                         coalesce(sum(facture), 0) as facture, count(*) filter (where statut = 'livre') as livres,
+                         avg(delai) filter (where delai >= 0) as delai
+                  from co group by pays_destination, service) x), '[]'::jsonb),
+    'pays', coalesce((select jsonb_agg(jsonb_build_object('pays', x.pays_destination, 'colis', x.n,
+                                                          'colis_precedents', x.np) order by x.n desc, x.pays_destination)
+                      from (select coalesce(a.pays_destination, b.pays_destination) as pays_destination,
+                                   coalesce(a.n, 0) as n, coalesce(b.n, 0) as np
+                            from (select pays_destination, count(*) as n from co group by 1) a
+                            full join (select pays_destination, count(*) as n from co_prec group by 1) b
+                              on b.pays_destination = a.pays_destination) x), '[]'::jsonb),
+    'villes', coalesce((select jsonb_agg(jsonb_build_object('ville', x.nom, 'pays', x.pays_destination, 'colis', x.n,
+                                                            'colis_precedents', x.np) order by x.n desc, x.nom)
+                        from (select v.nom, v.pays_destination, v.n,
+                                     (select count(*) from co_prec cp where cp.ville = v.ville
+                                        and cp.pays_destination = v.pays_destination) as np
+                              from (select ville, pays_destination, count(*) as n,
+                                           min(initcap(ville)) as nom
+                                    from co where ville is not null group by ville, pays_destination
+                                    order by count(*) desc, ville limit 10) v) x), '[]'::jsonb),
+    'sans_ville', (select count(*) from co where ville is null))
+$$;
+
+-- Les choix des listes de filtres : ce que les colis portent vraiment, avec leur nombre
+-- (tous les colis, maintenant). Villes et lieux : les 60 plus fréquents, écrits comme la
+-- plupart des colis les écrivent.
+create or replace function public.options_filtres()
+returns jsonb
+language sql
+stable
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'pays', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'colis', x.n) order by x.n desc, x.v), '[]'::jsonb)
+             from (select pays_destination as v, count(*) as n from public.colis group by 1) x),
+    'services', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'colis', x.n) order by x.n desc, x.v), '[]'::jsonb)
+                 from (select service as v, count(*) as n from public.colis group by 1) x),
+    'statuts', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'colis', x.n) order by x.n desc, x.v), '[]'::jsonb)
+                from (select statut as v, count(*) as n from public.colis group by 1) x),
+    'villes', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'libelle', x.l, 'colis', x.n)
+                                         order by x.n desc, x.v), '[]'::jsonb)
+               from (select lower(trim(destination)) as v, mode() within group (order by trim(destination)) as l,
+                            count(*) as n
+                     from public.colis where trim(destination) <> ''
+                     group by 1 order by count(*) desc, 1 limit 60) x),
+    'lieux', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'libelle', x.l, 'colis', x.n)
+                                        order by x.n desc, x.v), '[]'::jsonb)
+              from (select lower(trim(lieu)) as v, mode() within group (order by trim(lieu)) as l, count(*) as n
+                    from public.colis where trim(lieu) <> ''
+                    group by 1 order by count(*) desc, 1 limit 60) x))
+$$;
+
+-- La vue générale, filtrée : vue_generale entière (mêmes permissions, mêmes parties),
+-- dont les parties « colis » et « activite » ne comptent que les colis filtrés, plus :
+--   filtres      les filtres appliqués, mis en forme
+--   filtrees     les parties filtrées
+--   options      les choix possibles de chaque filtre
+--   comparaison  reçus, poids et livrés filtrés contre la période précédente
+--                (reports.view, comme les Analytics)
+--   routes       analytics_routes, filtrée (reports.view)
+create or replace function public.vue_generale_filtree(p_periode text default '30j', p_debut date default null,
+                                                       p_fin date default null, p_jours integer default 7,
+                                                       p_filtres jsonb default '{}'::jsonb)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  f jsonb;
+  r jsonb;
+  p record;
+  a record;
+  v_filtrees jsonb := '["colis"]'::jsonb;
+begin
+  perform public.exiger_permission('shipments.view');
+  f := public.filtres_colis(p_filtres);
+  r := public.vue_generale(p_periode, p_debut, p_fin, p_jours);
+  select * into p from public.bornes_periode(p_periode, p_debut, p_fin);
+  r := r || jsonb_build_object(
+    'filtres', f,
+    'options', public.options_filtres(),
+    'colis', public.tableau_colis_filtre(p.debut, p.fin, p.jour_debut, p.jour_fin, coalesce(p_jours, 7), f));
+  if public.peut('shipments.view_history') then
+    r := r || jsonb_build_object('activite', public.tableau_activite_filtree(12, f));
+    v_filtrees := v_filtrees || '["activite"]'::jsonb;
+  end if;
+  if public.peut('reports.view') then
+    select * into a from public.bornes_analytics(p_periode, p_debut, p_fin);
+    r := r || jsonb_build_object(
+      'comparaison', (select jsonb_build_object(
+                        'recus', public.comparer_valeurs((x ->> 'recus')::numeric, (y ->> 'recus')::numeric),
+                        'poids', public.comparer_valeurs((x ->> 'poids')::numeric, (y ->> 'poids')::numeric),
+                        'livres', public.comparer_valeurs((x ->> 'livres')::numeric, (y ->> 'livres')::numeric),
+                        'precedente', jsonb_build_object('debut', a.prec_jour_debut, 'fin', a.prec_jour_fin))
+                      from (select public.mesures_colis_filtre(a.debut, a.fin, f) as x,
+                                   public.mesures_colis_filtre(a.prec_debut, a.prec_fin, f) as y) m),
+      'routes', public.routes_filtrees(a.code, a.jour_debut, a.jour_fin, a.debut, a.fin, a.prec_debut, a.prec_fin, f));
+    v_filtrees := v_filtrees || '["comparaison", "routes"]'::jsonb;
+  end if;
+  return r || jsonb_build_object('filtrees', v_filtrees);
+end;
+$$;
+
+
+-- 12. Droits -------------------------------------------------------------------------------
 -- Les outils internes ne s'appellent pas seuls ; les analytics demandent
 -- reports.view, vérifiée par chaque fonction.
 revoke execute on function public.bornes_analytics(text, date, date) from public, anon, authenticated;
@@ -978,6 +1317,13 @@ revoke execute on function public.evenements_de_statut(timestamptz, timestamptz)
 revoke execute on function public.analytics_mesures(timestamptz, timestamptz) from public, anon, authenticated;
 revoke execute on function public.creances_au(timestamptz) from public, anon, authenticated;
 revoke execute on function public.statistiques_durees(double precision[]) from public, anon, authenticated;
+revoke execute on function public.filtres_colis(jsonb) from public, anon, authenticated;
+revoke execute on function public.colis_filtre(public.colis, jsonb) from public, anon, authenticated;
+revoke execute on function public.tableau_colis_filtre(timestamptz, timestamptz, date, date, integer, jsonb) from public, anon, authenticated;
+revoke execute on function public.tableau_activite_filtree(integer, jsonb) from public, anon, authenticated;
+revoke execute on function public.mesures_colis_filtre(timestamptz, timestamptz, jsonb) from public, anon, authenticated;
+revoke execute on function public.routes_filtrees(text, date, date, timestamptz, timestamptz, timestamptz, timestamptz, jsonb) from public, anon, authenticated;
+revoke execute on function public.options_filtres() from public, anon, authenticated;
 
 revoke execute on function public.analytics_synthese(text, date, date) from public, anon;
 revoke execute on function public.analytics_serie(text, date, date, text) from public, anon;
@@ -987,6 +1333,7 @@ revoke execute on function public.analytics_finances(text, date, date) from publ
 revoke execute on function public.analytics_routes(text, date, date) from public, anon;
 revoke execute on function public.analytics_scanner(text, date, date) from public, anon;
 revoke execute on function public.analytics_qualite() from public, anon;
+revoke execute on function public.vue_generale_filtree(text, date, date, integer, jsonb) from public, anon;
 grant execute on function public.analytics_synthese(text, date, date) to authenticated;
 grant execute on function public.analytics_serie(text, date, date, text) to authenticated;
 grant execute on function public.analytics_operations(text, date, date) to authenticated;
@@ -995,11 +1342,13 @@ grant execute on function public.analytics_finances(text, date, date) to authent
 grant execute on function public.analytics_routes(text, date, date) to authenticated;
 grant execute on function public.analytics_scanner(text, date, date) to authenticated;
 grant execute on function public.analytics_qualite() to authenticated;
+grant execute on function public.vue_generale_filtree(text, date, date, integer, jsonb) to authenticated;
 
 
 -- Contrôle ---------------------------------------------------------------------------------
--- analytics_sur_15 : 15 ; ouvertes_aux_visiteurs : 0 ; creances_egales : true
--- (le montant dû reconstitué à cet instant vaut la somme des soldes).
+-- analytics_sur_15 : 15 ; filtree_sur_8 : 8 ; ouvertes_aux_visiteurs : 0 ;
+-- creances_egales : true (le montant dû reconstitué à cet instant vaut la somme
+-- des soldes).
 select (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public'
           and p.proname in ('bornes_analytics', 'comparer_valeurs', 'jour_sd', 'evenements_de_statut',
@@ -1007,7 +1356,12 @@ select (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronames
                             'analytics_serie', 'analytics_operations', 'analytics_clients', 'analytics_finances',
                             'analytics_routes', 'analytics_scanner', 'analytics_qualite'))           as analytics_sur_15,
        (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-        where n.nspname = 'public' and p.proname like 'analytics\_%'
+        where n.nspname = 'public'
+          and p.proname in ('filtres_colis', 'colis_filtre', 'tableau_colis_filtre', 'tableau_activite_filtree',
+                            'mesures_colis_filtre', 'routes_filtrees', 'options_filtres',
+                            'vue_generale_filtree'))                                               as filtree_sur_8,
+       (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and (p.proname like 'analytics\_%' or p.proname = 'vue_generale_filtree')
           and has_function_privilege('anon', p.oid, 'execute'))                                    as ouvertes_aux_visiteurs,
        (select public.creances_au(now()) = coalesce(sum(public.solde_usd(f)), 0)
         from public.factures f)                                                                     as creances_egales;
