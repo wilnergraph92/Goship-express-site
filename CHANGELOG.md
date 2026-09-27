@@ -53,12 +53,6 @@ production ; confirmation des adresses e-mail désactivée.
 - Équipe : onglet Notifications (règles, centre des envois, envois d'un colis) ;
   le dialogue d'un colis n'envoie plus lui-même d'e-mail ni de WhatsApp.
 - Essais : `essai-notifications.py` / `.js`, remis dans `essais.yml`.
-- Tableau de bord : la vue générale reprend la maquette Claude Design « GoShip
-  Dashboard » aux couleurs du logo (bleu nuit, orange, bleu), sur tous les écrans.
-  Chiffres de `vue_generale` et, pour les comptes qui voient les rapports, des
-  Analytics (comparaison à la période précédente, routes, villes, clients actifs).
-  Les blocs de la maquette sans donnée dans la base (marge, agences, filtres par
-  mode de transport, « mises à jour simulées ») n'ont pas été repris.
 
 ## site-2026.09.26 — outillage de production (publié le 26/09/2026)
 
