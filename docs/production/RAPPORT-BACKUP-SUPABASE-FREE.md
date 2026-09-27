@@ -106,6 +106,8 @@ Environnement GitHub `production` : `SUPABASE_DB_URL` (Session pooler),
 | `actionlint` 1.7.12 (avec shellcheck) sur `sauvegarde.yml`, `restauration-test.yml`, `essais.yml` | TESTED LOCALLY | 0 erreur |
 | `essai-production.py` complet (sections A à L) | TESTED ON DISPOSABLE DATABASE | **106/106** |
 | … dont la section L, sauvegarde autonome | TESTED ON DISPOSABLE DATABASE | **36/36** |
+| Le même essai dans GitHub Actions (`essais.yml`, banc « Base — production », ubuntu-latest, `rclone` du paquet Ubuntu), commit `f850c27` | TESTED ON DISPOSABLE DATABASE (CI) | **106/106**, job 108560447838 |
+| `sauvegarde.yml` réel dans GitHub Actions, sans secrets (lancé à la main sur la branche) | GitHub Actions, sans base | **rouge** à « Secrets posés ? », rien tenté contre la base, job « Alerte en cas d'échec » lancé ; exécution 36298048867 |
 | Recherche de secrets (`git grep` : clés age privées, chaînes de connexion avec mot de passe, `sb_secret_`, jetons GitHub, clés AWS) | TESTED LOCALLY | aucun |
 | Recherche du domaine du site dans les scripts et workflows de sauvegarde | TESTED LOCALLY | aucun (`github.io`, `/Goship-express-site/`, `goshipexpress`) |
 | Sauvegarde, stockage, restauration sur staging | TESTED ON STAGING | **non exécutable** : goship-staging n'existe pas |
@@ -168,9 +170,9 @@ la publication `supabase_realtime` créée deux fois dans l'épreuve.
 - Toute exécution contre la production ou goship-staging (pas de secrets, pas de réseau
   vers Supabase depuis ce conteneur, projet de staging inexistant).
 - Un vrai passage de `sauvegarde.yml` et de `restauration-test.yml` dans GitHub
-  Actions avec secrets (le paquet `rclone` d'Ubuntu, la connexion au Session pooler et
-  la lecture de `auth.users` par l'utilisateur de la chaîne de connexion n'y sont donc
-  **pas prouvés**).
+  Actions **avec** secrets : la connexion au Session pooler et la lecture de
+  `auth.users` par l'utilisateur de la chaîne de connexion ne sont donc **pas
+  prouvées** (le paquet `rclone` d'Ubuntu, lui, l'est : banc « production » en CI).
 - Un vrai fournisseur de stockage (Backblaze B2, Drive, R2…) : rclone a été éprouvé
   avec son stockage local ; le chemin vers un fournisseur n'est pas testé.
 - La restauration dans un vrai projet Supabase (schéma `auth` réel, extensions, Vault).
@@ -274,7 +276,7 @@ Critères de la mission :
 | C9 | restauration | TESTED ON DISPOSABLE DATABASE |
 | C10 | restauration vérifiée | TESTED ON DISPOSABLE DATABASE |
 | C11 | secrets jamais exposés | TESTED ON DISPOSABLE DATABASE (journaux inspectés) + recherche dans le dépôt |
-| C12 | lancement manuel | IMPLEMENTED (`workflow_dispatch`, validé par actionlint) |
+| C12 | lancement manuel | lancé à la main dans GitHub Actions (exécution 36298048867) |
 | C13 | planification | IMPLEMENTED (`cron` quotidien, depuis `main`) |
-| C14 | échec réel du workflow | IMPLEMENTED ; chaque script : TESTED ON DISPOSABLE DATABASE (codes de sortie) |
+| C14 | échec réel du workflow | secrets absents : **rouge dans GitHub Actions** (exécution 36298048867) ; chaque autre échec : TESTED ON DISPOSABLE DATABASE (codes de sortie des scripts) |
 | C15 | documentation reproductible | `outils/README-backup.md` |
