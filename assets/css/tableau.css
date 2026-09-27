@@ -207,6 +207,282 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
   .gs-tableau--analytics .gs-nombre{text-align:left}
 }
 
+/* ---- La vue générale (admin.html#apercu) -------------------------------------------
+   Mise en page de la maquette Claude Design « GoShip Dashboard », aux couleurs du logo :
+   bleu nuit (#061a3f, #0d2b6b), orange (#f4600d), bleu (#1f5fe0). Des cartes blanches
+   posées sur une grille souple : une carte dont la partie n'est pas visible pour le rôle
+   est masquée, et sa voisine prend toute la largeur. */
+.gs-vg{--vg-bord:#e6ebf3;--vg-doux:#6b7690;--vg-pale:#f3f6fb;--vg-barre:#e9eef6}
+.gs-vg__tete{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 20px;margin:4px 0 20px}
+.gs-vg__intro{min-width:0}
+.gs-vg__titre{margin:0;font-family:'Archivo','Manrope',sans-serif;font-size:22px;font-weight:800;line-height:1.25;letter-spacing:-.015em;color:var(--ink)}
+.gs-vg__route{display:inline-block;margin-left:6px;font-family:'Manrope',sans-serif;font-size:14.5px;font-weight:700;letter-spacing:0;color:var(--vg-doux)}
+.gs-vg__etat{display:flex;align-items:center;gap:8px;margin:8px 0 0;font-size:13.5px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__etat::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.14)}
+.gs-vg__etat:empty{display:none}
+.gs-vg__commandes{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.gs-vg__periode{display:flex;align-items:center;gap:6px;height:46px;padding:0 6px 0 14px;border:1px solid var(--vg-bord);border-radius:14px;background:#fff;box-shadow:var(--app-ombre);color:var(--ink)}
+.gs-vg__periode .gs-ico{flex:none;width:18px;height:18px}
+.gs-vg__periode .gs-admin-filtre{height:40px;min-width:0;padding:0 30px 0 6px;border:0;background-color:transparent;font-weight:800;box-shadow:none}
+.gs-vg__dates{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}
+.gs-vg__bouton{display:inline-flex;align-items:center;gap:8px;height:46px;padding:0 16px;border:1px solid var(--vg-bord);border-radius:14px;background:#fff;box-shadow:var(--app-ombre);color:var(--ink);font:inherit;font-size:14.5px;font-weight:800;white-space:nowrap;cursor:pointer;transition:border-color .2s ease,background-color .2s ease}
+.gs-vg__bouton:hover{border-color:var(--ink)}
+.gs-vg__bouton .gs-ico{width:17px;height:17px}
+.gs-vg__bouton--petit{height:38px;padding:0 12px;border-radius:12px;box-shadow:none;font-size:13.5px}
+.gs-vg__bouton--petit .gs-ico{width:15px;height:15px}
+
+.gs-vg__corps{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.gs-vg__corps>*{min-width:0}
+.gs-vg__corps[aria-busy="true"]{opacity:.6;transition:opacity .2s ease}
+.gs-vg__rangee{display:flex;flex-wrap:wrap;gap:20px}
+.gs-vg__rangee[hidden]{display:none}
+.gs-vg__rangee:not(:has(>:not([hidden]))){display:none}
+.gs-vg__carte .gs-kpi,.gs-vg__carte .gs-apercu__panneau{box-shadow:none}
+.gs-vg--7{flex:7 1 520px}
+.gs-vg--5{flex:5 1 340px}
+.gs-vg--8{flex:8 1 540px}
+.gs-vg--4{flex:4 1 300px}
+.gs-vg__carte{position:relative;min-width:0;margin:0;padding:22px 24px;border:1px solid var(--vg-bord);border-radius:22px;background:#fff;box-shadow:var(--app-ombre)}
+.gs-vg__carte[hidden]{display:none}
+.gs-vg__carte-tete{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:8px 16px;margin-bottom:16px}
+.gs-vg__carte-titre{display:flex;align-items:center;gap:10px;margin:0;font-family:'Archivo','Manrope',sans-serif;font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.gs-vg__carte-titre .gs-ico{width:20px;height:20px}
+.gs-vg__sous-titre{margin:4px 0 0;font-size:13.5px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__libelle{display:block;margin:0;font-size:14px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__grand{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:6px 0 0;font-family:'Archivo','Manrope',sans-serif;font-size:34px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+.gs-vg__note{margin:14px 0 0;font-size:12.5px;line-height:1.45;color:var(--vg-doux)}
+.gs-vg__vide{margin:0;padding:34px 12px;border:1px dashed #d6ddea;border-radius:16px;background:var(--vg-pale);font-size:14px;text-align:center;color:var(--vg-doux)}
+.gs-vg__puce{display:inline-block;flex:none;width:9px;height:9px;border-radius:50%}
+.gs-vg__puce--carre{border-radius:3px}
+.gs-vg__puce--halo{box-shadow:0 0 0 4px color-mix(in srgb,currentColor 16%,transparent)}
+.gs-vg__legende{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:13.5px;font-weight:700;color:#2d3850}
+.gs-vg__legende-item{display:inline-flex;align-items:center;gap:7px}
+.gs-vg__variation{display:inline-flex;align-items:center;padding:2px 8px;border-radius:8px;background:#eef2f8;color:#2d3850;font-family:'Manrope',sans-serif;font-size:12.5px;font-weight:800;letter-spacing:0;white-space:nowrap}
+.gs-vg__variation--hausse{background:#e8efff;color:#1a4fbd}
+.gs-vg__variation--baisse{background:#fff1e8;color:#b44407}
+
+/* Les quatre chiffres des colis, deux par deux */
+.gs-vg__carte--kpis{padding:0;overflow:hidden}
+.gs-vg__kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));height:100%}
+.gs-vg__kpi{display:flex;flex-direction:column;justify-content:space-between;gap:26px;min-width:0;min-height:170px;margin:0;padding:22px 24px;border:0;border-right:1px solid var(--vg-bord);border-bottom:1px solid var(--vg-bord);background:#fff;color:inherit;font:inherit;text-align:left}
+.gs-vg__kpi:nth-child(2n){border-right:0}
+.gs-vg__kpi:nth-last-child(-n+2){border-bottom:0}
+button.gs-vg__kpi{cursor:pointer;transition:background-color .2s ease}
+button.gs-vg__kpi:hover{background:#fafbfe}
+.gs-vg__kpi-tete{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.gs-vg__kpi-valeur{display:block;margin-top:6px;overflow:hidden;font-family:'Archivo','Manrope',sans-serif;font-size:32px;font-weight:800;line-height:1.1;letter-spacing:-.02em;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.gs-vg__kpi-pied{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0;font-size:13px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__picto{display:grid;flex:none;place-items:center;width:52px;height:52px;border-radius:50%}
+.gs-vg__picto svg{width:22px;height:22px}
+.gs-vg__picto--orange{background:rgba(244,96,13,.12);color:#f4600d}
+.gs-vg__picto--vert{background:#dcfce7;color:#15803d}
+.gs-vg__picto--bleu{background:#e8efff;color:#1f5fe0}
+.gs-vg__picto--marine{background:#e7edf9;color:#0d2b6b}
+
+/* Les graphiques */
+.gs-vg__graphe{position:relative}
+.gs-vg__graphe>.gs-vg__legende{margin-bottom:14px}
+.gs-vg__barres{display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;height:260px}
+.gs-vg__axe-y{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-end;margin:-7px 0;font-size:12px;font-weight:600;color:#94a0b8;font-variant-numeric:tabular-nums}
+.gs-vg__plan{position:relative;display:flex;align-items:flex-end;gap:10px;min-width:0;height:100%;padding:0 4px}
+.gs-vg__plan--dense{gap:3px}
+.gs-vg__grille{position:absolute;right:0;left:0;height:0;border-top:1px solid #edf1f7;pointer-events:none}
+.gs-vg__colonne{position:relative;display:flex;flex:1;align-items:flex-end;justify-content:center;min-width:0;height:100%;outline:0}
+.gs-vg__barre{display:block;width:100%;max-width:48px;border-radius:12px;background:var(--vg-barre);transition:background-color .2s ease}
+.gs-vg__plan--dense .gs-vg__barre{border-radius:5px}
+.gs-vg__colonne.is-pic .gs-vg__barre,.gs-vg__colonne.is-actif .gs-vg__barre{background:repeating-linear-gradient(135deg,#f4600d 0 6px,#ff8a45 6px 12px)}
+.gs-vg__plan:hover .gs-vg__colonne.is-pic:not(.is-actif) .gs-vg__barre{background:var(--vg-barre)}
+.gs-vg__livres{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border:2px solid #fff;border-radius:50%;background:#1f5fe0;box-shadow:0 2px 6px rgba(31,95,224,.4);pointer-events:none}
+.gs-vg__plan--dense .gs-vg__livres{width:7px;height:7px;margin:0 0 -3.5px -3.5px;border-width:1px}
+.gs-vg__axe-x{display:flex;justify-content:space-between;gap:8px;margin:10px 0 0 42px;font-size:12.5px;font-weight:600;color:#94a0b8}
+.gs-vg__aire-cadre+.gs-vg__axe-x{margin-left:0}
+.gs-vg__aire-cadre{position:relative;height:210px}
+.gs-vg__aire{display:block;width:100%;height:100%;overflow:visible}
+.gs-vg__trait{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.gs-vg__trait--facture{stroke:#f4600d}
+.gs-vg__trait--encaisse{stroke:#1f5fe0;stroke-dasharray:6 5}
+.gs-vg__cibles{position:absolute;inset:0;display:flex}
+.gs-vg__cible{flex:1}
+.gs-vg__repere{position:absolute;top:0;bottom:0;width:0;border-left:1px dashed #b8c3d8;pointer-events:none}
+.gs-vg__bulle{position:absolute;z-index:5;min-width:150px;padding:10px 12px;border-radius:12px;background:#061a3f;color:#fff;box-shadow:0 18px 36px -18px rgba(6,26,63,.9);font-size:13px;pointer-events:none}
+.gs-vg__bulle-titre{margin:0 0 4px;font-weight:700;color:#c9d4ec}
+.gs-vg__bulle-ligne{display:flex;align-items:center;gap:8px;margin:2px 0 0}
+.gs-vg__bulle-ligne span{flex:1}
+.gs-vg__bulle-ligne strong{font-variant-numeric:tabular-nums}
+
+/* Le règlement des factures : la couronne graduée */
+.gs-vg__anneau{position:relative;width:min(230px,100%);margin:4px auto 0;aspect-ratio:1}
+.gs-vg__couronne{display:block;width:100%;height:100%}
+.gs-vg__graduation{stroke:#e6ebf3;stroke-width:3.4;stroke-linecap:round}
+.gs-vg__graduation--pleine{stroke:#f4600d}
+.gs-vg__anneau-centre{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 22%;text-align:center}
+.gs-vg__anneau-centre strong{font-family:'Archivo','Manrope',sans-serif;font-size:34px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+.gs-vg__anneau-centre span{font-size:12.5px;font-weight:600;line-height:1.3;color:var(--vg-doux)}
+.gs-vg__chiffres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0 0}
+.gs-vg__chiffres div{padding:10px 12px;border-radius:14px;background:var(--vg-pale)}
+.gs-vg__chiffres dt{font-size:12.5px;font-weight:700;color:var(--vg-doux)}
+.gs-vg__chiffres dd{margin:2px 0 0;font-size:16px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums}
+.gs-vg__chiffres .gs-vg__chiffre-sous{margin:0;font-size:12px;font-weight:600;color:var(--vg-doux)}
+
+/* Les destinations */
+.gs-vg__pays{display:flex;flex-wrap:wrap;gap:0;margin:0 0 12px;padding:0;border:1px solid var(--vg-bord);border-radius:14px;list-style:none}
+.gs-vg__pays li{display:flex;flex:1 1 200px;align-items:center;gap:8px;padding:10px 16px;font-size:13.5px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__pays li+li{border-left:1px solid var(--vg-bord)}
+.gs-vg__pays strong{font-size:17px;font-weight:800;color:var(--ink)}
+.gs-vg__carte-geo{position:relative;overflow:hidden;border-radius:16px;background:linear-gradient(180deg,#f7f9fd,#fff)}
+.gs-vg__carte-svg{display:block;width:100%;height:auto}
+.gs-vg__carte-point{fill:#dde4ef}
+.gs-vg__terre{fill:#e7ecf5;stroke:#d3dbea;stroke-width:1.2;stroke-linejoin:round}
+.gs-vg__arc{fill:none;stroke-width:2.2;stroke-dasharray:6 7;stroke-linecap:round}
+.gs-vg__arc--HT{stroke:#f4600d}
+.gs-vg__arc--DO{stroke:#1f5fe0}
+.gs-vg__rond-ville{stroke:#fff;stroke-width:2.5}
+.gs-vg__ville--HT .gs-vg__rond-ville,.gs-vg__ville--HT .gs-vg__halo{fill:#f4600d}
+.gs-vg__ville--DO .gs-vg__rond-ville,.gs-vg__ville--DO .gs-vg__halo{fill:#1f5fe0}
+.gs-vg__depart .gs-vg__rond-ville,.gs-vg__depart .gs-vg__halo{fill:#061a3f}
+.gs-vg__halo{opacity:.16;transform-box:fill-box;transform-origin:center;animation:gs-vg-halo 2.6s ease-out infinite}
+@keyframes gs-vg-halo{0%{transform:scale(.7);opacity:.3}100%{transform:scale(1.35);opacity:0}}
+.gs-vg__etiquette{position:absolute;padding:5px 10px;border-radius:9px;background:#061a3f;color:#fff;font-size:12.5px;font-weight:800;white-space:nowrap;transform:translate(-50%,calc(-100% - 16px));pointer-events:none}
+.gs-vg__etiquette--depart{background:#fff;color:var(--ink);box-shadow:0 8px 20px -12px rgba(6,26,63,.6)}
+.gs-vg__etiquette--DO{transform:translate(-30%,20px);background:#1f5fe0}
+.gs-vg__etiquette--HT{transform:translate(-70%,20px);background:#f4600d}
+
+/* Les clients : la carte sombre */
+.gs-vg__carte--sombre{display:flex;flex-direction:column;overflow:hidden;border-color:transparent;background:radial-gradient(320px 240px at 100% 0,rgba(244,96,13,.36),transparent 70%),radial-gradient(300px 260px at 0 100%,rgba(31,95,224,.35),transparent 70%),linear-gradient(160deg,#0d2b6b 0%,#061a3f 60%,#04122e 100%);color:#fff;box-shadow:0 30px 60px -34px rgba(6,26,63,.9)}
+.gs-vg__carte--sombre .gs-vg__carte-titre{color:#fff}
+.gs-vg__rond{display:grid;flex:none;place-items:center;width:48px;height:48px;padding:0;border:0;border-radius:50%;background:#f4600d;color:#fff;box-shadow:0 14px 28px -12px rgba(244,96,13,.9);cursor:pointer;transition:transform .2s ease}
+.gs-vg__rond:hover{transform:translateY(-2px)}
+.gs-vg__rond .gs-ico{width:20px;height:20px}
+.gs-vg__clients{display:flex;flex:1;flex-direction:column;gap:6px;margin-top:22px}
+.gs-vg__clients-grand{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0}
+.gs-vg__clients-grand strong{font-family:'Archivo','Manrope',sans-serif;font-size:54px;font-weight:800;line-height:1;letter-spacing:-.03em}
+.gs-vg__clients-sous{margin:0;font-size:13.5px;font-weight:600;color:#c9d4ec}
+.gs-vg__clients-ligne{display:flex;align-items:center;gap:10px;margin:14px 0 26px;padding:12px 14px;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.06);font-size:14px;color:#c9d4ec}
+.gs-vg__clients-ligne>span:first-child{flex:1}
+.gs-vg__clients-ligne strong{font-size:18px;color:#fff}
+.gs-vg__carte--sombre .gs-vg__variation{background:rgba(255,255,255,.14);color:#fff}
+.gs-vg__carte--sombre .gs-vg__variation--hausse{background:#c7ff4f;color:#12310a}
+.gs-vg__carte--sombre .gs-vg__variation--baisse{background:#ffd4b8;color:#6b2604}
+.gs-vg__jauge{position:relative;margin-top:auto;overflow:hidden;border-radius:16px;background:rgba(255,255,255,.1)}
+.gs-vg__jauge-plein{position:absolute;inset:0 auto 0 0;background:repeating-linear-gradient(135deg,#f4600d 0 10px,#ff7b2f 10px 20px)}
+.gs-vg__jauge-texte{position:relative;margin:0;padding:16px 18px;font-size:14px;font-weight:600;color:#fff}
+.gs-vg__jauge-texte strong{margin-right:4px;font-size:22px;font-weight:800}
+
+/* À surveiller : une bande de chiffres cliquables */
+.gs-vg__bande{padding:0;overflow:hidden}
+.gs-vg__surveiller{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:0;padding:0;list-style:none}
+.gs-vg__surveiller li{min-width:0;border-right:1px solid var(--vg-bord)}
+.gs-vg__surveiller li:last-child{border-right:0}
+.gs-vg__surveiller-case{display:flex;flex-direction:column;gap:6px;width:100%;height:100%;padding:20px 22px;border:0;background:none;color:inherit;font:inherit;text-align:left}
+button.gs-vg__surveiller-case{cursor:pointer;transition:background-color .2s ease}
+button.gs-vg__surveiller-case:hover{background:#fafbfe}
+.gs-vg__surveiller-nom{display:flex;align-items:center;gap:10px;font-size:13.5px;font-weight:700;color:#4a5670}
+.gs-vg__surveiller-valeur{overflow:hidden;font-family:'Archivo','Manrope',sans-serif;font-size:26px;font-weight:800;letter-spacing:-.02em;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.gs-vg__surveiller-case.is-vif .gs-vg__surveiller-valeur{color:#b42318}
+.gs-vg__surveiller-sous{font-size:12.5px;font-weight:600;color:var(--vg-doux)}
+
+/* Les colis par statut */
+.gs-vg__donut{position:relative;width:min(200px,100%);margin:0 auto 14px;aspect-ratio:1}
+.gs-vg__anneau-statuts{display:block;width:100%;height:100%;transform:rotate(0deg)}
+.gs-vg__anneau-fond{fill:none;stroke:#eef2f8;stroke-width:22}
+.gs-vg__donut-centre{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gs-vg__donut-centre strong{font-family:'Archivo','Manrope',sans-serif;font-size:32px;font-weight:800;color:var(--ink)}
+.gs-vg__donut-centre span{font-size:13px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__statuts{display:grid;gap:2px;margin:0;padding:0;list-style:none}
+.gs-vg__statut{display:grid;grid-template-columns:minmax(0,1fr) auto 52px;align-items:center;gap:10px;width:100%;min-height:36px;padding:6px 8px;border:0;border-radius:10px;background:none;color:inherit;font:inherit;font-size:14px;text-align:left;cursor:pointer}
+.gs-vg__statut:hover{background:var(--vg-pale)}
+.gs-vg__statut-nom{display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden;font-weight:700;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.gs-vg__statut-nombre{font-size:13.5px;color:var(--vg-doux);font-variant-numeric:tabular-nums}
+.gs-vg__statut-part{font-size:13.5px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+
+/* La chaîne logistique */
+.gs-vg__chaine{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;margin:0;padding:0;list-style:none}
+.gs-vg__etape{position:relative;min-width:0}
+.gs-vg__etape:not(:last-child)::after{content:"";position:absolute;top:19px;right:12px;left:52px;height:2px;border-radius:2px;background:#e3e9f3}
+.gs-vg__etape-bouton{display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:100%;padding:2px 14px 6px 2px;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.gs-vg__etape-rang{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#f4600d;color:#fff;font-size:14px;font-weight:800;box-shadow:0 10px 20px -12px rgba(244,96,13,.9)}
+.gs-vg__etape--fin .gs-vg__etape-rang{background:#16a34a;box-shadow:0 10px 20px -12px rgba(22,163,74,.9)}
+.gs-vg__etape-nom{min-height:2.6em;font-size:13.5px;font-weight:700;line-height:1.3;color:#4a5670}
+.gs-vg__etape-nombre{font-family:'Archivo','Manrope',sans-serif;font-size:28px;font-weight:800;line-height:1;color:var(--ink)}
+.gs-vg__etape-piste,.gs-vg__taux-piste{position:relative;display:block;width:100%;height:6px;overflow:hidden;border-radius:6px;background:#edf1f7}
+.gs-vg__etape-plein,.gs-vg__taux-plein{position:absolute;inset:0 auto 0 0;border-radius:6px;background:#f4600d}
+.gs-vg__etape--fin .gs-vg__etape-plein{background:#16a34a}
+.gs-vg__etape-bouton:hover .gs-vg__etape-nom{color:var(--ink)}
+
+/* Les tableaux dans une carte : sans second cadre */
+.gs-vg__carte--tableau .gs-tableau-cadre{margin:0 -24px;border:0;border-top:1px solid var(--vg-bord);border-radius:0;box-shadow:none}
+.gs-vg__carte--tableau .gs-tableau th{background:none;font-size:13px;color:var(--vg-doux)}
+.gs-vg__carte--tableau .gs-tableau th:first-child,.gs-vg__carte--tableau .gs-tableau td:first-child{padding-left:24px}
+.gs-vg__carte--tableau .gs-tableau th:last-child,.gs-vg__carte--tableau .gs-tableau td:last-child{padding-right:24px}
+.gs-vg__carte--tableau>.gs-admin-vide{margin-top:12px}
+.gs-vg__carte--tableau .gs-pagination{margin-top:12px}
+.gs-vg__carte .gs-apercu__tete{margin-bottom:12px}
+.gs-vg__carte .gs-kpis{margin-top:6px}
+.gs-vg__insecable{white-space:nowrap}
+.gs-vg__taux{display:flex;align-items:center;gap:10px;min-width:120px}
+.gs-vg__taux strong{flex:none;min-width:48px;font-size:13.5px;text-align:right}
+.gs-vg__villes{display:grid;gap:14px;margin:0;padding:0;list-style:none}
+.gs-vg__ville-ligne{display:grid;gap:8px}
+.gs-vg__ville-tete{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.gs-vg__ville-nom{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0;font-size:13px;color:var(--vg-doux)}
+.gs-vg__ville-nom strong{font-size:14.5px;color:var(--ink)}
+.gs-vg__ville-nombre{flex:none;font-size:14px;color:var(--ink)}
+.gs-vg__ville-ligne .gs-vg__taux-plein{background:linear-gradient(90deg,#0d2b6b,#1f5fe0)}
+
+@media (max-width:1199px){
+  .gs-vg__etiquette--HT,.gs-vg__etiquette--DO{display:none}
+  .gs-vg__chaine{grid-template-columns:repeat(4,minmax(0,1fr));row-gap:22px}
+  .gs-vg__etape:nth-child(4n)::after{display:none}
+}
+@media (min-width:760px) and (max-width:1199px){
+  .gs-tableau--activite th:nth-child(4),.gs-tableau--activite td:nth-child(4){display:none}
+}
+@media (max-width:759px){
+  .gs-vg__tete{align-items:stretch}
+  .gs-vg__commandes{width:100%}
+  .gs-vg__periode{flex:1 1 auto}
+  .gs-vg__periode .gs-admin-filtre{flex:1}
+  .gs-vg__carte{padding:18px 16px;border-radius:20px}
+  .gs-vg__carte--kpis,.gs-vg__bande{padding:0}
+  .gs-vg__carte--tableau .gs-tableau-cadre{margin:0 -16px}
+  .gs-vg__carte--tableau .gs-tableau th:first-child,.gs-vg__carte--tableau .gs-tableau td:first-child{padding-left:16px}
+  .gs-vg__carte--tableau .gs-tableau th:last-child,.gs-vg__carte--tableau .gs-tableau td:last-child{padding-right:16px}
+  .gs-vg__chaine{grid-template-columns:minmax(0,1fr);row-gap:6px}
+  .gs-vg__etape::after{display:none}
+  .gs-vg__etape-bouton{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:6px 12px;padding:6px 0}
+  .gs-vg__etape-rang{width:32px;height:32px;font-size:13px}
+  .gs-vg__etape-nom{min-height:0}
+  .gs-vg__etape-nombre{font-size:20px}
+  .gs-vg__etape-piste{grid-column:2 / -1}
+  .gs-vg__carte--tableau .gs-badge{white-space:normal}
+  .gs-vg__surveiller{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gs-vg__surveiller li{border-bottom:1px solid var(--vg-bord)}
+  .gs-vg__surveiller li:nth-child(2n){border-right:0}
+  .gs-vg__barres{height:210px;grid-template-columns:28px minmax(0,1fr)}
+  .gs-vg__axe-x{margin-left:36px}
+  .gs-vg__plan{gap:5px}
+  .gs-vg__plan--dense{gap:1px}
+  .gs-vg__pays li+li{border-left:0;border-top:1px solid var(--vg-bord)}
+  .gs-vg__etiquette{font-size:11px;padding:4px 7px}
+  .gs-vg__etiquette--HT,.gs-vg__etiquette--DO{display:none}
+}
+@media (max-width:639px){
+  .gs-vg__titre{font-size:19px}
+  .gs-vg__route{display:block;margin:4px 0 0}
+  .gs-vg__kpi{gap:16px;min-height:0;padding:16px}
+  .gs-vg__kpi-valeur{font-size:24px}
+  .gs-vg__picto{width:40px;height:40px}
+  .gs-vg__picto svg{width:18px;height:18px}
+  .gs-vg__kpi-pied{font-size:12px}
+  .gs-vg__grand{font-size:28px}
+  .gs-vg__surveiller-case{padding:16px}
+  .gs-vg__surveiller-valeur{font-size:21px}
+  .gs-vg__clients-grand strong{font-size:44px}
+}
+@media (prefers-reduced-motion:reduce){
+  .gs-vg__halo{animation:none}
+}
+
 /* ---- Le poste de travail : bandeaux (réseau coupé, application à mettre à jour),
    lecteur du scanner, raccourcis clavier ------------------------------------------- */
 .gs-td__bandeau{margin:14px 24px 0;padding:12px 16px;border:1px solid #cfd8e8;border-radius:14px;background:#eef3fd;color:#1a3a7a;font-size:14.5px;line-height:1.5}

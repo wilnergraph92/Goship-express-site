@@ -159,6 +159,8 @@ ICONES = {
     'menu': '<path d="M4 6h16M4 12h16M4 18h16"/>',
     'panel': '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/>',
     'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+    'calendar': '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    'arrow-up-right': '<path d="M7 17 17 7M7 7h10v10"/>',
     'chart': '<path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/>',
     'globe': '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/>',
 }

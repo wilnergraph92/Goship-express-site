@@ -2959,117 +2959,698 @@
     $$('[data-apercu-partie="' + nom + '"]').forEach(function (n) { n.hidden = !visible; });
   }
 
+  /* ---- La vue générale, dessinée ---------------------------------------------------
+     La mise en page vient de la maquette Claude Design (GoShip Dashboard), aux couleurs
+     du logo : bleu nuit, orange, bleu. Chaque chiffre est celui de vue_generale ; les
+     comptes qui voient les rapports reçoivent en plus, des Analytics, la comparaison à
+     la période précédente, les routes et les clients actifs. La page ne fait aucun
+     total : elle place, compare deux chiffres de la base, ou se tait. Les blocs de la
+     maquette dont la base n'a pas la donnée (marge, agences, filtres par mode de
+     transport) n'ont pas été repris. */
+
+  // Les couleurs des statuts : celles des pastilles de site.css
+  var COULEURS_STATUTS = { recu: '#0d2b6b', emballe: '#6d28d9', embarque: '#1f5fe0', distribution: '#d97706',
+                           succursale: '#ea580c', disponible: '#0f766e', livre: '#16a34a', incident: '#dc2626' };
+  var CHAINE = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre'];
+  var etatVG = { analytics: null, demande: 0, frais: false };
+
+  // Une variation (comparerValeurs de la base) : flèche, pourcentage, couleur neutre
+  function badgeVariation(cmp) {
+    if (!cmp || typeof cmp !== 'object') return null;
+    var v = variation(cmp, entier);
+    var b = el('span', 'gs-vg__variation gs-vg__variation--' + (cmp.tendance || 'stable'), v.texte);
+    b.title = 'Période précédente : ' + (typeof cmp.precedent === 'number' ? O.nombre(cmp.precedent) : cmp.precedent);
+    return b;
+  }
+
+  function texteComparaison() {
+    var s = etatVG.analytics && etatVG.analytics.synthese;
+    var prec = s && s.periode && s.periode.precedente;
+    return prec ? 'par rapport au ' + jourLisible(prec.debut, true) + ' – ' + jourLisible(prec.fin, true) : '';
+  }
+
+  function vgKpis(v) {
+    var c = v.colis || {}, s = etatVG.analytics && etatVG.analytics.synthese, m = (s && s.mesures) || {};
+    var zone = $('[data-vg-kpis]');
+    zone.textContent = '';
+    [
+      { picto: 'colis', teinte: 'orange', libelle: 'Colis reçus', valeur: entier(c.recus_periode), cmp: m.recus,
+        sous: 'sur la période' },
+      { picto: 'livre', teinte: 'vert', libelle: 'Colis livrés', valeur: entier(c.livres_periode), cmp: m.livres,
+        sous: 'sur la période' },
+      { picto: 'route', teinte: 'bleu', libelle: 'En cours', valeur: entier(c.actifs),
+        sous: 'maintenant · ' + pluriel(c.total, 'colis au total', 'colis au total'),
+        action: function () { viderFiltresColis(); filtrerParStatut('actifs'); } },
+      { picto: 'colis', teinte: 'marine', libelle: 'Poids reçu', valeur: O.nombre(Number(c.poids_periode) || 0) + ' lb', cmp: m.poids,
+        sous: 'sur la période' }
+    ].forEach(function (k) {
+      var carte = el(k.action ? 'button' : 'div', 'gs-vg__kpi');
+      if (k.action) { carte.type = 'button'; carte.addEventListener('click', k.action); }
+      var tete = el('div', 'gs-vg__kpi-tete');
+      var textes = el('div');
+      textes.appendChild(el('span', 'gs-vg__libelle', k.libelle));
+      textes.appendChild(el('strong', 'gs-vg__kpi-valeur', k.valeur));
+      tete.appendChild(textes);
+      var pastille = el('span', 'gs-vg__picto gs-vg__picto--' + k.teinte);
+      pastille.innerHTML = picto(k.picto);
+      tete.appendChild(pastille);
+      carte.appendChild(tete);
+      var pied = el('p', 'gs-vg__kpi-pied');
+      var b = k.cmp && badgeVariation(k.cmp);
+      if (b) {
+        pied.appendChild(b);
+        pied.appendChild(document.createTextNode(' ' + texteComparaison()));
+      } else {
+        pied.appendChild(document.createTextNode(k.sous));
+      }
+      carte.appendChild(pied);
+      zone.appendChild(carte);
+    });
+  }
+
+  // Une bulle qui suit la souris ou le clavier au-dessus d'un graphique
+  function bulle(zone) {
+    var b = zone.querySelector('.gs-vg__bulle');
+    if (!b) { b = el('div', 'gs-vg__bulle'); b.hidden = true; b.setAttribute('aria-hidden', 'true'); zone.appendChild(b); }
+    return b;
+  }
+  function montrerBulle(zone, cible, lignes) {
+    var b = bulle(zone);
+    b.textContent = '';
+    lignes.forEach(function (l, i) {
+      var p = el('p', i ? 'gs-vg__bulle-ligne' : 'gs-vg__bulle-titre');
+      if (l.couleur) { var puce = el('i', 'gs-vg__puce'); puce.style.background = l.couleur; p.appendChild(puce); }
+      p.appendChild(el('span', '', l.nom));
+      if (l.valeur != null) p.appendChild(el('strong', '', l.valeur));
+      b.appendChild(p);
+    });
+    b.hidden = false;
+    var z = zone.getBoundingClientRect(), r = cible.getBoundingClientRect();
+    var x = r.left - z.left + r.width / 2;
+    b.style.left = Math.max(8, Math.min(z.width - b.offsetWidth - 8, x - b.offsetWidth / 2)) + 'px';
+    b.style.top = Math.max(0, r.top - z.top - b.offsetHeight - 10) + 'px';
+  }
+  function cacherBulle(zone) { var b = zone.querySelector('.gs-vg__bulle'); if (b) b.hidden = true; }
+
+  // Des graduations lisibles : 0, puis 4 paliers ronds jusqu'au maximum
+  function graduations(max) {
+    if (!(max > 0)) return [0];
+    var brut = max / 4, puissance = Math.pow(10, Math.floor(Math.log(brut) / Math.LN10)), pas = puissance;
+    [1, 2, 2.5, 5, 10].some(function (f) { pas = f * puissance; return pas >= brut; });
+    if (pas < 1 && max >= 1) pas = 1;
+    var t = [];
+    for (var x = 0; x <= max + pas * 0.001 || t.length < 2; x += pas) t.push(Math.round(x * 100) / 100);
+    return t;
+  }
+
+  // Les colis reçus jour par jour : une barre par jour, la plus haute en orange
+  function vgJours(v) {
+    var c = v.colis || {}, jours = c.par_jour || [];
+    var legende = $('[data-vg-jours-legende]');
+    legende.textContent = '';
+    [['Reçus', entier(c.recus_periode), '#f4600d'], ['Livrés', entier(c.livres_periode), '#1f5fe0']].forEach(function (x) {
+      var s = el('span', 'gs-vg__legende-item');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = x[2];
+      s.appendChild(puce);
+      s.appendChild(document.createTextNode(x[0] + ' : ' + x[1]));
+      legende.appendChild(s);
+    });
+    var zone = $('[data-vg-jours-graphe]');
+    zone.textContent = '';
+    var max = 0, pic = -1;
+    jours.forEach(function (j, i) {
+      var n = Math.max(Number(j.recus) || 0, Number(j.livres) || 0);
+      if (n > max) max = n;
+      if ((Number(j.recus) || 0) > (pic < 0 ? 0 : Number(jours[pic].recus) || 0)) pic = i;
+    });
+    if (!jours.length || !max) { zone.appendChild(el('p', 'gs-vg__vide', 'Aucun colis reçu ni livré sur cette période.')); return; }
+    var echelle = graduations(max), haut = echelle[echelle.length - 1];
+    var cadre = el('div', 'gs-vg__barres');
+    cadre.setAttribute('role', 'img');
+    cadre.setAttribute('aria-label', 'Colis reçus par jour, du ' + jourLisible(jours[0].jour) + ' au ' +
+      jourLisible(jours[jours.length - 1].jour) + ' : ' + entier(c.recus_periode) + ' reçus, ' + entier(c.livres_periode) + ' livrés.');
+    var axe = el('div', 'gs-vg__axe-y');
+    echelle.slice().reverse().forEach(function (t) { axe.appendChild(el('span', '', O.nombre(t))); });
+    cadre.appendChild(axe);
+    var plan = el('div', 'gs-vg__plan' + (jours.length > 40 ? ' gs-vg__plan--dense' : ''));
+    echelle.forEach(function (t) {
+      var ligne = el('i', 'gs-vg__grille');
+      ligne.style.bottom = (t / haut * 100) + '%';
+      plan.appendChild(ligne);
+    });
+    var actif = null;
+    function activer(col, j) {
+      if (actif) actif.classList.remove('is-actif');
+      actif = col;
+      col.classList.add('is-actif');
+      montrerBulle(zone, col.querySelector('.gs-vg__barre') || col, [
+        { nom: jourLisible(j.jour) }, { nom: 'Reçus', valeur: entier(j.recus), couleur: '#f4600d' },
+        { nom: 'Livrés', valeur: entier(j.livres), couleur: '#1f5fe0' }]);
+    }
+    jours.forEach(function (j, i) {
+      var col = el('div', 'gs-vg__colonne');
+      col.tabIndex = -1;
+      var barre = el('span', 'gs-vg__barre');
+      barre.style.height = Math.max(Number(j.recus) ? 2 : 0, (Number(j.recus) || 0) / haut * 100) + '%';
+      col.appendChild(barre);
+      if (Number(j.livres)) {
+        var point = el('span', 'gs-vg__livres');
+        point.style.bottom = ((Number(j.livres) || 0) / haut * 100) + '%';
+        col.appendChild(point);
+      }
+      col.addEventListener('mouseenter', function () { activer(col, j); });
+      if (i === pic) col.classList.add('is-pic');
+      plan.appendChild(col);
+    });
+    plan.addEventListener('mouseleave', function () {
+      if (actif) actif.classList.remove('is-actif');
+      actif = null;
+      cacherBulle(zone);
+    });
+    cadre.appendChild(plan);
+    zone.appendChild(cadre);
+    var dates = el('div', 'gs-vg__axe-x');
+    var n = jours.length, reperes = n <= 7 ? jours.map(function (_, i) { return i; }) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
+    reperes.forEach(function (i) {
+      var d = el('span', '', n <= 7 ? jourSemaine(jours[i].jour) : jourLisible(jours[i].jour, true));
+      dates.appendChild(d);
+    });
+    zone.appendChild(dates);
+  }
+
+  function jourSemaine(jour) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(jour || ''));
+    if (!m) return '';
+    return ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()] + ' ' + m[3];
+  }
+
+  // Le facturé jour par jour : une aire, et l'encaissé en pointillé
+  function vgFacture(v) {
+    var f = v.facturation;
+    if (!f) return;
+    var s = etatVG.analytics && etatVG.analytics.synthese;
+    $('[data-vg-facture-total]').textContent = argent(f.facture_periode);
+    var zv = $('[data-vg-facture-variation]');
+    zv.textContent = '';
+    var b = s && s.mesures && badgeVariation(s.mesures.facture);
+    if (b) zv.appendChild(b);
+    var zone = $('[data-vg-facture-graphe]');
+    zone.textContent = '';
+    var jours = f.par_jour || [], max = 0;
+    jours.forEach(function (j) { max = Math.max(max, Number(j.facture) || 0, Number(j.encaisse) || 0); });
+    var legende = el('p', 'gs-vg__legende');
+    [['Facturé', '#f4600d', argent(f.facture_periode)], ['Encaissé', '#1f5fe0', argent(f.encaisse_periode)]].forEach(function (x) {
+      var it = el('span', 'gs-vg__legende-item');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = x[1];
+      it.appendChild(puce);
+      it.appendChild(document.createTextNode(x[0] + ' : ' + x[2]));
+      legende.appendChild(it);
+    });
+    zone.appendChild(legende);
+    if (!jours.length || !max) { zone.appendChild(el('p', 'gs-vg__vide', 'Rien de facturé ni d’encaissé sur cette période.')); return; }
+    var L = 600, H = 200, n = jours.length;
+    function x(i) { return n === 1 ? L / 2 : i / (n - 1) * L; }
+    function y(val) { return H - 6 - (Number(val) || 0) / max * (H - 16); }
+    function trace(cle) { return jours.map(function (j, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(j[cle]).toFixed(1); }).join(' '); }
+    var dessin = svg('svg', { viewBox: '0 0 ' + L + ' ' + H, preserveAspectRatio: 'none', class: 'gs-vg__aire',
+      role: 'img', 'aria-label': 'Facturé ' + argent(f.facture_periode) + ' et encaissé ' + argent(f.encaisse_periode) +
+      ', du ' + jourLisible(jours[0].jour) + ' au ' + jourLisible(jours[n - 1].jour) + '.' });
+    var defs = svg('defs');
+    var grad = svg('linearGradient', { id: 'vg-degrade-facture', x1: 0, y1: 0, x2: 0, y2: 1 });
+    grad.appendChild(svg('stop', { offset: '0%', 'stop-color': '#f4600d', 'stop-opacity': '.28' }));
+    grad.appendChild(svg('stop', { offset: '100%', 'stop-color': '#f4600d', 'stop-opacity': '0' }));
+    defs.appendChild(grad);
+    dessin.appendChild(defs);
+    dessin.appendChild(svg('path', { d: trace('facture') + ' L' + x(n - 1).toFixed(1) + ' ' + H + ' L' + x(0).toFixed(1) + ' ' + H + ' Z',
+                                     fill: 'url(#vg-degrade-facture)' }));
+    dessin.appendChild(svg('path', { d: trace('facture'), class: 'gs-vg__trait gs-vg__trait--facture' }));
+    dessin.appendChild(svg('path', { d: trace('encaisse'), class: 'gs-vg__trait gs-vg__trait--encaisse' }));
+    var cadre = el('div', 'gs-vg__aire-cadre');
+    cadre.appendChild(dessin);
+    var repere = el('i', 'gs-vg__repere');
+    repere.hidden = true;
+    cadre.appendChild(repere);
+    var cibles = el('div', 'gs-vg__cibles');
+    jours.forEach(function (j, i) {
+      var t = el('span', 'gs-vg__cible');
+      t.addEventListener('mouseenter', function () {
+        repere.hidden = false;
+        repere.style.left = (n === 1 ? 50 : i / (n - 1) * 100) + '%';
+        montrerBulle(zone, t, [{ nom: jourLisible(j.jour) }, { nom: 'Facturé', valeur: argent(j.facture), couleur: '#f4600d' },
+          { nom: 'Encaissé', valeur: argent(j.encaisse), couleur: '#1f5fe0' }]);
+      });
+      cibles.appendChild(t);
+    });
+    cibles.addEventListener('mouseleave', function () { repere.hidden = true; cacherBulle(zone); });
+    cadre.appendChild(cibles);
+    zone.appendChild(cadre);
+    var dates = el('div', 'gs-vg__axe-x');
+    (n <= 7 ? jours.map(function (_, i) { return i; }) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1]).forEach(function (i) {
+      dates.appendChild(el('span', '', n <= 7 ? jourSemaine(jours[i].jour) : jourLisible(jours[i].jour, true)));
+    });
+    zone.appendChild(dates);
+  }
+
+  // Le règlement des factures de la période : payé contre facturé, en couronne graduée
+  function vgAnneau(v) {
+    var f = v.facturation;
+    if (!f) return;
+    var zone = $('[data-vg-anneau]');
+    zone.textContent = '';
+    var facture = Number(f.facture_periode) || 0, paye = Number(f.paye_sur_periode) || 0;
+    var part = facture > 0 ? Math.min(1, paye / facture) : null;
+    var N = 72, R = 88, dessin = svg('svg', { viewBox: '0 0 220 220', class: 'gs-vg__couronne', 'aria-hidden': 'true' });
+    for (var i = 0; i < N; i++) {
+      var a = (i / N) * Math.PI * 2 - Math.PI / 2, dedans = part != null && i < Math.round(part * N);
+      dessin.appendChild(svg('line', { x1: (110 + Math.cos(a) * (R - 14)).toFixed(1), y1: (110 + Math.sin(a) * (R - 14)).toFixed(1),
+        x2: (110 + Math.cos(a) * R).toFixed(1), y2: (110 + Math.sin(a) * R).toFixed(1),
+        class: dedans ? 'gs-vg__graduation gs-vg__graduation--pleine' : 'gs-vg__graduation' }));
+    }
+    zone.appendChild(dessin);
+    var centre = el('div', 'gs-vg__anneau-centre');
+    centre.appendChild(el('strong', '', part == null ? '—' : O.nombre(Math.round(part * 1000) / 10) + ' %'));
+    centre.appendChild(el('span', '', part == null ? 'aucune facture sur la période' : 'du facturé déjà payé'));
+    zone.appendChild(centre);
+    zone.setAttribute('role', 'img');
+    zone.setAttribute('aria-label', part == null ? 'Aucune facture émise sur la période.'
+      : argent(paye) + ' payés sur ' + argent(facture) + ' facturés sur la période.');
+    var dl = $('[data-vg-encaissement]');
+    dl.textContent = '';
+    [['Facturé', argent(f.facture_periode), pluriel(f.emises_periode, 'facture', 'factures')],
+     ['Payé', argent(f.paye_sur_periode), 'sur ces factures'],
+     ['Reste dû', argent(f.solde_sur_periode), 'sur ces factures'],
+     ['Encaissé', argent(f.encaisse_periode), pluriel(f.paiements_periode, 'paiement', 'paiements')]].forEach(function (x) {
+      var d = el('div');
+      d.appendChild(el('dt', '', x[0]));
+      d.appendChild(el('dd', '', x[1]));
+      d.appendChild(el('dd', 'gs-vg__chiffre-sous', x[2]));
+      dl.appendChild(d);
+    });
+  }
+
+  // Les clients : ce que vue_generale sait, et les Analytics s'il y en a
+  function vgClients(v) {
+    var cl = v.clients;
+    if (!cl) return;
+    var a = etatVG.analytics && etatVG.analytics.clients;
+    var zone = $('[data-vg-clients]');
+    zone.textContent = '';
+    var grand = el('p', 'gs-vg__clients-grand');
+    grand.appendChild(el('strong', '', entier(cl.nouveaux_periode)));
+    var b = a && badgeVariation(a.nouveaux);
+    if (b) grand.appendChild(b);
+    zone.appendChild(grand);
+    zone.appendChild(el('p', 'gs-vg__clients-sous', (Number(cl.nouveaux_periode) > 1 ? 'nouveaux clients' : 'nouveau client') +
+      ' sur la période · ' + pluriel(cl.total, 'client inscrit', 'clients inscrits')));
+    if (a && a.actifs) {
+      var actifs = el('p', 'gs-vg__clients-ligne');
+      actifs.appendChild(el('span', '', 'Actifs sur la période'));
+      actifs.appendChild(el('strong', '', entier(a.actifs.actuel)));
+      var ba = badgeVariation(a.actifs);
+      if (ba) actifs.appendChild(ba);
+      zone.appendChild(actifs);
+    }
+    var total = Number(cl.total) || 0, enCours = Number(cl.avec_colis_en_cours) || 0;
+    var jauge = el('div', 'gs-vg__jauge');
+    var rempli = el('span', 'gs-vg__jauge-plein');
+    rempli.style.width = total ? Math.round(enCours / total * 100) + '%' : '0%';
+    jauge.appendChild(rempli);
+    var texte = el('p', 'gs-vg__jauge-texte');
+    texte.appendChild(el('strong', '', total ? O.nombre(Math.round(enCours / total * 1000) / 10) + ' %' : '—'));
+    texte.appendChild(document.createTextNode(' ' + pluriel(enCours, 'client a', 'clients ont') + ' un colis en cours'));
+    jauge.appendChild(texte);
+    zone.appendChild(jauge);
+  }
+
+  // À surveiller : les chiffres qui demandent une action, chacun mène à sa liste
+  function vgSurveiller(v) {
+    var c = v.colis || {}, f = v.facturation, zone = $('[data-vg-surveiller]');
+    zone.textContent = '';
+    var sansFacture = (v.alertes || []).filter(function (a) { return a.code === 'colis_sans_facture'; })[0];
+    var cases = [
+      { nom: 'Action requise', valeur: entier(c.action_requise), sous: 'colis, maintenant', couleur: '#dc2626', vif: c.action_requise > 0,
+        action: function () { choisirListe('action_requise'); } },
+      { nom: 'Sans mouvement', valeur: entier(c.sans_mouvement), sous: 'depuis ' + v.jours_sans_mouvement + ' j ou plus', couleur: '#d97706',
+        vif: c.sans_mouvement > 0, action: function () { choisirListe('sans_mouvement'); } }
+    ];
+    if (f) {
+      cases.push({ nom: 'À encaisser', valeur: argent(f.a_encaisser), sous: pluriel(f.ouvertes, 'facture ouverte', 'factures ouvertes'),
+        couleur: '#f4600d', action: function () { choisirFactures('a_payer'); } });
+      cases.push({ nom: 'En retard', valeur: argent(f.montant_en_retard), sous: pluriel((f.etats || {}).en_retard, 'facture échue', 'factures échues'),
+        couleur: '#b91c1c', vif: (f.etats || {}).en_retard > 0, action: function () { choisirFactures('en_retard'); } });
+      cases.push({ nom: 'Clients avec solde', valeur: entier(f.clients_avec_solde), sous: 'maintenant', couleur: '#1f5fe0',
+        action: function () { choisirVue('clients'); } });
+    }
+    if (peut('invoices.view')) {
+      cases.push({ nom: 'Colis sans facture', valeur: entier(sansFacture ? sansFacture.nombre : 0), sous: 'sur aucune facture active',
+        couleur: '#6d28d9', action: actionAlerte('colis_sans_facture') });
+    }
+    cases.forEach(function (x) {
+      var li = el('li');
+      var bouton = el(x.action ? 'button' : 'div', 'gs-vg__surveiller-case' + (x.vif ? ' is-vif' : ''));
+      if (x.action) { bouton.type = 'button'; bouton.addEventListener('click', x.action); }
+      var nom = el('span', 'gs-vg__surveiller-nom');
+      var puce = el('i', 'gs-vg__puce gs-vg__puce--halo'); puce.style.background = x.couleur; puce.style.color = x.couleur;
+      nom.appendChild(puce);
+      nom.appendChild(document.createTextNode(x.nom));
+      bouton.appendChild(nom);
+      bouton.appendChild(el('strong', 'gs-vg__surveiller-valeur', x.valeur));
+      bouton.appendChild(el('span', 'gs-vg__surveiller-sous', x.sous));
+      li.appendChild(bouton);
+      zone.appendChild(li);
+    });
+  }
+
+  // Les colis par statut, maintenant : un anneau et sa légende
+  function vgStatuts(v) {
+    var c = v.colis || {}, statuts = c.statuts || {}, total = Number(c.total) || 0;
+    var zone = $('[data-vg-donut]');
+    zone.textContent = '';
+    var R = 70, P = 2 * Math.PI * R, dessin = svg('svg', { viewBox: '0 0 200 200', class: 'gs-vg__anneau-statuts', 'aria-hidden': 'true' });
+    dessin.appendChild(svg('circle', { cx: 100, cy: 100, r: R, class: 'gs-vg__anneau-fond' }));
+    var deja = 0;
+    Object.keys(STATUTS).forEach(function (k) {
+      var n = Number(statuts[k]) || 0;
+      if (!n || !total) return;
+      var long = n / total * P, ecart = Object.keys(statuts).filter(function (x) { return statuts[x] > 0; }).length > 1 ? 2 : 0;
+      dessin.appendChild(svg('circle', { cx: 100, cy: 100, r: R, fill: 'none', stroke: COULEURS_STATUTS[k], 'stroke-width': 22,
+        'stroke-dasharray': Math.max(0.5, long - ecart).toFixed(2) + ' ' + (P - Math.max(0.5, long - ecart)).toFixed(2),
+        'stroke-dashoffset': (-deja + P / 4).toFixed(2) }));
+      deja += long;
+    });
+    zone.appendChild(dessin);
+    var centre = el('div', 'gs-vg__donut-centre');
+    centre.appendChild(el('strong', '', entier(total)));
+    centre.appendChild(el('span', '', 'colis'));
+    zone.appendChild(centre);
+    zone.setAttribute('role', 'img');
+    zone.setAttribute('aria-label', entier(total) + ' colis : ' + Object.keys(STATUTS).map(function (k) {
+      return STATUTS[k] + ' ' + entier(statuts[k]);
+    }).join(', ') + '.');
+    var liste = $('[data-vg-statuts]');
+    liste.textContent = '';
+    Object.keys(STATUTS).forEach(function (k) {
+      var n = Number(statuts[k]) || 0;
+      var li = el('li');
+      var b = el('button', 'gs-vg__statut');
+      b.type = 'button';
+      b.addEventListener('click', function () { viderFiltresColis(); filtrerParStatut(k); });
+      var nom = el('span', 'gs-vg__statut-nom');
+      var puce = el('i', 'gs-vg__puce gs-vg__puce--carre'); puce.style.background = COULEURS_STATUTS[k];
+      nom.appendChild(puce);
+      nom.appendChild(document.createTextNode(STATUTS[k]));
+      b.appendChild(nom);
+      b.appendChild(el('span', 'gs-vg__statut-nombre', entier(n)));
+      b.appendChild(el('strong', 'gs-vg__statut-part', total ? Math.round(n / total * 100) + ' %' : '—'));
+      li.appendChild(b);
+      liste.appendChild(li);
+    });
+  }
+
+  // La chaîne logistique : les sept étapes de GoShip, dans l'ordre du colis
+  function vgChaine(v) {
+    var c = v.colis || {}, statuts = c.statuts || {}, total = Number(c.total) || 0;
+    $('[data-vg-chaine-total]').textContent = 'Miami → Haïti / République dominicaine · ' + pluriel(total, 'colis', 'colis') +
+      (Number(c.action_requise) ? ' · ' + entier(c.action_requise) + ' en action requise' : '');
+    var liste = $('[data-vg-chaine]');
+    liste.textContent = '';
+    CHAINE.forEach(function (k, i) {
+      var n = Number(statuts[k]) || 0;
+      var li = el('li', 'gs-vg__etape' + (k === 'livre' ? ' gs-vg__etape--fin' : ''));
+      var b = el('button', 'gs-vg__etape-bouton');
+      b.type = 'button';
+      b.addEventListener('click', function () { viderFiltresColis(); filtrerParStatut(k); });
+      b.appendChild(el('span', 'gs-vg__etape-rang', String(i + 1)));
+      b.appendChild(el('span', 'gs-vg__etape-nom', STATUTS[k]));
+      b.appendChild(el('strong', 'gs-vg__etape-nombre', entier(n)));
+      var piste = el('span', 'gs-vg__etape-piste');
+      var plein = el('span', 'gs-vg__etape-plein');
+      plein.style.width = total ? Math.max(n ? 3 : 0, Math.round(n / total * 100)) + '%' : '0%';
+      piste.appendChild(plein);
+      b.appendChild(piste);
+      li.appendChild(b);
+      liste.appendChild(li);
+    });
+  }
+
+  function vgActivite(v) {
+    partie('activite', !!v.activite);
+    if (!v.activite) return;
+    var corps = $('[data-lignes="activite"]');
+    corps.textContent = '';
+    var lignes = v.activite.slice(0, 8);
+    lignes.forEach(function (e) {
+      var tr = el('tr');
+      var tdNum = cellule('Colis');
+      var numero = el('button', 'gs-lien-bouton gs-cellule-num', e.numero || '—');
+      numero.type = 'button';
+      numero.setAttribute('aria-label', 'Ouvrir le colis ' + (e.numero || ''));
+      if (e.numero) numero.addEventListener('click', function () { ouvrirColisParNumero(e.numero); });
+      tdNum.appendChild(numero);
+      tr.appendChild(tdNum);
+      cellulePleine(tr, 'Client', e.client || '—').classList.add('gs-vg__insecable');
+      // L'événement, dans la couleur du statut qu'il a donné au colis
+      var tdEv = cellule('Événement');
+      var etiquette = el('span', 'gs-badge gs-badge--' + (e.statut || 'recu'), e.libelle || libelleTypeEvenement(e.type_evenement));
+      etiquette.title = [e.auteur ? 'par ' + e.auteur : '', SOURCES[e.source] ? 'via ' + SOURCES[e.source] : '',
+                         e.corrige ? 'annulé par une correction' : ''].filter(Boolean).join(' · ');
+      tdEv.appendChild(etiquette);
+      if (e.corrige) tdEv.appendChild(el('span', 'gs-cellule-sous', 'annulé par une correction'));
+      tr.appendChild(tdEv);
+      cellulePleine(tr, 'Lieu', e.lieu || '—');
+      var tdDate = cellulePleine(tr, 'Date', jourLisible(String(e.cree_le || '').slice(0, 10), true) + ' · ' + heure(e.cree_le));
+      tdDate.classList.add('gs-vg__insecable');
+      tdDate.title = O.date(e.cree_le, true);
+      corps.appendChild(tr);
+    });
+    $('[data-vide="activite"]').hidden = lignes.length > 0;
+    $('.gs-tableau--activite').closest('.gs-tableau-cadre').hidden = !lignes.length;
+  }
+
+  /* ---- Les destinations : une carte schématique de Miami aux Grandes Antilles ------
+     Les villes viennent des colis (analytics_routes) ; seules celles dont on connaît la
+     position sont placées, les autres restent dans la liste « Villes de destination ».
+     Les côtes sont un simple repère visuel, pas une carte exacte. */
+  var GEO_VILLES = {
+    'miami': [-80.19, 25.76], 'port-au-prince': [-72.34, 18.54], 'petion-ville': [-72.29, 18.51], 'delmas': [-72.3, 18.55],
+    'carrefour': [-72.4, 18.54], 'croix-des-bouquets': [-72.2, 18.58], 'cap-haitien': [-72.2, 19.76], 'gonaives': [-72.69, 19.45],
+    'les cayes': [-73.75, 18.19], 'jacmel': [-72.53, 18.23], 'jeremie': [-74.12, 18.65], 'saint-marc': [-72.7, 19.11],
+    'port-de-paix': [-72.83, 19.94], 'hinche': [-72.01, 19.15], 'fort-liberte': [-71.84, 19.66], 'ouanaminthe': [-71.73, 19.55],
+    'miragoane': [-73.09, 18.45], 'leogane': [-72.63, 18.51], 'petit-goave': [-72.87, 18.43], 'mirebalais': [-72.1, 18.83],
+    'santo domingo': [-69.93, 18.49], 'santiago': [-70.69, 19.45], 'santiago de los caballeros': [-70.69, 19.45],
+    'la romana': [-68.97, 18.43], 'san pedro de macoris': [-69.3, 18.46], 'puerto plata': [-70.69, 19.79],
+    'higuey': [-68.71, 18.62], 'punta cana': [-68.37, 18.58], 'san francisco de macoris': [-70.25, 19.3],
+    'la vega': [-70.53, 19.22], 'bani': [-70.33, 18.28], 'barahona': [-71.1, 18.21], 'moca': [-70.52, 19.39],
+    'boca chica': [-69.61, 18.45], 'san cristobal': [-70.1, 18.42], 'dajabon': [-71.71, 19.55]
+  };
+  var CAPITALES = { HT: [-72.34, 18.54], DO: [-69.93, 18.49] };
+  var COTES = [
+    // Floride (le sud de la péninsule)
+    [[-80.3, 27.4], [-80.03, 26.7], [-80.1, 25.9], [-80.35, 25.3], [-80.8, 25.15], [-81.1, 25.15], [-81.35, 25.8], [-81.8, 26.1],
+     [-82.1, 26.6], [-82.5, 27.1], [-82.7, 27.4]],
+    // Cuba
+    [[-84.95, 21.87], [-84.0, 22.75], [-82.35, 23.14], [-81.58, 23.05], [-81.2, 23.2], [-80.0, 22.95], [-79.47, 22.53],
+     [-78.4, 22.5], [-77.1, 21.55], [-76.1, 21.1], [-75.0, 20.7], [-74.13, 20.25], [-75.2, 19.9], [-75.82, 20.0],
+     [-77.73, 19.83], [-77.12, 20.34], [-77.99, 20.71], [-78.9, 21.2], [-79.98, 21.8], [-80.45, 22.1], [-81.1, 22.1],
+     [-81.9, 22.2], [-82.3, 22.7], [-83.3, 22.2], [-84.3, 21.9]],
+    // Jamaïque
+    [[-78.37, 18.27], [-77.9, 18.52], [-77.1, 18.43], [-76.35, 18.18], [-76.2, 17.95], [-76.8, 17.93], [-77.2, 17.72],
+     [-77.85, 17.87], [-78.2, 18.2]],
+    // Hispaniola : Haïti à l'ouest, la République dominicaine à l'est
+    [[-73.4, 19.8], [-72.83, 19.94], [-72.2, 19.78], [-71.84, 19.7], [-71.65, 19.87], [-70.95, 19.9], [-70.69, 19.8],
+     [-70.08, 19.65], [-69.9, 19.64], [-69.2, 19.35], [-69.15, 19.3], [-69.38, 19.06], [-69.05, 18.98], [-68.33, 18.61],
+     [-68.37, 18.5], [-68.85, 18.37], [-68.97, 18.42], [-69.3, 18.45], [-69.9, 18.47], [-70.35, 18.25], [-70.73, 18.43],
+     [-71.08, 18.2], [-71.24, 17.9], [-71.42, 17.6], [-71.74, 18.03], [-72.53, 18.23], [-73.0, 18.18], [-73.75, 18.19],
+     [-73.92, 18.08], [-74.45, 18.33], [-74.42, 18.56], [-74.12, 18.65], [-73.8, 18.55], [-73.09, 18.45], [-72.87, 18.43],
+     [-72.63, 18.51], [-72.34, 18.55], [-72.42, 18.73], [-72.7, 19.11], [-72.69, 19.45], [-73.05, 19.63]],
+    // Porto Rico
+    [[-67.27, 18.37], [-65.62, 18.37], [-65.6, 18.0], [-67.18, 17.95]]
+  ];
+  function sansAccents(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function projeter(lonlat) {
+    // Équirectangulaire, bornes -85,5 → -64,5 et 17 → 27 (cos 22° pour les longitudes)
+    return [(lonlat[0] + 85.5) / 21 * 1000, (27 - lonlat[1]) / 10 * 540];
+  }
+
+  function vgRoutes() {
+    var r = etatVG.analytics && etatVG.analytics.routes;
+    $$('[data-vg-partie="routes"]').forEach(function (n) { n.hidden = !r; });
+    if (!r) return;
+    $('[data-vg-origine]').textContent = 'Départ : ' + (r.origine || 'Miami (Medley), FL');
+    var pays = r.pays || [];
+    var liste = $('[data-vg-pays]');
+    liste.textContent = '';
+    pays.forEach(function (p) {
+      var li = el('li');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = p.pays === 'DO' ? '#1f5fe0' : '#f4600d';
+      li.appendChild(puce);
+      li.appendChild(el('strong', '', entier(p.colis)));
+      li.appendChild(el('span', '', 'vers ' + nomPays(p.pays)));
+      var b = badgeVariation({ actuel: p.colis, precedent: p.colis_precedents,
+        variation_pct: p.colis_precedents ? Math.round((p.colis - p.colis_precedents) * 1000 / p.colis_precedents) / 10 : null,
+        tendance: p.colis > p.colis_precedents ? 'hausse' : (p.colis < p.colis_precedents ? 'baisse' : 'stable') });
+      if (b) li.appendChild(b);
+      liste.appendChild(li);
+    });
+    if (!pays.length) liste.appendChild(el('li', 'gs-vg__vide', 'Aucun colis reçu sur la période.'));
+
+    // La carte
+    var zone = $('[data-vg-carte]');
+    zone.textContent = '';
+    var dessin = svg('svg', { viewBox: '0 0 1000 540', class: 'gs-vg__carte-svg', role: 'img',
+      'aria-label': 'Carte schématique des destinations : ' + (pays.map(function (p) { return entier(p.colis) + ' vers ' + nomPays(p.pays); }).join(', ') || 'aucun colis') + '.' });
+    var defs = svg('defs');
+    var motif = svg('pattern', { id: 'vg-points', width: 18, height: 18, patternUnits: 'userSpaceOnUse' });
+    motif.appendChild(svg('circle', { cx: 2, cy: 2, r: 1.3, class: 'gs-vg__carte-point' }));
+    defs.appendChild(motif);
+    dessin.appendChild(defs);
+    dessin.appendChild(svg('rect', { x: 0, y: 0, width: 1000, height: 540, fill: 'url(#vg-points)' }));
+    COTES.forEach(function (c) {
+      dessin.appendChild(svg('path', { class: 'gs-vg__terre', d: c.map(function (p, i) {
+        var q = projeter(p); return (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1);
+      }).join(' ') + ' Z' }));
+    });
+    var origine = projeter(GEO_VILLES.miami), maxPays = 0;
+    pays.forEach(function (p) { maxPays = Math.max(maxPays, Number(p.colis) || 0); });
+    pays.forEach(function (p) {
+      if (!CAPITALES[p.pays] || !p.colis) return;
+      var q = projeter(CAPITALES[p.pays]), mx = (origine[0] + q[0]) / 2 + 60, my = Math.min(origine[1], q[1]) - 40;
+      dessin.appendChild(svg('path', { class: 'gs-vg__arc gs-vg__arc--' + p.pays, d: 'M' + origine[0].toFixed(1) + ' ' + origine[1].toFixed(1) +
+        ' Q' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + q[0].toFixed(1) + ' ' + q[1].toFixed(1) }));
+    });
+    // Les villes connues
+    var villes = r.villes || [], maxVille = 0;
+    villes.forEach(function (v) { maxVille = Math.max(maxVille, Number(v.colis) || 0); });
+    villes.forEach(function (v) {
+      var geo = GEO_VILLES[sansAccents(v.ville)];
+      if (!geo) return;
+      var q = projeter(geo), rayon = 5 + (maxVille ? v.colis / maxVille : 0) * 12;
+      var g = svg('g', { class: 'gs-vg__ville gs-vg__ville--' + v.pays });
+      g.appendChild(svg('circle', { cx: q[0].toFixed(1), cy: q[1].toFixed(1), r: (rayon * 1.9).toFixed(1), class: 'gs-vg__halo' }));
+      g.appendChild(svg('circle', { cx: q[0].toFixed(1), cy: q[1].toFixed(1), r: rayon.toFixed(1), class: 'gs-vg__rond-ville' }));
+      var titre = svg('title');
+      titre.textContent = v.ville + ' : ' + pluriel(v.colis, 'colis', 'colis');
+      g.appendChild(titre);
+      dessin.appendChild(g);
+    });
+    // Miami, le départ
+    var gm = svg('g', { class: 'gs-vg__depart' });
+    gm.appendChild(svg('circle', { cx: origine[0].toFixed(1), cy: origine[1].toFixed(1), r: 16, class: 'gs-vg__halo' }));
+    gm.appendChild(svg('circle', { cx: origine[0].toFixed(1), cy: origine[1].toFixed(1), r: 8, class: 'gs-vg__rond-ville' }));
+    dessin.appendChild(gm);
+    zone.appendChild(dessin);
+    // Les étiquettes en HTML : elles gardent leur taille quand la carte rétrécit
+    function etiquette(texte, lonlat, classe) {
+      var q = projeter(lonlat), e = el('span', 'gs-vg__etiquette' + (classe ? ' ' + classe : ''), texte);
+      e.style.left = (q[0] / 10) + '%';
+      e.style.top = (q[1] / 5.4) + '%';
+      zone.appendChild(e);
+    }
+    etiquette('Miami', GEO_VILLES.miami, 'gs-vg__etiquette--depart');
+    pays.forEach(function (p) {
+      if (CAPITALES[p.pays] && p.colis) etiquette(nomPays(p.pays) + ' · ' + entier(p.colis), CAPITALES[p.pays], 'gs-vg__etiquette--' + p.pays);
+    });
+
+    // Les routes (pays × service)
+    var corps = $('[data-lignes="routes"]');
+    corps.textContent = '';
+    (r.routes || []).forEach(function (x) {
+      var tr = el('tr');
+      var tdRoute = cellule('Route');
+      tdRoute.appendChild(el('span', 'gs-cellule-principale', 'Miami → ' + nomPays(x.pays)));
+      tdRoute.appendChild(el('span', 'gs-cellule-sous', nomService(x.service)));
+      tr.appendChild(tdRoute);
+      cellulePleine(tr, 'Colis', entier(x.colis));
+      cellulePleine(tr, 'Livrés', entier(x.livres));
+      cellulePleine(tr, 'Délai moyen', duree(x.delai_moyen_h));
+      cellulePleine(tr, 'Facturé', argent(x.facture));
+      var tdTaux = cellule('Taux de livraison');
+      var taux = el('div', 'gs-vg__taux');
+      var piste = el('span', 'gs-vg__taux-piste');
+      var plein = el('span', 'gs-vg__taux-plein');
+      plein.style.width = Math.max(0, Math.min(100, Number(x.taux_livre) || 0)) + '%';
+      piste.appendChild(plein);
+      taux.appendChild(piste);
+      taux.appendChild(el('strong', '', pourcent(x.taux_livre)));
+      tdTaux.appendChild(taux);
+      tr.appendChild(tdTaux);
+      corps.appendChild(tr);
+    });
+    var vide = !(r.routes || []).length;
+    $('[data-vide="routes"]').hidden = !vide;
+    $('.gs-tableau--routes').closest('.gs-tableau-cadre').hidden = vide;
+
+    // Les villes
+    var lv = $('[data-vg-villes]');
+    lv.textContent = '';
+    villes.forEach(function (v) {
+      var li = el('li', 'gs-vg__ville-ligne');
+      var tete = el('div', 'gs-vg__ville-tete');
+      var nom = el('span', 'gs-vg__ville-nom');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = v.pays === 'DO' ? '#1f5fe0' : '#f4600d';
+      nom.appendChild(puce);
+      nom.appendChild(el('strong', '', v.ville));
+      nom.appendChild(el('span', '', nomPays(v.pays)));
+      tete.appendChild(nom);
+      tete.appendChild(el('strong', 'gs-vg__ville-nombre', pluriel(v.colis, 'colis', 'colis')));
+      li.appendChild(tete);
+      var piste = el('span', 'gs-vg__taux-piste');
+      var plein = el('span', 'gs-vg__taux-plein');
+      plein.style.width = maxVille ? Math.round(v.colis / maxVille * 100) + '%' : '0%';
+      piste.appendChild(plein);
+      li.appendChild(piste);
+      lv.appendChild(li);
+    });
+    if (!villes.length) lv.appendChild(el('li', 'gs-vg__vide', 'Aucune ville de destination sur la période.'));
+    $('[data-vg-villes-note]').textContent = r.sans_ville ? pluriel(r.sans_ville, 'colis sans ville', 'colis sans ville') + ' de destination' : 'les dix premières';
+  }
+
+  // Les Analytics de la vue générale : seulement pour les comptes qui voient les rapports,
+  // gardées une minute (lireAnalytics). Une erreur n'efface rien : la vue reste entière.
+  function chargerAnalyticsApercu() {
+    if (!peut('reports.view')) { etatVG.analytics = null; vgRoutes(); return; }
+    var numero = ++etatVG.demande, frais = etatVG.frais;
+    etatVG.frais = false;
+    var o = { periode: etatApercu.periode, debut: etatApercu.debut, fin: etatApercu.fin };
+    function lire(module, plus) {
+      var options = Object.assign({}, o, plus || {});
+      // « Actualiser » veut des chiffres de maintenant : on oublie la réponse gardée
+      if (frais) delete etatAnalytics.memoire[module + '|' + JSON.stringify(Object.assign({ periode: etatAnalytics.periode,
+        debut: etatAnalytics.debut, fin: etatAnalytics.fin }, options))];
+      return lireAnalytics(module, options).catch(function () { return null; });
+    }
+    Promise.all([lire('synthese'), lire('routes'), lire('clients', { parPage: 1 })]).then(function (r) {
+      if (numero !== etatVG.demande || !etatApercu.donnees) return;
+      etatVG.analytics = { synthese: r[0], routes: r[1], clients: r[2] };
+      var v = etatApercu.donnees;
+      vgKpis(v);
+      vgFacture(v);
+      vgClients(v);
+      vgRoutes();
+    });
+  }
+
   function afficherApercu(v) {
     var p = v.periode || {};
     $('[data-apercu-etat]').textContent = (p.debut === p.fin ? 'Le ' + jourLisible(p.debut) : 'Du ' + jourLisible(p.debut) +
       ' au ' + jourLisible(p.fin)) + ' (jours de Santo Domingo) · chiffres de ' + heure(v.genere_le);
 
-    var c = v.colis || {};
-    kpis('colis', [
-      { picto: 'colis', teinte: 'bleu', libelle: 'Reçus', valeur: entier(c.recus_periode),
-        sous: Number(c.poids_periode) ? O.nombre(Number(c.poids_periode)) + ' lb sur la période' : 'sur la période' },
-      { picto: 'livre', teinte: 'vert', libelle: 'Livrés', valeur: entier(c.livres_periode), sous: 'sur la période' },
-      { picto: 'route', teinte: 'marine', libelle: 'En cours', valeur: entier(c.actifs), sous: 'maintenant · ' + pluriel(c.total, 'colis au total', 'colis au total'),
-        action: function () { viderFiltresColis(); filtrerParStatut('actifs'); } },
-      { picto: 'alerte', teinte: 'rouge', libelle: 'Action requise', valeur: entier(c.action_requise), sous: 'maintenant', ton: c.action_requise ? 'critique' : '',
-        action: function () { choisirListe('action_requise'); } },
-      { picto: 'horloge', teinte: 'orange', libelle: 'Sans mouvement', valeur: entier(c.sans_mouvement), sous: 'aucun événement depuis ' + v.jours_sans_mouvement + ' j ou plus',
-        ton: c.sans_mouvement ? 'attention' : '', action: function () { choisirListe('sans_mouvement'); } }
-    ]);
-
+    vgKpis(v);
+    partie('facturation', !!v.facturation);
+    vgFacture(v);
+    vgAnneau(v);
+    vgJours(v);
     partie('clients', !!v.clients);
-    if (v.clients) {
-      kpis('clients', [
-        { picto: 'clients', teinte: 'bleu', libelle: 'Clients inscrits', valeur: entier(v.clients.total), sous: 'maintenant',
-          action: function () { choisirVue('clients'); } },
-        { picto: 'nouveau', teinte: 'vert', libelle: 'Nouveaux', valeur: entier(v.clients.nouveaux_periode), sous: 'inscrits sur la période' },
-        { picto: 'colis', teinte: 'marine', libelle: 'Avec des colis en cours', valeur: entier(v.clients.avec_colis_en_cours), sous: 'maintenant' }
-      ]);
-    }
-
-    var f = v.facturation;
-    partie('facturation', !!f);
-    if (f) {
-      kpis('facturation', [
-        { picto: 'facture', teinte: 'marine', libelle: 'Facturé', valeur: argent(f.facture_periode),
-          sous: pluriel(f.emises_periode, 'facture', 'factures') + ' · payé ' + argent(f.paye_sur_periode) + ' · reste ' + argent(f.solde_sur_periode) },
-        { picto: 'argent', teinte: 'vert', libelle: 'Encaissé', valeur: argent(f.encaisse_periode), sous: pluriel(f.paiements_periode, 'paiement reçu', 'paiements reçus') },
-        { picto: 'portefeuille', teinte: 'orange', ton: 'fort', libelle: 'À encaisser', valeur: argent(f.a_encaisser),
-          sous: pluriel(f.ouvertes, 'facture ouverte', 'factures ouvertes') + ' · ' + pluriel(f.clients_avec_solde, 'client', 'clients'),
-          action: function () { choisirFactures('a_payer'); } },
-        { picto: 'alerte', teinte: 'rouge', libelle: 'En retard', valeur: argent(f.montant_en_retard), sous: pluriel((f.etats || {}).en_retard, 'facture échue', 'factures échues'),
-          ton: (f.etats || {}).en_retard ? 'attention' : '', action: function () { choisirFactures('en_retard'); } }
-      ]);
-      var etats = el('p', 'gs-apercu__etats');
-      ['a_payer', 'partielle', 'en_retard', 'payee', 'annulee'].forEach(function (k) {
-        var morceau = el('span', 'gs-apercu__etat-facture');
-        morceau.appendChild(badgeFacture(k));
-        morceau.appendChild(document.createTextNode(' ' + entier((f.etats || {})[k])));
-        etats.appendChild(morceau);
-      });
-      $('[data-kpis="facturation"]').appendChild(etats);
-      grapheJours($('[data-graphe="argent"] [data-graphe-zone]'), f.par_jour, [
-        { nom: 'Facturé', cle: 'facture', classe: 'gs-graphe--facture', total: f.facture_periode, format: argent },
-        { nom: 'Encaissé', cle: 'encaisse', classe: 'gs-graphe--encaisse', total: f.encaisse_periode, format: argent }
-      ]);
-    }
-
-    grapheJours($('[data-graphe="colis"] [data-graphe-zone]'), c.par_jour, [
-      { nom: 'Reçus', cle: 'recus', classe: 'gs-graphe--recus', total: c.recus_periode, format: entier },
-      { nom: 'Livrés', cle: 'livres', classe: 'gs-graphe--livres', total: c.livres_periode, format: entier }
-    ]);
-    var statuts = c.statuts || {};
-    var zoneStatuts = $('[data-graphe="statuts"] [data-graphe-zone]');
-    zoneStatuts.textContent = '';
-    var liste = el('ul', 'gs-repartition');
-    zoneStatuts.appendChild(liste);
-    repartition(liste, Object.keys(STATUTS).map(function (k) {
-      return { libelle: STATUTS[k], nombre: statuts[k] || 0, pastille: k };
-    }), '');
-
-    // Les alertes : celles que la base a levées, rien d'autre
-    var alertes = $('[data-alertes]');
-    alertes.textContent = '';
-    (v.alertes || []).forEach(function (a) {
-      var li = el('li', 'gs-alerte-ligne gs-alerte-ligne--' + a.gravite);
-      li.appendChild(el('span', 'gs-alerte-ligne__texte', a.message));
-      var aller = actionAlerte(a.code);
-      if (aller) {
-        var b = el('button', 'gs-lien-bouton', 'Voir');
-        b.type = 'button';
-        b.addEventListener('click', aller);
-        li.appendChild(b);
-      }
-      alertes.appendChild(li);
-    });
-    if (!(v.alertes || []).length) alertes.appendChild(el('li', 'gs-alerte-ligne gs-alerte-ligne--ok', 'Aucune alerte critique.'));
+    vgClients(v);
+    vgSurveiller(v);
+    vgActivite(v);
+    vgStatuts(v);
+    vgChaine(v);
+    vgRoutes();
     majCloche(v.alertes || []);
-
-    partie('activite', !!v.activite);
-    if (v.activite) {
-      var activite = $('[data-activite]');
-      activite.textContent = '';
-      v.activite.forEach(function (e) {
-        var li = el('li', 'gs-activite__ligne');
-        li.appendChild(el('time', 'gs-activite__date', O.date(e.cree_le, true)));
-        var corps = el('div', 'gs-activite__corps');
-        var tete = el('div', 'gs-activite__tete');
-        var numero = el('button', 'gs-lien-bouton gs-cellule-num', e.numero || '—');
-        numero.type = 'button';
-        numero.setAttribute('aria-label', 'Ouvrir le colis ' + (e.numero || ''));
-        if (e.numero) numero.addEventListener('click', function () { ouvrirColisParNumero(e.numero); });
-        tete.appendChild(numero);
-        tete.appendChild(el('strong', '', e.libelle || libelleTypeEvenement(e.type_evenement)));
-        tete.appendChild(badge(e.statut));
-        corps.appendChild(tete);
-        corps.appendChild(el('span', 'gs-cellule-sous', [e.client, e.lieu, e.auteur ? 'par ' + e.auteur : '',
-          SOURCES[e.source] ? 'via ' + SOURCES[e.source] : '', e.corrige ? 'annulé par une correction' : '']
-          .filter(Boolean).join(' · ')));
-        li.appendChild(corps);
-        activite.appendChild(li);
-      });
-      if (!v.activite.length) activite.appendChild(el('li', 'gs-activite__vide', 'Aucun événement pour l’instant.'));
-    }
+    chargerAnalyticsApercu();
 
     partie('scanner', !!v.scanner);
     if (v.scanner) {
@@ -3156,9 +3737,12 @@
     chargerApercu();
   });
   $('[data-action="apercu-actualiser"]').addEventListener('click', function () {
+    etatVG.frais = true;
     chargerApercu();
     chargerStatistiques();
   });
+  $('[data-action="vg-clients"]').addEventListener('click', function () { choisirVue('clients'); });
+  $('[data-action="vg-tous-colis"]').addEventListener('click', function () { viderFiltresColis(); choisirVue('colis'); });
 
   /* ---- Les colis à traiter ----------------------------------------------------- */
   var DEFINITIONS_TRAITER = {
