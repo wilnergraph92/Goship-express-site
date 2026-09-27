@@ -504,17 +504,26 @@ def etape_stockage(travail, sortie, nom, conf):
     configurée qui échoue (inaccessible, envoi, relecture, rétention) → l'étape échoue,
     donc le job et le workflow. Le même essai sous « bash -e » (le shell par défaut de
     GitHub, sans pipefail) montre le défaut corrigé : l'échec de B y passait en vert."""
-    import yaml
-    flux = {f: yaml.safe_load(open(os.path.join(RACINE, '.github', 'workflows', f), encoding='utf-8'))
+    # Lu dans le texte des workflows (sans module YAML : le banc n'a que la bibliothèque
+    # standard), avec l'indentation fixe des fichiers du dépôt
+    flux = {f: open(os.path.join(RACINE, '.github', 'workflows', f), encoding='utf-8').read()
             for f in ('sauvegarde.yml', 'restauration-test.yml')}
     for f, w in flux.items():
         verifier('D2 : %s — toutes les étapes sous « shell: bash » (bash -eo pipefail)' % f,
-                 ((w.get('defaults') or {}).get('run') or {}).get('shell'), 'bash')
-    etape = [e for e in flux['sauvegarde.yml']['jobs']['sauvegarder']['steps'] if e.get('id') == 'stockage'][0]
+                 re.search(r'^defaults:\n  run:\n    shell: bash$', w, re.M) is not None, True)
+    lignes = flux['sauvegarde.yml'].splitlines()
+    debut_job = lignes.index('  sauvegarder:')
+    fin_job = next(i for i in range(debut_job + 1, len(lignes)) if re.match(r'^  [a-z]', lignes[i]))
+    job = lignes[debut_job:fin_job]
+    i_id = job.index('        id: stockage')
+    debut = max(i for i in range(i_id) if job[i].startswith('      - '))
+    fin = next((i for i in range(i_id + 1, len(job)) if job[i].startswith('      - ')), len(job))
+    etape = job[debut:fin]
     verifier('… l\'étape « Stockage externe » ne tolère aucun échec (pas de continue-on-error, ni sur le job)',
-             (etape.get('continue-on-error', False), flux['sauvegarde.yml']['jobs']['sauvegarder'].get('continue-on-error', False)),
-             (False, False))
-    script = etape['run'].replace('${{ steps.copie.outputs.nom }}', nom)
+             ([l for l in etape if 'continue-on-error' in l], [l for l in job if l.startswith('    continue-on-error')]), ([], []))
+    i_run = etape.index('        run: |')
+    corps = [l[10:] for l in etape[i_run + 1:] if l.startswith('          ') or not l.strip()]
+    script = '\n'.join(corps).replace('${{ steps.copie.outputs.nom }}', nom) + '\n'
     faux_bin = os.path.join(travail, 'faux-bin')
     os.makedirs(faux_bin, exist_ok=True)
     open(os.path.join(faux_bin, 'rclone'), 'w').write(RCLONE_EN_PANNE)
