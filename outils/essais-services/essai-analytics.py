@@ -449,6 +449,75 @@ def main():
     verifier('aucune réponse avec NaN / Infinity / undefined',
              [m for m in MODULES if nulls(jsonq(db, ADMIN, 'select public.%s;' % m))], [])
 
+    print('\nM. La vue générale filtrée (pays, ville, mode, statut, lieu)')
+    def filtree(periode, filtres, compte=ADMIN, debut=None, fin=None):
+        return jsonq(db, compte, "select public.vue_generale_filtree(%s, %s, %s, 7, %s);"
+                     % (q(periode), q(debut), q(fin), js(filtres)))
+    for per in (('30j',), MARS, ('aujourdhui',), ('annee',)):
+        vg = jsonq(db, ADMIN, "select public.vue_generale(%s, %s, %s);" % (q(per[0]), q(per[1] if len(per) > 1 else None),
+                                                                          q(per[2] if len(per) > 1 else None)))
+        vf = filtree(per[0], {}, debut=per[1] if len(per) > 1 else None, fin=per[2] if len(per) > 1 else None)
+        sy = appel(db, 'analytics_synthese', *per)
+        ro = appel(db, 'analytics_routes', *per)
+        verifier('%s sans filtre : colis, activité, facturation, alertes = vue_generale' % per[0],
+                 [vf[k] for k in ('colis', 'activite', 'facturation', 'alertes', 'clients', 'periode')],
+                 [vg[k] for k in ('colis', 'activite', 'facturation', 'alertes', 'clients', 'periode')])
+        verifier('%s sans filtre : routes = analytics_routes, comparaison = synthèse' % per[0],
+                 (vf['routes'], [vf['comparaison'][k] for k in ('recus', 'poids', 'livres')],
+                  vf['comparaison']['precedente']),
+                 (ro, [sy['mesures'][k] for k in ('recus', 'poids', 'livres')], sy['periode']['precedente']))
+    verifier('les parties filtrées sont dites', filtree('30j', {})['filtrees'], ['colis', 'activite', 'comparaison', 'routes'])
+    nb = lambda cond: int(un(db, "select count(*) from colis c where %s;" % cond))
+    dans_mars = ("c.recu_le >= '2026-03-01'::timestamp at time zone 'America/Santo_Domingo' "
+                 "and c.recu_le < '2026-04-01'::timestamp at time zone 'America/Santo_Domingo'")
+    for filtres, cond in (({'pays': 'do'}, "pays_destination = 'DO'"),
+                          ({'service': 'maritime'}, "service = 'maritime'"),
+                          ({'pays': 'HT', 'service': 'aerien'}, "pays_destination = 'HT' and service = 'aerien'"),
+                          ({'ville': '  SANTIAGO '}, "lower(trim(destination)) = 'santiago'"),
+                          ({'statut': 'actifs'}, "statut <> 'livre'"),
+                          ({'statut': 'livre', 'pays': 'HT'}, "statut = 'livre' and pays_destination = 'HT'"),
+                          ({'lieu': 'pétion-ville'}, "lower(trim(lieu)) = 'pétion-ville'")):
+        v = filtree(MARS[0], filtres, debut=MARS[1], fin=MARS[2])
+        verifier('%s : total, reçus en mars = count(*) des colis' % json.dumps(filtres, ensure_ascii=False),
+                 (v['colis']['total'], v['colis']['recus_periode'], sum(v['colis']['statuts'].values())),
+                 (nb(cond), nb(cond + ' and ' + dans_mars), nb(cond)))
+        verifier('   … chaque route, chaque événement récent passe le filtre',
+                 all(nb("c.numero = '%s' and %s" % (e['numero'], cond)) == 1 for e in v['activite'])
+                 and sum(r['colis'] for r in v['routes']['routes']) == v['colis']['recus_periode']
+                 and v['comparaison']['recus']['actuel'] == v['colis']['recus_periode'], True)
+        verifier('   … l\'argent et les clients restent entiers', (v['facturation'], v['clients']),
+                 (filtree(MARS[0], {}, debut=MARS[1], fin=MARS[2])['facturation'],
+                  filtree(MARS[0], {}, debut=MARS[1], fin=MARS[2])['clients']))
+    v = filtree(MARS[0], {'pays': 'do', 'ville': ' Santiago', 'statut': '', 'lieu': None}, debut=MARS[1], fin=MARS[2])
+    verifier('filtres mis en forme, les vides retirés', v['filtres'], {'pays': 'DO', 'ville': 'santiago'})
+    livres_do = int(un(db, "select count(distinct e.colis_id) from public.evenements_de_statut("
+                           "'2026-03-01'::timestamp at time zone 'America/Santo_Domingo', "
+                           "'2026-04-01'::timestamp at time zone 'America/Santo_Domingo') e join colis c on c.id = e.colis_id "
+                           "where e.vers = 'livre' and c.pays_destination = 'DO' and lower(trim(c.destination)) = 'santiago';"))
+    verifier('DO + Santiago en mars : 3 colis reçus, les livrés comptés par la base',
+             (v['colis']['recus_periode'], v['colis']['livres_periode'], v['comparaison']['livres']['actuel']),
+             (3, livres_do, livres_do))
+    o = v['options']
+    verifier('options : les pays comptent tous les colis', sum(x['colis'] for x in o['pays']), nb('true'))
+    verifier('options : services et statuts aussi', (sum(x['colis'] for x in o['services']), sum(x['colis'] for x in o['statuts'])),
+             (nb('true'), nb('true')))
+    verifier('options : Santiago, écrit comme les colis l\'écrivent',
+             [x['libelle'] for x in o['villes'] if x['valeur'] == 'santiago'], ['Santiago'])
+    for mauvais in ({'agence': 'Delmas'}, {'pays': 'FR'}, {'service': 'fusee'}, {'statut': 'perdu'},
+                    {'ville': 'x' * 121}, {'pays': 3}):
+        verifier('refusé : %s' % json.dumps(mauvais)[:40], code(db, ADMIN, "select public.vue_generale_filtree('30j', null, null, 7, %s);"
+                                                              % js(mauvais)), 'INVALID_INPUT')
+    verifier('refusé : un tableau à la place de l\'objet',
+             code(db, ADMIN, "select public.vue_generale_filtree('30j', null, null, 7, '[1]');"), 'INVALID_INPUT')
+    verifier('un client : refusé (shipments.view)', code(db, MARIE, "select public.vue_generale_filtree('30j');"), REFUS)
+    verifier('un visiteur : refusé', 'permission denied' in code(db, None, "select public.vue_generale_filtree('30j');"), True)
+    ve = filtree('30j', {'pays': 'HT'}, compte=EMPLOYE)
+    verifier('un employé : les colis et l\'activité filtrés, ni comparaison ni routes ni facturation',
+             (sorted(k for k in ('colis', 'activite', 'comparaison', 'routes', 'facturation') if k in ve), ve['filtrees']),
+             (['activite', 'colis'], ['colis', 'activite']))
+    verifier('un employé : mêmes colis que l\'administrateur', ve['colis'], filtree('30j', {'pays': 'HT'})['colis'])
+    verifier('aucune réponse filtrée avec NaN / Infinity', nulls(filtree('annee', {'pays': 'US'})), [])
+
     print('\nK. Volume : 10 000 colis, 100 000 événements, 5 000 factures')
     db.sql("alter table colis disable trigger user; alter table colis_historique disable trigger user;"
            "alter table factures disable trigger user; alter table paiements disable trigger user;"
@@ -475,7 +544,9 @@ def main():
     verifier('volume en place', un(db, "select (select count(*) from colis) >= 10000 and (select count(*) from colis_historique) >= 100000;"), 't')
     for m in ("analytics_synthese('12m')", "analytics_serie('12m', null, null, 'jour')", "analytics_serie('12m', null, null, 'semaine')",
               "analytics_operations('12m')", "analytics_clients('12m')", "analytics_finances('12m')", "analytics_routes('12m')",
-              "analytics_scanner('12m')", "analytics_qualite()"):
+              "analytics_scanner('12m')", "analytics_qualite()", "vue_generale_filtree('annee')",
+              """vue_generale_filtree('annee', null, null, 7, '{"pays": "HT", "service": "aerien"}')""",
+              """vue_generale_filtree('30j', null, null, 7, '{"ville": "jacmel", "statut": "actifs"}')"""):
         debut = time.time()
         r = jsonq(db, ADMIN, 'select public.%s;' % m)
         duree = time.time() - debut
@@ -500,6 +571,8 @@ def main():
                      ('scanner', "analytics_scanner('30j')"), ('qualite', 'analytics_qualite()')):
         forme = set(cles(jsonq(db, ADMIN, 'select public.%s;' % sql)))
         verifier('%s : mêmes clés côté démo' % nom, sorted(set(demo[nom]) ^ forme), [])
+    forme = set(cles(jsonq(db, ADMIN, """select public.vue_generale_filtree('30j', null, null, 7, '{"pays": "HT"}');""")))
+    verifier('vue générale filtrée : mêmes clés côté démo', sorted(set(demo['vue_filtree']) ^ forme), [])
     periodes = json.loads(subprocess.run(['node', os.path.join(ICI, 'essai-analytics.js'), '--periodes'],
                                          capture_output=True, text=True, check=True).stdout)
     for p, jours in periodes.items():

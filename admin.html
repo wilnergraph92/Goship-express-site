@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
 <link rel="stylesheet" href="assets/css/site.css">
 <link rel="stylesheet" href="assets/css/tableau.css">
+<script src="assets/js/apparence.js"></script>
 <script src="assets/js/config.js" defer></script>
 <script src="assets/js/api.js" defer></script>
 <script src="assets/js/notifications.js" defer></script>
@@ -39,18 +40,38 @@
       <a class="gs-td__logo" href="index.html" aria-label="Goship Express — voir le site"><img src="assets/img/logo-goship.png" alt="" width="360" height="120"></a>
       <button type="button" class="gs-td__replier" data-action="replier-menu" aria-label="Réduire le menu" aria-pressed="false" title="Réduire le menu"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/></svg></button>
     </div>
-    <p class="gs-td__rubrique">Vue d'ensemble</p>
-    <div class="gs-td__nav" role="tablist" aria-label="Affichage" aria-orientation="vertical">
-      <button type="button" role="tab" aria-selected="true" data-onglet-vue="apercu" data-permission="shipments.view" title="Vue générale"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="gs-td__libelle">Vue générale</span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1" title="Factures"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg><span class="gs-td__libelle">Factures</span><span class="gs-admin-onglets__total" data-total="factures"></span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/></svg><span class="gs-td__libelle">Analytics</span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg><span class="gs-td__libelle">Scanner</span></button>
-      <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
+    <!-- Trois groupes, comme la maquette : les opérations de tous les jours, l'argent,
+         la gestion. Un groupe dont le rôle ne peut rien ouvrir disparaît (tableau.css). -->
+    <div class="gs-td__groupe">
+      <p class="gs-td__rubrique" id="menu-operations">Opérations</p>
+      <div class="gs-td__nav" role="tablist" aria-labelledby="menu-operations" aria-orientation="vertical">
+        <button type="button" role="tab" aria-selected="true" data-onglet-vue="apercu" data-permission="shipments.view" title="Vue générale"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="gs-td__libelle">Vue générale</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg><span class="gs-td__libelle">Scanner</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
+      </div>
+    </div>
+    <div class="gs-td__groupe">
+      <p class="gs-td__rubrique" id="menu-finance">Finance</p>
+      <div class="gs-td__nav" role="tablist" aria-labelledby="menu-finance" aria-orientation="vertical">
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="factures" data-permission="invoices.view" tabindex="-1" title="Factures"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg><span class="gs-td__libelle">Factures</span><span class="gs-admin-onglets__total" data-total="factures"></span></button>
+      </div>
+      <!-- Encaissements et créances : le module « Finances » des Analytics, ouvert directement -->
+      <div class="gs-td__nav">
+        <button type="button" class="gs-td__lien" data-action="menu-finances" data-permission="reports.view" title="Encaissements et créances"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg><span class="gs-td__libelle">Encaissements</span></button>
+      </div>
+    </div>
+    <div class="gs-td__groupe">
+      <p class="gs-td__rubrique" id="menu-gestion">Gestion</p>
+      <div class="gs-td__nav" role="tablist" aria-labelledby="menu-gestion" aria-orientation="vertical">
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/></svg><span class="gs-td__libelle">Analytics</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
+      </div>
+      <div class="gs-td__nav">
+        <button type="button" class="gs-td__lien" data-action="ouvrir-reglages" title="Réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="gs-td__libelle">Réglages</span></button>
+      </div>
     </div>
     <div class="gs-td__pied">
-      <button type="button" class="gs-td__lien" data-action="ouvrir-reglages" title="Réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="gs-td__libelle">Réglages</span></button>
       <a class="gs-td__lien" href="index.html" title="Voir le site"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg><span class="gs-td__libelle">Voir le site</span></a>
       <button type="button" class="gs-td__lien" data-action="deconnexion" title="Déconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span class="gs-td__libelle">Déconnexion</span></button>
     </div>
@@ -82,7 +103,24 @@
             <ul class="gs-alertes" data-alertes-cloche></ul>
           </div>
         </div>
-        <button type="button" class="gs-td__icone" data-action="ouvrir-reglages" aria-label="Réglages" title="Réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></button>
+        <div class="gs-td__deroulant">
+          <button type="button" class="gs-td__icone" data-action="menu-affichage" aria-expanded="false" aria-controls="menu-affichage" aria-label="Affichage et réglages" title="Affichage et réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg></button>
+          <!-- L'apparence et la disposition : des préférences de cet appareil, aucune donnée -->
+          <div class="gs-td__panneau gs-td__panneau--affichage" id="menu-affichage" data-menu-affichage hidden>
+            <p class="gs-td__panneau-titre" id="apparence-titre">Apparence</p>
+            <div class="gs-apparence" role="radiogroup" aria-labelledby="apparence-titre">
+              <label><input type="radio" name="apparence" value="clair" data-apparence-choix><span>Clair</span></label>
+              <label><input type="radio" name="apparence" value="sombre" data-apparence-choix><span>Sombre</span></label>
+              <label><input type="radio" name="apparence" value="systeme" data-apparence-choix><span>Système</span></label>
+            </div>
+            <hr class="gs-td__separateur">
+            <button type="button" class="gs-td__lien" data-action="personnaliser" data-permission="shipments.view"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Personnaliser le tableau de bord</span></button>
+            <button type="button" class="gs-td__lien" data-action="disposition-defaut" data-permission="shipments.view"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg><span>Rétablir la disposition</span></button>
+            <button type="button" class="gs-td__lien" data-action="ouvrir-reglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span>Tous les réglages…</span></button>
+            <hr class="gs-td__separateur">
+            <button type="button" class="gs-td__lien gs-td__lien--danger" data-action="deconnexion"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg><span>Déconnexion</span></button>
+          </div>
+        </div>
         <div class="gs-td__deroulant">
           <button type="button" class="gs-td__compte" data-action="menu-compte" aria-expanded="false" aria-controls="menu-compte" aria-label="Mon compte">
             <span class="gs-td__avatar" data-avatar aria-hidden="true"></span>
@@ -158,11 +196,17 @@
     <!-- La vue générale (vue_generale, colis_a_traiter). Chaque chiffre vient
          de la base ; une partie que le rôle ne peut pas voir n'est pas dans la
          réponse, et ne s'affiche donc pas. -->
-    <div class="gs-admin-vue gs-apercu gs-vg" data-vue="apercu" role="tabpanel">
+    <div class="gs-admin-vue gs-vg" data-vue="apercu" role="tabpanel">
       <div class="gs-vg__tete">
         <div class="gs-vg__intro">
           <h2 class="gs-vg__titre">Vue d'ensemble logistique <span class="gs-vg__route">Miami → Haïti · République dominicaine</span></h2>
           <p class="gs-vg__etat" data-apercu-etat role="status"></p>
+          <!-- Le direct : les changements signalés par la base rechargent la vue (au plus
+               toutes les 15 s) ; en pause, les chiffres restent ceux affichés. -->
+          <p class="gs-vg__direct" data-vg-direct>
+            <span class="gs-vg__direct-etat" data-vg-direct-etat><i aria-hidden="true"></i><span></span></span>
+            <span class="gs-vg__direct-maj" data-vg-direct-maj></span>
+          </p>
         </div>
         <div class="gs-vg__commandes">
           <label class="gs-vg__periode">
@@ -184,15 +228,32 @@
             <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--sombre" data-action="apercu-appliquer">Appliquer</button>
           </div>
           <button type="button" class="gs-vg__bouton" data-action="apercu-actualiser"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>Actualiser</button>
+          <button type="button" class="gs-vg__bouton gs-vg__bouton--direct" data-action="vg-direct" aria-pressed="true"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span data-vg-direct-texte>Suspendre le direct</span></button>
+          <button type="button" class="gs-vg__bouton gs-vg__bouton--plein" data-action="personnaliser"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Personnaliser</button>
         </div>
       </div>
+      <!-- Les filtres (vue_generale_filtree, outils/supabase-analytics.sql) : ce que les colis
+           portent vraiment — pays, ville, mode de transport, statut, lieu actuel (l'agence où
+           attend un colis « Disponible »). Ils découpent ce qui se compte en colis ; l'argent
+           et les clients restent entiers, et chaque carte non filtrée le dit. -->
+      <form class="gs-vg__filtres" data-vg-filtres aria-label="Filtres de la vue générale" novalidate>
+        <span class="gs-vg__filtres-titre"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5h18M6 12h12M10 19h4"/></svg>Filtres</span>
+        <label class="gs-vg__filtre"><span>Pays</span><select name="pays" data-vg-filtre="pays"><option value="">Tous</option></select></label>
+        <label class="gs-vg__filtre"><span>Destination</span><select name="ville" data-vg-filtre="ville"><option value="">Toutes</option></select></label>
+        <label class="gs-vg__filtre"><span>Mode</span><select name="service" data-vg-filtre="service"><option value="">Tous</option></select></label>
+        <label class="gs-vg__filtre"><span>Statut</span><select name="statut" data-vg-filtre="statut"><option value="">Tous</option></select></label>
+        <label class="gs-vg__filtre"><span>Agence</span><select name="lieu" data-vg-filtre="lieu"><option value="">Toutes</option></select></label>
+        <button type="button" class="gs-lien-bouton gs-vg__filtres-effacer" data-action="vg-filtres-effacer" hidden>Effacer les filtres</button>
+        <p class="gs-vg__filtres-total" data-vg-filtres-total aria-live="polite"></p>
+        <p class="gs-vg__filtres-note" data-vg-filtres-note hidden></p>
+      </form>
       <p class="gs-apercu__message" data-apercu-message role="alert" hidden></p>
       <!-- Chaque chiffre de cette page vient de vue_generale ou, pour les comptes qui
            voient les rapports, des Analytics (comparaison à la période précédente,
            routes, clients). Rien n'y est inventé ni additionné : une case dont la base
            n'a pas la donnée n'est pas affichée. -->
       <div class="gs-apercu__corps gs-vg__corps" data-apercu-corps aria-busy="true">
-        <div class="gs-vg__rangee">
+        <div data-vg-bloc="chiffres" class="gs-vg__rangee">
           <section class="gs-vg__carte gs-vg__carte--kpis gs-vg--7" aria-labelledby="vg-colis-titre">
             <h3 class="gs-invisible" id="vg-colis-titre">Colis</h3>
             <div class="gs-vg__kpis" data-vg-kpis></div>
@@ -208,7 +269,7 @@
           </section>
         </div>
 
-        <div class="gs-vg__rangee">
+        <div data-vg-bloc="jours" class="gs-vg__rangee">
           <section class="gs-vg__carte gs-vg--8" aria-labelledby="vg-jours-titre">
             <div class="gs-vg__carte-tete">
               <h3 class="gs-vg__carte-titre" id="vg-jours-titre">Colis reçus, jour par jour</h3>
@@ -226,7 +287,7 @@
           </section>
         </div>
 
-        <div class="gs-vg__rangee">
+        <div data-vg-bloc="carte" class="gs-vg__rangee">
           <section class="gs-vg__carte gs-vg--8" data-vg-partie="routes" aria-labelledby="vg-carte-titre" hidden>
             <div class="gs-vg__carte-tete">
               <h3 class="gs-vg__carte-titre" id="vg-carte-titre">Destinations les plus actives</h3>
@@ -244,12 +305,12 @@
           </section>
         </div>
 
-        <section class="gs-vg__carte gs-vg__bande" aria-labelledby="vg-surveiller-titre">
+        <section data-vg-bloc="surveiller" class="gs-vg__carte gs-vg__bande" aria-labelledby="vg-surveiller-titre">
           <h3 class="gs-invisible" id="vg-surveiller-titre">À surveiller</h3>
           <ul class="gs-vg__surveiller" data-vg-surveiller></ul>
         </section>
 
-        <div class="gs-vg__rangee">
+        <div data-vg-bloc="activite" class="gs-vg__rangee">
           <section class="gs-vg__carte gs-vg__carte--tableau gs-vg--8" data-apercu-partie="activite" aria-labelledby="vg-activite-titre" hidden>
             <div class="gs-vg__carte-tete">
               <h3 class="gs-vg__carte-titre" id="vg-activite-titre">Dernière activité</h3>
@@ -281,7 +342,7 @@
           </section>
         </div>
 
-        <section class="gs-vg__carte" aria-labelledby="vg-chaine-titre">
+        <section data-vg-bloc="chaine" class="gs-vg__carte" aria-labelledby="vg-chaine-titre">
           <div class="gs-vg__carte-tete">
             <h3 class="gs-vg__carte-titre" id="vg-chaine-titre">Chaîne logistique</h3>
             <p class="gs-vg__sous-titre" data-vg-chaine-total></p>
@@ -289,7 +350,7 @@
           <ol class="gs-vg__chaine" data-vg-chaine></ol>
         </section>
 
-        <div class="gs-vg__rangee" data-vg-partie="routes" hidden>
+        <div data-vg-bloc="routes" class="gs-vg__rangee" data-vg-partie="routes" hidden>
           <section class="gs-vg__carte gs-vg__carte--tableau gs-vg--7" aria-labelledby="vg-routes-titre">
             <div class="gs-vg__carte-tete">
               <h3 class="gs-vg__carte-titre" id="vg-routes-titre">Performance des routes</h3>
@@ -321,7 +382,7 @@
           </section>
         </div>
 
-        <section class="gs-apercu__bloc gs-vg__carte gs-vg__carte--tableau" aria-labelledby="apercu-traiter-titre">
+        <section data-vg-bloc="traiter" class="gs-apercu__bloc gs-vg__carte gs-vg__carte--tableau" aria-labelledby="apercu-traiter-titre">
           <div class="gs-apercu__tete">
             <h3 class="gs-vg__carte-titre" id="apercu-traiter-titre">Colis à traiter</h3>
             <div class="gs-apercu__choix gs-apercu__choix--ligne" role="radiogroup" aria-label="Liste">
@@ -354,7 +415,7 @@
           <p class="gs-admin-vide" data-vide="traiter" hidden></p>
           <div class="gs-pagination" data-pagination="traiter" hidden></div>
         </section>
-        <section class="gs-apercu__bloc gs-vg__carte" data-apercu-partie="scanner" aria-labelledby="apercu-scanner-titre" hidden>
+        <section data-vg-bloc="scanner" class="gs-apercu__bloc gs-vg__carte" data-apercu-partie="scanner" aria-labelledby="apercu-scanner-titre" hidden>
           <h3 class="gs-vg__carte-titre" id="apercu-scanner-titre">Poste de scan</h3>
           <div class="gs-kpis" data-kpis="scanner"></div>
           <div class="gs-apercu__trois">
@@ -373,7 +434,7 @@
           </div>
           <p class="gs-apercu__note">Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.</p>
         </section>
-        <section class="gs-apercu__bloc gs-vg__carte gs-vg__carte--tableau" data-apercu-partie="paiements_recents" aria-labelledby="apercu-paiements-titre" hidden>
+        <section data-vg-bloc="paiements" class="gs-apercu__bloc gs-vg__carte gs-vg__carte--tableau" data-apercu-partie="paiements_recents" aria-labelledby="apercu-paiements-titre" hidden>
           <h3 class="gs-vg__carte-titre" id="apercu-paiements-titre">Derniers paiements reçus</h3>
           <div class="gs-tableau-cadre">
             <table class="gs-tableau gs-tableau--paiements">
@@ -1138,6 +1199,18 @@
         <h3>Affichage</h3>
         <p class="gs-reglages__aide">Gardés sur cet appareil seulement : chaque membre de l'équipe règle le sien.</p>
         <label class="gs-reglage">
+          <span class="gs-reglage__texte"><strong>Apparence</strong><small>Claire, sombre, ou celle du système de cet appareil.</small></span>
+          <select class="gs-admin-filtre gs-admin-filtre--petit" data-reglage="apparence">
+            <option value="clair">Clair</option>
+            <option value="sombre">Sombre</option>
+            <option value="systeme">Système</option>
+          </select>
+        </label>
+        <label class="gs-reglage gs-reglage--case">
+          <span class="gs-reglage__texte"><strong>Animations</strong><small>Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.</small></span>
+          <input type="checkbox" class="gs-interrupteur" role="switch" data-reglage="animations">
+        </label>
+        <label class="gs-reglage">
           <span class="gs-reglage__texte"><strong>Période de la vue générale</strong><small>Celle qui s'affiche à l'ouverture du tableau de bord.</small></span>
           <select class="gs-admin-filtre gs-admin-filtre--petit" data-reglage="periode">
             <option value="aujourdhui">Aujourd'hui</option>
@@ -1220,6 +1293,24 @@
   </div>
   <div class="gs-dialogue__pied gs-reglages__pied">
     <button type="button" class="gs-lien-bouton" data-action="reglages-defaut">Rétablir l'affichage par défaut</button>
+    <button type="button" class="gs-bouton gs-bouton--plein" data-action="fermer">Terminé</button>
+  </div>
+</dialog>
+
+<!-- Personnaliser la vue générale : quels blocs, dans quel ordre. Une préférence de cet
+     appareil (gse-tableau-disposition) : elle ne change ni les données ni les permissions,
+     et un bloc que le rôle ne peut pas voir reste caché quoi qu'on coche. -->
+<dialog class="gs-dialogue gs-disposition" data-dialogue="disposition" aria-labelledby="dlg-disposition-titre">
+  <div class="gs-dialogue__tete">
+    <h2 id="dlg-disposition-titre">Personnaliser le tableau de bord</h2>
+    <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="gs-dialogue__corps">
+    <p class="gs-reglages__aide">Cochez les blocs à afficher et rangez-les avec les flèches. Gardé sur cet appareil seulement.</p>
+    <ol class="gs-disposition__liste" data-disposition-liste></ol>
+  </div>
+  <div class="gs-dialogue__pied gs-reglages__pied">
+    <button type="button" class="gs-lien-bouton" data-action="disposition-defaut">Rétablir la disposition</button>
     <button type="button" class="gs-bouton gs-bouton--plein" data-action="fermer">Terminé</button>
   </div>
 </dialog>

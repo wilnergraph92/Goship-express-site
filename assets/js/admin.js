@@ -263,7 +263,11 @@
     arreterSurveillance = API.surveiller(function (quoi) {
       clearTimeout(rechargementPrevu);
       rechargementPrevu = setTimeout(function () { toutRecharger(quoi); }, 350);
-    }, { tout: true, etat: function (actif) { $('[data-direct]').hidden = !actif; } });
+    }, { tout: true, etat: function (actif) {
+      $('[data-direct]').hidden = !actif;
+      etatDirect.connecte = actif;
+      majDirect();
+    } });
   }
 
   // Un changement signalé en direct (ou le retour du réseau) : les listes
@@ -277,7 +281,7 @@
     if (peut('clients.view') && (quoi === 'clients' || etat.vue === 'clients')) chargerClients();
     if (peut('invoices.view') && (quoi === 'factures' || etat.vue === 'factures')) chargerFactures();
     if (peut('users.view') && (quoi === 'clients' || etat.vue === 'equipe')) chargerEquipe();
-    if (etat.vue === 'apercu' || notificationsActives()) rafraichirApercu();
+    if (!etatDirect.pause && (etat.vue === 'apercu' || notificationsActives())) rafraichirApercu();
   }
 
   function chargerStatistiques() {
@@ -2678,7 +2682,18 @@
     corpsApercu.setAttribute('aria-busy', 'true');
     if (!etatApercu.donnees) $('[data-apercu-etat]').textContent = 'Chargement des chiffres…';
     chargerTraiter();
-    return API.admin.vueGenerale({ periode: etatApercu.periode, debut: etatApercu.debut, fin: etatApercu.fin, jours: traiter.jours })
+    var o = { periode: etatApercu.periode, debut: etatApercu.debut, fin: etatApercu.fin, jours: traiter.jours };
+    // La vue filtrée (vue_generale_filtree) est la vue générale entière, ses colis
+    // découpés par les filtres. Une base qui ne l'a pas encore : vue_generale, sans filtres.
+    var lecture = etatFiltres.disponible
+      ? API.admin.vueGeneraleFiltree(Object.assign({ filtres: etatFiltres.valeurs }, o)).catch(function (err) {
+        if (!err || err.code !== 'absent') throw err;
+        etatFiltres.disponible = false;
+        etatFiltres.valeurs = {};
+        return API.admin.vueGenerale(o);
+      })
+      : API.admin.vueGenerale(o);
+    return lecture
       .then(function (v) {
         if (numero !== etatApercu.demande) return;
         etatApercu.donnees = v;
@@ -2703,7 +2718,7 @@
     var attente = Math.max(0, 15000 - (Date.now() - etatApercu.charge));
     etatApercu.prevu = setTimeout(function () {
       etatApercu.prevu = null;
-      if (etat.vue === 'apercu' || notificationsActives()) chargerApercu();
+      if (!etatDirect.pause && (etat.vue === 'apercu' || notificationsActives())) chargerApercu();
     }, attente);
   }
 
@@ -2776,13 +2791,15 @@
   }
 
   function texteComparaison() {
-    var s = etatVG.analytics && etatVG.analytics.synthese;
-    var prec = s && s.periode && s.periode.precedente;
+    var s = etatVG.analytics && etatVG.analytics.synthese, v = etatApercu.donnees;
+    var prec = (v && v.comparaison && v.comparaison.precedente) || (s && s.periode && s.periode.precedente);
     return prec ? 'par rapport au ' + jourLisible(prec.debut, true) + ' – ' + jourLisible(prec.fin, true) : '';
   }
 
   function vgKpis(v) {
-    var c = v.colis || {}, s = etatVG.analytics && etatVG.analytics.synthese, m = (s && s.mesures) || {};
+    var c = v.colis || {}, s = etatVG.analytics && etatVG.analytics.synthese;
+    // Filtrée ou non, la comparaison de la vue filtrée vaut celle des Analytics (essai-analytics)
+    var m = v.comparaison || (s && s.mesures) || {};
     var zone = $('[data-vg-kpis]');
     zone.textContent = '';
     [
@@ -3267,7 +3284,7 @@
   }
 
   function vgRoutes() {
-    var r = etatVG.analytics && etatVG.analytics.routes;
+    var r = (etatApercu.donnees && etatApercu.donnees.routes) || (etatVG.analytics && etatVG.analytics.routes);
     $$('[data-vg-partie="routes"]').forEach(function (n) { n.hidden = !r; });
     if (!r) return;
     $('[data-vg-origine]').textContent = 'Départ : ' + (r.origine || 'Miami (Medley), FL');
@@ -3413,7 +3430,9 @@
         debut: etatAnalytics.debut, fin: etatAnalytics.fin }, options))];
       return lireAnalytics(module, options).catch(function () { return null; });
     }
-    Promise.all([lire('synthese'), lire('routes'), lire('clients', { parPage: 1 })]).then(function (r) {
+    // La vue filtrée apporte ses routes : inutile de les relire
+    var routes = etatApercu.donnees && etatApercu.donnees.routes ? Promise.resolve(null) : lire('routes');
+    Promise.all([lire('synthese'), routes, lire('clients', { parPage: 1 })]).then(function (r) {
       if (numero !== etatVG.demande || !etatApercu.donnees) return;
       etatVG.analytics = { synthese: r[0], routes: r[1], clients: r[2] };
       var v = etatApercu.donnees;
@@ -3442,6 +3461,9 @@
     vgChaine(v);
     vgRoutes();
     majCloche(v.alertes || []);
+    majFiltres(v);
+    majDirect();
+    revelerCartes();
     chargerAnalyticsApercu();
 
     partie('scanner', !!v.scanner);
@@ -3535,6 +3557,265 @@
   });
   $('[data-action="vg-clients"]').addEventListener('click', function () { choisirVue('clients'); });
   $('[data-action="vg-tous-colis"]').addEventListener('click', function () { viderFiltresColis(); choisirVue('colis'); });
+
+  /* ---- Les filtres de la vue générale ----------------------------------------------
+     vue_generale_filtree (outils/supabase-analytics.sql) : pays, ville de destination,
+     mode de transport, statut, lieu actuel (l'agence où attend un colis « Disponible » ;
+     la base n'a pas de table d'agences). Les choix sont ceux que les colis portent,
+     comptés par la base. Les filtres découpent ce qui se compte en colis ; l'argent,
+     les clients, le poste de scan et les colis à traiter restent entiers, et le disent.
+     Gardés le temps de la visite seulement : un tableau de bord rouvert montre tout. */
+  var etatFiltres = { valeurs: {}, disponible: true };
+  var formFiltres = $('[data-vg-filtres]');
+  var LIBELLES_FILTRES = { pays: 'Tous', ville: 'Toutes', service: 'Tous', statut: 'Tous', lieu: 'Toutes' };
+  // Les cartes que les filtres ne découpent pas
+  var PARTIES_ENTIERES = '[data-apercu-partie="facturation"], [data-apercu-partie="clients"], ' +
+    '[data-apercu-partie="scanner"], [data-apercu-partie="paiements_recents"], [data-vg-bloc="traiter"], [data-vg-bloc="surveiller"]';
+
+  function filtresActifs() {
+    return Object.keys(etatFiltres.valeurs).some(function (k) { return etatFiltres.valeurs[k]; });
+  }
+
+  function remplirFiltre(cle, choix) {
+    var liste = $('[data-vg-filtre="' + cle + '"]', formFiltres);
+    var garde = etatFiltres.valeurs[cle] || '';
+    liste.textContent = '';
+    liste.add(new Option(LIBELLES_FILTRES[cle], ''));
+    var vus = {};
+    choix.forEach(function (x) {
+      vus[x.valeur] = true;
+      liste.add(new Option(x.libelle + (x.colis != null ? ' (' + entier(x.colis) + ')' : ''), x.valeur));
+    });
+    // Un choix qui n'a plus de colis reste affiché tant qu'il est choisi
+    if (garde && !vus[garde]) liste.add(new Option(garde, garde));
+    liste.value = garde;
+    liste.closest('.gs-vg__filtre').classList.toggle('is-actif', !!garde);
+  }
+
+  function majFiltres(v) {
+    var o = v.options;
+    var actifs = filtresActifs();
+    $$('select', formFiltres).forEach(function (s) { s.disabled = !etatFiltres.disponible || !o; });
+    if (o) {
+      remplirFiltre('pays', (o.pays || []).map(function (x) { return { valeur: x.valeur, libelle: nomPays(x.valeur), colis: x.colis }; }));
+      remplirFiltre('ville', (o.villes || []).map(function (x) { return { valeur: x.valeur, libelle: x.libelle, colis: x.colis }; }));
+      remplirFiltre('service', (o.services || []).map(function (x) { return { valeur: x.valeur, libelle: nomService(x.valeur), colis: x.colis }; }));
+      // « En cours » n'a pas de nombre : ce serait une somme faite dans la page
+      remplirFiltre('statut', [{ valeur: 'actifs', libelle: 'En cours (tous sauf livrés)', colis: null }].concat(
+        CHAINE.concat(['incident']).map(function (k) {
+          var x = (o.statuts || []).filter(function (y) { return y.valeur === k; })[0];
+          return { valeur: k, libelle: STATUTS[k], colis: x ? x.colis : 0 };
+        })));
+      remplirFiltre('lieu', (o.lieux || []).map(function (x) { return { valeur: x.valeur, libelle: x.libelle, colis: x.colis }; }));
+    }
+    $('[data-action="vg-filtres-effacer"]').hidden = !actifs;
+    var c = v.colis || {};
+    $('[data-vg-filtres-total]').textContent = actifs
+      ? pluriel(c.total, 'colis correspond', 'colis correspondent') + ' aux filtres'
+      : pluriel(c.total, 'colis', 'colis') + ' dans la vue';
+    var note = $('[data-vg-filtres-note]');
+    if (!etatFiltres.disponible) {
+      note.textContent = 'Filtres indisponibles : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).';
+    } else if (actifs) {
+      note.textContent = 'Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, ' +
+        'poste de scan et colis à traiter restent entiers.';
+    }
+    note.hidden = !(actifs || !etatFiltres.disponible);
+    $$(PARTIES_ENTIERES).forEach(function (n) { n.classList.toggle('is-entier', actifs); });
+    document.body.classList.toggle('is-vg-filtree', actifs);
+  }
+
+  formFiltres.addEventListener('change', function (e) {
+    var cle = e.target.getAttribute('data-vg-filtre');
+    if (!cle) return;
+    if (e.target.value) etatFiltres.valeurs[cle] = e.target.value; else delete etatFiltres.valeurs[cle];
+    e.target.closest('.gs-vg__filtre').classList.toggle('is-actif', !!e.target.value);
+    chargerApercu();
+  });
+  formFiltres.addEventListener('submit', function (e) { e.preventDefault(); });
+  $('[data-action="vg-filtres-effacer"]').addEventListener('click', function () {
+    etatFiltres.valeurs = {};
+    $$('select', formFiltres).forEach(function (s) {
+      s.value = '';
+      s.closest('.gs-vg__filtre').classList.remove('is-actif');
+    });
+    chargerApercu();
+  });
+
+  /* ---- Le direct --------------------------------------------------------------------
+     Les changements que la base signale (API.surveiller) rechargent la vue générale, au
+     plus toutes les quinze secondes. Sans connexion en direct, la vue se relit chaque
+     minute tant qu'elle est à l'écran. « Suspendre le direct » fige les chiffres affichés
+     (le bouton « Actualiser » les relit quand même). Rien n'est simulé. */
+  var etatDirect = { pause: false, connecte: false };
+  function majDirect() {
+    var zone = $('[data-vg-direct-etat]');
+    var texte = etatDirect.pause ? 'En pause'
+      : (etatDirect.connecte ? 'En direct' : 'Mise à jour chaque minute');
+    zone.className = 'gs-vg__direct-etat gs-vg__direct-etat--' + (etatDirect.pause ? 'pause' : (etatDirect.connecte ? 'direct' : 'minute'));
+    zone.lastChild.textContent = texte;
+    var b = $('[data-action="vg-direct"]');
+    b.setAttribute('aria-pressed', String(!etatDirect.pause));
+    $('[data-vg-direct-texte]').textContent = etatDirect.pause ? 'Reprendre le direct' : 'Suspendre le direct';
+    var pastille = $('[data-direct]');
+    pastille.classList.toggle('is-pause', etatDirect.pause);
+    $('.gs-direct__texte', pastille).textContent = etatDirect.pause ? 'En pause' : 'En direct';
+    majDepuis();
+  }
+  // « Mis à jour il y a… » : l'heure des chiffres affichés (genere_le de la base)
+  function majDepuis() {
+    var v = etatApercu.donnees, zone = $('[data-vg-direct-maj]');
+    if (!v || !v.genere_le) { zone.textContent = ''; return; }
+    var minutes = Math.max(0, Math.floor((Date.now() - new Date(v.genere_le).getTime()) / 60000));
+    zone.textContent = minutes < 1 ? 'Mis à jour à l’instant' : 'Mis à jour il y a ' + pluriel(minutes, 'minute', 'minutes');
+  }
+  setInterval(function () {
+    majDepuis();
+    if (etatDirect.pause || etatDirect.connecte || etat.vue !== 'apercu' || document.hidden) return;
+    if (etatApercu.donnees && Date.now() - etatApercu.charge > 58000) chargerApercu();
+  }, 30000);
+  $('[data-action="vg-direct"]').addEventListener('click', function () {
+    etatDirect.pause = !etatDirect.pause;
+    majDirect();
+    if (!etatDirect.pause) chargerApercu();
+    toast(etatDirect.pause ? 'Direct suspendu : les chiffres restent ceux affichés.' : 'Direct repris.');
+  });
+
+  /* ---- La disposition de la vue générale ---------------------------------------------
+     Quels blocs, dans quel ordre : une préférence de cet appareil. Les blocs sont
+     déplacés dans la page (pas seulement à l'écran) : le clavier et les lecteurs d'écran
+     les parcourent dans le même ordre que les yeux. Un bloc que le rôle ne peut pas voir
+     reste caché, coché ou non. */
+  var CLE_DISPOSITION = 'gse-tableau-disposition';
+  var BLOCS_VG = [
+    ['chiffres', 'Chiffres clés et facturé'], ['jours', 'Colis par jour et règlement des factures'],
+    ['carte', 'Destinations et clients'], ['surveiller', 'À surveiller'], ['activite', 'Dernière activité et colis par statut'],
+    ['chaine', 'Chaîne logistique'], ['routes', 'Routes et villes'], ['traiter', 'Colis à traiter'],
+    ['scanner', 'Poste de scan'], ['paiements', 'Derniers paiements reçus']
+  ];
+  var IDS_BLOCS = BLOCS_VG.map(function (b) { return b[0]; });
+  function lireDisposition() {
+    var lu = {};
+    try { lu = JSON.parse(localStorage.getItem(CLE_DISPOSITION) || '{}') || {}; } catch (e) { lu = {}; }
+    var ordre = (Array.isArray(lu.ordre) ? lu.ordre : []).filter(function (id, i, t) {
+      return IDS_BLOCS.indexOf(id) >= 0 && t.indexOf(id) === i;
+    });
+    IDS_BLOCS.forEach(function (id) { if (ordre.indexOf(id) < 0) ordre.push(id); });
+    var caches = (Array.isArray(lu.caches) ? lu.caches : []).filter(function (id) { return IDS_BLOCS.indexOf(id) >= 0; });
+    return { ordre: ordre, caches: caches };
+  }
+  var disposition = lireDisposition();
+  function ecrireDisposition() {
+    try { localStorage.setItem(CLE_DISPOSITION, JSON.stringify(disposition)); } catch (e) { /* navigation privée */ }
+  }
+  function appliquerDisposition() {
+    var corps = $('[data-apercu-corps]');
+    disposition.ordre.forEach(function (id) {
+      var bloc = $('[data-vg-bloc="' + id + '"]', corps);
+      if (!bloc) return;
+      corps.appendChild(bloc);
+      bloc.classList.toggle('is-masque', disposition.caches.indexOf(id) >= 0);
+    });
+  }
+  var dlgDisposition = $('[data-dialogue="disposition"]');
+  function dessinerDisposition(focus) {
+    var liste = $('[data-disposition-liste]', dlgDisposition);
+    liste.textContent = '';
+    disposition.ordre.forEach(function (id, i) {
+      var nom = BLOCS_VG.filter(function (b) { return b[0] === id; })[0][1];
+      var li = el('li', 'gs-disposition__ligne');
+      var etiquette = el('label', 'gs-disposition__nom');
+      var coche = el('input');
+      coche.type = 'checkbox';
+      coche.checked = disposition.caches.indexOf(id) < 0;
+      coche.addEventListener('change', function () {
+        disposition.caches = disposition.caches.filter(function (x) { return x !== id; });
+        if (!coche.checked) disposition.caches.push(id);
+        ecrireDisposition();
+        appliquerDisposition();
+      });
+      etiquette.appendChild(coche);
+      etiquette.appendChild(el('span', '', nom));
+      li.appendChild(etiquette);
+      [['haut', -1, 'Monter'], ['bas', 1, 'Descendre']].forEach(function (s) {
+        var b = el('button', 'gs-disposition__fleche');
+        b.type = 'button';
+        b.setAttribute('aria-label', s[2] + ' « ' + nom + ' »');
+        b.innerHTML = s[1] < 0 ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+        var j = i + s[1];
+        b.disabled = j < 0 || j >= disposition.ordre.length;
+        b.addEventListener('click', function () {
+          disposition.ordre.splice(i, 1);
+          disposition.ordre.splice(j, 0, id);
+          ecrireDisposition();
+          appliquerDisposition();
+          dessinerDisposition({ id: id, sens: s[0] });
+        });
+        b.setAttribute('data-bloc', id);
+        b.setAttribute('data-sens', s[0]);
+        li.appendChild(b);
+      });
+      liste.appendChild(li);
+    });
+    if (focus) {
+      var cible = $('[data-bloc="' + focus.id + '"][data-sens="' + focus.sens + '"]', liste);
+      if (cible && cible.disabled) cible = $('[data-bloc="' + focus.id + '"]:not([disabled])', liste);
+      if (cible) cible.focus();
+    }
+  }
+  function ouvrirDisposition() {
+    fermerPanneaux(null);
+    dessinerDisposition();
+    choisirVue('apercu');
+    dlgDisposition.showModal();
+  }
+  function dispositionDefaut() {
+    disposition = { ordre: IDS_BLOCS.slice(), caches: [] };
+    try { localStorage.removeItem(CLE_DISPOSITION); } catch (e) { /* navigation privée */ }
+    appliquerDisposition();
+    if (dlgDisposition.open) dessinerDisposition();
+    toast('Disposition par défaut rétablie.');
+  }
+  $$('[data-action="personnaliser"]').forEach(function (b) { b.addEventListener('click', ouvrirDisposition); });
+  $$('[data-action="disposition-defaut"]').forEach(function (b) {
+    b.addEventListener('click', function () { fermerPanneaux(null); dispositionDefaut(); });
+  });
+  appliquerDisposition();
+
+  /* ---- Les apparitions au défilement et le relief -------------------------------------
+     Une carte glisse et apparaît la première fois qu'elle entre à l'écran ; les fonds
+     (carte, carte sombre, menu) bougent un peu moins vite que la page. Désactivés par
+     le réglage « Animations » ou quand le système demande moins d'animations (CSS). */
+  var observateur = 'IntersectionObserver' in window ? new IntersectionObserver(function (entrees) {
+    entrees.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('is-vu');
+      observateur.unobserve(e.target);
+    });
+  }, { rootMargin: '0px 0px -6% 0px', threshold: 0.06 }) : null;
+  function revelerCartes() {
+    if (!observateur) return;
+    $$('.gs-vg__rangee').forEach(function (r) {
+      $$('.gs-vg__carte', r).forEach(function (c, i) { c.style.setProperty('--rang', i); });
+    });
+    $$('.gs-vg__carte:not(.is-vu), .gs-vg__filtres:not(.is-vu)').forEach(function (n) { observateur.observe(n); });
+  }
+  if (observateur) document.documentElement.classList.add('gs-revele');
+  var reliefPrevu = false;
+  window.addEventListener('scroll', function () {
+    if (reliefPrevu) return;
+    reliefPrevu = true;
+    requestAnimationFrame(function () {
+      reliefPrevu = false;
+      document.documentElement.style.setProperty('--defil', String(Math.round(window.scrollY)));
+    });
+  }, { passive: true });
+
+  $('[data-action="menu-finances"]').addEventListener('click', function () {
+    choisirVue('analytics');
+    choisirModule('finances');
+  });
 
   /* ---- Les colis à traiter ----------------------------------------------------- */
   var DEFINITIONS_TRAITER = {
@@ -3790,7 +4071,8 @@
 
   // Les préférences d'affichage, gardées sur cet appareil seulement
   var CLE_REGLAGES = 'gse-tableau-reglages';
-  var REGLAGES_DEFAUT = { periode: '30j', parPage: 25, jours: 7, menuReduit: false, secondes: false, notifications: true };
+  var REGLAGES_DEFAUT = { periode: '30j', parPage: 25, jours: 7, menuReduit: false, secondes: false, notifications: true,
+                         apparence: 'clair', animations: true };
   var PERIODES_REGLAGES = ['aujourdhui', '7j', '30j', 'mois', 'mois_precedent', 'annee'];
   function lireReglages() {
     var r = Object.assign({}, REGLAGES_DEFAUT), lu = {};
@@ -3801,12 +4083,34 @@
     r.menuReduit = lu.menuReduit === true;
     r.secondes = lu.secondes === true;
     r.notifications = lu.notifications !== false;
+    if (['clair', 'sombre', 'systeme'].indexOf(lu.apparence) >= 0) r.apparence = lu.apparence;
+    r.animations = lu.animations !== false;
     return r;
   }
   function ecrireReglages() {
     try { localStorage.setItem(CLE_REGLAGES, JSON.stringify(reglages)); } catch (e) { /* navigation privée : tant pis */ }
   }
   var reglages = lireReglages();
+
+  // L'apparence : claire, sombre, ou celle du système (suivie quand elle change).
+  // apparence.js l'a déjà posée avant le premier affichage ; ceci la tient à jour.
+  var requeteSombre = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function appliquerApparence() {
+    var sombre = reglages.apparence === 'sombre' ||
+      (reglages.apparence === 'systeme' && !!requeteSombre && requeteSombre.matches);
+    var html = document.documentElement;
+    html.setAttribute('data-apparence', sombre ? 'sombre' : 'clair');
+    if (reglages.animations) html.removeAttribute('data-animations'); else html.setAttribute('data-animations', 'non');
+    var meta = $('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', sombre ? '#050d1f' : '#061a3f');
+    $$('[data-apparence-choix]').forEach(function (r) { r.checked = r.value === reglages.apparence; });
+  }
+  if (requeteSombre) {
+    var suivreSysteme = function () { if (reglages.apparence === 'systeme') appliquerApparence(); };
+    if (requeteSombre.addEventListener) requeteSombre.addEventListener('change', suivreSysteme);
+    else if (requeteSombre.addListener) requeteSombre.addListener(suivreSysteme);
+  }
+  appliquerApparence();
 
   // La date et l'heure de cet appareil, toujours visibles en haut de l'écran
   var horloge = { date: $('[data-horloge-date]'), court: $('[data-horloge-date-courte]'), heure: $('[data-horloge-heure]'), jour: '' };
@@ -3859,6 +4163,7 @@
   // Les deux panneaux de la barre : les alertes (cloche) et le compte
   var deroulants = [
     { bouton: $('[data-action="alertes"]'), panneau: $('[data-panneau-alertes]') },
+    { bouton: $('[data-action="menu-affichage"]'), panneau: $('[data-menu-affichage]') },
     { bouton: $('[data-action="menu-compte"]'), panneau: $('[data-menu-compte]') }
   ];
   function fermerPanneaux(sauf) {
@@ -3886,7 +4191,12 @@
     fermerPanneaux(null);
     fermerMenu();
   });
-  $$('[data-menu-compte] .gs-td__lien').forEach(function (b) { b.addEventListener('click', function () { fermerPanneaux(null); }); });
+  $$('[data-menu-compte] .gs-td__lien, [data-menu-affichage] .gs-td__lien').forEach(function (b) {
+    b.addEventListener('click', function () { fermerPanneaux(null); });
+  });
+  $$('[data-apparence-choix]').forEach(function (r) {
+    r.addEventListener('change', function () { if (r.checked) majReglage('apparence', r.value); });
+  });
 
   // Ce que fait « Voir » sur une alerte, dans la vue générale comme sous la cloche
   function actionAlerte(code) {
@@ -3975,6 +4285,10 @@
       majHorloge();
     } else if (cle === 'notifications' && valeur) {
       demanderNotifications();
+    } else if (cle === 'apparence' || cle === 'animations') {
+      appliquerApparence();
+      var choix = $('[data-reglage="' + cle + '"]', dlgReglages);
+      if (choix && choix.type !== 'checkbox') choix.value = valeur;
     }
   }
 
@@ -4041,13 +4355,14 @@
   $$('[data-reglage]', dlgReglages).forEach(function (c) {
     c.addEventListener('change', function () {
       var cle = c.getAttribute('data-reglage');
-      majReglage(cle, c.type === 'checkbox' ? c.checked : (cle === 'periode' ? c.value : Number(c.value)));
+      majReglage(cle, c.type === 'checkbox' ? c.checked : (cle === 'periode' || cle === 'apparence' ? c.value : Number(c.value)));
     });
   });
   $('[data-action="reglages-defaut"]', dlgReglages).addEventListener('click', function () {
     reglages = Object.assign({}, REGLAGES_DEFAUT);
     ecrireReglages();
     appliquerReglages();
+    appliquerApparence();
     majHorloge();
     $$('[data-reglage]', dlgReglages).forEach(function (c) {
       var cle = c.getAttribute('data-reglage');

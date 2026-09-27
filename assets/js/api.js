@@ -1073,6 +1073,20 @@
         }).then(resultat);
       },
 
+      // La même, ses colis découpés par filtres ({ pays, ville, service, statut,
+      // lieu } dans o.filtres) : vue_generale_filtree, outils/supabase-analytics.sql.
+      // Une base qui ne l'a pas encore répond « absent » ; la page garde alors
+      // vue_generale, sans les filtres.
+      vueGeneraleFiltree: function (o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('vue_generale_filtree', {
+            p_periode: o.periode || '30j', p_debut: o.debut || null, p_fin: o.fin || null, p_jours: o.jours || 7,
+            p_filtres: o.filtres || {}
+          });
+        }).then(resultat);
+      },
+
       // liste : « action_requise » ou « sans_mouvement ». Réponse : { liste,
       // jours, total, lignes }, les plus anciens d'abord.
       colisATraiter: function (liste, o) {
@@ -2073,6 +2087,246 @@
   function heuresEntre(a, b) { return (new Date(b).getTime() - new Date(a).getTime()) / 36e5; }
 
   var MODULES_ANALYTICS = ['synthese', 'serie', 'operations', 'clients', 'finances', 'routes', 'scanner', 'qualite'];
+
+  // Les filtres de la vue générale (filtres_colis, colis_filtre, options_filtres) :
+  // mêmes clés, mêmes valeurs, mêmes refus que la base
+  var SERVICES_COLIS = ['aerien', 'maritime', 'terrestre'];
+  function filtresColisDemo(f) {
+    var r = {};
+    if (f == null) return r;
+    if (typeof f !== 'object' || Array.isArray(f)) throw Erreur('INVALID_INPUT', 'Les filtres forment un objet.');
+    Object.keys(f).forEach(function (k) {
+      if (['pays', 'ville', 'service', 'statut', 'lieu'].indexOf(k) < 0) {
+        throw Erreur('INVALID_INPUT', 'Filtre inconnu : ' + k.slice(0, 20) + '.');
+      }
+      if (f[k] != null && typeof f[k] !== 'string') throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » est un texte.');
+      var v = String(f[k] == null ? '' : f[k]).trim().toLowerCase();
+      if (!v) return;
+      if (k === 'pays') {
+        v = v.toUpperCase();
+        if (['HT', 'DO', 'US'].indexOf(v) < 0) throw Erreur('INVALID_INPUT', 'Pays inconnu : ' + v.slice(0, 10) + '.');
+      } else if (k === 'service' && SERVICES_COLIS.indexOf(v) < 0) {
+        throw Erreur('INVALID_INPUT', 'Mode de transport inconnu : ' + v.slice(0, 20) + '.');
+      } else if (k === 'statut' && v !== 'actifs' && STATUTS.indexOf(v) < 0) {
+        throw Erreur('INVALID_INPUT', 'Statut inconnu : ' + v.slice(0, 20) + '.');
+      } else if ((k === 'ville' || k === 'lieu') && v.length > 120) {
+        throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » fait 120 caractères au plus.');
+      }
+      r[k] = v;
+    });
+    return r;
+  }
+  function colisFiltreDemo(c, f) {
+    return (!f.pays || c.pays_destination === f.pays) && (!f.service || c.service === f.service) &&
+           (!f.statut || c.statut === f.statut || (f.statut === 'actifs' && c.statut !== 'livre')) &&
+           (!f.ville || String(c.destination || '').trim().toLowerCase() === f.ville) &&
+           (!f.lieu || String(c.lieu || '').trim().toLowerCase() === f.lieu);
+  }
+  function optionsFiltresDemo(d) {
+    function compter(cle, texte) {
+      var t = {};
+      d.colis.forEach(function (c) {
+        var brut = String(c[cle] == null ? '' : c[cle]).trim(), v = texte ? brut.toLowerCase() : brut;
+        if (!v) return;
+        var x = t[v] || (t[v] = { valeur: v, colis: 0, ecritures: {} });
+        x.colis++;
+        if (texte) x.ecritures[brut] = (x.ecritures[brut] || 0) + 1;
+      });
+      var liste = Object.keys(t).map(function (k) { return t[k]; })
+        .sort(function (a, b) { return b.colis - a.colis || (a.valeur < b.valeur ? -1 : 1); });
+      if (!texte) return liste.map(function (x) { return { valeur: x.valeur, colis: x.colis }; });
+      // L'écriture la plus fréquente (à égalité, la première dans l'ordre), comme mode() dans la base
+      return liste.slice(0, 60).map(function (x) {
+        var libelle = Object.keys(x.ecritures).sort(function (a, b) {
+          return x.ecritures[b] - x.ecritures[a] || (a < b ? -1 : 1);
+        })[0];
+        return { valeur: x.valeur, libelle: libelle, colis: x.colis };
+      });
+    }
+    return { pays: compter('pays_destination'), services: compter('service'), statuts: compter('statut'),
+             villes: compter('destination', true), lieux: compter('lieu', true) };
+  }
+
+  // vue_generale, calculée sur les données d : une période → ce que le rôle a le droit
+  // de voir (la copie démo de outils/supabase-tableau-de-bord.sql)
+  function vueGeneraleDemo(d, o) {
+    o = o || {};
+    var moi = exiger(d, 'shipments.view');
+    var jours = joursSansMouvement(o.jours);
+    var p = bornesPeriode(o.periode, o.debut, o.fin);
+    var serie = joursEntre(p.debut, p.fin);
+    function dans(iso) { var j = jourSD(iso); return j >= p.debut && j <= p.fin; }
+    function parJour(liste, cle, valeur) {
+      var t = {};
+      liste.forEach(function (x) { t[x.jour] = arrondi((t[x.jour] || 0) + (valeur ? valeur(x) : 1)); });
+      return t;
+    }
+
+    // Les colis : le stock maintenant, les reçus et livrés de la période
+    var statuts = {};
+    STATUTS.forEach(function (st) { statuts[st] = 0; });
+    d.colis.forEach(function (c) { statuts[c.statut] = (statuts[c.statut] || 0) + 1; });
+    var recus = d.colis.filter(function (c) { return dans(c.recu_le); });
+    var livraisons = {};
+    d.historique.forEach(function (h) {
+      if (h.statut !== 'livre' || h.statut_precedent === 'livre' || !dans(h.cree_le) || corrigeDemo(d, h)) return;
+      var j = jourSD(h.cree_le);
+      if (!livraisons[h.colis_id] || j < livraisons[h.colis_id]) livraisons[h.colis_id] = j;
+    });
+    var limite = Date.now() - jours * 864e5;
+    var immobiles = d.colis.filter(function (c) {
+      if (c.statut === 'livre') return false;
+      var dernier = dernierEvenementDemo(d, c.id);
+      return new Date(dernier ? dernier.cree_le : c.recu_le).getTime() < limite;
+    }).length;
+    var parRecu = parJour(recus.map(function (c) { return { jour: jourSD(c.recu_le) }; }));
+    var parLivre = parJour(Object.keys(livraisons).map(function (k) { return { jour: livraisons[k] }; }));
+    var colis = {
+      total: d.colis.length,
+      actifs: d.colis.length - statuts.livre,
+      statuts: statuts,
+      action_requise: statuts.incident,
+      sans_mouvement: immobiles,
+      recus_periode: recus.length,
+      poids_periode: arrondi(recus.reduce(function (t, c) { return t + (Number(c.poids_lb) || 0); }, 0)),
+      livres_periode: Object.keys(livraisons).length,
+      par_jour: serie.map(function (j) { return { jour: j, recus: parRecu[j] || 0, livres: parLivre[j] || 0 }; })
+    };
+    var r = {
+      periode: { code: p.code, debut: p.debut, fin: p.fin, jours: serie.length, fuseau: 'America/Santo_Domingo' },
+      jours_sans_mouvement: jours,
+      genere_le: maintenant(),
+      colis: colis
+    };
+
+    if (peutCompte(moi, 'clients.view')) {
+      var clients = d.comptes.filter(function (c) { return c.role === 'client'; });
+      var idsClients = clients.map(function (c) { return c.id; });
+      var actifs = {};
+      d.colis.forEach(function (c) {
+        if (c.statut !== 'livre' && idsClients.indexOf(c.client_id) >= 0) actifs[c.client_id] = true;
+      });
+      r.clients = {
+        total: clients.length,
+        nouveaux_periode: clients.filter(function (c) { return dans(c.cree_le); }).length,
+        avec_colis_en_cours: Object.keys(actifs).length
+      };
+    }
+
+    var facturation = null;
+    if (peutCompte(moi, 'reports.view')) {
+      var f = { emises_periode: 0, facture_periode: 0, paye_sur_periode: 0, solde_sur_periode: 0, annulees_periode: 0,
+                encaisse_periode: 0, paiements_periode: 0, a_encaisser: 0, ouvertes: 0, montant_en_retard: 0,
+                clients_avec_solde: 0, etats: { a_payer: 0, partielle: 0, en_retard: 0, payee: 0, annulee: 0 } };
+      var avecSolde = {}, emissions = [], encaissements = [];
+      (d.factures || []).forEach(function (x) {
+        var c = factureComplete(d, x);
+        f.etats[c.etat_paiement] += 1;
+        if (x.statut !== 'annulee' && dans(x.cree_le)) {
+          f.emises_periode++;
+          f.facture_periode = arrondi(f.facture_periode + x.montant_usd);
+          f.paye_sur_periode = arrondi(f.paye_sur_periode + c.paye_usd);
+          f.solde_sur_periode = arrondi(f.solde_sur_periode + c.solde_usd);
+          emissions.push({ jour: jourSD(x.cree_le), montant: x.montant_usd });
+        }
+        if (x.statut === 'annulee' && dans(x.cree_le)) f.annulees_periode++;
+        f.a_encaisser = arrondi(f.a_encaisser + c.solde_usd);
+        if (c.solde_usd > 0) { f.ouvertes++; avecSolde[x.client_id] = true; }
+        if (c.etat_paiement === 'en_retard') f.montant_en_retard = arrondi(f.montant_en_retard + c.solde_usd);
+        paiementsValides(x).forEach(function (pa) {
+          if (dans(pa.paye_le)) encaissements.push({ jour: jourSD(pa.paye_le), montant: pa.montant_usd });
+        });
+      });
+      f.encaisse_periode = arrondi(encaissements.reduce(function (t, x) { return t + x.montant; }, 0));
+      f.paiements_periode = encaissements.length;
+      f.clients_avec_solde = Object.keys(avecSolde).length;
+      var parFacture = parJour(emissions, null, function (x) { return x.montant; });
+      var parEncaisse = parJour(encaissements, null, function (x) { return x.montant; });
+      f.par_jour = serie.map(function (j) { return { jour: j, facture: parFacture[j] || 0, encaisse: parEncaisse[j] || 0 }; });
+      facturation = f;
+      r.facturation = f;
+    }
+
+    if (peutCompte(moi, 'shipments.view_history')) {
+      var tous = d.historique.filter(function (h) { return (h.metadonnees || {}).source === 'scanner'; });
+      var scans = tous.filter(function (h) { return dans(h.cree_le); });
+      var dernier = tous.slice().sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; })[0];
+      var parEmploye = {}, parOperation = {};
+      scans.forEach(function (h) {
+        var k = h.auteur_id || '';
+        parEmploye[k] = (parEmploye[k] || 0) + 1;
+        parOperation[h.type_evenement] = (parOperation[h.type_evenement] || 0) + 1;
+      });
+      var parScan = parJour(scans.map(function (h) { return { jour: jourSD(h.cree_le) }; }));
+      r.scanner = {
+        aujourdhui: tous.filter(function (h) { return jourSD(h.cree_le) === aujourdhui(); }).length,
+        periode: scans.length,
+        echecs_suivis: false,
+        dernier: dernier ? Object.assign(evenementJson(d, dernier), { numero: (trouverColisDemo(d, dernier.colis_id) || {}).numero || null })
+          : null,
+        par_employe: Object.keys(parEmploye).map(function (k) {
+          var cl = d.comptes.filter(function (c) { return c.id === k; })[0];
+          return { auteur_id: k || null, nom: cl ? (cl.nom_complet || cl.email) : 'Compte supprimé',
+                   role: cl ? cl.role : null, nombre: parEmploye[k] };
+        }).sort(function (a, b) { return b.nombre - a.nombre || String(a.nom).localeCompare(String(b.nom)); }),
+        par_operation: Object.keys(parOperation).map(function (k) {
+          return { type: k, libelle: TYPES_EVENEMENT[k] ? TYPES_EVENEMENT[k].libelle : k, nombre: parOperation[k] };
+        }).sort(function (a, b) { return b.nombre - a.nombre || (a.type < b.type ? -1 : 1); }),
+        par_jour: serie.map(function (j) { return { jour: j, nombre: parScan[j] || 0 }; })
+      };
+      r.activite = d.historique.slice().sort(function (a, b) {
+        return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id;
+      }).slice(0, 12).map(function (h) {
+        var c = trouverColisDemo(d, h.colis_id) || {};
+        var cl = d.comptes.filter(function (x) { return x.id === c.client_id; })[0];
+        return Object.assign(evenementJson(d, h), {
+          numero: c.numero || null, client: cl ? cl.code : null,
+          libelle: TYPES_EVENEMENT[h.type_evenement] ? TYPES_EVENEMENT[h.type_evenement].libelle : null,
+          source: (h.metadonnees || {}).source || ''
+        });
+      });
+    }
+
+    if (peutCompte(moi, 'payments.view')) {
+      var tousPaiements = [];
+      (d.factures || []).forEach(function (x) {
+        paiementsValides(x).forEach(function (pa) { tousPaiements.push({ p: pa, f: x }); });
+      });
+      r.paiements_recents = tousPaiements.sort(function (a, b) {
+        return new Date(b.p.paye_le) - new Date(a.p.paye_le) || new Date(b.p.cree_le) - new Date(a.p.cree_le);
+      }).slice(0, 8).map(function (x) {
+        var cl = d.comptes.filter(function (c) { return c.id === x.p.client_id; })[0];
+        return { id: x.p.id, montant_usd: x.p.montant_usd, moyen: x.p.moyen, paye_le: x.p.paye_le,
+                 facture_id: x.f.id, facture: x.f.numero,
+                 client: { code: cl ? cl.code : null, nom_complet: cl ? cl.nom_complet : null } };
+      });
+    }
+
+    // Les alertes : les mêmes règles, les mêmes phrases que la base
+    var alertes = [];
+    if (colis.action_requise > 0) {
+      alertes.push({ code: 'action_requise', gravite: 'critique', nombre: colis.action_requise,
+                     message: colis.action_requise + ' colis en « action requise » : le client ou l’équipe doit agir.' });
+    }
+    if (colis.sans_mouvement > 0) {
+      alertes.push({ code: 'sans_mouvement', gravite: 'attention', nombre: colis.sans_mouvement,
+                     message: colis.sans_mouvement + ' colis en cours sans aucun événement depuis ' + jours + ' jours ou plus.' });
+    }
+    if (facturation && facturation.etats.en_retard > 0) {
+      alertes.push({ code: 'factures_en_retard', gravite: 'attention', nombre: facturation.etats.en_retard,
+                     message: facturation.etats.en_retard + ' facture(s) échue(s) non soldée(s) : ' +
+                              montantTexte(facturation.montant_en_retard).replace('.', ',') + ' $ en retard.' });
+    }
+    if (peutCompte(moi, 'invoices.view')) {
+      var sansFacture = d.colis.filter(function (c) { return c.client_id && !factureActiveDu(d, c.id); }).length;
+      if (sansFacture > 0) {
+        alertes.push({ code: 'colis_sans_facture', gravite: 'info', nombre: sansFacture,
+                       message: sansFacture + ' colis sur aucune facture active.' });
+      }
+    }
+    r.alertes = alertes;
+    return r;
+  }
 
   function analyticsDemo(d, module, o) {
     var p = module === 'qualite' ? null : bornesAnalytics(o.periode, o.debut, o.fin);
@@ -3440,183 +3694,44 @@
 
       // vue_generale : une période → ce que le rôle a le droit de voir
       vueGenerale: function (o) {
+        try {
+          return plusTard(vueGeneraleDemo(lireDonnees(), o));
+        } catch (e) { return rejeter(e); }
+      },
+
+      // vue_generale_filtree : la même, ses colis découpés par pays, ville, mode,
+      // statut ou lieu (outils/supabase-analytics.sql, section 11)
+      vueGeneraleFiltree: function (o) {
         o = o || {};
         var d = lireDonnees();
         try {
           var moi = exiger(d, 'shipments.view');
-          var jours = joursSansMouvement(o.jours);
-          var p = bornesPeriode(o.periode, o.debut, o.fin);
-          var serie = joursEntre(p.debut, p.fin);
-          function dans(iso) { var j = jourSD(iso); return j >= p.debut && j <= p.fin; }
-          function parJour(liste, cle, valeur) {
-            var t = {};
-            liste.forEach(function (x) { t[x.jour] = arrondi((t[x.jour] || 0) + (valeur ? valeur(x) : 1)); });
-            return t;
-          }
-
-          // Les colis : le stock maintenant, les reçus et livrés de la période
-          var statuts = {};
-          STATUTS.forEach(function (st) { statuts[st] = 0; });
-          d.colis.forEach(function (c) { statuts[c.statut] = (statuts[c.statut] || 0) + 1; });
-          var recus = d.colis.filter(function (c) { return dans(c.recu_le); });
-          var livraisons = {};
-          d.historique.forEach(function (h) {
-            if (h.statut !== 'livre' || h.statut_precedent === 'livre' || !dans(h.cree_le) || corrigeDemo(d, h)) return;
-            var j = jourSD(h.cree_le);
-            if (!livraisons[h.colis_id] || j < livraisons[h.colis_id]) livraisons[h.colis_id] = j;
-          });
-          var limite = Date.now() - jours * 864e5;
-          var immobiles = d.colis.filter(function (c) {
-            if (c.statut === 'livre') return false;
-            var dernier = dernierEvenementDemo(d, c.id);
-            return new Date(dernier ? dernier.cree_le : c.recu_le).getTime() < limite;
-          }).length;
-          var parRecu = parJour(recus.map(function (c) { return { jour: jourSD(c.recu_le) }; }));
-          var parLivre = parJour(Object.keys(livraisons).map(function (k) { return { jour: livraisons[k] }; }));
-          var colis = {
-            total: d.colis.length,
-            actifs: d.colis.length - statuts.livre,
-            statuts: statuts,
-            action_requise: statuts.incident,
-            sans_mouvement: immobiles,
-            recus_periode: recus.length,
-            poids_periode: arrondi(recus.reduce(function (t, c) { return t + (Number(c.poids_lb) || 0); }, 0)),
-            livres_periode: Object.keys(livraisons).length,
-            par_jour: serie.map(function (j) { return { jour: j, recus: parRecu[j] || 0, livres: parLivre[j] || 0 }; })
-          };
-          var r = {
-            periode: { code: p.code, debut: p.debut, fin: p.fin, jours: serie.length, fuseau: 'America/Santo_Domingo' },
-            jours_sans_mouvement: jours,
-            genere_le: maintenant(),
-            colis: colis
-          };
-
-          if (peutCompte(moi, 'clients.view')) {
-            var clients = d.comptes.filter(function (c) { return c.role === 'client'; });
-            var idsClients = clients.map(function (c) { return c.id; });
-            var actifs = {};
-            d.colis.forEach(function (c) {
-              if (c.statut !== 'livre' && idsClients.indexOf(c.client_id) >= 0) actifs[c.client_id] = true;
-            });
-            r.clients = {
-              total: clients.length,
-              nouveaux_periode: clients.filter(function (c) { return dans(c.cree_le); }).length,
-              avec_colis_en_cours: Object.keys(actifs).length
-            };
-          }
-
-          var facturation = null;
+          var f = filtresColisDemo(o.filtres);
+          var r = vueGeneraleDemo(d, o);
+          // Les mêmes données, réduites aux colis filtrés et à leurs événements : les
+          // règles de la vue générale et des routes s'y appliquent telles quelles
+          var ids = {};
+          var df = Object.assign({}, d, { colis: d.colis.filter(function (c) {
+            if (!colisFiltreDemo(c, f)) return false;
+            ids[c.id] = true;
+            return true;
+          }) });
+          df.historique = d.historique.filter(function (h) { return ids[h.colis_id]; });
+          var rf = vueGeneraleDemo(df, o), filtrees = ['colis'];
+          r.filtres = f;
+          r.options = optionsFiltresDemo(d);
+          r.colis = rf.colis;
+          if (peutCompte(moi, 'shipments.view_history')) { r.activite = rf.activite; filtrees.push('activite'); }
           if (peutCompte(moi, 'reports.view')) {
-            var f = { emises_periode: 0, facture_periode: 0, paye_sur_periode: 0, solde_sur_periode: 0, annulees_periode: 0,
-                      encaisse_periode: 0, paiements_periode: 0, a_encaisser: 0, ouvertes: 0, montant_en_retard: 0,
-                      clients_avec_solde: 0, etats: { a_payer: 0, partielle: 0, en_retard: 0, payee: 0, annulee: 0 } };
-            var avecSolde = {}, emissions = [], encaissements = [];
-            (d.factures || []).forEach(function (x) {
-              var c = factureComplete(d, x);
-              f.etats[c.etat_paiement] += 1;
-              if (x.statut !== 'annulee' && dans(x.cree_le)) {
-                f.emises_periode++;
-                f.facture_periode = arrondi(f.facture_periode + x.montant_usd);
-                f.paye_sur_periode = arrondi(f.paye_sur_periode + c.paye_usd);
-                f.solde_sur_periode = arrondi(f.solde_sur_periode + c.solde_usd);
-                emissions.push({ jour: jourSD(x.cree_le), montant: x.montant_usd });
-              }
-              if (x.statut === 'annulee' && dans(x.cree_le)) f.annulees_periode++;
-              f.a_encaisser = arrondi(f.a_encaisser + c.solde_usd);
-              if (c.solde_usd > 0) { f.ouvertes++; avecSolde[x.client_id] = true; }
-              if (c.etat_paiement === 'en_retard') f.montant_en_retard = arrondi(f.montant_en_retard + c.solde_usd);
-              paiementsValides(x).forEach(function (pa) {
-                if (dans(pa.paye_le)) encaissements.push({ jour: jourSD(pa.paye_le), montant: pa.montant_usd });
-              });
-            });
-            f.encaisse_periode = arrondi(encaissements.reduce(function (t, x) { return t + x.montant; }, 0));
-            f.paiements_periode = encaissements.length;
-            f.clients_avec_solde = Object.keys(avecSolde).length;
-            var parFacture = parJour(emissions, null, function (x) { return x.montant; });
-            var parEncaisse = parJour(encaissements, null, function (x) { return x.montant; });
-            f.par_jour = serie.map(function (j) { return { jour: j, facture: parFacture[j] || 0, encaisse: parEncaisse[j] || 0 }; });
-            facturation = f;
-            r.facturation = f;
+            var p = bornesAnalytics(o.periode, o.debut, o.fin);
+            var a = mesuresAnalytics(df, p.debut, p.fin), b = mesuresAnalytics(df, p.precDebut, p.precFin);
+            r.comparaison = { recus: comparerValeurs(a.recus, b.recus), poids: comparerValeurs(a.poids, b.poids),
+                              livres: comparerValeurs(a.livres, b.livres),
+                              precedente: { debut: p.precDebut, fin: p.precFin } };
+            r.routes = analyticsDemo(df, 'routes', o);
+            filtrees.push('comparaison', 'routes');
           }
-
-          if (peutCompte(moi, 'shipments.view_history')) {
-            var tous = d.historique.filter(function (h) { return (h.metadonnees || {}).source === 'scanner'; });
-            var scans = tous.filter(function (h) { return dans(h.cree_le); });
-            var dernier = tous.slice().sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; })[0];
-            var parEmploye = {}, parOperation = {};
-            scans.forEach(function (h) {
-              var k = h.auteur_id || '';
-              parEmploye[k] = (parEmploye[k] || 0) + 1;
-              parOperation[h.type_evenement] = (parOperation[h.type_evenement] || 0) + 1;
-            });
-            var parScan = parJour(scans.map(function (h) { return { jour: jourSD(h.cree_le) }; }));
-            r.scanner = {
-              aujourdhui: tous.filter(function (h) { return jourSD(h.cree_le) === aujourdhui(); }).length,
-              periode: scans.length,
-              echecs_suivis: false,
-              dernier: dernier ? Object.assign(evenementJson(d, dernier), { numero: (trouverColisDemo(d, dernier.colis_id) || {}).numero || null })
-                : null,
-              par_employe: Object.keys(parEmploye).map(function (k) {
-                var cl = d.comptes.filter(function (c) { return c.id === k; })[0];
-                return { auteur_id: k || null, nom: cl ? (cl.nom_complet || cl.email) : 'Compte supprimé',
-                         role: cl ? cl.role : null, nombre: parEmploye[k] };
-              }).sort(function (a, b) { return b.nombre - a.nombre || String(a.nom).localeCompare(String(b.nom)); }),
-              par_operation: Object.keys(parOperation).map(function (k) {
-                return { type: k, libelle: TYPES_EVENEMENT[k] ? TYPES_EVENEMENT[k].libelle : k, nombre: parOperation[k] };
-              }).sort(function (a, b) { return b.nombre - a.nombre || (a.type < b.type ? -1 : 1); }),
-              par_jour: serie.map(function (j) { return { jour: j, nombre: parScan[j] || 0 }; })
-            };
-            r.activite = d.historique.slice().sort(function (a, b) {
-              return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id;
-            }).slice(0, 12).map(function (h) {
-              var c = trouverColisDemo(d, h.colis_id) || {};
-              var cl = d.comptes.filter(function (x) { return x.id === c.client_id; })[0];
-              return Object.assign(evenementJson(d, h), {
-                numero: c.numero || null, client: cl ? cl.code : null,
-                libelle: TYPES_EVENEMENT[h.type_evenement] ? TYPES_EVENEMENT[h.type_evenement].libelle : null,
-                source: (h.metadonnees || {}).source || ''
-              });
-            });
-          }
-
-          if (peutCompte(moi, 'payments.view')) {
-            var tousPaiements = [];
-            (d.factures || []).forEach(function (x) {
-              paiementsValides(x).forEach(function (pa) { tousPaiements.push({ p: pa, f: x }); });
-            });
-            r.paiements_recents = tousPaiements.sort(function (a, b) {
-              return new Date(b.p.paye_le) - new Date(a.p.paye_le) || new Date(b.p.cree_le) - new Date(a.p.cree_le);
-            }).slice(0, 8).map(function (x) {
-              var cl = d.comptes.filter(function (c) { return c.id === x.p.client_id; })[0];
-              return { id: x.p.id, montant_usd: x.p.montant_usd, moyen: x.p.moyen, paye_le: x.p.paye_le,
-                       facture_id: x.f.id, facture: x.f.numero,
-                       client: { code: cl ? cl.code : null, nom_complet: cl ? cl.nom_complet : null } };
-            });
-          }
-
-          // Les alertes : les mêmes règles, les mêmes phrases que la base
-          var alertes = [];
-          if (colis.action_requise > 0) {
-            alertes.push({ code: 'action_requise', gravite: 'critique', nombre: colis.action_requise,
-                           message: colis.action_requise + ' colis en « action requise » : le client ou l’équipe doit agir.' });
-          }
-          if (colis.sans_mouvement > 0) {
-            alertes.push({ code: 'sans_mouvement', gravite: 'attention', nombre: colis.sans_mouvement,
-                           message: colis.sans_mouvement + ' colis en cours sans aucun événement depuis ' + jours + ' jours ou plus.' });
-          }
-          if (facturation && facturation.etats.en_retard > 0) {
-            alertes.push({ code: 'factures_en_retard', gravite: 'attention', nombre: facturation.etats.en_retard,
-                           message: facturation.etats.en_retard + ' facture(s) échue(s) non soldée(s) : ' +
-                                    montantTexte(facturation.montant_en_retard).replace('.', ',') + ' $ en retard.' });
-          }
-          if (peutCompte(moi, 'invoices.view')) {
-            var sansFacture = d.colis.filter(function (c) { return c.client_id && !factureActiveDu(d, c.id); }).length;
-            if (sansFacture > 0) {
-              alertes.push({ code: 'colis_sans_facture', gravite: 'info', nombre: sansFacture,
-                             message: sansFacture + ' colis sur aucune facture active.' });
-            }
-          }
-          r.alertes = alertes;
+          r.filtrees = filtrees;
           return plusTard(r);
         } catch (e) { return rejeter(e); }
       },

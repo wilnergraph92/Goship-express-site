@@ -571,7 +571,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
   .gs-horloge__date{display:none}
   .gs-horloge__date--courte{display:inline}
   .gs-td__outils{gap:6px}
-  .gs-td__outils>[data-action="ouvrir-reglages"],.gs-td__outils>.gs-direct{display:none}
+  .gs-td__outils>.gs-td__deroulant:has(>[data-action="menu-affichage"]),.gs-td__outils>.gs-direct{display:none}
   .gs-td__barre{padding:10px}
   .gs-td__titre{flex:1 1 0}
   .gs-td__titre-texte{font-size:17px;white-space:nowrap}
@@ -593,4 +593,552 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 }
 @media (prefers-reduced-motion:reduce){
   .is-app .gs-td__menu,.gs-td__panneau{transition:none;animation:none}
+}
+
+/* ---- Le menu en trois groupes, le panneau « Affichage » -----------------------------
+   Opérations, Finance, Gestion : un groupe dont le rôle ne peut rien ouvrir disparaît. */
+.gs-td__groupe{display:flex;flex-direction:column;gap:4px;margin-bottom:18px}
+.gs-td__groupe:not(:has(button:not([data-interdit]))){display:none}
+.gs-td__groupe .gs-td__rubrique{padding-bottom:6px}
+.is-menu-reduit .gs-td__groupe{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.gs-td__menu .gs-td__nav .gs-td__lien{color:#c9d4ec}
+.gs-td__panneau--affichage{width:280px;padding:10px}
+.gs-td__panneau--affichage .gs-td__panneau-titre{margin:4px 6px 8px}
+.gs-td__separateur{margin:8px 4px;border:0;border-top:1px solid #eef2f8}
+.gs-td__lien--danger,.gs-td__panneau .gs-td__lien--danger{color:#b42318}
+.gs-td__panneau .gs-td__lien--danger:hover{background:#fef3f2;color:#b42318}
+.gs-apparence{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:#f3f6fb}
+.gs-apparence label{position:relative;display:block;cursor:pointer}
+.gs-apparence input{position:absolute;opacity:0;pointer-events:none}
+.gs-apparence span{display:block;padding:9px 6px;border-radius:11px;font-size:14px;font-weight:800;text-align:center;color:#5b6782;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.gs-apparence input:checked+span{background:#fff;color:var(--ink);box-shadow:0 4px 12px -6px rgba(6,26,63,.35)}
+.gs-apparence input:focus-visible+span{outline:2px solid var(--accent2);outline-offset:1px}
+.gs-direct.is-pause .gs-direct__point{background:#94a0b8;animation:none;box-shadow:none}
+
+/* ---- La vue générale : direct, boutons, filtres ------------------------------------- */
+.gs-vg__direct{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:6px 0 0;font-size:13.5px;font-weight:600;color:var(--vg-doux)}
+.gs-vg__direct-etat{display:inline-flex;align-items:center;gap:7px;padding:3px 10px 3px 8px;border-radius:999px;font-weight:800}
+.gs-vg__direct-etat i{width:8px;height:8px;border-radius:50%}
+.gs-vg__direct-etat--direct{background:#dcfce7;color:#15803d}
+.gs-vg__direct-etat--direct i{background:#16a34a;animation:gs-vg-pouls 1.8s ease-out infinite}
+.gs-vg__direct-etat--minute{background:#e8efff;color:#1a4fbd}
+.gs-vg__direct-etat--minute i{background:#1f5fe0}
+.gs-vg__direct-etat--pause{background:#eef2f8;color:#4a5670}
+.gs-vg__direct-etat--pause i{background:#94a0b8}
+@keyframes gs-vg-pouls{0%{box-shadow:0 0 0 0 rgba(22,163,74,.5)}100%{box-shadow:0 0 0 8px rgba(22,163,74,0)}}
+.gs-vg__bouton[aria-pressed="false"]{border-color:#c7d6f7;background:#eef3fd;color:#1a4fbd}
+.gs-vg__bouton--plein{border-color:transparent;background:linear-gradient(135deg,#f4600d,#ff7b2f);color:#fff;box-shadow:0 14px 26px -14px rgba(244,96,13,.9)}
+.gs-vg__bouton--plein:hover{border-color:transparent;background:#d4500a}
+.gs-vg__filtres{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 20px}
+.gs-vg__filtres-titre{display:inline-flex;align-items:center;gap:7px;margin-right:2px;font-size:14px;font-weight:800;color:#4a5670}
+.gs-vg__filtres-titre .gs-ico{width:17px;height:17px}
+.gs-vg__filtre{position:relative;display:inline-flex;align-items:center;gap:4px;height:40px;padding:0 0 0 14px;border:1px solid var(--vg-bord);border-radius:999px;background:#fff;box-shadow:var(--app-ombre);font-size:14px;font-weight:600;color:var(--vg-doux);cursor:pointer;transition:border-color .2s ease,background-color .2s ease}
+.gs-vg__filtre:hover{border-color:#b8c3d8}
+.gs-vg__filtre>span{white-space:nowrap}
+.gs-vg__filtre>span::after{content:" :"}
+.gs-vg__filtre select{max-width:150px;height:38px;padding:0 30px 0 2px;border:0;border-radius:999px;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%235b6782' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);font:inherit;font-size:14px;font-weight:800;text-overflow:ellipsis;-webkit-appearance:none;appearance:none;cursor:pointer}
+.gs-vg__filtre select:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
+.gs-vg__filtre select:disabled{cursor:not-allowed;opacity:.6}
+.gs-vg__filtre.is-actif{border-color:#f4600d;background:#fff4ec;color:#c4500b}
+.gs-vg__filtres-effacer{font-size:14px}
+.gs-vg__filtres-total{margin:0 0 0 auto;font-size:14px;font-weight:700;color:var(--vg-doux)}
+.gs-vg__filtres-note{flex:1 1 100%;margin:0;font-size:13px;line-height:1.45;color:var(--vg-doux)}
+/* Une carte que les filtres ne découpent pas le dit */
+.gs-vg__corps .is-entier::before{content:"Tous les colis";position:absolute;top:-10px;right:18px;z-index:2;padding:2px 9px;border:1px solid #cfd8e8;border-radius:999px;background:#fff;font-size:11.5px;font-weight:800;color:#5b6782}
+.gs-vg__corps [data-vg-bloc="surveiller"].is-entier::before,.gs-vg__corps [data-vg-bloc="traiter"].is-entier::before{top:-10px}
+.gs-vg__corps .is-entier[data-apercu-partie="clients"]::before{border-color:transparent;background:#c7ff4f;color:#12310a}
+.gs-vg__corps>.is-masque{display:none!important}
+@media (max-width:759px){
+  .gs-vg__commandes .gs-vg__bouton{flex:1 1 auto;justify-content:center}
+  .gs-vg__filtres{gap:8px}
+  .gs-vg__filtres-titre{flex:1 1 100%}
+  .gs-vg__filtre{flex:1 1 calc(50% - 8px);min-width:0}
+}
+@media (max-width:639px){
+  .gs-vg__filtre{flex-basis:100%}
+  .gs-vg__filtre select{flex:1;min-width:0;max-width:none}
+  .gs-vg__filtres-total{flex:1 1 100%;margin:0}
+}
+
+/* ---- Personnaliser la vue générale ---------------------------------------------------- */
+.gs-disposition{width:min(560px,calc(100vw - 24px))}
+.gs-disposition[open]{display:flex;flex-direction:column}
+.gs-disposition .gs-dialogue__corps{display:block;flex:1;min-height:0}
+.gs-disposition .gs-dialogue__pied{flex:none}
+.gs-disposition__liste{display:grid;gap:8px;margin:12px 0 0;padding:0;list-style:none;counter-reset:bloc}
+.gs-disposition__ligne{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
+.gs-disposition__nom{display:flex;flex:1;align-items:center;gap:12px;min-width:0;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer}
+.gs-disposition__nom input{flex:none;width:20px;height:20px;margin:0;accent-color:#f4600d}
+.gs-disposition__nom span{min-width:0;overflow-wrap:anywhere}
+.gs-disposition__fleche{display:grid;flex:none;place-items:center;width:38px;height:38px;padding:0;border:1px solid #e3e8f2;border-radius:11px;background:#fff;color:var(--ink);cursor:pointer}
+.gs-disposition__fleche:hover:not(:disabled){border-color:var(--ink)}
+.gs-disposition__fleche:disabled{opacity:.35;cursor:default}
+.gs-disposition__fleche svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- Les apparitions au défilement et le relief ---------------------------------------
+   Seulement quand le JavaScript a pris la main (gs-revele), que le réglage « Animations »
+   est actif et que le système ne demande pas moins d'animations ; jamais à l'impression. */
+@media screen and (prefers-reduced-motion:no-preference){
+  html.gs-revele:not([data-animations="non"]) .gs-vg__carte:not(.is-vu),
+  html.gs-revele:not([data-animations="non"]) .gs-vg__filtres:not(.is-vu){opacity:0;transform:translateY(22px) scale(.985)}
+  html.gs-revele:not([data-animations="non"]) .gs-vg__carte,
+  html.gs-revele:not([data-animations="non"]) .gs-vg__filtres{transition:opacity .6s cubic-bezier(.2,.7,.3,1),transform .7s cubic-bezier(.2,.7,.3,1);transition-delay:calc(var(--rang,0) * 90ms)}
+  html.gs-revele:not([data-animations="non"]) .gs-vg__carte:not(.is-vu) .gs-vg__barre{transform:scaleY(0)}
+  html.gs-revele:not([data-animations="non"]) .gs-vg__barre{transform-origin:bottom;transition:transform .8s cubic-bezier(.2,.7,.3,1) .15s,background-color .2s ease}
+  html.gs-revele:not([data-animations="non"]) .gs-vg__carte:not(.is-vu) :is(.gs-vg__etape-plein,.gs-vg__taux-plein,.gs-vg__jauge-plein){transform:scaleX(0)}
+  html.gs-revele:not([data-animations="non"]) :is(.gs-vg__etape-plein,.gs-vg__taux-plein,.gs-vg__jauge-plein){transform-origin:left;transition:transform .9s cubic-bezier(.2,.7,.3,1) .2s}
+  /* Le relief : les fonds glissent un peu moins vite que la page (--defil, admin.js) */
+  html:not([data-animations="non"]) .gs-vg__carte-geo .gs-vg__carte-svg{transform:translateY(calc(var(--defil,0) * -.025px));transition:transform .1s linear}
+  html:not([data-animations="non"]) .gs-vg__carte--sombre,html:not([data-animations="non"]) .is-app .gs-td__menu{background-repeat:no-repeat}
+  html:not([data-animations="non"]) .gs-vg__carte--sombre{background-position:calc(var(--defil,0) * -.04px) calc(var(--defil,0) * .06px),calc(var(--defil,0) * .03px) calc(var(--defil,0) * -.05px),0 0}
+  html:not([data-animations="non"]) .is-app .gs-td__menu{background-position:0 calc(var(--defil,0) * .05px),0 calc(var(--defil,0) * -.04px),0 0}
+  html:not([data-animations="non"]) .gs-vg__kpi .gs-vg__picto{transition:transform .35s cubic-bezier(.2,.7,.3,1)}
+  html:not([data-animations="non"]) button.gs-vg__kpi:hover .gs-vg__picto{transform:translateY(-3px) rotate(-6deg)}
+  html:not([data-animations="non"]) .gs-vg__carte{transition-property:opacity,transform,box-shadow}
+  html:not([data-animations="non"]) .gs-vg__carte.is-vu:hover{box-shadow:0 1px 2px rgba(6,26,63,.05),0 26px 50px -30px rgba(6,26,63,.5)}
+}
+html[data-animations="non"] .gs-vg__halo,html[data-animations="non"] .gs-vg__direct-etat i{animation:none}
+@media (prefers-reduced-motion:reduce){
+  .gs-vg__direct-etat i{animation:none}
+}
+
+/* ---- L'apparence sombre (réglage « Apparence ») -----------------------------------------
+   Posée par apparence.js et admin.js sur <html data-apparence="sombre">, pour le tableau
+   de bord seulement. D'abord la contrepartie sombre de chaque couleur claire des cartes,
+   listes, champs et fenêtres (fond blanc → bleu nuit profond, fonds pâles → bleu nuit,
+   bordures, gris de texte, teintes d'alerte), puis les retouches écrites à la main. Une
+   nouvelle règle claire du tableau de bord demande sa ligne ici. */
+[data-apparence="sombre"] .gs-admin-body .gs-attente{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-carte-auth{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-atouts{background-color:#132041;border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-atouts li{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-atouts__ico--bleu{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-carte-auth__pied{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-carte-auth__pied a,[data-apparence="sombre"] .gs-admin-body .gs-champ__lien{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__texte{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__choisie{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__choisie span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__option{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__pictogramme{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__pictogramme--wa{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-methode__libelle span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-chevron{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-lien-bouton{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-lien-bouton--danger{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-lien-bouton--danger:hover{color:#fecaca}
+[data-apparence="sombre"] .gs-admin-body .gs-champ label{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-facultatif{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-champ input,[data-apparence="sombre"] .gs-admin-body .gs-champ select,[data-apparence="sombre"] .gs-admin-body .gs-champ textarea{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-champ select{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-champ select:invalid{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-champ select:disabled{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-champ input[readonly]{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-champ input:hover,[data-apparence="sombre"] .gs-admin-body .gs-champ select:hover,[data-apparence="sombre"] .gs-admin-body .gs-champ textarea:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-champ__aide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-mdp__oeil{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-mdp__oeil:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-form__erreur{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-form__intro p{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-form__mention{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-form__mention a{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--contour{background-color:#0e1830;border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-alerte--info{color:#a9c2ff}
+[data-apparence="sombre"] .gs-admin-body .gs-alerte--succes{color:#86efac}
+[data-apparence="sombre"] .gs-admin-body .gs-alerte--erreur{background-color:rgba(220,38,38,.16)}
+[data-apparence="sombre"] .gs-admin-body .gs-copie-ok{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-panneau{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-panneau__intro{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-panneau__note{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-solde div{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-solde dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-solde .gs-solde__reste dd{color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-solde.is-a-jour .gs-solde__reste dd{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-solde__note{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-messages__ligne{border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-messages__ligne span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-adresse span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-infos dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-deconnexion{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-deconnexion:hover{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-direct{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-onglets{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-onglets button{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-onglets button[aria-selected="true"]{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-squelette{background:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-colis{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-colis:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-colis__desc{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-colis__infos{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-colis__note{background-color:rgba(244,96,13,.15);color:#fdba8c}
+[data-apparence="sombre"] .gs-admin-body .gs-colis__pied{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-colis__historique summary{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-badge{background-color:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--emballe{background-color:rgba(124,58,237,.2)}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--distribution{background-color:rgba(234,179,8,.15);color:#fcd34d}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--succursale{background-color:rgba(244,96,13,.15)}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--livre{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--incident{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-etapes li{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-etapes li::before{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-chrono li::after{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-chrono__meta{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-chrono__note{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vide{border-color:#22304f;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-panneau__total{color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-facture{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-facture:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__date{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__lignes{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__colis{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__note{border-color:#22304f;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__soldes{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__soldes .gs-facture__reste strong{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__paiements{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-facture__paiements strong{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-suivi__maj{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-suivi p{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-equipe__intro{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-equipe__form{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--role-admin{color:#a9c2ff}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--role-gerant{background-color:rgba(234,179,8,.15);color:#fcd34d}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--role-employe{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-roles summary{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-demo{background-color:rgba(244,96,13,.15);color:#fdba8c}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-carte{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-carte p{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-carte__demo{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-carte code{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-stat{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-stat:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-stat__libelle{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-onglets__total{background-color:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-recherche{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-filtre{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-filtre-client{background-color:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau-cadre{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau th{border-bottom-color:#22304f;background-color:#132041;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau td{border-bottom-color:#22304f;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr.is-choisi{background-color:rgba(244,96,13,.15)}
+[data-apparence="sombre"] .gs-admin-body .gs-cellule-sous{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-vide{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__tete{border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__sous-titre{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__fermer{background-color:#132041;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__fermer:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__pied{border-top-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-completion{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-completion__vide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-completion__det{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-client-trouve.is-ok{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-client-trouve.is-erreur{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-statut-mini{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-balance-due{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis__tout{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis__compte{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-recap{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-recap__ligne{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-recap__ligne--balance{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-recap__ligne--balance strong{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis legend{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis span{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis label:hover span{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis input:checked+span{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--facture-a_payer{color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--facture-payee{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--facture-annulee{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--facture-partielle{background-color:rgba(234,179,8,.15);color:#fcd34d}
+[data-apparence="sombre"] .gs-admin-body .gs-badge--facture-en_retard{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--danger{background-color:#0e1830;color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--danger:hover{color:#fecaca}
+[data-apparence="sombre"] .gs-admin-body .gs-regroupement__carte{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-regroupement__carte small{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-regroupement__choix:hover .gs-regroupement__carte{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-colis input:checked+.gs-regroupement__carte{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-finances__case{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-finances__libelle{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-finances__sous{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-finances--retard .gs-finances__case--retard{background-color:rgba(220,38,38,.16)}
+[data-apparence="sombre"] .gs-admin-body .gs-finances--retard .gs-finances__case--retard .gs-finances__montant{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-paiements{border-top-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-paiement{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-paiement__moyen{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-paiement__note{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-paiement--annule{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-facture-annulee{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-anomalie{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-anomalie__gravite{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-anomalie--erreur .gs-anomalie__gravite{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-anomalie--attention .gs-anomalie__gravite{background-color:rgba(234,179,8,.15);color:#fcd34d}
+[data-apparence="sombre"] .gs-admin-body .gs-anomalies__infos summary{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-statut legend{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-statut span{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-statut label:hover span{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-statut input:checked+span{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-choix-statut label:hover input:disabled+span{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__historique h3{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__actions-colis{border-top-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-case{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-envoi{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-envoi__num{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-envoi__ligne{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-envoi__ligne--ok{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-envoi__ligne--attente{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-envoi__detail{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--wa.is-fait{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__aide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-notifs li{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-notifs li span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-notifs li.is-echec{background-color:rgba(220,38,38,.16)}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__corps--apercu{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__saisie label{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__ligne input{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__reglages .gs-champ{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__etat{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__etat span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__etat.is-succes strong{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__etat.is-attention{background-color:rgba(234,179,8,.15)}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__etat.is-erreur{background-color:rgba(220,38,38,.16)}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__etat.is-erreur strong{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__fiche,[data-apparence="sombre"] .gs-admin-body .gs-scan__journal{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__infos dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__alerte{background-color:rgba(234,179,8,.15);color:#fcd34d}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__alerte--incident{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__raison{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__journal li{border-left-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__heure{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-rapide__resultats{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-rapide__message{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-rapide__section{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-rapide__carte{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-rapide__ligne{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__choix{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__choix--ligne{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__etat{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__message{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__note{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__panneau{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body button.gs-kpi:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__libelle{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__sous{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--critique{background-color:rgba(220,38,38,.16)}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--critique .gs-kpi__valeur{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--attention{background-color:rgba(244,96,13,.15)}
+[data-apparence="sombre"] .gs-admin-body .gs-graphe{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-graphe__legende{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-graphe__max{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-graphe__axe{stroke:#2a3a5f}
+[data-apparence="sombre"] .gs-admin-body .gs-graphe__dates{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-graphe__vide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-repartition__nom{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-repartition__piste{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-repartition__vide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-alerte-ligne{background-color:#132041;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-alerte-ligne--critique{background-color:rgba(220,38,38,.16)}
+[data-apparence="sombre"] .gs-admin-body .gs-alerte-ligne--attention{background-color:rgba(244,96,13,.15)}
+[data-apparence="sombre"] .gs-admin-body .gs-activite__ligne{border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-activite__date{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-activite__vide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-pagination{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-periode{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-date{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-horloge{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-horloge__heure{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-td__barre .gs-recherche{background-color:#132041;border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-td__barre .gs-recherche:focus-within{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-td__icone{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-td__compte{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-td__compte .gs-ico{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-td__role{color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-td__panneau{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-td__panneau-titre{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-td__panneau--compte .gs-td__panneau-titre{border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-td__panneau-role{color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-td__panneau .gs-td__lien:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__barre{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__libelle{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__picto--bleu{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__picto--marine{background-color:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__picto--vert{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi__picto--rouge{background-color:rgba(220,38,38,.16);color:#f87171}
+[data-apparence="sombre"] .gs-admin-body button.gs-kpi:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--critique{background:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--attention{background:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-apercu__etats{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau th{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-analytics__onglets{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-analytics__onglets button{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-analytics__onglets button:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-variation{background-color:#132041;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-variation--hausse{background-color:#132041;color:#9dbcff}
+[data-apparence="sombre"] .gs-admin-body .gs-variation--baisse{background-color:rgba(244,96,13,.15);color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-analytics__non-suivi{border-color:#22304f;background-color:#132041;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-tendances li{background-color:#0e1830;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-definitions{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-definitions dd{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__periode{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__bouton{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__carte{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__vide{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__legende{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__variation{background-color:#132041;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__variation--hausse{background-color:#132041;color:#9dbcff}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__variation--baisse{background-color:rgba(244,96,13,.15);color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__kpi{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body button.gs-vg__kpi:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__picto--vert{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__picto--bleu{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__picto--marine{background-color:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__axe-y{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__grille{border-top-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__axe-x{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__repere{border-left-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__graduation{stroke:#2a3a5f}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__carte-geo{background:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__carte-point{fill:#1c2a4b}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__terre{fill:#1c2a4b;stroke:#2a3a5f}
+[data-apparence="sombre"] .gs-admin-body button.gs-vg__surveiller-case:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__surveiller-nom{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__surveiller-case.is-vif .gs-vg__surveiller-valeur{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__anneau-fond{stroke:#2a3a5f}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__etape-nom{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__etape-piste,[data-apparence="sombre"] .gs-admin-body .gs-vg__taux-piste{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-td__bandeau{border-color:#22304f;background-color:#132041;color:#a9c2ff}
+[data-apparence="sombre"] .gs-admin-body .gs-td__bandeau--erreur{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__lecteur{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__lecteur.is-actif{color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-reglages__infos kbd{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-reglages__nav button{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-reglages__nav button:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-reglages__aide{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-reglage{border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-reglage__texte small{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-interrupteur::after{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-reglages__infos div{border-bottom-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-reglages__infos dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-td__separateur{border-top-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-td__lien--danger,[data-apparence="sombre"] .gs-admin-body .gs-td__panneau .gs-td__lien--danger{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-td__panneau .gs-td__lien--danger:hover{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-apparence{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-apparence span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-apparence input:checked+span{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__direct-etat--direct{background-color:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__direct-etat--minute{background-color:#132041;color:#9dbcff}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__direct-etat--pause{background-color:#132041;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__bouton[aria-pressed="false"]{background-color:#132041;color:#9dbcff}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__filtres-titre{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__filtre{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__filtre:hover{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__filtre.is-actif{background-color:rgba(244,96,13,.15);color:#ffb38a}
+[data-apparence="sombre"] .gs-admin-body .gs-vg__corps .is-entier::before{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-disposition__ligne{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-disposition__fleche{border-color:#22304f;background-color:#0e1830}
+@media (max-width:719px){
+  [data-apparence="sombre"] .gs-admin-body .gs-etapes.is-incident::after{color:#fca5a5}
+}
+@media (max-width:859px){
+  [data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr{border-bottom-color:#22304f}
+  [data-apparence="sombre"] .gs-admin-body .gs-tableau td[data-libelle]::before{color:#9aaacb}
+}
+
+/* L'apparence sombre, écrite à la main : les fonds, la barre, et ce qui prend le bleu
+   nuit (var(--ink)) comme fond. Posée après les règles tirées des couleurs claires. */
+html[data-apparence="sombre"]{color-scheme:dark}
+html[data-apparence="sombre"] body.gs-admin-body{--ink:#e7edf9;--ink2:#c3d0ee;--cream:#132041;--mist:#1a2850;--app-fond:#070e20;--app-bord:#1f2b48;--app-ombre:0 1px 2px rgba(0,0,0,.35),0 18px 40px -28px rgba(0,0,0,.9);background:#070e20;color:#dce5f7}
+[data-apparence="sombre"] .gs-vg{--vg-bord:#1f2b48;--vg-doux:#9aaacb;--vg-pale:#132041;--vg-barre:#1c2a4b}
+[data-apparence="sombre"] .gs-admin-body input::placeholder,[data-apparence="sombre"] .gs-admin-body textarea::placeholder{color:#6f7fa3}
+[data-apparence="sombre"] .gs-td__barre{border-color:#1f2b48;background:rgba(12,21,43,.9)}
+[data-apparence="sombre"] .gs-td__icone,[data-apparence="sombre"] .gs-td__compte{border-color:#1f2b48;background:#0e1830;color:#e7edf9}
+[data-apparence="sombre"] .gs-td__icone:hover,[data-apparence="sombre"] .gs-td__icone[aria-expanded="true"]{border-color:#1f5fe0;background:#1f5fe0;color:#fff}
+[data-apparence="sombre"] .gs-td__compte:hover,[data-apparence="sombre"] .gs-td__compte[aria-expanded="true"]{border-color:#3b5ea8}
+[data-apparence="sombre"] .gs-td__compteur{border-color:#0e1830}
+[data-apparence="sombre"] .gs-horloge__heure{background:#1c2a4b;color:#e7edf9}
+[data-apparence="sombre"] .gs-td__panneau{border-color:#1f2b48;background:#0e1830;box-shadow:0 30px 60px -24px rgba(0,0,0,.8)}
+[data-apparence="sombre"] .gs-td__panneau .gs-td__lien:hover{background:#132041;color:#fff}
+[data-apparence="sombre"] .gs-td__panneau--compte .gs-td__panneau-titre,[data-apparence="sombre"] .gs-td__separateur{border-color:#1f2b48}
+[data-apparence="sombre"] .gs-td__panneau-role,[data-apparence="sombre"] .gs-td__role{color:#ffb38a}
+[data-apparence="sombre"] .gs-td__role{background:rgba(244,96,13,.18)}
+[data-apparence="sombre"] .gs-td__panneau .gs-td__lien--danger{color:#fca5a5}
+[data-apparence="sombre"] .gs-td__panneau .gs-td__lien--danger:hover{background:rgba(220,38,38,.16);color:#fecaca}
+[data-apparence="sombre"] .gs-apparence{background:#070e20}
+[data-apparence="sombre"] .gs-apparence span{color:#9aaacb}
+[data-apparence="sombre"] .gs-apparence input:checked+span{background:#1c2a4b;color:#fff;box-shadow:none}
+[data-apparence="sombre"] .gs-td__bandeau{border-color:#2a3a5f;background:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-td__bandeau--erreur{border-color:rgba(220,38,38,.4);background:rgba(220,38,38,.14);color:#fca5a5}
+/* Le bleu nuit comme fond : le bleu de la marque, qui reste lisible sur fond sombre */
+[data-apparence="sombre"] .gs-admin-body :is(.gs-bouton--sombre,.gs-toast,.gs-admin-selection,.gs-admin-carte__ico){background:#1f5fe0;color:#fff}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--sombre:hover{background:var(--accent)}
+[data-apparence="sombre"] .gs-admin-body .gs-toast--erreur{background:#b91c1c}
+[data-apparence="sombre"] .gs-analytics__onglets button[aria-selected="true"],[data-apparence="sombre"] .gs-reglages__nav button[aria-selected="true"]{background:#1f5fe0;color:#fff}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--contour{border-color:#2a3a5f;background-color:#0e1830;color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--contour:hover{border-color:#8fb3ff;color:#fff}
+[data-apparence="sombre"] .gs-admin-body .gs-bouton--danger{border-color:rgba(220,38,38,.45);background-color:#0e1830;color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue{border:1px solid #1f2b48;background:#0e1830;color:#e7edf9;box-shadow:0 50px 100px -30px rgba(0,0,0,.9)}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue::backdrop{background:rgba(2,6,16,.7)}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__pied{background:#0b1429}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__fermer{background:#1c2a4b;color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-dialogue__fermer:hover{background:#26375f;color:#fff}
+[data-apparence="sombre"] .gs-admin-body :is(.gs-champ input,.gs-champ select,.gs-champ textarea,.gs-admin-filtre,.gs-admin-date,.gs-recherche,.gs-scan__ligne input){border-color:#2a3a5f;background-color:#0b1429;color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-recherche input{color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau td{border-bottom-color:#1a2644;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr:hover{background:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-interrupteur{background:#2a3a5f}
+[data-apparence="sombre"] .gs-admin-body .gs-interrupteur:checked{background:var(--accent)}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--critique{border-color:rgba(220,38,38,.4);background:rgba(220,38,38,.1)}
+[data-apparence="sombre"] .gs-admin-body .gs-kpi--attention{border-color:rgba(244,96,13,.4);background:rgba(244,96,13,.08)}
+[data-apparence="sombre"] .gs-admin-body .gs-admin-demo{border-color:rgba(244,96,13,.35);background:rgba(244,96,13,.1);color:#fdba8c}
+/* La vue générale */
+[data-apparence="sombre"] .gs-vg__periode,[data-apparence="sombre"] .gs-vg__bouton,[data-apparence="sombre"] .gs-vg__filtre{border-color:#1f2b48;background-color:#0e1830;color:#e7edf9}
+[data-apparence="sombre"] .gs-vg__bouton:hover{border-color:#8fb3ff}
+[data-apparence="sombre"] .gs-vg__bouton[aria-pressed="false"]{border-color:#2d4a86;background:#132b5c;color:#bcd1ff}
+[data-apparence="sombre"] .gs-vg__bouton--plein{border-color:transparent;background:linear-gradient(135deg,#f4600d,#ff7b2f);color:#fff}
+[data-apparence="sombre"] .gs-vg__filtre.is-actif{border-color:#f4600d;background:rgba(244,96,13,.16);color:#ffb38a}
+[data-apparence="sombre"] .gs-vg__filtres-titre{color:#c3d0ee}
+[data-apparence="sombre"] .gs-vg__direct-etat--direct{background:rgba(22,163,74,.18);color:#4ade80}
+[data-apparence="sombre"] .gs-vg__direct-etat--minute{background:rgba(31,95,224,.22);color:#9dbcff}
+[data-apparence="sombre"] .gs-vg__direct-etat--pause{background:#1c2a4b;color:#9aaacb}
+[data-apparence="sombre"] .gs-vg__corps .is-entier::before{border-color:#2a3a5f;background:#132041;color:#c3d0ee}
+[data-apparence="sombre"] .gs-vg__carte{border-color:#1f2b48;background-color:#0e1830}
+[data-apparence="sombre"] .gs-vg__carte--sombre{border-color:#223a74;background:radial-gradient(320px 240px at 100% 0,rgba(244,96,13,.32),transparent 70%),radial-gradient(300px 260px at 0 100%,rgba(31,95,224,.4),transparent 70%),linear-gradient(160deg,#12337a 0%,#0a2152 60%,#071736 100%)}
+[data-apparence="sombre"] .gs-vg__kpi{border-color:#1f2b48;background:#0e1830}
+[data-apparence="sombre"] button.gs-vg__kpi:hover,[data-apparence="sombre"] button.gs-vg__surveiller-case:hover{background:#132041}
+[data-apparence="sombre"] .gs-vg__picto--orange{background:rgba(244,96,13,.18);color:#ff8a45}
+[data-apparence="sombre"] .gs-vg__picto--vert{background:rgba(22,163,74,.2);color:#4ade80}
+[data-apparence="sombre"] .gs-vg__picto--bleu{background:rgba(31,95,224,.24);color:#8fb3ff}
+[data-apparence="sombre"] .gs-vg__picto--marine{background:rgba(141,164,214,.16);color:#c3d0ee}
+[data-apparence="sombre"] .gs-vg__variation{background:#1c2a4b;color:#c3d0ee}
+[data-apparence="sombre"] .gs-vg__variation--hausse{background:rgba(31,95,224,.24);color:#9dbcff}
+[data-apparence="sombre"] .gs-vg__variation--baisse{background:rgba(244,96,13,.2);color:#ffb38a}
+[data-apparence="sombre"] .gs-vg__legende{color:#c3d0ee}
+[data-apparence="sombre"] :is(.gs-vg__axe-y,.gs-vg__axe-x){color:#7d8db0}
+[data-apparence="sombre"] .gs-vg__grille{border-top-color:#1a2644}
+[data-apparence="sombre"] .gs-vg__livres{border-color:#0e1830}
+[data-apparence="sombre"] .gs-vg__repere{border-left-color:#3b4d76}
+[data-apparence="sombre"] .gs-vg__bulle{border:1px solid #2a3a5f;background:#020815}
+[data-apparence="sombre"] .gs-vg__graduation{stroke:#22304f}
+[data-apparence="sombre"] .gs-vg__graduation--pleine{stroke:#f4600d}
+[data-apparence="sombre"] .gs-vg__anneau-fond{stroke:#1c2a4b}
+[data-apparence="sombre"] .gs-vg__carte-geo{background:linear-gradient(180deg,#0f1c3a,#0e1830)}
+[data-apparence="sombre"] .gs-vg__carte-point{fill:#1c2a4b}
+[data-apparence="sombre"] .gs-vg__terre{fill:#1a2850;stroke:#2a3a5f}
+[data-apparence="sombre"] .gs-vg__rond-ville{stroke:#0e1830}
+[data-apparence="sombre"] .gs-vg__depart .gs-vg__rond-ville,[data-apparence="sombre"] .gs-vg__depart .gs-vg__halo{fill:#e7edf9}
+[data-apparence="sombre"] .gs-vg__etiquette--depart{background:#e7edf9;color:#061a3f}
+[data-apparence="sombre"] .gs-vg__etiquette:not(.gs-vg__etiquette--depart):not(.gs-vg__etiquette--HT):not(.gs-vg__etiquette--DO){background:#1f5fe0}
+[data-apparence="sombre"] :is(.gs-vg__etape-piste,.gs-vg__taux-piste){background:#1c2a4b}
+[data-apparence="sombre"] .gs-vg__etape:not(:last-child)::after{background:#22304f}
+[data-apparence="sombre"] :is(.gs-vg__etape-nom,.gs-vg__surveiller-nom){color:#9aaacb}
+[data-apparence="sombre"] .gs-vg__surveiller-case.is-vif .gs-vg__surveiller-valeur{color:#f87171}
+[data-apparence="sombre"] .gs-vg__vide{border-color:#2a3a5f;background:#132041}
+[data-apparence="sombre"] .gs-vg__ville-ligne .gs-vg__taux-plein{background:linear-gradient(90deg,#1f5fe0,#6f9bff)}
+[data-apparence="sombre"] .gs-vg__carte--tableau .gs-tableau-cadre{border-top-color:#1f2b48;background:transparent}
+[data-apparence="sombre"] .gs-disposition__ligne,[data-apparence="sombre"] .gs-disposition__fleche{border-color:#22304f;background:#0b1429}
+[data-apparence="sombre"] .gs-disposition__fleche:hover:not(:disabled){border-color:#8fb3ff}
+[data-apparence="sombre"] .gs-reglages__infos kbd{border-color:#2a3a5f;background:#132041}
+@media screen and (prefers-reduced-motion:no-preference){
+  html[data-apparence="sombre"]:not([data-animations="non"]) .gs-vg__carte.is-vu:hover{box-shadow:0 1px 2px rgba(0,0,0,.4),0 26px 50px -30px rgba(0,0,0,.95)}
 }
