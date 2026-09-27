@@ -1,17 +1,20 @@
 # Sauvegardes
 
-## Ce qui existe vraiment (26/09/2026)
+## Ce qui existe vraiment (27/09/2026)
+
+Guide complet de la sauvegarde autonome (Supabase Free) : **`outils/README-backup.md`**.
+Ce fichier garde l'état réel et le registre des restaurations.
 
 | Sauvegarde | État | Preuve |
 |---|---|---|
-| Sauvegardes automatiques de Supabase | **inconnu** — dépend de l'offre du projet (l'offre gratuite n'en garde aucune téléchargeable ; Pro : quotidiennes, 7 jours ; PITR en option) | à relever dans Supabase > Database > Backups et à noter ici |
-| `sauvegarde.yml` (copie logique chiffrée, chaque jour) | **écrite et éprouvée sur une base d'essai, pas encore en service** : les secrets `SUPABASE_DB_URL` et `SAUVEGARDE_DESTINATAIRE` ne sont pas posés | tant qu'ils manquent, le workflow s'arrête sur l'avis « Sauvegarde non configurée » |
-| Restauration d'épreuve automatique (job « restaurer » de `sauvegarde.yml`) | **prête, jamais exécutée sur une vraie sauvegarde** : `RESTAURATION_DESTINATAIRE` et `RESTAURATION_CLE` non posés | éprouvée par `essai-production.py`, section K |
+| Sauvegardes automatiques de Supabase | **aucune** : le projet reste sur l'offre gratuite, qui n'en fournit pas de téléchargeable | choix du 27/09/2026 |
+| `sauvegarde.yml` : copie chiffrée quotidienne, stockage externe (rclone), rétention 7, restauration d'épreuve | **écrite et éprouvée sur une base jetable, jamais exécutée sur la production** : secrets non posés (`SUPABASE_DB_URL`, clés age, `SAUVEGARDE_RCLONE_CONFIG`, `SAUVEGARDE_STOCKAGE`) | `essai-production.py`, sections F, K et L ; le 26/09/2026, l'unique passage avait été **sauté** faute de secrets (et affiché vert : ce n'est plus possible, il est rouge désormais) |
+| Stockage externe | **non configuré** : aucun fournisseur choisi | outils/README-backup.md, C.2 |
 | Restauration dans un vrai projet Supabase | **jamais faite** | go-no-go.md, A3b |
-| RPO, RTO | **non mesurés** : aucune sauvegarde de production n'existe | le résumé du job « restaurer » les donnera à chaque passage |
+| RPO, RTO | **non mesurés en production** : aucune sauvegarde de production n'existe | le résumé du job « Restauration d'épreuve » les donnera à chaque passage |
 
-Personne ne doit dire « on a des sauvegardes » avant que les deux premières lignes
-soient vérifiées et qu'une restauration ait réussi.
+Personne ne doit dire « on a des sauvegardes » avant qu'un passage de `sauvegarde.yml`
+soit vert de bout en bout **et** qu'une restauration dans un vrai projet ait réussi.
 
 ## Ce que fait `sauvegarder.sh`
 
@@ -34,9 +37,11 @@ soient vérifiées et qu'une restauration ait réussi.
      table — chiffré lui aussi : le dépôt est public, et les artefacts d'un dépôt
      public se téléchargent par n'importe quel compte GitHub).
 
-`sauvegarde.yml` garde les fichiers **90 jours** dans les artefacts du workflow.
-Sans la clé privée, ils ne valent rien : c'est le chiffrement qui les protège, pas
-GitHub.
+Puis `sauvegarde.yml` vérifie les fichiers (`verifier-sauvegarde.sh`), les envoie
+dans le stockage externe et applique la rétention (`stocker.sh`), et en garde une
+copie de secours 7 jours dans les artefacts du workflow. Chaque fichier chiffré a son
+empreinte SHA-256 (`….age.sha256`). Sans la clé privée, ils ne valent rien : c'est le
+chiffrement qui les protège, pas GitHub.
 
 ### Ce qui n'est PAS dans la sauvegarde
 
@@ -103,9 +108,13 @@ neuf (préproduction, ou le futur projet de production après un sinistre).
 
 ```
 # sur un ordinateur de confiance, avec pg_restore/psql 17 et age
-CIBLE_DB_URL='postgresql://…projet-neuf…' \
+RESTORE_TARGET=staging CIBLE_DB_URL='postgresql://…projet-neuf…' \
   bash outils/production/restaurer.sh <dossier des fichiers> goship-<date> goship-sauvegarde.key
 ```
+
+`RESTORE_TARGET` est obligatoire (`essai`, `staging`, ou `production` avec
+`RESTORE_CONFIRM=RESTAURER-EN-PRODUCTION`, dans le nouveau projet après un sinistre
+seulement) ; le SHA-256 de chaque fichier chiffré est vérifié avant de déchiffrer.
 
 Le script déchiffre (une mauvaise clé s'arrête là), vérifie les empreintes,
 restaure les comptes puis le schéma public, et compare le nombre de lignes table
@@ -131,11 +140,12 @@ de la mise en service) reste à faire.
 
 ## Conservation
 
-| Où | Combien de temps |
+| Où | Combien |
 |---|---|
-| Artefacts GitHub (`sauvegarde.yml`) | 90 jours |
-| Supabase (selon l'offre) | à noter |
-| Copie hors GitHub (recommandé) | une sauvegarde par mois, téléchargée et rangée hors ligne, 12 mois |
+| Stockage externe, destination A (et B) | les **7** dernières sauvegardes complètes (`stocker.sh retention`, garde-fous : outils/README-backup.md, H) |
+| Artefacts GitHub (`sauvegarde.yml`) | 7 jours, copie de secours |
+| Supabase | aucune (offre gratuite) |
+| Copie hors ligne (recommandé) | une sauvegarde par mois, téléchargée et rangée hors ligne, 12 mois |
 
 ## Tester (chaque trimestre)
 
@@ -146,5 +156,6 @@ Une sauvegarde qui n'a jamais été restaurée n'est pas une sauvegarde.
 | Date | Sauvegarde | Durée | Résultat | Par |
 |---|---|---|---|---|
 | 26/09/2026 | base d'essai (`essai-production.py`, sections F et K) | ~1 s (base d'essai de 27 colis) | réussie, 70/70 | CI |
+| 27/09/2026 | base jetable, chaîne complète (`essai-production.py`, section L : stockage rclone, rétention, téléchargement, `epreuve-restauration.sh`) | ~2 s (334 lignes) | réussie, 106/106 | local (ce conteneur) |
 | — | première sauvegarde de production, épreuve automatique | — | **à faire** (A3) | — |
 | — | première sauvegarde de production, vrai projet Supabase | — | **à faire** (A3b) | — |

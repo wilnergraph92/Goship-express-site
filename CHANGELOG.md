@@ -7,6 +7,24 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — sauvegarde autonome de la base (Supabase Free)
+
+Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backup.md`.
+
+- `sauvegarde.yml` : rouge quand un secret manque (il affichait vert sans rien
+  sauvegarder), stockage externe par rclone (destinations A et B), rétention 7 avec
+  garde-fous, épreuve de restauration retéléchargée du stockage, rapport PASS/FAIL,
+  RTO par étape, alerte `ALERTE_WEBHOOK`. Corrige une épreuve qui aurait échoué au
+  premier passage (publication `supabase_realtime` créée deux fois).
+- Nouveaux : `verifier-sauvegarde.sh`, `stocker.sh`, `verifier-restauration.sh`,
+  `epreuve-restauration.sh`, `alerter.sh`, `restauration-test.yml`.
+- `sauvegarder.sh` : connexion vérifiée (message sans mot de passe), contrôles de
+  structure et de taille, SHA-256 des fichiers chiffrés, nom à la seconde, comptes
+  dans le manifeste. `restaurer.sh` : `RESTORE_TARGET` obligatoire, confirmation pour
+  la production, SHA-256 vérifié avant de déchiffrer.
+- Domaine de production (`www.goshipexpress.net`) : configuration Auth décrite à part
+  (`docs/production/environment.md`).
+
 ## site-2026.09.27.2 — tableau de bord : filtres, apparence, direct, disposition (publié le 27/09/2026)
 
 Migration en lecture seule, appliquée en production le 27/09/2026 avant la

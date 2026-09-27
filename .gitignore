@@ -43,5 +43,19 @@ yarn-error.log*
 *.key
 *.pem
 
+# --- Sauvegardes de la base : jamais dans le dépôt ------------------------
+#  Elles vivent dans le stockage externe (outils/README-backup.md). Les
+#  migrations outils/*.sql, elles, sont versionnées : pas de « *.sql » ici,
+#  seulement les formes que prend une sauvegarde.
+*.dump
+*.backup
+*.age
+*.age.sha256
+*.sql.gz
+*.dump.gz
+goship-backup/
+goship-sauvegarde*/
+rclone.conf
+
 # --- Application mobile : elle a son propre dépôt GitHub -----------------
 application-mobile/

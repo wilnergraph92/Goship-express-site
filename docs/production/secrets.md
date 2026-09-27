@@ -18,6 +18,7 @@ pour être publique : elle ne donne que ce que la RLS autorise.
 | Signature Android (keystore de production) | serveurs Expo (EAS credentials) | compte Expo de GoShip Express | ne se change pas sans procédure Google Play (App Signing) |
 | Certificats Apple | serveurs Expo (EAS credentials) / compte Apple Developer | propriétaire | EAS gère le renouvellement |
 | Clé privée d'**épreuve** (age) | secret `RESTAURATION_CLE` (environnement `production`) ; clé publique : `RESTAURATION_DESTINATAIRE` | job « restaurer » de `sauvegarde.yml` | nouvelle paire ; n'ouvre rien de plus que `SUPABASE_DB_URL` du même environnement |
+| Accès au stockage externe des sauvegardes | secret `SAUVEGARDE_RCLONE_CONFIG` (un `rclone.conf` complet), destinations `SAUVEGARDE_STOCKAGE` et `SAUVEGARDE_STOCKAGE_B` (environnement `production`) | `sauvegarde.yml`, `restauration-test.yml` | nouvelle clé d'accès chez le fournisseur, nouveau secret, puis révoquer l'ancienne (outils/README-backup.md, G) |
 | Chaîne de connexion de la **préproduction** | secret `STAGING_DB_URL` (environnement `staging`) ; `STAGING_SUPABASE_URL` / `_CLE` sont des variables (publiques par conception) | `preproduction.yml` | Supabase (goship-staging) > Database > Reset password |
 | Alerte à la seconde personne | secret `ALERTE_WEBHOOK` (dépôt) | `surveillance.yml` | nouveau sujet ntfy / nouveau webhook |
 | Battement de cœur | secret `HEARTBEAT_URL` (dépôt) | `surveillance.yml` | Healthchecks.io > régénérer |

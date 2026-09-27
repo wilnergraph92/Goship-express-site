@@ -68,3 +68,40 @@ une nouvelle version publiée (voir rollback.md).
    remplacer les deux valeurs `REMPLACER…` ; `eas build --profile staging`.
 
 Toute migration passe par la préproduction avant la production (deployment.md).
+
+## Domaine de production (`https://www.goshipexpress.net`)
+
+Aujourd'hui le site est servi par GitHub Pages à
+`https://wilnergraph92.github.io/Goship-express-site/` ; il le sera à
+`https://www.goshipexpress.net`. Le **backend reste l'adresse officielle de Supabase**
+(`https://gpfdyslysqjmojgzggib.supabase.co`) : un domaine personnalisé pour Supabase
+(option payante) n'est **pas** nécessaire — le site peut vivre sur le domaine de
+GoShip et appeler Supabase à son adresse habituelle.
+
+Les sauvegardes ne dépendent pas du domaine du site (`outils/README-backup.md`,
+section K) : rien à changer de ce côté.
+
+Le jour du passage, dans cet ordre :
+
+1. **GitHub Pages** : Settings > Pages > *Custom domain* = `www.goshipexpress.net`
+   (HTTPS imposé), et chez le registraire du domaine un `CNAME` `www` →
+   `wilnergraph92.github.io` (plus une redirection de `goshipexpress.net` vers `www`).
+2. **Supabase Auth** (Authentication > URL Configuration), projet de **production** :
+   - *Site URL* = `https://www.goshipexpress.net`
+   - *Redirect URLs* = `https://www.goshipexpress.net/**` ; pendant la transition,
+     garder aussi `https://wilnergraph92.github.io/Goship-express-site/**`, puis la
+     retirer ; **jamais** `localhost` en production.
+   La préproduction garde ses propres URL (section « Créer la préproduction ») ; le
+   développement, `http://localhost:8765`.
+3. **Adresse dans les e-mails** (Vault, production) :
+   `select public.definir_reglage('site_url', 'https://www.goshipexpress.net');`
+4. **Les trois fichiers qui portent l'adresse du site** (tableau « Où est la
+   configuration ») : `bureau/config/environnements.json` (`production`), le `siteUrl`
+   de l'application mobile (nouvelle version à publier), et l'adresse surveillée par
+   défaut de `outils/production/surveiller.sh` (le déploiement lui passe déjà
+   l'adresse publiée).
+5. Vérifier : inscription, « mot de passe oublié » (le lien doit ouvrir
+   `www.goshipexpress.net`), connexion au tableau de bord, application de bureau.
+
+`assets/js/config.js` ne change pas : il porte l'adresse de Supabase, pas celle du
+site.

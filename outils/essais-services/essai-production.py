@@ -243,8 +243,10 @@ def main():
     verifier('sauvegarder.sh réussit', (r.returncode, r.stderr.strip()[-200:]), (0, ''))
     fichiers = sorted(os.listdir(os.path.join(travail, 'sortie')))
     nom = fichiers[0].split('.')[0]
-    verifier('trois fichiers, tous chiffrés (le manifeste aussi : le dépôt est public)', [f[len(nom):] for f in fichiers],
-             ['.comptes.dump.age', '.manifeste.json.age', '.public.dump.age'])
+    verifier('trois fichiers chiffrés (le manifeste aussi : le dépôt est public) et leurs empreintes SHA-256',
+             [f[len(nom):] for f in fichiers],
+             ['.comptes.dump.age', '.comptes.dump.age.sha256', '.manifeste.json.age', '.manifeste.json.age.sha256',
+              '.public.dump.age', '.public.dump.age.sha256'])
     manifeste = json.loads(subprocess.run(['age', '-d', '-i', cle, os.path.join(travail, 'sortie', nom + '.manifeste.json.age')],
                                           capture_output=True, text=True, check=True).stdout)
     verifier('le manifeste compte les lignes (27 colis)', manifeste['lignes_par_table'].get('colis'), 27)
@@ -263,11 +265,11 @@ def main():
     mauvaise = os.path.join(travail, 'autre-cle.txt')
     subprocess.run(['age-keygen', '-o', mauvaise], capture_output=True, check=True)
     r = subprocess.run(['bash', os.path.join(PRODUCTION, 'restaurer.sh'), os.path.join(travail, 'sortie'), nom, mauvaise],
-                       env=dict(env_pg(cible), CIBLE_DB_URL=cible), capture_output=True, text=True)
+                       env=dict(env_pg(cible), CIBLE_DB_URL=cible, RESTORE_TARGET='essai'), capture_output=True, text=True)
     verifier('avec une autre clé : refusé, rien de restauré', (r.returncode != 0,
              psql_dans(db, RESTAUREE, "select to_regclass('public.colis') is null;")), (True, 't'))
     r = subprocess.run(['bash', os.path.join(PRODUCTION, 'restaurer.sh'), os.path.join(travail, 'sortie'), nom, cle],
-                       env=dict(env_pg(cible), CIBLE_DB_URL=cible), capture_output=True, text=True)
+                       env=dict(env_pg(cible), CIBLE_DB_URL=cible, RESTORE_TARGET='essai'), capture_output=True, text=True)
     verifier('restaurer.sh réussit, lignes identiques au manifeste',
              (r.returncode, 'identiques au manifeste' in r.stdout), (0, True))
     if r.returncode:
@@ -282,7 +284,7 @@ def main():
     secu = sorted((c, o) for c, v, o, _d in lignes_controle(db, RESTAUREE, 'controle-securite.sql') if v == 'ALERTE')
     verifier('contrôle de sécurité de la base restaurée : mêmes seules alertes', secu, attendues)
     r = subprocess.run(['bash', os.path.join(PRODUCTION, 'restaurer.sh'), os.path.join(travail, 'sortie'), nom, cle],
-                       env=dict(env_pg(cible), CIBLE_DB_URL=cible), capture_output=True, text=True)
+                       env=dict(env_pg(cible), CIBLE_DB_URL=cible, RESTORE_TARGET='essai'), capture_output=True, text=True)
     verifier('une deuxième restauration sur cette base (non vide) : refusée',
              (r.returncode != 0, 'restauration refusée' in r.stderr), (True, True))
     # Les règles vivent : lecture d'un client, écriture par la porte prévue, verrou du statut
@@ -336,7 +338,7 @@ def main():
         return 'postgresql://%s@/%s?host=%s' % (db.su, EPREUVE, db.socket)
     restaurer = lambda cible, cle_privee, **e: subprocess.run(
         ['bash', os.path.join(PRODUCTION, 'restaurer.sh'), os.path.join(travail, 'sortie'), nom, cle_privee],
-        env=dict(env_pg(cible), CIBLE_DB_URL=cible, **e), capture_output=True, text=True)
+        env=dict(env_pg(cible), CIBLE_DB_URL=cible, RESTORE_TARGET='essai', **e), capture_output=True, text=True)
     r = restaurer(cible_neuve(), cle)
     verifier('sans le mode d\'épreuve, les comptes ne rentrent pas dans la doublure (refus net, rien d\'écrit)',
              (r.returncode != 0, psql_dans(db, EPREUVE, 'select count(*) from auth.users;').strip()), (True, '0'))
@@ -358,6 +360,9 @@ def main():
     verifier('durée mesurée de la restauration + chaîne : %.0f s' % (time.time() - t0), time.time() - t0 < 600, True)
     shutil.rmtree(travail)
     psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % EPREUVE)
+
+    # Avant G, qui introduit exprès des anomalies (orphelins) : une base saine, comme en service
+    sauvegarde_autonome(db)
 
     print('\nG. Contrôle d\'intégrité (outils/production/controle-integrite.sql)')
     lignes = lignes_controle(db, S.BASE, 'controle-integrite.sql')
@@ -473,6 +478,212 @@ def main():
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), sum(S.RESULTATS)))
     sys.exit(0 if all(S.RESULTATS) else 1)
 
+
+def sauvegarde_autonome(db):
+    """L. La sauvegarde autonome (Supabase Free) de bout en bout, sur une base jetable qui
+    porte le vrai schéma GoShip (chaîne complète) et des données d'essai : sauvegarde,
+    vérification, stockage externe par rclone (vrai rclone, destinations = dossiers
+    locaux), rétention, récupération, restauration chronométrée, vérification de la base
+    restaurée, garde-fous. Aucune base réelle n'est touchée."""
+    print('\nL. Sauvegarde autonome : vérifiée, stockée hors du dépôt, retenue (7), récupérée, restaurée')
+    if not shutil.which('rclone'):
+        verifier('rclone installé (stockage externe)', False, True)
+        return
+    travail = tempfile.mkdtemp(prefix='goship-autonome-')
+    proprio, epreuve = os.path.join(travail, 'proprio.key'), os.path.join(travail, 'epreuve.key')
+    for f in (proprio, epreuve):
+        subprocess.run(['age-keygen', '-o', f], capture_output=True, check=True)
+    pub = lambda f: [l.split(': ')[1].strip() for l in open(f) if l.startswith('# public key')][0]
+    secret = [l.strip() for l in open(epreuve) if l.startswith('AGE-SECRET-KEY')][0]
+    source = 'postgresql://%s@/%s?host=%s' % (db.su, S.BASE, db.socket)
+    sortie = os.path.join(travail, 'sortie')
+    sorties = []                                   # tout ce que les scripts ont écrit, pour la recherche de secrets
+    def lancer(script, *args, **env):
+        r = subprocess.run(['bash', os.path.join(PRODUCTION, script)] + list(args),
+                           env=dict(env_pg(env.pop('url', source)), **env), capture_output=True, text=True)
+        sorties.append(r.stdout + r.stderr)
+        return r
+
+    # 1. La base ne répond pas : échec net, et le mot de passe n'apparaît nulle part
+    r = lancer('sauvegarder.sh', sortie, SUPABASE_DB_URL='postgresql://postgres:motdepasse-essai-42@/nulle?host=/tmp/aucun-serveur',
+               SAUVEGARDE_DESTINATAIRE=pub(proprio))
+    verifier('base injoignable : échec (code 1), message clair, mot de passe jamais affiché',
+             (r.returncode, 'Connexion à la base impossible' in r.stderr, 'motdepasse-essai-42' in r.stdout + r.stderr),
+             (1, True, False))
+
+    # 2. La sauvegarde, puis sa vérification sans et avec la clé
+    r = lancer('sauvegarder.sh', sortie, SUPABASE_DB_URL=source, SAUVEGARDE_DESTINATAIRE=pub(proprio),
+               RESTAURATION_DESTINATAIRE=pub(epreuve))
+    verifier('sauvegarder.sh : base jointe, copie relue, chiffrée, empreintes', (r.returncode, 'Base jointe' in r.stdout,
+             'Copie relue' in r.stdout, 'empreintes SHA-256 : faits' in r.stdout), (0, True, True, True))
+    nom = sorted(os.listdir(sortie))[0].split('.')[0]
+    verifier('nom horodaté à la seconde (goship-AAAA-MM-JJTHHMMSSZ)', re.match(r'^goship-\d{4}-\d\d-\d\dT\d{6}Z$', nom) is not None, True)
+    r = lancer('verifier-sauvegarde.sh', sortie, nom)
+    verifier('verifier-sauvegarde.sh sans clé : fichiers, tailles, SHA-256, chiffrement',
+             (r.returncode, [l.split()[0] for l in r.stdout.splitlines() if ' OK ' in l]),
+             (0, ['BACKUP', 'SIZE:', 'CHECKSUM:', 'ENCRYPTION:']))
+    r = lancer('verifier-sauvegarde.sh', sortie, nom, epreuve)
+    print('     ' + '\n     '.join(r.stdout.strip().splitlines()))
+    verifier('… avec la clé d\'épreuve : déchiffrée, conforme au manifeste, structure relue, PASS',
+             (r.returncode, 'DECRYPTION:        OK' in r.stdout, 'MANIFEST:          OK' in r.stdout,
+              'DUMP STRUCTURE:    OK' in r.stdout, r.stdout.strip().endswith('PASS')), (0, True, True, True, True))
+    autre = os.path.join(travail, 'autre.key')
+    subprocess.run(['age-keygen', '-o', autre], capture_output=True, check=True)
+    r = lancer('verifier-sauvegarde.sh', sortie, nom, autre)
+    verifier('… avec une autre clé : DECRYPTION FAIL, code 1', (r.returncode, 'DECRYPTION:        FAIL' in r.stdout), (1, True))
+
+    # 3. Un fichier chiffré altéré : la vérification et la restauration refusent, avant de déchiffrer
+    abime = os.path.join(travail, 'abime')
+    shutil.copytree(sortie, abime)
+    f = os.path.join(abime, nom + '.public.dump.age')
+    contenu = bytearray(open(f, 'rb').read())
+    contenu[len(contenu) // 2] ^= 0xFF
+    open(f, 'wb').write(bytes(contenu))
+    r = lancer('verifier-sauvegarde.sh', abime, nom)
+    verifier('un octet changé : CHECKSUM FAIL, code 1', (r.returncode, 'CHECKSUM:          FAIL' in r.stdout), (1, True))
+
+    # 4. Le stockage externe : deux destinations rclone (ici deux dossiers, par le vrai rclone)
+    conf = os.path.join(travail, 'rclone.conf')
+    open(conf, 'w').write('[stock_a]\ntype = local\n\n[stock_b]\ntype = local\n')
+    distant_a, distant_b = os.path.join(travail, 'distant-a'), os.path.join(travail, 'distant-b')
+    stock = dict(RCLONE_CONFIG=conf, SAUVEGARDE_STOCKAGE='stock_a:' + distant_a, SAUVEGARDE_STOCKAGE_B='stock_b:' + distant_b)
+    r = lancer('stocker.sh', 'envoyer', sortie, nom, **stock)
+    verifier('envoyer : 6 fichiers vers A et vers B, relus, SHA-256 identiques',
+             (r.returncode, r.stdout.count('6 fichiers envoyés et relus')), (0, 2))
+    verifier('… les destinations ne sont jamais écrites en entier dans le journal', distant_a in r.stdout + r.stderr, False)
+    r = lancer('stocker.sh', 'envoyer', sortie, nom, **stock)
+    verifier('renvoyer la même sauvegarde : sans effet, réussi', r.returncode, 0)
+    r = lancer('stocker.sh', 'envoyer', abime, nom, **stock)
+    verifier('envoyer une copie altérée : refusé avant tout envoi (empreinte locale fausse)', (r.returncode, 'Empreinte locale fausse' in r.stderr), (1, True))
+    faux = os.path.join(travail, 'faux')
+    shutil.copytree(abime, faux)
+    subprocess.run('cd "%s" && sha256sum %s.public.dump.age > %s.public.dump.age.sha256' % (faux, nom, nom), shell=True, check=True)
+    r = lancer('stocker.sh', 'envoyer', faux, nom, **stock)
+    verifier('un autre fichier sous le même nom : jamais remplacé (--immutable), échec', r.returncode != 0, True)
+    verifier('… et la copie distante est restée l\'originale',
+             hashlib.sha256(open(os.path.join(distant_a, nom + '.public.dump.age'), 'rb').read()).hexdigest(),
+             hashlib.sha256(open(os.path.join(sortie, nom + '.public.dump.age'), 'rb').read()).hexdigest())
+    r = lancer('stocker.sh', 'lister', **stock)
+    verifier('lister : la sauvegarde complète', r.stdout.split(), [nom])
+
+    # 5. La rétention : 10 sauvegardes plus anciennes (dont une à l'ancien format), une
+    # incomplète et un fichier étranger ; on garde les 7 plus récentes, 3 suppressions au plus
+    anciennes = ['goship-2026-09-%02dT052300Z' % j for j in range(11, 20)] + ['goship-2026-09-01T0523Z']
+    for a in anciennes:
+        for fichier in os.listdir(sortie):
+            shutil.copy(os.path.join(sortie, fichier), os.path.join(distant_a, fichier.replace(nom, a)))
+    shutil.copy(os.path.join(sortie, nom + '.public.dump.age'), os.path.join(distant_a, 'goship-2026-08-30T052300Z.public.dump.age'))
+    open(os.path.join(distant_a, 'notes.txt'), 'w').write('à garder')
+    r = lancer('stocker.sh', 'retention', '5', **stock)
+    verifier('garder 5 : refusé (7 au moins), rien supprimé', (r.returncode, len(os.listdir(distant_a))), (1, 11 * 6 + 2))
+    r = lancer('stocker.sh', 'retention', **stock)
+    completes = lambda: lancer('stocker.sh', 'lister', **stock).stdout.split()
+    verifier('1er passage : 11 complètes → 3 supprimées au plus, 8 restent', (r.returncode, len(completes())), (0, 8))
+    r = lancer('stocker.sh', 'retention', **stock)
+    reste = completes()
+    verifier('2e passage : 7 gardées, les plus récentes (la nouvelle en tête)',
+             (r.returncode, reste), (0, [nom] + ['goship-2026-09-%02dT052300Z' % j for j in range(19, 13, -1)]))
+    verifier('l\'ancienne incomplète est partie ; le fichier étranger est resté',
+             (os.path.exists(os.path.join(distant_a, 'goship-2026-08-30T052300Z.public.dump.age')),
+              os.path.exists(os.path.join(distant_a, 'notes.txt'))), (False, True))
+    r = lancer('stocker.sh', 'retention', **stock)
+    verifier('3e passage : rien à supprimer', (r.returncode, len(completes())), (0, 7))
+    verifier('destination B : sa seule sauvegarde, jamais supprimée', lancer('stocker.sh', 'lister', SOURCE='B', **stock).stdout.split(), [nom])
+
+    # 6. Récupérer (C7), puis altérer la copie distante : le téléchargement est refusé
+    t0 = time.time()
+    recue = os.path.join(travail, 'recue')
+    r = lancer('stocker.sh', 'recuperer', 'derniere', recue, **stock)
+    duree_telechargement = time.time() - t0
+    verifier('recuperer « derniere » : la nouvelle, SHA-256 vérifiés', (r.returncode, r.stdout.strip()), (0, nom))
+    f = os.path.join(distant_b, nom + '.comptes.dump.age')
+    contenu = bytearray(open(f, 'rb').read())
+    contenu[40] ^= 0x01
+    open(f, 'wb').write(bytes(contenu))
+    r = lancer('stocker.sh', 'recuperer', nom, os.path.join(travail, 'recue-b'), SOURCE='B', **stock)
+    verifier('copie distante altérée (B) : téléchargement refusé', (r.returncode, 'SHA-256 faux' in r.stderr), (1, True))
+
+    # 7. Les garde-fous de restaurer.sh
+    EPREUVE = 'goship_autonome'
+    def cible_neuve():
+        psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % EPREUVE)
+        psql_dans(db, 'postgres', 'create database %s;' % EPREUVE)
+        psql_dans(db, EPREUVE, subprocess.run([sys.executable, os.path.join(PRODUCTION, 'doublures-supabase.py')],
+                                              capture_output=True, text=True, check=True).stdout)
+        return 'postgresql://%s@/%s?host=%s' % (db.su, EPREUVE, db.socket)
+    cible = cible_neuve()
+    vide = lambda: psql_dans(db, EPREUVE, "select to_regclass('public.colis') is null;").strip()
+    r = lancer('restaurer.sh', recue, nom, epreuve, url=cible, CIBLE_DB_URL=cible, RESTAURATION_ESSAI='1')
+    verifier('sans RESTORE_TARGET : refusé, rien restauré', (r.returncode, 'RESTORE_TARGET' in r.stderr, vide()), (1, True, 't'))
+    r = lancer('restaurer.sh', recue, nom, epreuve, url=cible, CIBLE_DB_URL=cible, RESTORE_TARGET='production')
+    verifier('RESTORE_TARGET=production sans confirmation : refusé', (r.returncode, 'RESTORE_CONFIRM' in r.stderr, vide()), (1, True, 't'))
+    r = lancer('restaurer.sh', recue, nom, epreuve, url=cible, CIBLE_DB_URL=cible, RESTORE_TARGET='staging', SUPABASE_DB_URL=cible)
+    verifier('cible = la base en service (SUPABASE_DB_URL) hors « production » : refusé',
+             (r.returncode, 'base de production' in r.stderr, vide()), (1, True, 't'))
+    r = lancer('restaurer.sh', abime, nom, epreuve, url=cible, CIBLE_DB_URL=cible, RESTORE_TARGET='essai', RESTAURATION_ESSAI='1')
+    verifier('sauvegarde altérée : restauration refusée avant déchiffrement', (r.returncode, 'SHA-256 différent' in r.stderr, vide()), (1, True, 't'))
+
+    # 8. La restauration chronométrée : déchiffrer + vérifier, restaurer, rejouer la chaîne, vérifier la base
+    t1 = time.time()
+    r = lancer('verifier-sauvegarde.sh', recue, nom, epreuve)
+    t2 = time.time()
+    verifier('sauvegarde téléchargée : vérifiée et déchiffrable (PASS)', r.returncode, 0)
+    r = lancer('restaurer.sh', recue, nom, epreuve, url=cible, CIBLE_DB_URL=cible, RESTORE_TARGET='essai', RESTAURATION_ESSAI='1')
+    t3 = time.time()
+    verifier('restaurer.sh (RESTORE_TARGET=essai) : lignes identiques au manifeste',
+             (r.returncode, 'identiques au manifeste' in r.stdout), (0, True))
+    if r.returncode:
+        print(r.stdout[-600:], r.stderr[-600:])
+    r = lancer('appliquer-chaine.sh', url=cible, CIBLE_DB_URL=cible, SANS_PG_NET='1')
+    t4 = time.time()
+    verifier('la chaîne de migrations se rejoue sur la base restaurée', r.returncode, 0)
+    manifeste = os.path.join(travail, 'manifeste.json')
+    subprocess.run(['age', '-d', '-i', epreuve, '-o', manifeste, os.path.join(recue, nom + '.manifeste.json.age')], check=True)
+    r = lancer('verifier-restauration.sh', manifeste, url=cible, CIBLE_DB_URL=cible)
+    t5 = time.time()
+    print('     ' + '\n     '.join(r.stdout.strip().splitlines()))
+    verifier('verifier-restauration.sh : connexion, tables, fonctions, contraintes, verrous, données, comptes : PASS',
+             (r.returncode, r.stdout.count(' OK '), 'identiques au manifeste' in r.stdout,
+              'comme dans la sauvegarde' in r.stdout, r.stdout.strip().endswith('PASS')), (0, 8, True, True, True))
+    print('     RESTORE DURATION (base d\'essai, %s lignes) : téléchargement %.1f s + vérification/déchiffrement %.1f s + '
+          'restauration %.1f s + chaîne %.1f s + validation %.1f s = %.1f s'
+          % (json.load(open(manifeste))['lignes_par_table'] and sum(json.load(open(manifeste))['lignes_par_table'].values()),
+             duree_telechargement, t2 - t1, t3 - t2, t4 - t3, t5 - t4, duree_telechargement + t5 - t1))
+    # Une base restaurée abîmée (un verrou coupé) : la vérification le voit
+    psql_dans(db, EPREUVE, 'alter table public.colis disable trigger verrou_statut;')
+    r = lancer('verifier-restauration.sh', manifeste, url=cible, CIBLE_DB_URL=cible)
+    verifier('… un verrou coupé sur la base restaurée : BUSINESS LOCKS FAIL, FAIL', (r.returncode, 'BUSINESS LOCKS:    FAIL' in r.stdout), (1, True))
+    # Le script des workflows, tel qu'ils l'appellent : une base PostgreSQL VIDE, qu'il habille
+    # lui-même en projet Supabase (PREPARER_CIBLE=1), puis tout l'enchaînement et le rapport
+    psql_dans(db, 'postgres', 'drop database if exists goship_workflow with (force);')
+    psql_dans(db, 'postgres', 'create database goship_workflow;')
+    nue = 'postgresql://%s@/goship_workflow?host=%s' % (db.su, db.socket)
+    r = lancer('epreuve-restauration.sh', recue, nom, epreuve, '%.0f' % duree_telechargement, url=nue, CIBLE_DB_URL=nue,
+               RESTORE_TARGET='essai', PREPARER_CIBLE='1')
+    print('     ' + '\n     '.join(l for l in r.stdout.strip().splitlines() if l.startswith(('RESTORE', 'BACKUP AGE', 'FINAL'))))
+    verifier('epreuve-restauration.sh (celui des workflows) sur une base vide : PASS, durées et RPO écrits',
+             (r.returncode, r.stdout.count('FINAL RESULT:      PASS'), 'RESTORE DURATION:' in r.stdout, 'BACKUP AGE (RPO):' in r.stdout),
+             (0, 3, True, True))
+    if r.returncode:
+        print(r.stdout[-800:], r.stderr[-800:])
+    r = lancer('epreuve-restauration.sh', recue, nom, epreuve, url=nue, CIBLE_DB_URL=nue, RESTORE_TARGET='production')
+    verifier('… il refuse RESTORE_TARGET=production', (r.returncode, 'jamais production' in r.stderr), (1, True))
+    psql_dans(db, 'postgres', 'drop database if exists goship_workflow with (force);')
+    # Le piège d'une restauration ratée : le bon schéma, mais aucune donnée. Jamais PASS.
+    vide_mais_migree = cible_neuve()
+    r = lancer('appliquer-chaine.sh', url=vide_mais_migree, CIBLE_DB_URL=vide_mais_migree, SANS_PG_NET='1')
+    r = lancer('verifier-restauration.sh', manifeste, url=vide_mais_migree, CIBLE_DB_URL=vide_mais_migree)
+    verifier('… une base au bon schéma mais sans données : DATA CHECK FAIL, AUTH ACCOUNTS FAIL, FAIL',
+             (r.returncode, 'DATA CHECK:        FAIL' in r.stdout, 'AUTH ACCOUNTS:     FAIL' in r.stdout), (1, True, True))
+    psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % EPREUVE)
+
+    # 9. Aucun secret dans ce que les scripts ont écrit
+    tout = '\n'.join(sorties)
+    verifier('aucune clé privée age, aucun mot de passe, aucune destination dans les journaux',
+             ('AGE-SECRET-KEY' in tout, secret in tout, 'motdepasse-essai-42' in tout, distant_a in tout), (False, False, False, False))
+    verifier('aucun fichier en clair laissé (ni .dump ni .json hors du chiffré)',
+             [f for d in (sortie, recue, distant_a) for f in os.listdir(d) if f.endswith(('.dump', '.json', '.liste'))], [])
+    shutil.rmtree(travail)
 
 def jsonq_su(db, base, sql):
     return psql_dans(db, base, sql).strip()

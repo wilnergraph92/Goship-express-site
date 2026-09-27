@@ -56,9 +56,9 @@ jobs:
         run: |
           curl -sSL "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
           echo "POSTGREST=$RUNNER_TEMP/postgrest" >> "$GITHUB_ENV"
-      - name: age (sauvegarde chiffrée, banc production)
+      - name: age et rclone (sauvegarde chiffrée, stockage externe, banc production)
         if: matrix.banc == 'production'
-        run: sudo apt-get install -y -qq age
+        run: sudo apt-get install -y -qq age rclone
       - name: essai-${{ matrix.banc }}.py
         run: python3 outils/essais-services/essai-${{ matrix.banc }}.py
 
