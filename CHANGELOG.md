@@ -7,6 +7,18 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.27 — nouvelle vue générale du tableau de bord (publié le 27/09/2026)
+
+Aucune migration, aucune donnée modifiée : la page ne lit que `vue_generale` et les
+Analytics, déjà en production.
+
+- Tableau de bord : la vue générale reprend la maquette Claude Design « GoShip
+  Dashboard » aux couleurs du logo (bleu nuit, orange, bleu), sur tous les écrans.
+  Chiffres de `vue_generale` et, pour les comptes qui voient les rapports, des
+  Analytics (comparaison à la période précédente, routes, villes, clients actifs).
+  Les blocs de la maquette sans donnée dans la base (marge, agences, filtres par
+  mode de transport, « mises à jour simulées ») n'ont pas été repris.
+
 ## site-2026.09.26.2 — finalisation de la mise en production (publié le 26/09/2026)
 
 Aucune page ne change, aucune donnée n'est modifiée. **Verdict : NO-GO**
