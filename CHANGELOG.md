@@ -7,13 +7,14 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — tableau de bord : filtres, apparence, direct, disposition
+## site-2026.09.27.2 — tableau de bord : filtres, apparence, direct, disposition (publié le 27/09/2026)
 
-Migration facultative, en lecture seule : relancer `supabase-analytics.sql` puis
-`supabase-mobile.sql` (la chaîne veut qu'on relance ce qui suit) ajoute
-`vue_generale_filtree` et ses aides. Aucune table, aucune donnée, aucune règle ne
-change. Sans elle, le site publié fonctionne : les filtres sont désactivés et le
-disent.
+Migration en lecture seule, appliquée en production le 27/09/2026 avant la
+publication : `supabase-analytics.sql` relancé (contrôle de fin : 15 | 8 | 0 | true),
+puis `supabase-mobile.sql` (contrôle : 1 | false | 2 | 1). Elle ajoute
+`vue_generale_filtree` et ses aides ; aucune table, aucune donnée, aucune règle ne
+change. Une base sans elle garde un tableau de bord entier, filtres désactivés.
+Barre du haut : sur une ligne jusqu'à 1365 px (elle passait sur deux lignes à 1280 px).
 
 - Correction : le menu latéral défilait avec la page et laissait un blanc dessous
   (la vue générale portait par erreur la classe à hauteur fixe de l'aperçu d'e-mail,
