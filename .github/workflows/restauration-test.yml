@@ -1,0 +1,130 @@
+# ==========================================================================
+#  Test de restauration à la demande : une sauvegarde choisie, depuis le stockage externe
+# ==========================================================================
+#  Actions > Test de restauration > Run workflow. Jamais automatique, jamais la
+#  production : la cible est
+#    essai    un PostgreSQL 17 jetable dans le runner, habillé en projet Supabase
+#             (environnement GitHub « production », qui porte la clé et le stockage) ;
+#    staging  la préproduction goship-staging, VIDÉE au préalable (restaurer.sh refuse une
+#             base qui a déjà des colis) — environnement GitHub « staging », qui doit
+#             alors porter aussi RESTAURATION_CLE, SAUVEGARDE_RCLONE_CONFIG et
+#             SAUVEGARDE_STOCKAGE (outils/README-backup.md).
+#  Étapes : trouver la sauvegarde (la plus récente, ou celle nommée), la télécharger,
+#  vérifier les SHA-256, déchiffrer, restaurer, rejouer la chaîne, vérifier la base ;
+#  rapport et durées réelles dans le résumé. Tout échec rend le workflow rouge.
+# ==========================================================================
+
+name: Test de restauration
+
+on:
+  workflow_dispatch:
+    inputs:
+      sauvegarde:
+        description: "Sauvegarde : « derniere » ou un nom goship-AAAA-MM-JJTHHMMSSZ"
+        required: true
+        default: derniere
+      source:
+        description: Destination de stockage d'où la lire
+        type: choice
+        options: [A, B]
+        default: A
+      cible:
+        description: Où restaurer (jamais la production)
+        type: choice
+        options: [essai, staging]
+        default: essai
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restauration-test
+  cancel-in-progress: false
+
+jobs:
+  restaurer:
+    name: Restaurer ${{ inputs.sauvegarde }} (${{ inputs.cible }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ inputs.cible == 'staging' && 'staging' || 'production' }}
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: epreuve-jetable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      RESTAURATION_CLE: ${{ secrets.RESTAURATION_CLE }}
+      SAUVEGARDE_RCLONE_CONFIG: ${{ secrets.SAUVEGARDE_RCLONE_CONFIG }}
+      SAUVEGARDE_STOCKAGE: ${{ secrets.SAUVEGARDE_STOCKAGE }}
+      SAUVEGARDE_STOCKAGE_B: ${{ secrets.SAUVEGARDE_STOCKAGE_B }}
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+      CIBLE: ${{ inputs.cible }}
+      QUOI: ${{ inputs.sauvegarde }}
+      SOURCE: ${{ inputs.source }}
+    steps:
+      - name: Tout est posé ? (et la cible n'est pas la production)
+        run: |
+          manque=""
+          for v in RESTAURATION_CLE SAUVEGARDE_RCLONE_CONFIG SAUVEGARDE_STOCKAGE; do [ -n "${!v}" ] || manque="$manque $v"; done
+          [ "$SOURCE" = B ] && [ -z "$SAUVEGARDE_STOCKAGE_B" ] && manque="$manque SAUVEGARDE_STOCKAGE_B"
+          [ "$CIBLE" = staging ] && [ -z "$STAGING_DB_URL" ] && manque="$manque STAGING_DB_URL"
+          if [ -n "$manque" ]; then echo "::error::Secrets absents (environnement $CIBLE) :$manque (outils/README-backup.md)."; exit 1; fi
+          case "$QUOI" in derniere|goship-*) ;; *) echo "::error::Sauvegarde : « derniere » ou un nom goship-…"; exit 1 ;; esac
+          if [ "$CIBLE" = staging ]; then
+            case "$STAGING_DB_URL" in *gpfdyslysqjmojgzggib*) echo "::error::STAGING_DB_URL pointe vers la PRODUCTION : arrêt."; exit 1 ;; esac
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: |
+            outils
+          sparse-checkout-cone-mode: false
+
+      - name: Outils (pg_restore 17, age, rclone)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17 age rclone
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Choisir et télécharger (SHA-256 vérifiés)
+        id: telecharger
+        run: |
+          umask 077
+          printf '%s\n' "$SAUVEGARDE_RCLONE_CONFIG" > "$RUNNER_TEMP/rclone.conf"
+          export RCLONE_CONFIG="$RUNNER_TEMP/rclone.conf"
+          echo "Sauvegardes complètes dans la destination $SOURCE :"
+          bash outils/production/stocker.sh lister | head -10
+          debut=$(date +%s)
+          nom="$(bash outils/production/stocker.sh recuperer "$QUOI" "$RUNNER_TEMP/restauration" | tail -1)"
+          echo "duree=$(( $(date +%s) - debut ))" >> "$GITHUB_OUTPUT"
+          echo "nom=$nom" >> "$GITHUB_OUTPUT"
+          echo "BACKUP FOUND:      OK   $nom (destination $SOURCE)"
+          rm -f "$RUNNER_TEMP/rclone.conf"
+
+      - name: Restaurer et vérifier (rapport, RTO et RPO mesurés)
+        env:
+          TELECHARGEMENT: ${{ steps.telecharger.outputs.duree }}
+          NOM: ${{ steps.telecharger.outputs.nom }}
+        run: |
+          umask 077
+          cle="$RUNNER_TEMP/cle-restauration.txt"
+          printf '%s\n' "$RESTAURATION_CLE" > "$cle"
+          trap 'rm -f "$cle"' EXIT
+          if [ "$CIBLE" = staging ]; then
+            export CIBLE_DB_URL="$STAGING_DB_URL"
+            RESTORE_TARGET=staging bash outils/production/epreuve-restauration.sh "$RUNNER_TEMP/restauration" "$NOM" "$cle" "$TELECHARGEMENT"
+          else
+            export CIBLE_DB_URL="postgresql://postgres:epreuve-jetable@localhost:5432/postgres"
+            RESTORE_TARGET=essai PREPARER_CIBLE=1 bash outils/production/epreuve-restauration.sh "$RUNNER_TEMP/restauration" "$NOM" "$cle" "$TELECHARGEMENT"
+          fi
+
+      - name: Nettoyer
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/restauration" "$RUNNER_TEMP/rclone.conf" "$RUNNER_TEMP/cle-restauration.txt"
