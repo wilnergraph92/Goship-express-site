@@ -37,6 +37,15 @@ Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backu
   - le manifeste garde la valeur des séquences et le détail des comptes (identités,
     mots de passe, confirmés), comparés après restauration.
 
+## site-2026.09.28.2 — tableau de bord : actions dans la fiche seulement (publié le 28/09/2026)
+
+Aucune migration, aucune donnée modifiée.
+
+- Colis, clients, factures : les boutons quittent les lignes (Mettre à jour, Voir la
+  facture, Étiquette ; Ses colis, Ses factures, + Colis ; Encaisser, Imprimer,
+  Détails, WhatsApp, Annuler). Ils ne sont plus que dans la fiche qu'un clic sur la
+  ligne ouvre, avec les mêmes permissions.
+
 ## site-2026.09.28 — tableau de bord : fiches complètes, destinations réelles (publié le 28/09/2026)
 
 Aucune migration nouvelle (celle de `site-2026.09.27.3` reste à relancer pour le

@@ -481,16 +481,8 @@
       tdMaj.textContent = O.date(colis.maj_le, true);
       tr.appendChild(tdMaj);
 
-      var tdActions = el('td', 'gs-cellule-actions');
-      var bouton = el('button', 'gs-bouton gs-bouton--petit gs-bouton--sombre', 'Mettre à jour');
-      bouton.type = 'button';
-      bouton.setAttribute('data-maj', colis.id);
-      bouton.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
-      tdActions.appendChild(bouton);
-      if (peut('invoices.view')) tdActions.appendChild(boutonFactureDuColis(colis));
-      tdActions.appendChild(boutonEtiquette(colis, 'gs-bouton gs-bouton--petit gs-bouton--contour'));
-      tr.appendChild(tdActions);
-
+      // Pas de boutons dans la ligne : « Mettre à jour », « Voir la facture » et
+      // « Étiquette » sont dans sa fiche, qu'un clic sur la ligne ouvre
       corpsColis.appendChild(tr);
     });
 
@@ -662,14 +654,6 @@
     if (etat.selection.length) ouvrirStatut(etat.selection.slice(), null);
   });
 
-  corpsColis.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-maj]');
-    if (!b) return;
-    var id = b.getAttribute('data-maj');
-    var colis = etat.colis.lignes.filter(function (l) { return l.id === id; })[0];
-    if (colis) ouvrirStatut([id], colis);
-  });
-
   /* ---- Clients ---------------------------------------------------------------- */
   var corpsClients = $('[data-lignes="clients"]');
 
@@ -714,6 +698,29 @@
       boite.appendChild(p);
     });
     return boite;
+  }
+
+  // Les actions d'un client, montrées dans sa fiche : selon les permissions du rôle
+  function actionsClient(client) {
+    var r = [];
+    var voir = petitBouton('Ses colis', null, function () { filtrerParClient(client); });
+    r.push(voir);
+    if (peut('invoices.create')) {
+      var sesFactures = petitBouton('Ses factures', null, function () {
+        choisirVue('factures');
+        ouvrirFacture(null);
+        champCodeFacture.value = client.code || '';
+        champCodeFacture.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      sesFactures.setAttribute('aria-label', 'Voir les factures de ' + (client.nom_complet || client.code));
+      r.push(sesFactures);
+    }
+    if (peut('shipments.create')) {
+      var ajouter = petitBouton('+ Colis', null, function () { ouvrirColis({ code: client.code }); });
+      ajouter.setAttribute('aria-label', 'Enregistrer un colis pour ' + (client.nom_complet || client.code));
+      r.push(ajouter);
+    }
+    return r;
   }
 
   function afficherClients() {
@@ -776,28 +783,7 @@
       tdDate.textContent = client.derniere_activite ? O.date(client.derniere_activite, true) : '—';
       tr.appendChild(tdDate);
 
-      var tdActions = el('td', 'gs-cellule-actions');
-      var voir = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Ses colis');
-      voir.type = 'button';
-      voir.addEventListener('click', function () { filtrerParClient(client); });
-      var ajouter = el('button', 'gs-bouton gs-bouton--petit gs-bouton--sombre', '+ Colis');
-      ajouter.type = 'button';
-      ajouter.setAttribute('aria-label', 'Enregistrer un colis pour ' + (client.nom_complet || client.code));
-      ajouter.addEventListener('click', function () { ouvrirColis({ code: client.code }); });
-      var sesFactures = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Ses factures');
-      sesFactures.type = 'button';
-      sesFactures.setAttribute('aria-label', 'Voir les factures de ' + (client.nom_complet || client.code));
-      sesFactures.addEventListener('click', function () {
-        choisirVue('factures');
-        ouvrirFacture(null);
-        champCodeFacture.value = client.code || '';
-        champCodeFacture.dispatchEvent(new Event('input', { bubbles: true }));
-      });
-      tdActions.appendChild(voir);
-      if (peut('invoices.create')) tdActions.appendChild(sesFactures);
-      if (peut('shipments.create')) tdActions.appendChild(ajouter);
-      tr.appendChild(tdActions);
-
+      // Pas de boutons dans la ligne : ses actions sont dans sa fiche (actionsClient)
       corpsClients.appendChild(tr);
     });
     var vide = $('[data-vide="clients"]');
@@ -940,6 +926,40 @@
     return b;
   }
 
+  // Les actions d'une facture, montrées dans sa fiche : selon son état et les permissions
+  function actionsFacture(facture) {
+    var client = facture.clients || {};
+    var t = O.totauxFacture(facture);
+    var r = [];
+    if (t.etat !== 'annulee' && t.balance > 0 && peut('payments.create')) {
+      r.push(petitBouton('Encaisser', 'gs-bouton--plein', function () { ouvrirPaiement(facture); }));
+    }
+    var imprimerBouton = petitBouton('Imprimer', null, function () { imprimerFacture(facture); });
+    imprimerBouton.setAttribute('aria-label', 'Imprimer la facture ' + facture.numero);
+    imprimerBouton.setAttribute('data-imprimer', '');
+    r.push(imprimerBouton);
+    r.push(petitBouton(t.etat === 'annulee' ? 'Voir' : 'Détails', null, function () { ouvrirFacture(facture); }));
+    if (client.telephone && t.etat !== 'annulee' && t.balance > 0) {
+      r.push(petitBouton('WhatsApp', null, function () {
+        var reste = t.paye > 0;
+        var modele = (reste ? MESSAGE_RESTE : MESSAGE_FACTURE)[client.langue] || (reste ? MESSAGE_RESTE : MESSAGE_FACTURE).fr;
+        var texte = modele
+          .replace('{nom}', (client.nom_complet || '').split(' ')[0])
+          .replace('{numero}', facture.numero)
+          .replace('{montant}', argent(reste ? t.balance : t.grandTotal))
+          .replace('{lien}', facture.lien_paiement ? '\n' + facture.lien_paiement : '');
+        var numero = String(client.telephone).replace(/\D/g, '');
+        window.open('https://wa.me/' + numero + '?text=' + encodeURIComponent(texte), '_blank', 'noopener');
+      }));
+    }
+    if (t.etat !== 'annulee' && t.paye === 0 && peut('invoices.cancel')) {
+      var annuler = petitBouton('Annuler', 'gs-bouton--danger', function () { demanderAnnulationFacture(facture); });
+      annuler.setAttribute('aria-label', 'Annuler la facture ' + facture.numero);
+      r.push(annuler);
+    }
+    return r;
+  }
+
   function afficherFactures() {
     var f = etat.factures;
     corpsFactures.textContent = '';
@@ -986,37 +1006,7 @@
       tdDate.textContent = O.date(facture.cree_le);
       tr.appendChild(tdDate);
 
-      var tdActions = el('td', 'gs-cellule-actions');
-      if (t.etat !== 'annulee' && t.balance > 0 && peut('payments.create')) {
-        tdActions.appendChild(petitBouton('Encaisser', 'gs-bouton--plein', function () { ouvrirPaiement(facture); }));
-      }
-      var imprimerBouton = petitBouton('Imprimer', null, function () { imprimerFacture(facture); });
-      imprimerBouton.setAttribute('data-imprimer', '');
-      imprimerBouton.setAttribute('aria-label', 'Imprimer la facture ' + facture.numero);
-      tdActions.appendChild(imprimerBouton);
-      tdActions.appendChild(petitBouton(t.etat === 'annulee' ? 'Voir' : 'Détails', null,
-                                        function () { ouvrirFacture(facture); }));
-
-      if (client.telephone && t.etat !== 'annulee' && t.balance > 0) {
-        tdActions.appendChild(petitBouton('WhatsApp', null, function () {
-          var reste = t.paye > 0;
-          var modele = (reste ? MESSAGE_RESTE : MESSAGE_FACTURE)[client.langue] || (reste ? MESSAGE_RESTE : MESSAGE_FACTURE).fr;
-          var texte = modele
-            .replace('{nom}', (client.nom_complet || '').split(' ')[0])
-            .replace('{numero}', facture.numero)
-            .replace('{montant}', argent(reste ? t.balance : t.grandTotal))
-            .replace('{lien}', facture.lien_paiement ? '\n' + facture.lien_paiement : '');
-          var numero = String(client.telephone).replace(/\D/g, '');
-          window.open('https://wa.me/' + numero + '?text=' + encodeURIComponent(texte), '_blank', 'noopener');
-        }));
-      }
-      if (t.etat !== 'annulee' && t.paye === 0 && peut('invoices.cancel')) {
-        var annuler = petitBouton('Annuler', 'gs-bouton--danger', function () { demanderAnnulationFacture(facture); });
-        annuler.setAttribute('aria-label', 'Annuler la facture ' + facture.numero);
-        tdActions.appendChild(annuler);
-      }
-      tr.appendChild(tdActions);
-
+      // Pas de boutons dans la ligne : ses actions sont dans sa fiche (actionsFacture)
       corpsFactures.appendChild(tr);
     });
 
@@ -5723,15 +5713,15 @@
     montrerFiche();
   }
 
-  // Les boutons d'une ligne, dans la fiche : chaque copie déclenche le bouton de la ligne
-  // (même action, mêmes permissions : la ligne n'affiche que ce que le rôle peut faire)
-  function boutonsDeLigne(tr) {
-    var r = [];
-    Array.prototype.forEach.call(tr.cells, function (td) {
-      if (td.classList.contains('gs-tableau__case')) return;
-      $$('button, a[href]', td).forEach(function (b) { if (!b.disabled && !b.hidden && b.textContent.trim()) r.push(b); });
+  // Des boutons d'action dans la fiche : même taille que les autres ; la fiche se ferme
+  // après l'action, sauf une impression (data-imprimer)
+  function ajouterActions(boutons) {
+    boutons.forEach(function (b, i) {
+      var danger = b.classList.contains('gs-bouton--danger');
+      b.className = 'gs-bouton ' + (danger ? 'gs-bouton--danger' : i === 0 ? 'gs-bouton--plein' : 'gs-bouton--contour');
+      if (!b.hasAttribute('data-imprimer')) b.addEventListener('click', function () { dlgFiche.close(); });
+      actionsFiche.appendChild(b);
     });
-    return r;
   }
   function copierBoutons(boutons) {
     boutons.forEach(function (b, i) {
@@ -5748,7 +5738,7 @@
 
   /* La facture : ce que la liste en a lu (lignes et paiements compris), montants par
      API.outils.totauxFacture comme partout ; ses actions sont celles de sa ligne. */
-  function ouvrirFicheFacture(facture, tr) {
+  function ouvrirFicheFacture(facture) {
     var client = facture.clients || {};
     var t = O.totauxFacture(facture);
     preparerFiche('Facture', facture.numero, client.nom_complet || '', badgeFacture(t.etat));
@@ -5798,13 +5788,13 @@
       });
       sp.appendChild(up);
     }
-    copierBoutons(boutonsDeLigne(tr));
+    ajouterActions(actionsFacture(facture));
     montrerFiche();
   }
 
   /* Le client : ce que la liste en sait, puis ses derniers colis, ses factures et leurs
      paiements, lus à l'ouverture (et seulement si le rôle peut les voir). */
-  function ouvrirFicheClient(client, tr) {
+  function ouvrirFicheClient(client) {
     preparerFiche('Client', client.nom_complet || client.code, client.code || '', null);
     sectionFiche('Informations personnelles');
     champFiche('Identifiant', client.code);
@@ -5866,7 +5856,7 @@
         }, 'Aucun paiement reçu pour l’instant.');
       }
     }
-    copierBoutons(boutonsDeLigne(tr));
+    ajouterActions(actionsClient(client));
     montrerFiche();
   }
 
@@ -5888,8 +5878,8 @@
   function ouvrirFicheDe(tr) {
     var d = FICHES.get(tr);
     if (d && d.colis) { ouvrirFicheColis(d.colis); return; }
-    if (d && d.facture) { ouvrirFicheFacture(d.facture, tr); return; }
-    if (d && d.client) { ouvrirFicheClient(d.client, tr); return; }
+    if (d && d.facture) { ouvrirFicheFacture(d.facture); return; }
+    if (d && d.client) { ouvrirFicheClient(d.client); return; }
     if (d && d.paiement) { ouvrirFichePaiement(d.paiement); return; }
     if (tr.hasAttribute('data-id') && tr.closest('.gs-tableau--colis')) {
       var colis = etat.colis.lignes.filter(function (l) { return l.id === tr.getAttribute('data-id'); })[0];
