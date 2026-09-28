@@ -33,7 +33,10 @@ Outils (tous dans `outils/`, jamais publiés) :
 | `outils/production/controle-securite.sql` | RLS, fonctions, droits des visiteurs, comptes, verrous, migrations — **lecture seule** |
 | `outils/production/controle-integrite.sql` | rattachements, doublons, argent, statuts, files — **lecture seule** |
 | `outils/production/surveiller.sh` | le site et la base répondent-ils ? (surveillance et contrôle après publication) |
-| `outils/production/sauvegarder.sh` / `restaurer.sh` | sauvegarde chiffrée et sa restauration (`RESTAURATION_ESSAI=1` : épreuve sur PostgreSQL ordinaire) |
+| `outils/production/sauvegarder.sh` / `restaurer.sh` | sauvegarde chiffrée et sa restauration (`RESTORE_TARGET` obligatoire ; `RESTAURATION_ESSAI=1` : épreuve sur PostgreSQL ordinaire) |
+| `outils/production/verifier-sauvegarde.sh` / `verifier-restauration.sh` | une sauvegarde (SHA-256, chiffrement, déchiffrement, structure) ; une base restaurée (lecture seule) — `FINAL RESULT: PASS/FAIL` |
+| `outils/production/stocker.sh` | stockage externe des sauvegardes par rclone (A, B), relecture, rétention 7 avec garde-fous |
+| `outils/production/epreuve-restauration.sh` | l'épreuve complète d'une sauvegarde, chronométrée (RTO de la base) — guide : `outils/README-backup.md` |
 | `outils/production/sonder.sh` | quelles migrations sont en production, vu de l'extérieur (clé publique, lecture seule) |
 | `outils/production/controler.sh` | les deux contrôles en lecture seule ; sortie publiable, détail chiffré |
 | `outils/production/appliquer-chaine.sh` | la chaîne des migrations, arrêt au premier échec, refus de la production sans confirmation |

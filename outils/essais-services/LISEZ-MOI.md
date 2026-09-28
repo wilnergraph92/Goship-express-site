@@ -297,6 +297,18 @@ EXECUTE sur toute nouvelle fonction) :
   contrôles verts, seconde restauration refusée, l'espace client et la création
   de colis fonctionnent après restauration.
 
+Section L (27/09/2026), la sauvegarde autonome de bout en bout, sur une base
+saine (avant les anomalies de la section G) : base injoignable (mot de passe
+jamais affiché), `verifier-sauvegarde.sh` avec et sans clé, mauvaise clé, octet
+altéré, `stocker.sh` vers deux destinations par le vrai rclone (dossiers
+locaux) — envoi relu, jamais de remplacement, rétention (7 au moins, 3
+suppressions au plus par passage, fichier étranger épargné), téléchargement,
+copie distante altérée refusée —, garde-fous de `restaurer.sh`
+(`RESTORE_TARGET`, production sans confirmation, base en service), restauration
+chronométrée, `verifier-restauration.sh` (et une base vide ou un verrou coupé
+jamais déclarés PASS), `epreuve-restauration.sh` tel que l'appellent les
+workflows, aucun secret dans les journaux. Il faut `age` et `rclone`.
+
 Depuis la finalisation, il éprouve aussi (sections H à K) : `controler.sh`
 (sortie sans e-mail ni numéro, détail chiffré, mot de passe jamais affiché),
 `essai-metier.sql` (le parcours métier passe, ne laisse rien, et échoue si un

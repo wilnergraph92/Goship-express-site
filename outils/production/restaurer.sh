@@ -2,10 +2,19 @@
 # =============================================================================
 # Goship Express — restauration d'une sauvegarde chiffrée (Phase 12)
 #
-#   CIBLE_DB_URL=… bash outils/production/restaurer.sh <dossier> <nom> <clé privée age>
+#   RESTORE_TARGET=essai|staging CIBLE_DB_URL=… \
+#     bash outils/production/restaurer.sh <dossier> <nom> <clé privée age>
 #     <dossier>  où se trouvent les fichiers de la sauvegarde
-#     <nom>      goship-AAAA-MM-JJTHHMMZ (voir le manifeste)
+#     <nom>      goship-AAAA-MM-JJTHHMMSSZ (voir le manifeste)
 #     <clé>      fichier de la clé PRIVÉE age (jamais dans le dépôt)
+#
+# RESTORE_TARGET est obligatoire et dit où l'on restaure :
+#   essai       une base jetable (workflows, essais)
+#   staging     la préproduction (un projet Supabase vidé ou neuf)
+#   production  seulement après un sinistre, dans le NOUVEAU projet de production, et
+#               avec RESTORE_CONFIRM=RESTAURER-EN-PRODUCTION en plus
+# Si SUPABASE_DB_URL est aussi posée (la base en service) et que CIBLE_DB_URL pointe
+# le même serveur et la même base, la restauration est refusée hors « production ».
 #
 # JAMAIS sur la production en service : la cible est un projet Supabase NEUF (ou
 # une base d'essai), dont le schéma public est vide. Le script refuse une cible
@@ -26,6 +35,31 @@ dossier="${1:?Usage : restaurer.sh <dossier> <nom> <clé privée age>}"
 nom="${2:?nom de la sauvegarde manquant}"
 cle="${3:?fichier de la clé privée manquant}"
 : "${CIBLE_DB_URL:?CIBLE_DB_URL manquante (base de destination)}"
+case "${RESTORE_TARGET:-}" in
+  essai|staging) ;;
+  production)
+    if [ "${RESTORE_CONFIRM:-}" != "RESTAURER-EN-PRODUCTION" ]; then
+      echo "Restauration en production refusée : poser aussi RESTORE_CONFIRM=RESTAURER-EN-PRODUCTION" >&2
+      echo "(uniquement dans le nouveau projet après un sinistre : docs/production/disaster-recovery.md)." >&2
+      exit 1
+    fi ;;
+  *) echo "RESTORE_TARGET manquante ou inconnue : essai, staging ou production" >&2; exit 1 ;;
+esac
+# La base en service, reconnue par son serveur et son nom de base (sans rien afficher)
+meme_base() {
+  python3 - "$1" "$2" <<'PY2'
+import sys
+from urllib.parse import urlsplit
+def cle(u):
+    s = urlsplit(u)
+    return ((s.hostname or '').lower(), s.port or 5432, (s.path or '/').lstrip('/') or 'postgres')
+sys.exit(0 if cle(sys.argv[1]) == cle(sys.argv[2]) else 1)
+PY2
+}
+if [ "$RESTORE_TARGET" != "production" ] && [ -n "${SUPABASE_DB_URL:-}" ] && meme_base "$CIBLE_DB_URL" "$SUPABASE_DB_URL"; then
+  echo "La cible est la base de production : refusé (RESTORE_TARGET=$RESTORE_TARGET)." >&2
+  exit 1
+fi
 PG_RESTORE="${PG_RESTORE:-pg_restore}"
 PSQL="${PSQL:-psql}"
 
@@ -43,6 +77,14 @@ compter_lignes() {
 }
 
 [ -f "$dossier/$nom.manifeste.json.age" ] || { echo "Manifeste introuvable : $dossier/$nom.manifeste.json.age" >&2; exit 1; }
+# Les fichiers chiffrés d'abord : une empreinte absente ou fausse arrête tout, avant
+# même de déchiffrer
+for partie in manifeste.json comptes.dump public.dump; do
+  [ -f "$dossier/$nom.$partie.age.sha256" ] || { echo "Empreinte absente : $nom.$partie.age.sha256" >&2; exit 1; }
+  ( cd "$dossier" && sha256sum -c --quiet "$nom.$partie.age.sha256" ) \
+    || { echo "SHA-256 différent pour $nom.$partie.age : fichier altéré, restauration refusée" >&2; exit 1; }
+done
+echo "SHA-256 des fichiers chiffrés : conformes."
 
 # Refuser une base qui a déjà des colis : ce n'est pas une cible de restauration
 deja=0
