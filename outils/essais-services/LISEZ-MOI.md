@@ -29,7 +29,7 @@ node outils/essais-services/essai-rapports.js        # les rapports en démonstr
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `outils/production/` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `outils/production/` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`
@@ -119,6 +119,11 @@ règles de sécurité des tables s'appliquent donc pour de bon.
   passe à 3 $ ; un nouveau colis prend le nouveau tarif.
 - **Le regroupement** : 20 + 15 + 30 + 10 = 75 $, aperçu compris ; refus
   (paiement, deux clients, une seule facture, sans colis, annulée).
+- **Sortir d'un regroupement** (`supabase-regroupement.sql`) : 75 $ → 30 $
+  (le colis sorti, ses frais) + 55 $ (les autres) ; échéance et note reprises (pas le lien, qui portait le montant) ;
+  même demande renvoyée, rien de refait ; refus (tous les colis, colis étranger,
+  aucun, payée, annulée, déjà un paiement, sans colis, un client) ; encaisser le
+  colis sorti laisse le reste à payer.
 - **Les paiements** : partiel (25 → payé 25, solde 50), multiples
   (25 + 20 + 30), trop-payé (80 $ refusé), montant, moyen et date refusés,
   double clic, même référence, **deux paiements de 50 $ simultanés sur 75 $**

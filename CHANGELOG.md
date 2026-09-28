@@ -7,9 +7,34 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — « Supprimer mon compte » dans l'application mobile
+## Non publié — regroupement des factures : encaisser, retirer, sortir des colis
 
-Migration à passer avant de publier la nouvelle version de l'application : **un seul
+Migration à passer : **un seul fichier**, `outils/supabase-regroupement.sql` (le dernier
+de la chaîne, 14ᵉ). Il ajoute une fonction ; il ne change aucune donnée. Contrôle
+attendu : `1 | false`. Sans lui, « Sortir du regroupement » répond « La base n'est pas à
+jour » ; le reste du tableau de bord marche comme avant.
+
+- Fenêtre « Regrouper des factures » : chaque facture a « Encaisser » (la fenêtre du
+  paiement s'ouvre ; payée, même en partie, elle quitte la liste) et « Retirer » (elle
+  quitte la liste sans que la facture change ; « Tout remettre » la ramène).
+- Une facture de colis à payer, sans paiement, d'au moins deux colis : « Sortir des
+  colis de cette facture » (fenêtre de la facture, et fiche : « Sortir des colis »).
+  Les colis cochés passent sur leur propre facture, les autres sur une seconde ; la
+  facture regroupée est annulée et renvoie vers la seconde (`remplacee_par`). Chaque
+  facture compte ses frais de service (sortir des colis en ajoute une fois) ; l'aperçu
+  le montre avant de valider. « Sortir et encaisser » ouvre ensuite le paiement de la
+  facture des colis sortis. Refusé : tous les colis, un colis étranger, une facture
+  payée, annulée ou qui a reçu un paiement, une facture sans colis.
+- `sortir_du_regroupement` (base) et sa copie démo (`api.js`), clé d'idempotence,
+  journalisé (`facture.sortie_regroupement`). Le lien de paiement n'est pas recopié
+  (il portait le montant regroupé) : le tableau de bord en pose un sur chaque facture.
+- Bancs : `essai-finances.py` section R (21 cas), `essai-finances.js` section Q
+  (16 cas) ; `sonder.sh` et `controle-securite.sql` connaissent la 14ᵉ migration.
+
+## site-2026.09.28.6 — « Supprimer mon compte » dans l'application mobile (publié le 28/09/2026)
+
+Migration exécutée par le propriétaire le 28/09/2026 (contrôle `1 | false | 1`, sonde
+anonyme : 13 migrations sur 13) : **un seul
 fichier**, `outils/supabase-compte.sql` (le dernier de la chaîne). Il ajoute une
 colonne vide (`clients.supprime_le`) et une fonction ; il ne change aucune donnée.
 Sans lui, l'application répond « La suppression du compte n'est pas encore

@@ -8,6 +8,7 @@
 (obligatoire, gardé au journal)
 + Colis
 0 à 30 jours
+1 facture retirée de la liste.
 12 derniers mois
 14 jours
 3 derniers mois
@@ -130,6 +131,7 @@ Aucune ville de destination sur la période.
 Aucune ville indiquée.
 Aucune étape achevée pendant cette période.
 Aujourd'hui
+Aujourd'hui, une facture
 Aujourd’hui
 Autre
 Autre moyen
@@ -203,6 +205,7 @@ Clients correspondants
 Clients inscrits
 Clients inscrits (fin de période)
 Clients les plus actifs
+Cochez le colis qui sort de la facture.
 Cochez les blocs à afficher et rangez-les avec les flèches. Gardé sur cet appareil seulement.
 Code
 Code client
@@ -224,6 +227,7 @@ Colis par statut
 Colis par statut, maintenant
 Colis passés en action requise
 Colis passés à ce statut pendant la période, chacun une fois, sans les étapes annulées par une correction. Source : les événements (colis_historique).
+Colis qui sortent
 Colis reçu
 Colis reçus
 Colis reçus et livrés
@@ -233,12 +237,14 @@ Colis sans facture
 Colis sans progression, maintenant
 Colis scanné
 Colis scannés
+Colis sortis d’un regroupement
 Colis supprimé.
 Colis « sans mouvement »
 Colis à facturer
 Colis à traiter
 Colis, facture, suivi, code-barres, nom, téléphone…
 Compte
+Compte supprimé par le client
 Comptes et colis sont enregistrés uniquement dans ce navigateur. Une fois Supabase configuré (voir le fichier README.md), ce tableau de bord utilise la vraie base de données.
 Comptées en jours de Santo Domingo
 Confirmer
@@ -375,6 +381,7 @@ Enregistrer le paiement
 Enregistrer les modifications
 Enregistrer un autre colis
 Enregistrer un colis
+Ensemble, après la sortie
 Erreur
 Espèces
 Essai de notification
@@ -446,6 +453,7 @@ Historique
 Historique interne
 Identifiant
 Identifiant GSE, nom ou e-mail
+Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.
 Impayé
 Impayées
 Imprimer
@@ -480,6 +488,8 @@ Laissé vide, un lien PayPal est créé avec le montant : le client paie par car
 Langue
 Langue du tableau de bord
 Le colis a changé de statut entre-temps : rechargez la liste.
+Le colis qui reste, sur sa facture
+Le colis sorti, sur sa facture
 Le compte
 Le jour
 Le plus de colis en cours
@@ -487,6 +497,7 @@ Le prix du colis doit être compris entre 0 et 100 000 $.
 Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
 Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
 Les chiffres se lisent dans la base à chaque ouverture du rapport.
+Les colis cochés passent sur leur propre facture ; les autres restent ensemble sur une nouvelle facture. Celle-ci est annulée et renvoie vers la nouvelle. Chaque facture compte ses frais de service : sortir des colis en ajoute une fois.
 Les dépenses ne sont pas suivies : aucune marge n'est calculée.
 Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, poste de scan et colis à traiter restent entiers.
 Les icônes seulement, pour laisser plus de place aux listes (ordinateur).
@@ -550,6 +561,7 @@ Modifier un rapport
 Modifier une facture
 Modifié le
 Moins de 24 h
+Moins de deux factures dans la liste : rien à regrouper.
 Mois
 Mois du
 Mois précédent
@@ -736,6 +748,7 @@ Restait dû à la fin de la période
 Reste dû
 Reste sur les factures de la période
 Reste à payer
+Retirer
 Retour
 Reçu
 Reçu le
@@ -801,6 +814,12 @@ Solde actuel
 Solde le plus élevé
 Sombre
 Son
+Sortie…
+Sortir des colis
+Sortir des colis de cette facture
+Sortir des colis de la facture
+Sortir du regroupement
+Sortir et encaisser
 Statistiques
 Statistiques financières
 Statut
@@ -853,6 +872,7 @@ Tous les colis
 Tous les réglages
 Tous les réglages…
 Tous les services
+Tout remettre
 Tout sélectionner
 Toutes
 Toutes les destinations
@@ -1017,6 +1037,8 @@ sur ces factures
 sur la période
 transféré à la succursale
 transférés à la succursale
+« Encaisser » enregistre le paiement d'une facture : payée, elle quitte la liste. « Retirer » l'enlève de la liste sans rien changer à la facture.
+« Sortir et encaisser » ouvre ensuite le paiement de la facture des colis sortis.
 · mot de passe
 À encaisser
 À la création

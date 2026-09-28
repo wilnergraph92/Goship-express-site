@@ -94,6 +94,11 @@
     [/^Facture (\d{4}-\d{2}-\d+)$/, ['Invoice $1', 'Factura $1', 'Fakti $1']],
     [/^Miami → ([^·]+)$/, ['Miami → {1}', 'Miami → {1}', 'Miami → {1}']],
     [/^(.+), (Haïti|République dominicaine|États-Unis)$/, ['$1, {2}', '$1, {2}', '$1, {2}']],
+    // Le regroupement des factures, et la sortie de colis d'une facture regroupée
+    [/^(\d+) factures retirées de la liste\.$/, ['$1 invoices removed from the list.', '$1 facturas quitadas de la lista.', '$1 fakti retire nan lis la.']],
+    [/^Les (\d+) colis sortis, sur leur facture$/, ['The $1 packages taken out, on their invoice', 'Los $1 paquetes sacados, en su factura', '$1 koli ki soti yo, sou fakti pa yo']],
+    [/^Les (\d+) colis qui restent, ensemble$/, ['The $1 remaining packages, together', 'Los $1 paquetes que quedan, juntos', '$1 koli ki rete yo, ansanm']],
+    [/^Colis sortis : facture (\S+) \((.+)\)\. Les autres : facture (\S+) \((.+)\)\.$/, ['Packages taken out: invoice $1 ($2). The others: invoice $3 ($4).', 'Paquetes sacados: factura $1 ($2). Los demás: factura $3 ($4).', 'Koli ki soti yo : fakti $1 ($2). Lòt yo : fakti $3 ($4).']],
     // Les rapports (onglet « Rapport »)
     [/^(Voir le rapport|Détails du rapport|Imprimer le rapport|PDF du rapport|Modifier le rapport|Supprimer le rapport) (.+)$/, ['{1} $2', '{1} $2', '{1} $2']],
     [/^(\d+)–(\d+) sur (\d+)$/, ['$1–$2 of $3', '$1–$2 de $3', '$1–$2 sou $3']],

@@ -56,7 +56,8 @@ supabase-notifications.sql|notifications_non_lues||non
 supabase-notifications.sql|mes_notifications||non
 supabase-production.sql|sante||oui
 supabase-rapports.sql|liste_rapports||non
-supabase-compte.sql|supprimer_mon_compte|p_confirmation=sonde|non'
+supabase-compte.sql|supprimer_mon_compte|p_confirmation=sonde|non
+supabase-regroupement.sql|sortir_du_regroupement|p_facture=00000000-0000-0000-0000-000000000000&p_colis=%7B%7D|non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"
