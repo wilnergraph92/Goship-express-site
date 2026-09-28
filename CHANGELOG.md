@@ -7,6 +7,16 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — nouvelles icônes (application de bureau, site)
+
+Aucune migration, aucune donnée modifiée. Toutes tirées du même dessin (le colis et
+sa flèche, fourni par le propriétaire).
+
+- Application de bureau (`bureau/build/icone.png`) : tuile blanche arrondie à la
+  manière de macOS, avec son ombre ; Windows en tire son `.ico` à la construction.
+- Site : icône d'écran d'accueil de l'iPhone (`apple-touch-icon.png`, 180 px) et
+  favicons (`favicon-32.png`, `favicon-64.png`, `favicon.ico` 16/32/48).
+
 ## site-2026.09.28.4 — formulaire du colis : prix fixé à la main ; fenêtres protégées (publié le 28/09/2026)
 
 Publié à la demande du propriétaire **avant** la migration. Tant qu'elle n'est pas
