@@ -244,7 +244,11 @@ function cles(v, chemin) {
   for (var cas of [[{ pays: 'do' }, function (c) { return c.pays_destination === 'DO'; }],
                    [{ service: 'maritime' }, function (c) { return c.service === 'maritime'; }],
                    [{ statut: 'actifs' }, function (c) { return c.statut !== 'livre'; }],
-                   [{ pays: 'HT', statut: 'recu' }, function (c) { return c.pays_destination === 'HT' && c.statut === 'recu'; }]]) {
+                   [{ pays: 'HT', statut: 'recu' }, function (c) { return c.pays_destination === 'HT' && c.statut === 'recu'; }],
+                   [{ agence: 'us' }, function (c) { return c.statut === 'recu' || c.statut === 'emballe'; }],
+                   [{ agence: 'HT' }, function (c) {
+                     return c.pays_destination === 'HT' && ['distribution', 'succursale', 'disponible'].indexOf(c.statut) >= 0;
+                   }]]) {
     var r2 = await A.vueGeneraleFiltree({ periode: 'annee', filtres: cas[0] });
     verifier(JSON.stringify(cas[0]) + ' : total = les colis qui passent le filtre', r2.colis.total, compte(cas[1]));
     verifier('   … routes et événements filtrés aussi',
@@ -256,7 +260,16 @@ function cles(v, chemin) {
   verifier('ville : casse et espaces ignorés', [rv.filtres.ville, rv.colis.total],
            [villeDemo.destination.trim().toLowerCase(), compte(function (c) { return String(c.destination || '').trim().toLowerCase() === villeDemo.destination.trim().toLowerCase(); })]);
   verifier('options : les pays comptent tous les colis', rv.options.pays.reduce(function (t, x) { return t + x.colis; }, 0), tous.length);
-  for (var mauvais of [{ agence: 'x' }, { pays: 'FR' }, { service: 'fusee' }, { statut: 'perdu' }, { pays: 3 }]) {
+  verifier('options : les trois agences, dans l\'ordre, comptées comme le filtre',
+           rv.options.agences.map(function (x) { return x.valeur + ' ' + x.colis; }),
+           ['US', 'HT', 'DO'].map(function (a) {
+             return a + ' ' + compte(function (c) {
+               return a === 'US' ? (c.statut === 'recu' || c.statut === 'emballe')
+                 : c.pays_destination === a && ['distribution', 'succursale', 'disponible'].indexOf(c.statut) >= 0;
+             });
+           }));
+  verifier('options : chaque ville porte son pays', rv.options.villes.every(function (x) { return ['HT', 'DO', 'US'].indexOf(x.pays) >= 0; }), true);
+  for (var mauvais of [{ agence: 'x' }, { agence: 'FR' }, { bureau: 'HT' }, { pays: 'FR' }, { service: 'fusee' }, { statut: 'perdu' }, { pays: 3 }]) {
     verifier('refusé : ' + JSON.stringify(mauvais), await code(A.vueGeneraleFiltree({ filtres: mauvais })), 'INVALID_INPUT');
   }
   await comme('employe');

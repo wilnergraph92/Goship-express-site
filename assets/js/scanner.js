@@ -224,14 +224,21 @@
   }
 
   /* ---- La liste des derniers scans : ce que la base a répondu --------------- */
-  function noter(reference, nom, libelle) {
+  // numero : celui du colis quand la base l'a reconnu (la ligne ouvre alors sa fiche)
+  function noter(reference, nom, libelle, numero) {
     var d = new Date();
     derniers.unshift({ heure: (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') +
-      d.getMinutes(), reference: reference, nom: nom, libelle: libelle });
+      d.getMinutes(), reference: reference, nom: nom, libelle: libelle, numero: numero || null });
     derniers = derniers.slice(0, 15);
     journal.textContent = '';
     derniers.forEach(function (x) {
       var li = el('li', 'is-' + (ETATS[x.nom] || ETATS.serveur)[0]);
+      // Un numéro de colis reconnu : la ligne ouvre sa fiche (admin.js, « La fiche d'une ligne »)
+      if (x.numero) {
+        li.setAttribute('data-numero', x.numero);
+        li.tabIndex = 0;
+        li.title = 'Ouvrir la fiche du colis';
+      }
       li.appendChild(el('span', 'gs-scan__heure', x.heure));
       li.appendChild(el('strong', null, x.reference));
       li.appendChild(el('span', null, x.libelle));
@@ -393,7 +400,8 @@
         montrerEtat(r.etat, r.etat === 'fait' ? '✓ ' + op.libelle.toUpperCase() : 'ℹ DÉJÀ FAIT : ' + op.libelle.toUpperCase(),
                     detail);
         (r.etat === 'fait' ? Son.succes : Son.info)();
-        noter(reference, r.etat, (r.etat === 'fait' ? '✓ ' : 'ℹ déjà : ') + op.libelle);
+        noter(reference, r.etat, (r.etat === 'fait' ? '✓ ' : 'ℹ déjà : ') + op.libelle,
+              r.fiche && r.fiche.colis && r.fiche.colis.numero);
         afficherFiche(r.fiche);
       } else {
         echec(reference, r, op);
@@ -455,7 +463,7 @@
         var nom = c.statut === 'livre' ? 'livre' : (c.statut === 'incident' ? 'incident' : 'trouve');
         montrerEtat(nom, null, c.numero + ' — ' + (LIBELLES[c.statut] || c.statut) + '. Choisissez l’opération.');
         (nom === 'trouve' ? Son.succes : Son.info)();
-        noter(c.numero, nom, (nom === 'trouve' ? '✓ trouvé' : ETATS[nom][1].replace(/^[^A-ZÀ-Ü]+/, '').toLowerCase()));
+        noter(c.numero, nom, (nom === 'trouve' ? '✓ trouvé' : ETATS[nom][1].replace(/^[^A-ZÀ-Ü]+/, '').toLowerCase()), c.numero);
         afficherFiche(r.fiche);
       } else {
         echec(r.analyse.reference, r);

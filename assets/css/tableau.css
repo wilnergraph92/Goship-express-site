@@ -68,7 +68,7 @@
 .gs-horloge__date--courte{display:none}
 .gs-horloge__heure{padding:2px 8px;border-radius:8px;background:#eef2fb;color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 
-.gs-td__barre .gs-rapide{flex:1 1 220px;max-width:480px;margin:0}
+.gs-td__barre .gs-rapide{flex:1 1 150px;max-width:480px;margin:0}
 .gs-td__barre .gs-recherche{height:44px;border-radius:14px;background:#f5f7fb;border-color:#e3e8f2}
 .gs-td__barre .gs-recherche:focus-within{background:#fff}
 .gs-td__barre .gs-rapide__bouton{min-height:44px;padding:0 16px;border-radius:14px;font-size:14.5px}
@@ -535,7 +535,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
   .gs-horloge__date--courte{display:inline}
   .gs-td__nouveau span{display:none}
   .gs-td__nouveau{width:44px;padding:0;justify-content:center}
-  .gs-td__barre .gs-rapide{flex-basis:160px}
+  .gs-td__barre .gs-rapide{flex-basis:120px}
 }
 
 /* ---- Tablette et téléphone : le menu devient un tiroir ------------------------------- */
@@ -723,6 +723,59 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 html[data-animations="non"] .gs-vg__halo,html[data-animations="non"] .gs-vg__direct-etat i{animation:none}
 @media (prefers-reduced-motion:reduce){
   .gs-vg__direct-etat i{animation:none}
+}
+
+/* ---- La langue du tableau de bord (barre du haut) ------------------------------------ */
+.gs-td__langue{position:relative;display:inline-flex;flex:none;align-items:center;gap:4px;height:44px;padding:0 4px 0 11px;border:1px solid var(--app-bord);border-radius:14px;background:#fff;color:var(--ink);cursor:pointer}
+.gs-td__langue .gs-ico{width:18px;height:18px;color:#5b6782}
+.gs-td__langue select{height:100%;padding:0 2px;border:0;background:transparent;color:inherit;font:inherit;font-size:13.5px;font-weight:800;letter-spacing:.02em;cursor:pointer}
+.gs-td__langue select:focus-visible{outline:2px solid #1f5fe0;outline-offset:2px;border-radius:6px}
+.gs-td__langue:hover{border-color:#c9d3e6}
+@media (max-width:560px){
+  .gs-td__langue{padding:0 2px 0 6px}
+  .gs-td__langue .gs-ico{display:none}
+}
+
+/* ---- La fiche d'une ligne (clic sur une ligne de tableau) ------------------------------ */
+.gs-admin-body tbody tr.is-cliquable{cursor:pointer}
+.gs-admin-body tbody tr.is-cliquable:focus-visible{outline:2px solid #1f5fe0;outline-offset:-2px}
+.gs-scan__journal li[data-numero]{cursor:pointer}
+.gs-scan__journal li[data-numero]:hover{background:#f5f7fb}
+.gs-fiche{width:min(720px,calc(100vw - 24px))}
+.gs-fiche__type{margin:0 0 4px;font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7690}
+.gs-fiche__titre{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;word-break:break-word}
+.gs-fiche__badge:empty{display:none}
+.gs-fiche__grille{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 20px;margin:0}
+.gs-fiche__champ{min-width:0}
+.gs-fiche__champ--large{grid-column:1/-1}
+.gs-fiche__champ dt{margin-bottom:4px;font-size:13px;color:#6b7690}
+.gs-fiche__champ dd{display:grid;gap:2px;margin:0;overflow-wrap:anywhere}
+.gs-fiche__valeur{font-size:15.5px;font-weight:700;color:var(--ink)}
+.gs-fiche__sous{font-size:13.5px;color:#5b6782}
+.gs-fiche__parcours{padding-top:16px;border-top:1px solid #eef2f8}
+.gs-fiche__parcours h3{margin:0 0 12px;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#2d3850}
+.gs-fiche__alerte{margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#fef2f2;color:#b91c1c;font-size:14px;font-weight:600}
+.gs-fiche__etapes{display:grid;gap:0;margin:0;padding:0;list-style:none}
+.gs-fiche__etape{position:relative;display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:12px;min-height:36px;color:#5b6782;font-size:15px}
+.gs-fiche__etape:not(:last-child)::after{content:"";position:absolute;left:10px;top:25px;bottom:-11px;width:2px;background:#e3e8f2}
+.gs-fiche__etape.is-fait:not(:last-child)::after{background:#1f5fe0}
+.gs-fiche__point{position:relative;z-index:1;width:22px;height:22px;border:2px solid #cfd7e6;border-radius:50%;background:#fff}
+.gs-fiche__etape.is-fait .gs-fiche__point{border-color:#1f5fe0;background:#1f5fe0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center/13px no-repeat}
+.gs-fiche__etape.is-actuel .gs-fiche__point{border-color:#f4600d;background:#f4600d;box-shadow:0 0 0 5px rgba(244,96,13,.18)}
+.gs-fiche__etape.is-fait,.gs-fiche__etape.is-actuel{color:var(--ink)}
+.gs-fiche__etape.is-actuel .gs-fiche__etape-nom{font-weight:800}
+.gs-fiche__etape-date{font-size:13px;color:#6b7690;white-space:nowrap}
+.gs-fiche__pied{flex-direction:column;align-items:stretch;justify-content:flex-start}
+.gs-fiche__actions{display:flex;flex-wrap:wrap;gap:10px}
+.gs-fiche__actions:empty,.gs-fiche__liens:empty{display:none}
+.gs-fiche__liens{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px}
+.gs-fiche__liens .gs-lien-bouton{font-size:14.5px}
+@media (max-width:720px){
+  .gs-fiche__grille{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gs-fiche__actions .gs-bouton{flex:1 1 auto}
+}
+@media (max-width:420px){
+  .gs-fiche__grille{grid-template-columns:1fr}
 }
 
 /* ---- L'apparence sombre (réglage « Apparence ») -----------------------------------------
@@ -1173,6 +1226,23 @@ html[data-apparence="sombre"] body.gs-admin-body{--ink:#e7edf9;--ink2:#c3d0ee;--
 [data-apparence="sombre"] .gs-disposition__ligne,[data-apparence="sombre"] .gs-disposition__fleche{border-color:#22304f;background:#0b1429}
 [data-apparence="sombre"] .gs-disposition__fleche:hover:not(:disabled){border-color:#8fb3ff}
 [data-apparence="sombre"] .gs-reglages__infos kbd{border-color:#2a3a5f;background:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-td__langue{border-color:#22304f;background-color:#0e1830;color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-td__langue .gs-ico{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-td__langue select{color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-td__langue option{background-color:#0e1830;color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__journal li[data-numero]:hover{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body :is(.gs-fiche__type,.gs-fiche__champ dt,.gs-fiche__etape-date){color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__valeur{color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__sous,[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-fait,[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-actuel{color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__parcours{border-top-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__parcours h3{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__alerte{background-color:rgba(220,38,38,.16);color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape:not(:last-child)::after{background-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-fait:not(:last-child)::after{background-color:#1f5fe0}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__point{border-color:#2a3a5f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-fait .gs-fiche__point{border-color:#1f5fe0;background-color:#1f5fe0}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-actuel .gs-fiche__point{border-color:#f4600d;background-color:#f4600d}
 @media screen and (prefers-reduced-motion:no-preference){
   html[data-apparence="sombre"]:not([data-animations="non"]) .gs-vg__carte.is-vu:hover{box-shadow:0 1px 2px rgba(0,0,0,.4),0 26px 50px -30px rgba(0,0,0,.95)}
 }

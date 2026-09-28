@@ -449,7 +449,7 @@ def main():
     verifier('aucune réponse avec NaN / Infinity / undefined',
              [m for m in MODULES if nulls(jsonq(db, ADMIN, 'select public.%s;' % m))], [])
 
-    print('\nM. La vue générale filtrée (pays, ville, mode, statut, lieu)')
+    print('\nM. La vue générale filtrée (pays, ville, mode, statut, lieu, agence)')
     def filtree(periode, filtres, compte=ADMIN, debut=None, fin=None):
         return jsonq(db, compte, "select public.vue_generale_filtree(%s, %s, %s, 7, %s);"
                      % (q(periode), q(debut), q(fin), js(filtres)))
@@ -476,7 +476,11 @@ def main():
                           ({'ville': '  SANTIAGO '}, "lower(trim(destination)) = 'santiago'"),
                           ({'statut': 'actifs'}, "statut <> 'livre'"),
                           ({'statut': 'livre', 'pays': 'HT'}, "statut = 'livre' and pays_destination = 'HT'"),
-                          ({'lieu': 'pétion-ville'}, "lower(trim(lieu)) = 'pétion-ville'")):
+                          ({'lieu': 'pétion-ville'}, "lower(trim(lieu)) = 'pétion-ville'"),
+                          ({'agence': 'us'}, "statut in ('recu', 'emballe')"),
+                          ({'agence': 'HT'}, "pays_destination = 'HT' and statut in ('distribution', 'succursale', 'disponible')"),
+                          ({'agence': 'DO', 'service': 'maritime'},
+                           "pays_destination = 'DO' and statut in ('distribution', 'succursale', 'disponible') and service = 'maritime'")):
         v = filtree(MARS[0], filtres, debut=MARS[1], fin=MARS[2])
         verifier('%s : total, reçus en mars = count(*) des colis' % json.dumps(filtres, ensure_ascii=False),
                  (v['colis']['total'], v['colis']['recus_periode'], sum(v['colis']['statuts'].values())),
@@ -503,7 +507,16 @@ def main():
              (nb('true'), nb('true')))
     verifier('options : Santiago, écrit comme les colis l\'écrivent',
              [x['libelle'] for x in o['villes'] if x['valeur'] == 'santiago'], ['Santiago'])
-    for mauvais in ({'agence': 'Delmas'}, {'pays': 'FR'}, {'service': 'fusee'}, {'statut': 'perdu'},
+    verifier('options : chaque ville porte son pays, et les villes comptent tous les colis qui en ont une',
+             (all(x['pays'] in ('HT', 'DO', 'US') for x in o['villes']), sum(x['colis'] for x in o['villes'])),
+             (True, nb("trim(destination) <> ''")))
+    verifier('options : les trois agences, dans l\'ordre, comptées par la base',
+             [(x['valeur'], x['colis']) for x in o['agences']],
+             [('US', nb("statut in ('recu', 'emballe')")),
+              ('HT', nb("pays_destination = 'HT' and statut in ('distribution', 'succursale', 'disponible')")),
+              ('DO', nb("pays_destination = 'DO' and statut in ('distribution', 'succursale', 'disponible')"))])
+    verifier('agence mise en forme en majuscules', filtree('30j', {'agence': ' do '})['filtres'], {'agence': 'DO'})
+    for mauvais in ({'agence': 'Delmas'}, {'agence': 'FR'}, {'bureau': 'HT'}, {'pays': 'FR'}, {'service': 'fusee'}, {'statut': 'perdu'},
                     {'ville': 'x' * 121}, {'pays': 3}):
         verifier('refusé : %s' % json.dumps(mauvais)[:40], code(db, ADMIN, "select public.vue_generale_filtree('30j', null, null, 7, %s);"
                                                               % js(mauvais)), 'INVALID_INPUT')

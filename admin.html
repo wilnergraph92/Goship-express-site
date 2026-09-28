@@ -22,6 +22,8 @@
 <script src="assets/js/notifications.js" defer></script>
 <script src="assets/js/codes.js" defer></script>
 <script src="assets/js/impression.js" defer></script>
+<script src="assets/js/tableau-langue.js" defer></script>
+<script src="assets/js/lieux.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
 <script src="assets/js/scan-parser.js" defer></script>
 <script src="assets/js/scanner.js" defer></script>
@@ -97,6 +99,14 @@
       <div class="gs-td__outils" data-barre-connecte hidden>
         <span class="gs-direct" data-direct hidden><span class="gs-direct__point" aria-hidden="true"></span><span class="gs-direct__texte">En direct</span></span>
         <button type="button" class="gs-bouton gs-bouton--plein gs-td__nouveau" data-action="nouveau-colis" data-permission="shipments.create" title="Enregistrer un colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg><span>Enregistrer un colis</span></button>
+        <!-- La langue du tableau de bord (assets/js/tableau-langue.js) : une préférence de cet
+             appareil. Le code de la langue dans la barre, son nom dans la liste. -->
+        <label class="gs-td__langue" title="Langue du tableau de bord"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg><select data-langue-tableau aria-label="Langue du tableau de bord" translate="no">
+          <option value="fr" title="Français">FR</option>
+          <option value="en" title="English">EN</option>
+          <option value="es" title="Español">ES</option>
+          <option value="ht" title="Kreyòl ayisyen">HT</option>
+        </select></label>
         <div class="gs-td__deroulant">
           <button type="button" class="gs-td__icone" data-action="alertes" aria-expanded="false" aria-controls="panneau-alertes" aria-label="Alertes" title="Alertes"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="gs-td__compteur" data-alertes-nombre hidden></span></button>
           <div class="gs-td__panneau gs-td__panneau--alertes" id="panneau-alertes" data-panneau-alertes hidden>
@@ -233,17 +243,17 @@
           <button type="button" class="gs-vg__bouton gs-vg__bouton--plein" data-action="personnaliser"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Personnaliser</button>
         </div>
       </div>
-      <!-- Les filtres (vue_generale_filtree, outils/supabase-analytics.sql) : ce que les colis
-           portent vraiment — pays, ville, mode de transport, statut, lieu actuel (l'agence où
-           attend un colis « Disponible »). Ils découpent ce qui se compte en colis ; l'argent
-           et les clients restent entiers, et chaque carte non filtrée le dit. -->
+      <!-- Les filtres (vue_generale_filtree, outils/supabase-analytics.sql) : pays (Haïti,
+           Santo Domingo, USA), les villes du pays choisi, mode (aérienne, maritime,
+           terrestre), statut, agence (où se trouve le colis). Ils découpent ce qui se compte
+           en colis ; l'argent et les clients restent entiers, et chaque carte non filtrée le dit. -->
       <form class="gs-vg__filtres" data-vg-filtres aria-label="Filtres de la vue générale" novalidate>
         <span class="gs-vg__filtres-titre"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5h18M6 12h12M10 19h4"/></svg>Filtres</span>
         <label class="gs-vg__filtre"><span>Pays</span><select name="pays" data-vg-filtre="pays"><option value="">Tous</option></select></label>
         <label class="gs-vg__filtre"><span>Destination</span><select name="ville" data-vg-filtre="ville"><option value="">Toutes</option></select></label>
         <label class="gs-vg__filtre"><span>Mode</span><select name="service" data-vg-filtre="service"><option value="">Tous</option></select></label>
         <label class="gs-vg__filtre"><span>Statut</span><select name="statut" data-vg-filtre="statut"><option value="">Tous</option></select></label>
-        <label class="gs-vg__filtre"><span>Agence</span><select name="lieu" data-vg-filtre="lieu"><option value="">Toutes</option></select></label>
+        <label class="gs-vg__filtre" title="Là où se trouve le colis : USA = au dépôt de Miami (reçu, emballé) ; Haïti, Santo Domingo = arrivé dans le pays (centre de distribution, succursale, disponible)"><span>Agence</span><select name="agence" data-vg-filtre="agence"><option value="">Toutes</option></select></label>
         <button type="button" class="gs-lien-bouton gs-vg__filtres-effacer" data-action="vg-filtres-effacer" hidden>Effacer les filtres</button>
         <p class="gs-vg__filtres-total" data-vg-filtres-total aria-live="polite"></p>
         <p class="gs-vg__filtres-note" data-vg-filtres-note hidden></p>
@@ -1224,6 +1234,35 @@
     <div class="gs-dialogue__pied">
       <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Fermer</button>
       <button type="button" class="gs-bouton gs-bouton--plein" data-action="autre-colis" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer un autre colis</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- La fiche d'une ligne : un clic sur une ligne de n'importe quel tableau l'ouvre (admin.js,
+     « La fiche d'une ligne »). Un colis y montre tout ce que la base en sait, son parcours et
+     ses actions (mettre à jour, facture, étiquette, client) ; les autres lignes, leurs
+     colonnes et les boutons de la ligne. Rien ne s'y calcule. -->
+<dialog class="gs-dialogue gs-fiche" data-dialogue="fiche" aria-labelledby="dlg-fiche-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div class="gs-fiche__entete">
+        <p class="gs-fiche__type" data-fiche-type></p>
+        <h2 id="dlg-fiche-titre" class="gs-fiche__titre"><span data-fiche-titre></span><span class="gs-fiche__badge" data-fiche-badge></span></h2>
+        <p class="gs-dialogue__sous-titre" data-fiche-sous-titre></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <dl class="gs-fiche__grille" data-fiche-champs></dl>
+      <section class="gs-fiche__parcours" data-fiche-parcours hidden aria-labelledby="dlg-fiche-parcours">
+        <h3 id="dlg-fiche-parcours">Parcours</h3>
+        <p class="gs-fiche__alerte" data-fiche-alerte hidden></p>
+        <ol class="gs-fiche__etapes" data-fiche-etapes></ol>
+      </section>
+    </div>
+    <div class="gs-dialogue__pied gs-fiche__pied">
+      <div class="gs-fiche__actions" data-fiche-actions></div>
+      <div class="gs-fiche__liens" data-fiche-liens></div>
     </div>
   </div>
 </dialog>

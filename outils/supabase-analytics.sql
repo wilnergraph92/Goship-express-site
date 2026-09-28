@@ -996,7 +996,12 @@ $$;
 --   pays     HT, DO ou US            service  aerien, maritime ou terrestre
 --   statut   l'un des huit, ou « actifs » (tout sauf livré)
 --   ville    la destination saisie, casse et espaces ignorés (comme les routes)
---   lieu     le lieu actuel du colis, casse et espaces ignorés
+--   lieu     le lieu actuel du colis, casse et espaces ignorés (gardé pour les pages
+--            déjà ouvertes ; la page l'a remplacé par « agence » le 27/09/2026)
+--   agence   US, HT ou DO : là où se trouve le colis. US = au dépôt de Miami (reçu,
+--            emballé) ; HT, DO = arrivé dans ce pays (centre de distribution,
+--            succursale, disponible). Un colis en route, livré ou en action requise
+--            n'est dans aucune agence.
 create or replace function public.filtres_colis(p_filtres jsonb)
 returns jsonb
 language plpgsql
@@ -1015,7 +1020,7 @@ begin
     perform public.erreur_metier('INVALID_INPUT', 'Les filtres forment un objet.');
   end if;
   for k in select jsonb_object_keys(p_filtres) loop
-    if k not in ('pays', 'ville', 'service', 'statut', 'lieu') then
+    if k not in ('pays', 'ville', 'service', 'statut', 'lieu', 'agence') then
       perform public.erreur_metier('INVALID_INPUT', 'Filtre inconnu : ' || left(k, 20) || '.');
     end if;
     if jsonb_typeof(p_filtres -> k) not in ('string', 'null') then
@@ -1023,7 +1028,7 @@ begin
     end if;
     v := nullif(lower(trim(coalesce(p_filtres ->> k, ''))), '');
     continue when v is null;
-    if k = 'pays' then
+    if k in ('pays', 'agence') then
       v := upper(v);
       if v not in ('HT', 'DO', 'US') then
         perform public.erreur_metier('INVALID_INPUT', 'Pays inconnu : ' || left(v, 10) || '.');
@@ -1055,6 +1060,10 @@ as $$
           or (p_filtres ->> 'statut' = 'actifs' and p_colis.statut <> 'livre'))
      and (p_filtres ->> 'ville' is null or lower(trim(p_colis.destination)) = p_filtres ->> 'ville')
      and (p_filtres ->> 'lieu' is null or lower(trim(p_colis.lieu)) = p_filtres ->> 'lieu')
+     and (p_filtres ->> 'agence' is null
+          or (p_filtres ->> 'agence' = 'US' and p_colis.statut in ('recu', 'emballe'))
+          or (p_filtres ->> 'agence' in ('HT', 'DO') and p_colis.pays_destination = p_filtres ->> 'agence'
+              and p_colis.statut in ('distribution', 'succursale', 'disponible')))
 $$;
 
 -- Les colis de la vue générale (tableau_colis), pour les seuls colis filtrés
@@ -1225,8 +1234,9 @@ as $$
 $$;
 
 -- Les choix des listes de filtres : ce que les colis portent vraiment, avec leur nombre
--- (tous les colis, maintenant). Villes et lieux : les 60 plus fréquents, écrits comme la
--- plupart des colis les écrivent.
+-- (tous les colis, maintenant). Villes : les 300 plus fréquentes, avec leur pays (la
+-- page les range sous le pays choisi) ; lieux : les 60 plus fréquents ; écrits comme la
+-- plupart des colis les écrivent. Agences : les trois, toujours.
 create or replace function public.options_filtres()
 returns jsonb
 language sql
@@ -1240,17 +1250,23 @@ as $$
                  from (select service as v, count(*) as n from public.colis group by 1) x),
     'statuts', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'colis', x.n) order by x.n desc, x.v), '[]'::jsonb)
                 from (select statut as v, count(*) as n from public.colis group by 1) x),
-    'villes', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'libelle', x.l, 'colis', x.n)
-                                         order by x.n desc, x.v), '[]'::jsonb)
-               from (select lower(trim(destination)) as v, mode() within group (order by trim(destination)) as l,
-                            count(*) as n
+    'villes', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'libelle', x.l, 'pays', x.p, 'colis', x.n)
+                                         order by x.n desc, x.v, x.p), '[]'::jsonb)
+               from (select lower(trim(destination)) as v, pays_destination as p,
+                            mode() within group (order by trim(destination)) as l, count(*) as n
                      from public.colis where trim(destination) <> ''
-                     group by 1 order by count(*) desc, 1 limit 60) x),
+                     group by 1, 2 order by count(*) desc, 1, 2 limit 300) x),
     'lieux', (select coalesce(jsonb_agg(jsonb_build_object('valeur', x.v, 'libelle', x.l, 'colis', x.n)
                                         order by x.n desc, x.v), '[]'::jsonb)
               from (select lower(trim(lieu)) as v, mode() within group (order by trim(lieu)) as l, count(*) as n
                     from public.colis where trim(lieu) <> ''
-                    group by 1 order by count(*) desc, 1 limit 60) x))
+                    group by 1 order by count(*) desc, 1 limit 60) x),
+    -- Les trois agences, toujours, avec le nombre de colis qui s'y trouvent (0 compris)
+    'agences', (select jsonb_agg(jsonb_build_object('valeur', a.v, 'colis',
+                                   (select count(*) from public.colis c
+                                    where public.colis_filtre(c, jsonb_build_object('agence', a.v))))
+                                 order by a.o)
+                from (values ('US', 1), ('HT', 2), ('DO', 3)) a(v, o)))
 $$;
 
 -- La vue générale, filtrée : vue_generale entière (mêmes permissions, mêmes parties),

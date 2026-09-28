@@ -1254,7 +1254,9 @@ def build_compte():
             fail(f'{out}: repère non remplacé')
         # codes.js et impression.js ne servent qu'à « Mon compte » (factures
         # imprimables) : les autres pages de l'espace client s'en passent.
-        scripts = ('api', 'codes', 'impression', 'compte') if out == 'mon-compte.html' else ('api', 'compte')
+        # lieux.js (régions et villes) avant compte.js, qui s'en sert.
+        scripts = (('api', 'codes', 'impression', 'lieux', 'compte') if out == 'mon-compte.html'
+                   else ('api', 'lieux', 'compte'))
         head = build_head(title, desc, None, False, False, scripts=scripts, noindex=noindex)
         with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
             f.write(head + body[:s] + main + body[e:])
