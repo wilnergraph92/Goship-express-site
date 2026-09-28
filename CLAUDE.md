@@ -226,9 +226,11 @@ historique complet (`API.admin.historique`, lu à l'ouverture) ; « Mettre à jo
 « Modifier », « Voir la facture », « Étiquette » selon `peut()`. Facture : lignes,
 paiements, montants par `totauxFacture`. Client : ses derniers colis, ses factures
 et leurs paiements, lus à l'ouverture. Paiement reçu : sa facture. Les autres lignes
-montrent leurs colonnes (`data-libelle`). Les actions d'une facture ou d'un client
-sont des copies des boutons de sa ligne, qui les déclenchent (un bouton d'impression
-porte `data-imprimer` et laisse la fiche ouverte). Le poste de scan demande la fiche
+montrent leurs colonnes (`data-libelle`) et une copie des boutons de la ligne.
+**Les lignes des colis, des clients et des factures n'ont plus de boutons** : leurs
+actions ne sont que dans la fiche (`ouvrirFicheColis`, `actionsClient`,
+`actionsFacture`, selon `peut()`) ; un bouton d'impression porte `data-imprimer` et
+laisse la fiche ouverte. Le poste de scan demande la fiche
 par l'événement `goship:fiche-colis`. Rien ne s'y calcule.
 
 **La langue du tableau de bord** (`tableau-langue.js`, sélecteur
