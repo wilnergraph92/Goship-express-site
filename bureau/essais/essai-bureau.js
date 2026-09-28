@@ -254,9 +254,19 @@ function taillePdf(octets) {
       await f.waitForSelector('[data-apercu]:not([hidden])', { timeout: 20000 });
       return f;
     }
+    // Les boutons d'une ligne sont dans sa fiche : un clic sur la ligne l'ouvre (l'impression
+    // la laisse ouverte, on la ferme ensuite)
+    function parLaFiche(vue, bouton) {
+      return page.click('[data-vue="' + vue + '"] tbody tr:first-child td[data-libelle="Client"]').then(function () {
+        return page.click('[data-dialogue="fiche"][open] .gs-fiche__actions button:has-text("' + bouton + '")');
+      });
+    }
+    function fermerFiche() {
+      return page.evaluate(function () { var d = document.querySelector('[data-dialogue="fiche"]'); if (d.open) d.close(); });
+    }
     await onglet('colis');
     await attendre(500);
-    var imp = await fenetreImprimer(function () { return page.click('[data-vue="colis"] tbody button:has-text("Étiquette")'); });
+    var imp = await fenetreImprimer(function () { return parLaFiche('colis', 'Étiquette'); });
     await attendre(800);
     await capturer(imp, 'bureau-imprimer');
     ok('étiquette → fenêtre « Imprimer » avec aperçu : ' + (await imp.textContent('[data-format]')), /4 × 6/.test(await imp.textContent('[data-format]')));
@@ -278,9 +288,10 @@ function taillePdf(octets) {
        /Impression échouée/.test(await imp.textContent('[data-etat]')) && (await imp.textContent('[data-imprimer]')) === 'Réessayer');
     await imp.click('[data-fermer]');
     await attendre(500);
+    await fermerFiche();
     await onglet('factures');
     await attendre(1200);
-    var imp2 = await fenetreImprimer(function () { return page.click('[data-vue="factures"] tbody button:has-text("Imprimer")'); });
+    var imp2 = await fenetreImprimer(function () { return parLaFiche('factures', 'Imprimer'); });
     await imp2.click('[data-pdf]');
     await imp2.waitForSelector('[data-etat]:has-text("PDF enregistré")', { timeout: 20000 });
     var pdf2 = fs.readFileSync(path.join(donnees, 'doc-2.pdf'));
@@ -288,6 +299,7 @@ function taillePdf(octets) {
     await imp2.keyboard.press('Escape').catch(function () { /* la fenêtre se ferme pendant la frappe */ });
     await attendre(500);
     ok('fenêtre « Imprimer » fermée, retour au tableau de bord', app.windows().length === 1);
+    await fermerFiche();
 
     // ---- 7. Sécurité ----------------------------------------------------------------------
     var avant = (await ouverts()).length;
