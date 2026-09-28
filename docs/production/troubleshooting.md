@@ -43,6 +43,7 @@
 | `deploy.yml` : « Une clé secrète est dans le site publié » | une clé `sb_secret_`, `service_role` ou privée dans un fichier | **ne pas publier**, retirer la clé, la révoquer (secrets.md) |
 | Contrôle après publication : « … servi publiquement » | un fichier de travail est en ligne | exclusion manquante dans `deploy.yml` |
 | Les liens « mot de passe oublié » mènent à `localhost` | *Site URL* de Supabase Auth encore sur `localhost` | README, « Les cinq réglages », point 2 |
+| L'inscription affiche « Une erreur est survenue » ; journaux *Auth* : `535 "5.7.8 Authentication failed"` sur `/signup` | Brevo refuse l'identifiant SMTP : la confirmation d'e-mail est active et l'e-mail ne part pas, donc Supabase refuse l'inscription entière | *Authentication > Emails > SMTP Settings* : *Username* = le **Login** de Brevo (*SMTP & API > SMTP*, de la forme `…@smtp-brevo.com`, pas l'adresse Gmail) ; *Password* = une **clé SMTP** Brevo ; dans Brevo, « Last used on » prend une date au premier envoi réussi |
 | Un client ne reçoit pas l'e-mail de confirmation | expéditeur non authentifié (indésirables) | authentifier le domaine chez Brevo ; SMTP personnalisé dans Supabase |
 | Le site montre l'ancienne version | cache de GitHub Pages / du navigateur | attendre ~10 min, recharger sans cache |
 

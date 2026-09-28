@@ -27,6 +27,7 @@ Un essai local, de démonstration ou de CI ne prouve pas l'état de la productio
 | 26/09 18:44 | `surveillance.yml` lancée à la main sur `main` | vert |
 | 26/09 18:47 | `audit-production.yml` (`sonder.sh`, clé publique, GET en lecture seule) | migrations **1 à 9 présentes** ; **`supabase-notifications.sql` et `supabase-production.sql` absentes** ; aucune fonction ouverte aux visiteurs sans raison ; Auth : **confirmation des adresses e-mail DÉSACTIVÉE**, inscriptions ouvertes, seul fournisseur : e-mail |
 | 28/09 08:31 | `audit-production.yml` lancée à la main sur `rapports` (après la chaîne relancée par le propriétaire dans le SQL Editor) | **12 migrations présentes sur 12** ; aucune fonction ouverte aux visiteurs sans raison ; Auth : confirmation des adresses e-mail toujours **DÉSACTIVÉE** |
+| 28/09 11:13 | `audit-production.yml` sur `main` | confirmation des adresses e-mail **ACTIVE** ; 12/12 migrations ; propriétaire : *Site URL* et *Redirect URLs* = `https://wilnergraph92.github.io/Goship-express-site/`, SMTP Brevo corrigé (identifiant = *Login* SMTP Brevo, l'adresse Gmail donnait `535 Authentication failed` à l'inscription), inscription réelle réussie avec une vraie boîte |
 
 Limite de la sonde : une fonction témoin présente prouve que son fichier est
 passé, pas qu'il l'est **dans sa dernière version**. Seul `controler.sh`
@@ -43,7 +44,7 @@ passé, pas qu'il l'est **dans sa dernière version**. Seul `controler.sh`
 | C5 | Intégrité de la production | **non vérifié** | `controler.sh` jamais lancé en production. NB : une base avec des lignes orphelines **ne se restaure pas** (clés étrangères) — C5 conditionne C6 |
 | C6 | Sauvegarde + restauration réelle | **non rempli** | outils éprouvés (`essai-production.py` F et K) ; secrets non posés ; aucune sauvegarde de production n'existe |
 | C7 | Préproduction | **non rempli** | outillée (`preproduction.yml`, profil EAS `staging`) ; le projet `goship-staging` n'existe pas |
-| C8 | Auth de production | **non rempli** | confirmation des e-mails désactivée (observé) ; *Site URL* / *Redirect URLs* : non lisibles de l'extérieur |
+| C8 | Auth de production | **rempli** (28/09) | confirmation des e-mails active (sonde) ; *Site URL* / *Redirect URLs* = adresse du site (écran du propriétaire) ; inscription réelle réussie ; `localhost:8000` gardé dans *Redirect URLs* pour les essais locaux |
 | C9 | Surveillance | **partiel** | `surveillance.yml` vert sur `main` ; exécution planifiée pas encore observée ; seconde personne (`ALERTE_WEBHOOK`) et battement externe (`HEARTBEAT_URL`) prêts mais non posés ; `sante()` absente |
 | C10 | Retour arrière | **partiel** | site : `git revert` + republication (mécanisme de `deploy.yml` éprouvé à chaque publication) ; base : restauration éprouvée hors production seulement ; jamais répété en conditions réelles |
 | C11 | HTTPS | **vérifié** | contrôle du 26/09 18:06 |
