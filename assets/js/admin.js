@@ -952,6 +952,11 @@
         window.open('https://wa.me/' + numero + '?text=' + encodeURIComponent(texte), '_blank', 'noopener');
       }));
     }
+    if (t.etat !== 'annulee' && sortable(facture)) {
+      var sortirBouton = petitBouton('Sortir des colis', null, function () { ouvrirSortie(facture); });
+      sortirBouton.setAttribute('aria-label', 'Sortir des colis de la facture ' + facture.numero);
+      r.push(sortirBouton);
+    }
     if (t.etat !== 'annulee' && t.paye === 0 && peut('invoices.cancel')) {
       var annuler = petitBouton('Annuler', 'gs-bouton--danger', function () { demanderAnnulationFacture(facture); });
       annuler.setAttribute('aria-label', 'Annuler la facture ' + facture.numero);
@@ -1235,10 +1240,12 @@
         $$('input, textarea', formFacture).forEach(function (n) { n.disabled = true; });
       } else {
         var regrouper = regroupable(facture) && peut('invoices.create') && peut('invoices.cancel');
+        var sortir = sortable(facture);
         var annulable = t.paye === 0 && peut('invoices.cancel');
         $('[data-action="regrouper-facture"]', formFacture).hidden = !regrouper;
+        $('[data-action="sortir-regroupement"]', formFacture).hidden = !sortir;
         $('[data-action="annuler-facture"]', formFacture).hidden = !annulable;
-        blocActionsFacture.hidden = !regrouper && !annulable;
+        blocActionsFacture.hidden = !regrouper && !sortir && !annulable;
         // Sans invoices.edit, la facture se consulte sans se modifier
         if (!peut('invoices.edit')) {
           enregistrer.hidden = true;
@@ -1320,14 +1327,16 @@
   var formPaiement = $('form[data-form="paiement"]', dlgPaiement);
   var facturePayee = null;
   var clePaiement = null;
+  var suitePaiement = null;   // ce que la fenêtre qui a demandé l'encaissement fait ensuite
 
   function dateDuJour() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  function ouvrirPaiement(facture) {
+  function ouvrirPaiement(facture, suite) {
     facturePayee = facture;
+    suitePaiement = suite || null;
     clePaiement = nouvelleCle();
     formPaiement.reset();
     erreurFormulaire(formPaiement, '');
@@ -1368,6 +1377,9 @@
       clePaiement = null;
       dlgPaiement.close();
       var f = r.facture;
+      var suite = suitePaiement;
+      suitePaiement = null;
+      if (suite) suite(f);
       var tf = O.totauxFacture(f);
       return majLienPaiement(f).then(function () {
         return apresFinances(f, (r.deja ? 'Paiement déjà enregistré. ' : 'Paiement de ' + argent(r.paiement.montant_usd) +
@@ -1467,52 +1479,105 @@
   var formRegroupement = $('form[data-form="regroupement"]', dlgRegroupement);
   var listeRegroupement = $('[data-liste-regroupement]', dlgRegroupement);
   var facturesRegroupables = {};
+  var candidatesRegroupement = [];   // dans l'ordre de la base
+  var retireesRegroupement = {};     // enlevées de la liste par « Retirer »
+  var cocheesRegroupement = {};
   var cleRegroupement = null;
   var apercuRegroupement = 0;
 
   function ouvrirRegroupement(facture) {
     cleRegroupement = nouvelleCle();
     facturesRegroupables = {};
+    candidatesRegroupement = [];
+    retireesRegroupement = {};
+    cocheesRegroupement = {};
+    cocheesRegroupement[facture.id] = true;
     erreurFormulaire(formRegroupement, '');
     $('[data-regroupement-client]', dlgRegroupement).textContent = (facture.clients || {}).nom_complet || '';
     listeRegroupement.textContent = 'Chargement…';
+    $('[data-regroupement-retirees]', dlgRegroupement).hidden = true;
     $('[data-recap-regroupement]', dlgRegroupement).hidden = true;
     dlgRegroupement.showModal();
     API.admin.factures({ client_id: facture.client_id, etat: 'a_payer', parPage: 200 }).then(function (r) {
-      listeRegroupement.textContent = '';
-      var candidates = (r.lignes || []).filter(regroupable);
-      candidates.forEach(function (f) {
-        facturesRegroupables[f.id] = f;
-        var label = el('label', 'gs-regroupement__choix');
-        var input = document.createElement('input');
-        input.type = 'checkbox';
-        input.value = f.id;
-        input.checked = f.id === facture.id;
-        input.addEventListener('change', majApercuRegroupement);
-        var carte = el('div', 'gs-regroupement__carte');
-        carte.appendChild(el('strong', '', f.numero));
-        carte.appendChild(el('b', '', argent(f.montant_usd)));
-        carte.appendChild(el('small', '', (f.facture_lignes || []).map(function (l) {
-          return (l.colis && l.colis.numero) || l.libelle;
-        }).join(', ') + ' · ' + O.date(f.cree_le)));
-        label.appendChild(input);
-        label.appendChild(carte);
-        listeRegroupement.appendChild(label);
-      });
-      if (candidates.length < 2) {
-        listeRegroupement.appendChild(el('p', 'gs-champ__aide',
-          'Ce client n’a pas d’autre facture de colis à payer sans paiement : rien à regrouper.'));
-      }
-      majApercuRegroupement();
+      candidatesRegroupement = (r.lignes || []).filter(regroupable);
+      candidatesRegroupement.forEach(function (f) { facturesRegroupables[f.id] = f; });
+      afficherRegroupement();
     }).catch(function (err) {
       listeRegroupement.textContent = '';
       erreurFormulaire(formRegroupement, messageErreur(err));
     });
   }
 
+  // Chaque facture : sa carte à cocher, et deux gestes à côté (pas dans le
+  // <label> : un bouton n'a rien à faire dans l'étiquette d'une case)
+  function afficherRegroupement() {
+    listeRegroupement.textContent = '';
+    var visibles = candidatesRegroupement.filter(function (f) { return !retireesRegroupement[f.id]; });
+    visibles.forEach(function (f) {
+      var ligne = el('div', 'gs-regroupement__ligne');
+      var label = el('label', 'gs-regroupement__choix');
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = f.id;
+      input.checked = !!cocheesRegroupement[f.id];
+      input.addEventListener('change', function () {
+        cocheesRegroupement[f.id] = input.checked;
+        majApercuRegroupement();
+      });
+      var carte = el('div', 'gs-regroupement__carte');
+      carte.appendChild(el('strong', '', f.numero));
+      carte.appendChild(el('b', '', argent(f.montant_usd)));
+      carte.appendChild(el('small', '', (f.facture_lignes || []).map(function (l) {
+        return (l.colis && l.colis.numero) || l.libelle;
+      }).join(', ') + ' · ' + O.date(f.cree_le)));
+      label.appendChild(input);
+      label.appendChild(carte);
+      ligne.appendChild(label);
+      var gestes = el('div', 'gs-regroupement__gestes');
+      if (peut('payments.create')) {
+        var encaisser = petitBouton('Encaisser', 'gs-bouton--plein', function () {
+          // Payée (même en partie), elle ne se regroupe plus : elle quitte la liste
+          ouvrirPaiement(f, function (payee) {
+            candidatesRegroupement = candidatesRegroupement.filter(function (x) { return x.id !== payee.id; });
+            delete facturesRegroupables[payee.id];
+            delete cocheesRegroupement[payee.id];
+            if (dlgRegroupement.open) afficherRegroupement();
+          });
+        });
+        encaisser.setAttribute('aria-label', 'Encaisser la facture ' + f.numero);
+        gestes.appendChild(encaisser);
+      }
+      var retirer = petitBouton('Retirer', null, function () {
+        retireesRegroupement[f.id] = true;
+        delete cocheesRegroupement[f.id];
+        afficherRegroupement();
+      });
+      retirer.setAttribute('aria-label', 'Retirer la facture ' + f.numero + ' de la liste');
+      gestes.appendChild(retirer);
+      ligne.appendChild(gestes);
+      listeRegroupement.appendChild(ligne);
+    });
+    if (visibles.length < 2) {
+      listeRegroupement.appendChild(el('p', 'gs-champ__aide', candidatesRegroupement.length < 2
+        ? 'Ce client n’a pas d’autre facture de colis à payer sans paiement : rien à regrouper.'
+        : 'Moins de deux factures dans la liste : rien à regrouper.'));
+    }
+    var nbRetirees = candidatesRegroupement.filter(function (f) { return retireesRegroupement[f.id]; }).length;
+    $('[data-regroupement-retirees]', dlgRegroupement).hidden = !nbRetirees;
+    $('[data-regroupement-retirees-texte]', dlgRegroupement).textContent = nbRetirees === 1
+      ? '1 facture retirée de la liste.' : nbRetirees + ' factures retirées de la liste.';
+    majApercuRegroupement();
+  }
+
+  $('[data-action="remettre-regroupement"]', dlgRegroupement).addEventListener('click', function () {
+    retireesRegroupement = {};
+    afficherRegroupement();
+  });
+
   function facturesCochees() {
-    return $$('input[type="checkbox"]', listeRegroupement).filter(function (i) { return i.checked; })
-      .map(function (i) { return facturesRegroupables[i.value]; }).filter(Boolean);
+    return candidatesRegroupement.filter(function (f) {
+      return cocheesRegroupement[f.id] && !retireesRegroupement[f.id];
+    });
   }
 
   // L'aperçu vient de la base (calculer_facture) : c'est elle qui facturera
@@ -1520,8 +1585,8 @@
     var cochees = facturesCochees();
     var recap = $('[data-recap-regroupement]', dlgRegroupement);
     $('[data-regroupement-valider]', dlgRegroupement).disabled = cochees.length < 2;
-    if (cochees.length < 2) { recap.hidden = true; return; }
     var numero = ++apercuRegroupement;
+    if (cochees.length < 2) { recap.hidden = true; return; }
     var colis = [];
     cochees.forEach(function (f) { (f.facture_lignes || []).forEach(function (l) { colis.push(l.colis_id); }); });
     API.admin.calculerFacture(colis).then(function (c) {
@@ -1559,6 +1624,126 @@
 
   $('[data-action="regrouper-facture"]', formFacture).addEventListener('click', function () {
     if (factureEditee) ouvrirRegroupement(factureEditee);
+  });
+
+  /* ---- Sortir des colis d'une facture regroupée ------------------------------ */
+  // Le chemin inverse du regroupement (outils/supabase-regroupement.sql) : les
+  // colis cochés passent sur leur propre facture, les autres restent ensemble
+  // sur une nouvelle. La base décide de tout ; ici, on choisit et on montre.
+  var dlgSortie = $('[data-dialogue="sortie"]');
+  var formSortie = $('form[data-form="sortie"]', dlgSortie);
+  var listeSortie = $('[data-liste-sortie]', dlgSortie);
+  var factureSortie = null;
+  var cleSortie = null;
+  var apercuSortie = 0;
+
+  // Une facture de colis, à payer, sans paiement, d'au moins deux colis
+  function sortable(f) {
+    return regroupable(f) && (f.facture_lignes || []).length >= 2 &&
+           peut('invoices.create') && peut('invoices.cancel');
+  }
+
+  function ouvrirSortie(facture) {
+    factureSortie = facture;
+    cleSortie = nouvelleCle();
+    erreurFormulaire(formSortie, '');
+    $('[data-sortie-facture]', dlgSortie).textContent =
+      'Facture ' + facture.numero + ' · ' + ((facture.clients || {}).nom_complet || '');
+    listeSortie.textContent = '';
+    (facture.facture_lignes || []).forEach(function (l) {
+      var label = el('label', 'gs-regroupement__choix');
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = l.colis_id;
+      input.addEventListener('change', majApercuSortie);
+      var carte = el('div', 'gs-regroupement__carte');
+      carte.appendChild(el('strong', '', (l.colis && l.colis.numero) || l.libelle || 'Colis'));
+      carte.appendChild(el('b', '', argent(l.montant_usd)));
+      carte.appendChild(el('small', '', [l.libelle, l.poids_lb != null ? String(l.poids_lb).replace('.', ',') + ' lb' : '']
+        .filter(Boolean).join(' · ')));
+      label.appendChild(input);
+      label.appendChild(carte);
+      listeSortie.appendChild(label);
+    });
+    $('[data-sortie-encaisser]', dlgSortie).hidden = !peut('payments.create');
+    majApercuSortie();
+    dlgSortie.showModal();
+  }
+
+  function colisSortis() {
+    return $$('input[type="checkbox"]', listeSortie).filter(function (i) { return i.checked; })
+      .map(function (i) { return i.value; });
+  }
+
+  // Deux aperçus de la base (calculer_facture) : la facture des colis sortis,
+  // celle des autres. Les frais de service comptent une fois sur chacune.
+  function majApercuSortie() {
+    var sortis = colisSortis();
+    var tous = (factureSortie.facture_lignes || []).map(function (l) { return l.colis_id; });
+    var reste = tous.filter(function (i) { return sortis.indexOf(i) < 0; });
+    var possible = sortis.length > 0 && reste.length > 0;
+    $('[data-sortie-valider]', dlgSortie).disabled = !possible;
+    $('[data-sortie-encaisser]', dlgSortie).disabled = !possible;
+    var recap = $('[data-recap-sortie]', dlgSortie);
+    var numero = ++apercuSortie;
+    if (!possible) {
+      recap.hidden = true;
+      if (sortis.length && !reste.length) {
+        erreurFormulaire(formSortie, 'Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.');
+      } else {
+        erreurFormulaire(formSortie, '');
+      }
+      return;
+    }
+    erreurFormulaire(formSortie, '');
+    Promise.all([API.admin.calculerFacture(sortis), API.admin.calculerFacture(reste)]).then(function (c) {
+      if (numero !== apercuSortie) return;
+      $('[data-sortie="avant"]', dlgSortie).textContent = argent(O.totauxFacture(factureSortie).grandTotal);
+      $('[data-sortie-libelle-sortis]', dlgSortie).textContent = sortis.length === 1
+        ? 'Le colis sorti, sur sa facture' : 'Les ' + sortis.length + ' colis sortis, sur leur facture';
+      $('[data-sortie-libelle-reste]', dlgSortie).textContent = reste.length === 1
+        ? 'Le colis qui reste, sur sa facture' : 'Les ' + reste.length + ' colis qui restent, ensemble';
+      $('[data-sortie="sortis"]', dlgSortie).textContent = argent(c[0].total);
+      $('[data-sortie="reste"]', dlgSortie).textContent = argent(c[1].total);
+      $('[data-sortie="apres"]', dlgSortie).textContent = argent(O.arrondi(c[0].total + c[1].total));
+      recap.hidden = false;
+    }).catch(function () { recap.hidden = true; });
+  }
+
+  function sortirDuRegroupement(encaisser) {
+    erreurFormulaire(formSortie, '');
+    var sortis = colisSortis();
+    if (!sortis.length) { erreurFormulaire(formSortie, 'Cochez le colis qui sort de la facture.'); return; }
+    var bouton = encaisser ? $('[data-sortie-encaisser]', dlgSortie) : $('[data-sortie-valider]', dlgSortie);
+    var fin = attente(bouton, 'Sortie…');
+    var client = factureSortie.clients;
+    API.admin.sortirDuRegroupement(factureSortie.id, sortis, cleSortie).then(function (r) {
+      cleSortie = null;
+      dlgSortie.close();
+      if (dlgFacture.open) dlgFacture.close();
+      // Le lien de l'ancienne portait son montant : chacune reçoit le sien
+      return Promise.all([ajouterLienPaiement(r.facture), ajouterLienPaiement(r.reste)]).then(function () {
+        toast('Colis sortis : facture ' + r.facture.numero + ' (' + argent(r.facture.montant_usd) + '). ' +
+              'Les autres : facture ' + r.reste.numero + ' (' + argent(r.reste.montant_usd) + ').');
+        if (encaisser) {
+          if (!r.facture.clients) r.facture.clients = client;
+          ouvrirPaiement(r.facture);
+        }
+        return chargerFactures();
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formSortie, messageErreur(err));
+    }).then(fin);
+  }
+
+  formSortie.addEventListener('submit', function (e) {
+    e.preventDefault();
+    sortirDuRegroupement(false);
+  });
+  $('[data-sortie-encaisser]', dlgSortie).addEventListener('click', function () { sortirDuRegroupement(true); });
+
+  $('[data-action="sortir-regroupement"]', formFacture).addEventListener('click', function () {
+    if (factureEditee) ouvrirSortie(factureEditee);
   });
 
   /* ---- Contrôle de la facturation ------------------------------------------- */
@@ -5911,6 +6096,8 @@
     'facture.creation': 'Création d’une facture', 'facture.modification': 'Modification d’une facture',
     'facture.paiement': 'Paiement d’une facture', 'facture.annulation': 'Annulation d’une facture',
     'facture.regroupement': 'Regroupement de factures', 'facture.suppression': 'Suppression d’une facture',
+    'facture.sortie_regroupement': 'Colis sortis d’un regroupement',
+    'client.suppression_demandee': 'Compte supprimé par le client',
     'paiement.enregistrement': 'Paiement encaissé', 'paiement.annulation': 'Annulation d’un paiement',
     'paiement.reprise': 'Paiement repris', 'rapport.creation': 'Création d’un rapport',
     'rapport.modification': 'Modification d’un rapport', 'rapport.suppression': 'Suppression d’un rapport',

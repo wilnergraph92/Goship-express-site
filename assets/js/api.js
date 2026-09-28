@@ -1027,6 +1027,20 @@
         }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
       },
 
+      // Le chemin inverse (outils/supabase-regroupement.sql) : les colis choisis
+      // quittent la facture regroupée pour leur propre facture, les autres passent
+      // sur une seconde. Réponse : { facture, reste, annulee, deja }. Une base
+      // sans ce fichier répond « absent ».
+      sortirDuRegroupement: function (factureId, colisIds, cle) {
+        return sb().then(function (c) {
+          return c.rpc('sortir_du_regroupement', { p_facture: factureId, p_colis: colisIds || [], p_cle: cle || null });
+        }).then(resultat).then(function (r) {
+          if (r && r.facture) trierPaiements(r.facture);
+          if (r && r.reste) trierPaiements(r.reste);
+          return r;
+        });
+      },
+
       // Ce que la base facturerait pour ces colis, sans rien créer :
       // { lignes, sous_total, frais_service, total }
       calculerFacture: function (colisIds) {
@@ -4038,6 +4052,70 @@
                       { numero: n.numero, montant_usd: n.montant_usd });
           ecrireDonnees(d, 'factures');
           return plusTard({ facture: factureComplete(d, n), annulees: numeros, deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // sortir_du_regroupement (supabase-regroupement.sql), mêmes refus, même ordre
+      sortirDuRegroupement: function (factureId, colisIds, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          exiger(d, 'invoices.cancel');
+          var parCle = function (c) { return (d.factures || []).filter(function (f) { return c && f.cle_idempotence === c; })[0]; };
+          if (cle && parCle(cle)) {
+            var reprise = parCle(cle + ':reste');
+            var ancienne = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+            return plusTard({ facture: factureComplete(d, parCle(cle)), reste: reprise ? factureComplete(d, reprise) : null,
+                              annulee: ancienne ? ancienne.numero : null, deja: true });
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          if (f.statut !== 'a_payer') {
+            throw Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' est ' +
+                         (f.statut === 'payee' ? 'payée' : 'annulée') + ' : ses colis ne se déplacent plus.');
+          }
+          if (paiementsValides(f).length) {
+            throw Erreur('INVOICE_HAS_PAYMENTS', 'La facture ' + f.numero + ' a déjà reçu un paiement : ses colis ne se déplacent plus.');
+          }
+          var lignes = f.facture_lignes || [];
+          if (!lignes.length || lignes.some(function (l) { return !l.colis_id; })) {
+            throw Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' n’est pas une facture de colis.');
+          }
+          var tous = lignes.map(function (l) { return l.colis_id; });
+          var sortis = (colisIds || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; });
+          if (!sortis.length) throw Erreur('INVALID_INPUT', 'Choisissez le colis qui sort de la facture.');
+          if (sortis.some(function (i) { return tous.indexOf(i) < 0; })) {
+            throw Erreur('INVALID_INPUT', 'Un colis choisi n’est pas sur la facture ' + f.numero + '.');
+          }
+          var reste = tous.filter(function (i) { return sortis.indexOf(i) < 0; });
+          if (!reste.length) {
+            throw Erreur('INVALID_INPUT', 'Tous les colis de la facture ' + f.numero + ' sont choisis : il doit en rester au moins un. ' +
+                         'Pour tout défaire, annulez la facture.');
+          }
+          var colisDe = function (ids) {
+            return ids.map(function (i) { return trouverColisDemo(d, i); })
+              .sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); });
+          };
+          if (colisDe(tous).some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis de la facture n’existe plus.');
+          var numeros = colisDe(sortis).map(function (c) { return c.numero; }).sort().join(', ');
+          var motif = 'Sortie du regroupement : ' + numeros;
+          Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
+          noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+          var nouvelle = function (colis, c) {
+            return nouvelleFacture(d, moi, {
+              client_id: f.client_id, montant_usd: arrondi(colis.reduce(function (s, x) { return s + prixColis(x); }, 0) + FRAIS_SERVICE),
+              frais_service_usd: FRAIS_SERVICE, echeance_le: f.echeance_le, note: f.note,
+              cle_idempotence: c || null
+            }, colis);
+          };
+          var s = nouvelle(colisDe(sortis), cle);
+          var r = nouvelle(colisDe(reste), cle ? cle + ':reste' : null);
+          f.remplacee_par = r.id;
+          journaliser(d, moi, 'facture.sortie_regroupement', 'facture', f.id,
+                      { numero: f.numero, montant_usd: f.montant_usd },
+                      { colis: numeros, facture: s.numero, reste: r.numero });
+          ecrireDonnees(d, 'factures');
+          return plusTard({ facture: factureComplete(d, s), reste: factureComplete(d, r), annulee: f.numero, deja: false });
         } catch (e) { return rejeter(e); }
       },
 

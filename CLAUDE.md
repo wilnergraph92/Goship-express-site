@@ -150,7 +150,15 @@ d'idempotence). Un paiement ne se modifie ni ne se supprime : il s'annule
 `statut`, `moyen` et `payee_le` suivent les paiements (déclencheur
 `garde_facture` : aucune page ne les écrit). Une facture ne se supprime
 pas : `annuler_facture` (motif, refusée si elle a reçu de l'argent).
-Regrouper : `regrouper_factures` (annule les anciennes, `remplacee_par`).
+Regrouper : `regrouper_factures` (annule les anciennes, `remplacee_par`). Le chemin
+inverse : `sortir_du_regroupement` (`outils/supabase-regroupement.sql`) — les colis
+choisis d'une facture de colis à payer, sans paiement, passent sur leur propre facture,
+les autres sur une seconde que l'ancienne désigne (`remplacee_par`) ; chaque facture
+compte ses frais de service ; le lien de paiement n'est pas recopié (le tableau de bord
+en pose un). Copie démo : `sortirDuRegroupement` dans `api.js`. Côté page, la fenêtre
+de regroupement a « Encaisser » (payée, la facture quitte la liste : `ouvrirPaiement`
+prend une suite) et « Retirer » (la liste seulement, rien en base) ; la fenêtre « Sortir
+des colis » (`ouvrirSortie`) montre l'aperçu par deux `calculer_facture`.
 Les trois statuts stockés ne changent pas ; « partielle » et « en_retard »
 sont des états déduits. Même copie démo que le reste (`ajouterPaiementDemo`,
 `recalculerFactureDemo`…), comparée par `essai-finances.py` /
@@ -375,7 +383,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

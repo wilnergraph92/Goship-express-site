@@ -1045,6 +1045,7 @@
       </section>
       <div class="gs-dialogue__actions-colis" data-bloc-actions-facture hidden>
         <button type="button" class="gs-lien-bouton" data-action="regrouper-facture" data-permission="invoices.create invoices.cancel"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg>Regrouper avec d'autres factures de ce client</button>
+        <button type="button" class="gs-lien-bouton" data-action="sortir-regroupement" data-permission="invoices.create invoices.cancel"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17 17 7M7 7h10v10"/></svg>Sortir des colis de cette facture</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="annuler-facture" data-permission="invoices.cancel"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>Annuler cette facture</button>
       </div>
       <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
@@ -1149,10 +1150,12 @@
     </div>
     <div class="gs-dialogue__corps">
       <p class="gs-dialogue__aide">Les factures cochées sont annulées et remplacées par une seule, qui reprend tous leurs colis au prix déjà arrêté — les frais de service n'y comptent qu'une fois. Seules les factures de colis sans aucun paiement se regroupent.</p>
+      <p class="gs-dialogue__aide">« Encaisser » enregistre le paiement d'une facture : payée, elle quitte la liste. « Retirer » l'enlève de la liste sans rien changer à la facture.</p>
       <fieldset class="gs-choix-colis">
         <legend>Factures à regrouper</legend>
         <div class="gs-regroupement" data-liste-regroupement></div>
       </fieldset>
+      <p class="gs-regroupement__retirees" data-regroupement-retirees hidden><span data-regroupement-retirees-texte></span> <button type="button" class="gs-lien-bouton" data-action="remettre-regroupement">Tout remettre</button></p>
       <div class="gs-recap" data-recap-regroupement hidden>
         <div class="gs-recap__ligne"><span data-regroupement-avant></span><strong data-regroupement="avant"></strong></div>
         <div class="gs-recap__ligne"><span>Colis</span><strong data-regroupement="colis"></strong></div>
@@ -1164,6 +1167,38 @@
     <div class="gs-dialogue__pied">
       <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
       <button type="submit" class="gs-bouton gs-bouton--plein" data-regroupement-valider>Regrouper</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="sortie" aria-labelledby="dlg-sortie-titre">
+  <form class="gs-form" data-form="sortie" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-sortie-titre">Sortir des colis de la facture</h2>
+        <p class="gs-dialogue__sous-titre" data-sortie-facture></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Les colis cochés passent sur leur propre facture ; les autres restent ensemble sur une nouvelle facture. Celle-ci est annulée et renvoie vers la nouvelle. Chaque facture compte ses frais de service : sortir des colis en ajoute une fois.</p>
+      <p class="gs-dialogue__aide">« Sortir et encaisser » ouvre ensuite le paiement de la facture des colis sortis.</p>
+      <fieldset class="gs-choix-colis">
+        <legend>Colis qui sortent</legend>
+        <div class="gs-regroupement" data-liste-sortie></div>
+      </fieldset>
+      <div class="gs-recap" data-recap-sortie hidden>
+        <div class="gs-recap__ligne"><span>Aujourd'hui, une facture</span><strong data-sortie="avant"></strong></div>
+        <div class="gs-recap__ligne"><span data-sortie-libelle-sortis></span><strong data-sortie="sortis"></strong></div>
+        <div class="gs-recap__ligne"><span data-sortie-libelle-reste></span><strong data-sortie="reste"></strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Ensemble, après la sortie</span><strong data-sortie="apres"></strong></div>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="button" class="gs-bouton gs-bouton--contour" data-sortie-encaisser data-permission="payments.create">Sortir et encaisser</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-sortie-valider>Sortir du regroupement</button>
     </div>
   </form>
 </dialog>

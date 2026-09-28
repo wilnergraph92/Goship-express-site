@@ -983,6 +983,7 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-bouton--danger:hover{color:#fecaca}
 [data-apparence="sombre"] .gs-admin-body .gs-regroupement__carte{border-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-regroupement__carte small{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-regroupement__retirees{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-regroupement__choix:hover .gs-regroupement__carte{border-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-choix-colis input:checked+.gs-regroupement__carte{background-color:#132041}
 [data-apparence="sombre"] .gs-admin-body .gs-finances__case{border-color:#22304f;background-color:#0e1830}

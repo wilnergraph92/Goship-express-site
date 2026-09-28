@@ -7,7 +7,7 @@ bureau ou le mobile ne peuvent que demander ; la base décide.
 
 ## Migrations
 
-La chaîne officielle : `outils/migrations.txt` (treize fichiers). Règles :
+La chaîne officielle : `outils/migrations.txt` (quatorze fichiers). Règles :
 
 - **dans l'ordre** ; relancer un fichier impose de relancer ceux qui le suivent ;
 - **rejouables sans risque** : `if not exists`, `create or replace`, valeurs par
@@ -33,6 +33,7 @@ on revient en arrière par une nouvelle migration ou une restauration
 |---|---|
 | `supabase.sql` à `supabase-rapports.sql` (1 à 12) | présentes (fonction témoin de chacune) ; chaîne entière relancée par le propriétaire le 28/09/2026, contrôle de `supabase-rapports.sql` : `5 \| 0 \| true \| true` |
 | `supabase-compte.sql` (13, « Supprimer mon compte » de l'application) | **à exécuter** (le seul fichier à lancer : il vient en dernier) ; contrôle attendu : `1 \| false \| 1` |
+| `supabase-regroupement.sql` (14, sortir des colis d'une facture regroupée) | **à exécuter** (après `supabase-compte.sql`) ; contrôle attendu : `1 \| false` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de
