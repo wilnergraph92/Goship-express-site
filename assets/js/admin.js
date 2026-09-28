@@ -722,6 +722,7 @@
     corpsClients.textContent = '';
     c.lignes.forEach(function (client) {
       var tr = el('tr');
+      FICHES.set(tr, { client: client });
       var enCours = Number(client.colis_en_cours) || 0;
       if (enCours) tr.classList.add('is-actif-client');
 
@@ -946,6 +947,7 @@
       var client = facture.clients || {};
       var t = O.totauxFacture(facture);
       var tr = el('tr', t.etat === 'annulee' ? 'gs-ligne-annulee' : '');
+      FICHES.set(tr, { facture: facture });
 
       var tdNum = cellule('Facture');
       tdNum.appendChild(el('span', 'gs-cellule-num', facture.numero || '—'));
@@ -3702,6 +3704,7 @@
       corpsPaiements.textContent = '';
       v.paiements_recents.forEach(function (x) {
         var tr = el('tr');
+        FICHES.set(tr, { paiement: x });
         cellulePleine(tr, 'Reçu le', O.date(x.paye_le, true));
         var tdClient = cellule('Client');
         tdClient.appendChild(el('span', 'gs-cellule-principale', (x.client && x.client.nom_complet) || '—'));
@@ -3771,9 +3774,10 @@
   /* ---- Les filtres de la vue générale ----------------------------------------------
      vue_generale_filtree (outils/supabase-analytics.sql). Des listes fixes :
        Pays         Haïti, Santo Domingo (République dominicaine), USA
-       Destination  toutes les villes du pays choisi (assets/js/lieux.js : communes
-                    d'Haïti, municipalités dominicaines), plus celles que les colis
-                    portent sans être dans la liste ; pour les USA, celles des colis
+       Destination  les villes que les colis vers le pays choisi portent vraiment
+                    (options_filtres, avec leur pays), rangées par département ou
+                    province quand assets/js/lieux.js les connaît ; aucune ville
+                    inventée : une ville sans colis n'apparaît pas
        Mode         Aérienne, Maritime, Terrestre
        Statut       les huit étapes, ou « En cours »
        Agence       USA (au dépôt de Miami : reçu, emballé), Haïti, Santo Domingo
@@ -3801,8 +3805,9 @@
   // La même mise en forme que la base (filtres_colis) : casse et espaces ignorés
   function cleVille(v) { return String(v || '').trim().toLowerCase(); }
 
-  // choix : des options { valeur, libelle, colis } ou des groupes { groupe, choix: [...] }
-  function remplirFiltre(cle, choix, invite) {
+  // choix : des options { valeur, libelle, colis } ou des groupes { groupe, choix: [...] }.
+  // zeros : afficher aussi « (0) » (le filtre Statut l'a toujours fait)
+  function remplirFiltre(cle, choix, invite, zeros) {
     var liste = $('[data-vg-filtre="' + cle + '"]', formFiltres);
     var garde = etatFiltres.valeurs[cle] || '';
     liste.textContent = '';
@@ -3810,7 +3815,7 @@
     var vus = {};
     function option(x, parent) {
       vus[x.valeur] = true;
-      var o = new Option(x.libelle + (x.colis ? ' (' + entier(x.colis) + ')' : ''), x.valeur);
+      var o = new Option(x.libelle + (x.colis != null && (zeros || x.colis) ? ' (' + entier(x.colis) + ')' : ''), x.valeur);
       parent.appendChild(o);
     }
     choix.forEach(function (x) {
@@ -3827,31 +3832,37 @@
     liste.closest('.gs-vg__filtre').classList.toggle('is-actif', !!garde);
   }
 
-  // Les villes du pays choisi : sa liste (lieux.js), rangée par département ou province,
-  // puis celles des colis qui n'y sont pas (écrites autrement, ou hors liste)
+  // Les villes du pays choisi : celles des colis. Une base d'avant le 27/09/2026 ne dit
+  // pas le pays de chaque ville : lieux.js le reconnaît pour Haïti et la République
+  // dominicaine, et une ville qu'il ne connaît pas reste proposée, à part.
+  var REGION_DE = {};
+  Object.keys(LIEUX.REGIONS).forEach(function (p) {
+    Object.keys(LIEUX.REGIONS[p]).forEach(function (r) {
+      LIEUX.REGIONS[p][r].forEach(function (v) { REGION_DE[p + '|' + cleVille(v)] = r; });
+    });
+  });
+  function paysConnu(valeur) {
+    return REGION_DE['HT|' + valeur] ? 'HT' : (REGION_DE['DO|' + valeur] ? 'DO' : null);
+  }
   function villesDuPays(pays, villesBase) {
-    var comptes = {}, connues = {};
+    var groupes = {}, incertaines = [];
     villesBase.forEach(function (x) {
-      // Une base d'avant le 27/09/2026 ne dit pas le pays de chaque ville : on les garde toutes
-      if (x.pays && x.pays !== pays) return;
-      comptes[x.valeur] = (comptes[x.valeur] || 0) + x.colis;
+      var p = x.pays || paysConnu(x.valeur);
+      var choix = { valeur: x.valeur, libelle: x.libelle, colis: x.colis };
+      if (!p) { incertaines.push(choix); return; }
+      if (p !== pays) return;
+      var g = REGION_DE[pays + '|' + x.valeur] || 'Autres villes';
+      (groupes[g] = groupes[g] || []).push(choix);
     });
-    var groupes = [];
-    var regions = LIEUX.REGIONS[pays] || {};
-    Object.keys(regions).sort(function (a, b) { return a.localeCompare(b, 'fr'); }).forEach(function (r) {
-      groupes.push({ groupe: r, choix: regions[r].slice().sort(function (a, b) { return a.localeCompare(b, 'fr'); })
-        .map(function (v) {
-          var k = cleVille(v);
-          connues[k] = true;
-          return { valeur: k, libelle: v, colis: comptes[k] || 0 };
-        }) });
+    function trier(t) { return t.sort(function (a, b) { return a.libelle.localeCompare(b.libelle, 'fr'); }); }
+    var noms = Object.keys(groupes).sort(function (a, b) {
+      return a === 'Autres villes' ? 1 : b === 'Autres villes' ? -1 : a.localeCompare(b, 'fr');
     });
-    var autres = villesBase.filter(function (x) { return (!x.pays || x.pays === pays) && !connues[x.valeur]; })
-      .map(function (x) { return { valeur: x.valeur, libelle: x.libelle, colis: comptes[x.valeur] }; })
-      .filter(function (x, i, t) { return t.map(function (y) { return y.valeur; }).indexOf(x.valeur) === i; })
-      .sort(function (a, b) { return a.libelle.localeCompare(b.libelle, 'fr'); });
-    groupes.push({ groupe: groupes.length ? 'Autres villes des colis' : 'Villes des colis', choix: autres });
-    return groupes;
+    // Un seul groupe (les USA, ou une base qui ne range pas) : une liste simple
+    var r = noms.length === 1 && !incertaines.length ? trier(groupes[noms[0]])
+      : noms.map(function (g) { return { groupe: g, choix: trier(groupes[g]) }; });
+    if (incertaines.length) r.push({ groupe: 'Pays non précisé', choix: trier(incertaines) });
+    return r;
   }
 
   function nombreDe(liste, valeur) {
@@ -3867,14 +3878,16 @@
     if (o) {
       remplirFiltre('pays', PAYS_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.pays, x[0]) }; }));
       var pays = etatFiltres.valeurs.pays;
-      remplirFiltre('ville', pays ? villesDuPays(pays, o.villes || []) : [], pays ? 'Toutes' : 'Choisir un pays');
+      var villes = pays ? villesDuPays(pays, o.villes || []) : [];
+      remplirFiltre('ville', villes, !pays ? 'Choisir un pays' : (villes.length ? 'Toutes' : 'Aucune ville dans les colis'));
       $('[data-vg-filtre="ville"]', formFiltres).disabled = !etatFiltres.disponible || !pays;
       remplirFiltre('service', MODES_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.services, x[0]) }; }));
       // « En cours » n'a pas de nombre : ce serait une somme faite dans la page
       remplirFiltre('statut', [{ valeur: 'actifs', libelle: 'En cours (tous sauf livrés)', colis: null }].concat(
         CHAINE.concat(['incident']).map(function (k) {
-          return { valeur: k, libelle: STATUTS[k], colis: nombreDe(o.statuts, k) };
-        })));
+          var x = (o.statuts || []).filter(function (y) { return y.valeur === k; })[0];
+          return { valeur: k, libelle: STATUTS[k], colis: x ? x.colis : 0 };
+        })), null, true);
       remplirFiltre('agence', AGENCES_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.agences, x[0]) }; }));
       // Une base d'avant le 27/09/2026 ne connaît pas l'agence : le filtre attend sa mise à jour
       $('[data-vg-filtre="agence"]', formFiltres).disabled = !etatFiltres.disponible || !agencesConnues;
@@ -5415,7 +5428,12 @@
   var actionsFiche = $('[data-fiche-actions]', dlgFiche);
   var liensFiche = $('[data-fiche-liens]', dlgFiche);
   var parcoursFiche = $('[data-fiche-parcours]', dlgFiche);
+  var sectionsFiche = $('[data-fiche-sections]', dlgFiche);
+  var suiteFiche = $('[data-fiche-suite]', dlgFiche);
+  var grilleFiche = champsFiche;
   var ficheColisId = null;
+  var ficheDemande = 0;
+  var CODES = window.GoshipCodes;
 
   function preparerFiche(type, titre, sousTitre, badgeNoeud) {
     $('[data-fiche-type]', dlgFiche).textContent = type;
@@ -5427,10 +5445,59 @@
     st.textContent = sousTitre || '';
     st.hidden = !sousTitre;
     champsFiche.textContent = '';
+    sectionsFiche.textContent = '';
+    suiteFiche.textContent = '';
+    grilleFiche = champsFiche;
     actionsFiche.textContent = '';
     liensFiche.textContent = '';
     parcoursFiche.hidden = true;
     ficheColisId = null;
+    ficheDemande++;
+  }
+
+  // Une section titrée (« Destinataire », « Historique »…) : les champs suivants y vont.
+  // apres : sous le parcours du colis plutôt qu'au-dessus
+  function sectionFiche(titre, apres) {
+    var s = el('section', 'gs-fiche__section');
+    s.appendChild(el('h3', '', titre));
+    grilleFiche = el('dl', 'gs-fiche__grille');
+    s.appendChild(grilleFiche);
+    (apres ? suiteFiche : sectionsFiche).appendChild(s);
+    return s;
+  }
+
+  // Une liste chargée à l'ouverture (colis d'un client, historique…) : « Chargement… »,
+  // puis ses lignes, ou une phrase si elle est vide ou indisponible. demande : la fiche
+  // pour laquelle on charge (une autre fiche ouverte entre-temps ne reçoit rien).
+  function listeFiche(section, charger, vide) {
+    var ol = el('ul', 'gs-fiche__liste');
+    var attente = el('p', 'gs-fiche__attente', 'Chargement…');
+    section.appendChild(attente);
+    section.appendChild(ol);
+    var demande = ficheDemande;
+    charger().then(function (lignes) {
+      if (demande !== ficheDemande) return;
+      attente.remove();
+      if (!lignes.length) section.appendChild(el('p', 'gs-fiche__attente', vide));
+      lignes.forEach(function (l) { ol.appendChild(l); });
+    }).catch(function (err) {
+      if (demande !== ficheDemande) return;
+      attente.textContent = messageErreur(err);
+    });
+  }
+
+  // Une ligne de liste : un texte principal, un détail, et, si elle mène quelque part, un bouton
+  function ligneListe(principal, detail, droite, action) {
+    var li = el('li', 'gs-fiche__ligne');
+    var corps = el(action ? 'button' : 'div', 'gs-fiche__ligne-corps');
+    if (action) { corps.type = 'button'; corps.addEventListener('click', action); }
+    var g = el('span', 'gs-fiche__ligne-texte');
+    g.appendChild(el('span', 'gs-fiche__valeur', principal));
+    if (detail) g.appendChild(el('span', 'gs-fiche__sous', detail));
+    corps.appendChild(g);
+    if (droite) corps.appendChild(typeof droite === 'string' ? el('span', 'gs-fiche__ligne-droite', droite) : droite);
+    li.appendChild(corps);
+    return li;
   }
 
   // Un champ : un libellé et une ou plusieurs lignes de texte (vides ignorées)
@@ -5442,7 +5509,7 @@
     var dd = el('dd');
     lignes.forEach(function (l, i) { dd.appendChild(el('span', i ? 'gs-fiche__sous' : 'gs-fiche__valeur', l)); });
     bloc.appendChild(dd);
-    champsFiche.appendChild(bloc);
+    grilleFiche.appendChild(bloc);
   }
 
   // Un bouton de la fiche : fermer la fiche, puis agir (sauf « garder » : l'impression)
@@ -5462,29 +5529,74 @@
     premier.focus();
   }
 
-  /* Le colis */
+  /* Le colis : ce que la liste en sait (colis_details), par sections ; le parcours et
+     l'historique complet se lisent à l'ouverture (API.admin.historique). Un champ que la
+     base ne connaît pas n'est pas affiché. */
+  function heure(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
   function ouvrirFicheColis(colis) {
     preparerFiche('Détail du colis', colis.numero, colis.description || '', badge(colis.statut));
     ficheColisId = colis.id;
+    var recu = colis.recu_le || colis.cree_le;
     var poids = colis.poids_lb != null && colis.poids_lb !== '' ? Number(colis.poids_lb) : null;
-    champFiche('Client', [colis.nom_client || 'Client supprimé', [colis.code_client, colis.telephone_client].filter(Boolean).join(' · ')]);
-    champFiche('Route', ['Miami → ' + [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', ')]);
-    champFiche('Mode', SERVICES[colis.service] || colis.service);
+
+    sectionFiche('Informations générales');
+    champFiche('N° de colis', colis.numero);
+    champFiche('Date de réception', O.date(recu));
+    champFiche('Heure de réception', heure(recu));
+    champFiche('Statut', STATUTS[colis.statut] || colis.statut);
+    champFiche('Lieu actuel', colis.lieu || '—');
+    champFiche('Mis à jour', O.date(colis.maj_le, true));
+    // Le code-barres de l'étiquette (Code 128 du numéro), dessiné comme sur l'étiquette
+    if (CODES && CODES.code128) {
+      try {
+        var bloc = el('div', 'gs-fiche__champ gs-fiche__champ--large');
+        bloc.appendChild(el('dt', '', 'Code-barres'));
+        var dd = el('dd', 'gs-fiche__codebarre');
+        dd.appendChild(CODES.code128(colis.numero, { hauteur: 44, titre: colis.numero }));
+        dd.appendChild(el('span', 'gs-fiche__sous', colis.numero));
+        bloc.appendChild(dd);
+        grilleFiche.appendChild(bloc);
+      } catch (e) { /* un numéro illisible en Code 128 : pas de code-barres */ }
+    }
+
+    sectionFiche('Destinataire (client)');
+    champFiche('Nom', colis.nom_client || 'Client supprimé');
+    champFiche('Code client', colis.code_client);
+    champFiche('Téléphone', colis.telephone_client);
+    champFiche('E-mail', colis.email_client);
+    champFiche('Adresse', colis.adresse_client, true);
+    champFiche('Ville', [colis.ville_client, colis.region_client].filter(Boolean).join(', '));
+    champFiche('Pays', PAYS[colis.pays_client] || colis.pays_client);
+
+    sectionFiche('Expéditeur (magasin)');
+    champFiche('Nom', colis.expediteur || 'Non renseigné');
+    champFiche('N° de suivi du vendeur', colis.suivi_transporteur);
+    var grilleExp = grilleFiche;
+
+    sectionFiche('Colis');
+    champFiche('Contenu', colis.description);
     champFiche('Poids', poids != null ? [O.nombre(poids) + ' lb', O.nombre(Math.round(poids * 0.45359237 * 10) / 10) + ' kg'] : '—');
+    champFiche('Mode de transport', SERVICES[colis.service] || colis.service);
+    champFiche('Destination', [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', '));
     if (colis.prix_usd != null && colis.prix_usd !== '') {
-      champFiche('Montant du transport', [argent(colis.prix_usd),
+      champFiche('Prix du transport', [argent(colis.prix_usd),
         colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '']);
     }
-    champFiche('Lieu actuel', colis.lieu || '—');
-    champFiche('Reçu le', O.date(colis.recu_le || colis.cree_le, true));
-    champFiche('Mis à jour', O.date(colis.maj_le, true));
-    champFiche('Expéditeur', colis.expediteur);
-    champFiche('Suivi du vendeur', colis.suivi_transporteur);
-    champFiche('Note', colis.note, true);
+    champFiche('Message pour le client', colis.note, true);
 
-    var maj = boutonFiche('Mettre à jour', 'gs-bouton--plein', function () { ouvrirStatut([colis.id], colis); });
-    maj.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
-    actionsFiche.appendChild(maj);
+    // Les actions : celles que le rôle permet ; la base vérifie de toute façon
+    if (peut('shipments.change_status')) {
+      var maj = boutonFiche('Mettre à jour', 'gs-bouton--plein', function () { ouvrirStatut([colis.id], colis); });
+      maj.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
+      actionsFiche.appendChild(maj);
+    }
+    if (peut('shipments.edit')) {
+      actionsFiche.appendChild(boutonFiche('Modifier', 'gs-bouton--contour', function () { ouvrirColis({ colis: colis }); }));
+    }
     if (peut('invoices.view')) {
       var fac = boutonFactureDuColis(colis);
       fac.className = 'gs-bouton gs-bouton--contour';
@@ -5506,11 +5618,32 @@
       }));
     }
     parcoursColis(colis, null);
+    var hist = sectionFiche('Historique', true);
+    var ol = el('ol', 'gs-chrono');
+    var attente = el('p', 'gs-fiche__attente', 'Chargement…');
+    hist.appendChild(attente);
+    hist.appendChild(ol);
     montrerFiche();
-    // Les dates du parcours : l'historique du colis, tel que la base l'a gardé
+    // Le parcours daté et l'historique : tous les événements, tels que la base les a gardés
+    var demande = ficheDemande;
     API.admin.historique(colis.id).then(function (h) {
-      if (ficheColisId === colis.id) parcoursColis(colis, h || []);
-    }).catch(function () { /* le parcours reste sans dates */ });
+      if (demande !== ficheDemande) return;
+      h = h || [];
+      parcoursColis(colis, h);
+      attente.remove();
+      O.remplirHistorique(ol, h, { notes: true, libelle: libelleEvenement });
+      if (!h.length) hist.appendChild(el('p', 'gs-fiche__attente', 'Aucun événement pour l’instant.'));
+      // Le lieu de réception : celui de son premier événement
+      var premier = h.filter(function (x) { return x.lieu; })[0];
+      if (premier) {
+        var g = grilleFiche;
+        grilleFiche = grilleExp;
+        champFiche('Lieu de réception', premier.lieu);
+        grilleFiche = g;
+      }
+    }).catch(function (err) {
+      if (demande === ficheDemande) attente.textContent = messageErreur(err);
+    });
   }
 
   // Les sept étapes : faites, en cours, à venir. « Action requise » n'est pas une étape :
@@ -5586,6 +5719,21 @@
     var tete = colonnes.shift();
     preparerFiche(typeDeLigne(table), tete.lignes[0], tete.lignes.slice(1).join(' · '), null);
     colonnes.forEach(function (c) { champFiche(c.libelle, c.lignes); });
+    copierBoutons(boutons);
+    montrerFiche();
+  }
+
+  // Les boutons d'une ligne, dans la fiche : chaque copie déclenche le bouton de la ligne
+  // (même action, mêmes permissions : la ligne n'affiche que ce que le rôle peut faire)
+  function boutonsDeLigne(tr) {
+    var r = [];
+    Array.prototype.forEach.call(tr.cells, function (td) {
+      if (td.classList.contains('gs-tableau__case')) return;
+      $$('button, a[href]', td).forEach(function (b) { if (!b.disabled && !b.hidden && b.textContent.trim()) r.push(b); });
+    });
+    return r;
+  }
+  function copierBoutons(boutons) {
     boutons.forEach(function (b, i) {
       // Un lien de la ligne (numéro de facture…) devient « Ouvrir … »
       var texte = b.classList.contains('gs-bouton') ? b.textContent.trim()
@@ -5596,6 +5744,143 @@
       if (b.getAttribute('aria-label')) copie.setAttribute('aria-label', b.getAttribute('aria-label'));
       actionsFiche.appendChild(copie);
     });
+  }
+
+  /* La facture : ce que la liste en a lu (lignes et paiements compris), montants par
+     API.outils.totauxFacture comme partout ; ses actions sont celles de sa ligne. */
+  function ouvrirFicheFacture(facture, tr) {
+    var client = facture.clients || {};
+    var t = O.totauxFacture(facture);
+    preparerFiche('Facture', facture.numero, client.nom_complet || '', badgeFacture(t.etat));
+    sectionFiche('Informations générales');
+    champFiche('N° de facture', facture.numero);
+    champFiche('Créée le', O.date(facture.cree_le, true));
+    champFiche('À payer avant le', facture.echeance_le ? O.date(facture.echeance_le) : '');
+    champFiche('Payée le', facture.payee_le ? O.date(facture.payee_le, true) : '');
+    champFiche('Moyen', facture.moyen ? (MOYENS[facture.moyen] || facture.moyen) : '');
+    champFiche('Lien de paiement', facture.lien_paiement, true);
+    champFiche('Motif', t.etat === 'annulee' ? facture.motif_annulation : '', true);
+    champFiche('Note pour le client', facture.note, true);
+    sectionFiche('Client');
+    champFiche('Nom', client.nom_complet);
+    champFiche('Code client', client.code);
+    champFiche('Téléphone', client.telephone);
+    champFiche('E-mail', client.email);
+    champFiche('Ville', [client.ville, PAYS[client.pays] || client.pays].filter(Boolean).join(', '));
+    sectionFiche('Montants');
+    champFiche('Total colis', argent(t.colis));
+    champFiche('Frais de service', argent(t.frais));
+    champFiche('Grand total', argent(t.grandTotal));
+    champFiche('Déjà payé', argent(t.paye));
+    champFiche('Reste à payer', argent(t.balance));
+    var lignes = facture.facture_lignes || [];
+    if (lignes.length) {
+      var sl = sectionFiche('Colis facturés');
+      var ul = el('ul', 'gs-fiche__liste');
+      lignes.forEach(function (l) {
+        var c = l.colis || {};
+        ul.appendChild(ligneListe(c.numero || l.libelle || '—',
+          [c.description || (c.numero ? l.libelle : ''), l.poids_lb != null ? O.nombre(Number(l.poids_lb)) + ' lb' : '']
+            .filter(Boolean).join(' · '),
+          argent(l.montant_usd),
+          c.numero ? function () { ouvrirColisParNumero(c.numero); } : null));
+      });
+      sl.appendChild(ul);
+    }
+    var paiements = facture.paiements || [];
+    if (paiements.length) {
+      var sp = sectionFiche('Paiements');
+      var up = el('ul', 'gs-fiche__liste');
+      paiements.forEach(function (x) {
+        up.appendChild(ligneListe(argent(x.montant_usd) + ' · ' + (MOYENS[x.moyen] || x.moyen || ''),
+          [O.date(x.paye_le, true), x.reference ? 'réf. ' + x.reference : '', x.annule_le ? 'Annulé le ' + O.date(x.annule_le) : '']
+            .filter(Boolean).join(' · '), null, null));
+      });
+      sp.appendChild(up);
+    }
+    copierBoutons(boutonsDeLigne(tr));
+    montrerFiche();
+  }
+
+  /* Le client : ce que la liste en sait, puis ses derniers colis, ses factures et leurs
+     paiements, lus à l'ouverture (et seulement si le rôle peut les voir). */
+  function ouvrirFicheClient(client, tr) {
+    preparerFiche('Client', client.nom_complet || client.code, client.code || '', null);
+    sectionFiche('Informations personnelles');
+    champFiche('Identifiant', client.code);
+    champFiche('Nom', client.nom_complet);
+    champFiche('Inscrit le', client.cree_le ? O.date(client.cree_le) : '');
+    champFiche('Langue', LANGUES[client.langue] || client.langue);
+    sectionFiche('Coordonnées');
+    champFiche('Téléphone', client.telephone);
+    champFiche('E-mail', client.email);
+    champFiche('Adresse', client.adresse, true);
+    champFiche('Ville', [client.ville, client.region].filter(Boolean).join(', '));
+    champFiche('Pays', PAYS[client.pays] || client.pays);
+    sectionFiche('Situation');
+    champFiche('Colis en cours', client.colis_en_cours != null ? String(client.colis_en_cours) : '');
+    champFiche('Poids en cours', Number(client.poids_en_cours) ? O.nombre(Number(client.poids_en_cours)) + ' lb' : '');
+    if (peut('invoices.view') && etat.clients.finances && !etat.clients.sansChiffres) {
+      champFiche('Facturé', argent(client.facture_usd));
+      champFiche('Payé', argent(client.paye_usd));
+      champFiche('Solde', argent(client.solde_usd));
+    }
+    champFiche('Dernière activité', client.derniere_activite ? O.date(client.derniere_activite, true) : '');
+    if (peut('shipments.view') && client.id) {
+      listeFiche(sectionFiche('Derniers colis'), function () {
+        return API.admin.colis({ clientId: client.id, statut: '', parPage: 10 }).then(function (r) {
+          return (r.lignes || []).map(function (c) {
+            return ligneListe(c.numero, [c.description, O.date(c.recu_le || c.cree_le)].filter(Boolean).join(' · '),
+                              badge(c.statut), function () { ouvrirFicheColis(c); });
+          });
+        });
+      }, 'Aucun colis enregistré.');
+    }
+    if (peut('invoices.view') && client.id) {
+      var secFactures = sectionFiche('Factures');
+      var secPaiements = peut('payments.view') ? sectionFiche('Paiements') : null;
+      var lecture = API.admin.factures({ client_id: client.id, etat: '', parPage: 20 });
+      listeFiche(secFactures, function () {
+        return lecture.then(function (r) {
+          return (r.lignes || []).map(function (f) {
+            var tf = O.totauxFacture(f);
+            return ligneListe(f.numero || '—', [argent(tf.grandTotal), O.date(f.cree_le)].join(' · '), badgeFacture(tf.etat),
+                              function () { dlgFiche.close(); choisirVue('factures'); ouvrirFacture(f); });
+          });
+        });
+      }, 'Aucune facture.');
+      if (secPaiements) {
+        listeFiche(secPaiements, function () {
+          return lecture.then(function (r) {
+            var tous = [];
+            (r.lignes || []).forEach(function (f) {
+              (f.paiements || []).forEach(function (x) { tous.push({ p: x, facture: f.numero }); });
+            });
+            tous.sort(function (a, b) { return new Date(b.p.paye_le) - new Date(a.p.paye_le); });
+            return tous.map(function (x) {
+              return ligneListe(argent(x.p.montant_usd) + ' · ' + (MOYENS[x.p.moyen] || x.p.moyen || ''),
+                [O.date(x.p.paye_le, true), 'Facture ' + x.facture, x.p.annule_le ? 'Annulé le ' + O.date(x.p.annule_le) : '']
+                  .filter(Boolean).join(' · '), null, null);
+            });
+          });
+        }, 'Aucun paiement reçu pour l’instant.');
+      }
+    }
+    copierBoutons(boutonsDeLigne(tr));
+    montrerFiche();
+  }
+
+  /* Un paiement reçu (vue générale) : ce que la base en rend, et sa facture */
+  function ouvrirFichePaiement(x) {
+    preparerFiche('Paiement reçu', argent(x.montant_usd), (x.client && x.client.nom_complet) || '', null);
+    champFiche('Reçu le', O.date(x.paye_le, true));
+    champFiche('Client', [(x.client && x.client.nom_complet) || '—', x.client && x.client.code]);
+    champFiche('Facture', x.facture);
+    champFiche('Moyen', MOYENS[x.moyen] || x.moyen);
+    champFiche('Montant', argent(x.montant_usd));
+    if (x.facture_id) {
+      actionsFiche.appendChild(boutonFiche('Voir la facture', 'gs-bouton--plein', function () { ouvrirFactureParId(x.facture_id); }));
+    }
     montrerFiche();
   }
 
@@ -5603,6 +5888,9 @@
   function ouvrirFicheDe(tr) {
     var d = FICHES.get(tr);
     if (d && d.colis) { ouvrirFicheColis(d.colis); return; }
+    if (d && d.facture) { ouvrirFicheFacture(d.facture, tr); return; }
+    if (d && d.client) { ouvrirFicheClient(d.client, tr); return; }
+    if (d && d.paiement) { ouvrirFichePaiement(d.paiement); return; }
     if (tr.hasAttribute('data-id') && tr.closest('.gs-tableau--colis')) {
       var colis = etat.colis.lignes.filter(function (l) { return l.id === tr.getAttribute('data-id'); })[0];
       if (colis) { ouvrirFicheColis(colis); return; }
@@ -5646,6 +5934,11 @@
     }).observe($('.gs-admin-body') || document.body, { childList: true, subtree: true });
   }
   marquerLignes(document);
+
+  // Le poste de scan demande la fiche complète du colis scanné (scanner.js)
+  document.addEventListener('goship:fiche-colis', function (e) {
+    if (e.detail && e.detail.numero) ouvrirColisParNumero(e.detail.numero);
+  });
 
   // Le journal du poste de scan : un scan ouvre la fiche de son colis
   var journalScan = $('[data-scan-journal]');

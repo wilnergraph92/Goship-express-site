@@ -65,6 +65,18 @@ for page in index.html connexion.html mon-compte.html admin.html en/index.html h
 done
 code="$(recuperer "${SITE}assets/js/api.js" "$tmp/api")"
 if [ "$code" = 200 ] && grep -q 'GoshipAPI' "$tmp/api"; then ok "assets/js/api.js"; else echec "assets/js/api.js : code $code"; fi
+# Le tableau de bord : chacun de ses scripts est publié (un fichier oublié le casserait
+# sans qu'aucune page ne réponde en erreur)
+code="$(recuperer "${SITE}admin.html" "$tmp/admin")"
+if [ "$code" = 200 ]; then
+  absents=""
+  for js in $(grep -o 'src="assets/js/[^"]*\.js"' "$tmp/admin" | cut -d'"' -f2); do
+    c="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE$js" 2>/dev/null || echo 000)"
+    [ "$c" = 200 ] || absents="$absents $js ($c)"
+  done
+  if [ -z "$absents" ]; then ok "admin.html : ses $(grep -c 'src="assets/js/' "$tmp/admin") scripts sont publiés"
+  else echec "admin.html : scripts absents :$absents"; fi
+fi
 # config.js publié avec l'adresse de la base : sinon le site passe en mode « hors service »
 code="$(recuperer "${SITE}assets/js/config.js" "$tmp/config")"
 if [ "$code" = 200 ] && grep -q 'supabase.co' "$tmp/config"; then ok "assets/js/config.js (base configurée)"
