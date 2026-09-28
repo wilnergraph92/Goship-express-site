@@ -19,3 +19,4 @@ supabase-mobile.sql
 supabase-notifications.sql
 supabase-production.sql
 supabase-rapports.sql
+supabase-compte.sql

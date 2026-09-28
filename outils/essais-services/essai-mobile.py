@@ -50,12 +50,16 @@ _spec.loader.exec_module(S)
 RACINE, TRAVAIL = S.RACINE, S.TRAVAIL
 ADMIN, MARIE, JEAN = S.ADMIN, S.MARIE, S.JEAN
 EMPLOYE = 'cccccccc-0000-0000-0000-00000000000c'
+# Deux comptes faits pour être supprimés (supabase-compte.sql) : Paul par ce banc,
+# Léa par les essais de l'application (navigateur, émulateur, simulateur)
+PAUL = 'dddddddd-0000-0000-0000-00000000000d'
+LEA = 'eeeeeeee-0000-0000-0000-00000000000e'
 verifier, jsonq, creer, un = S.verifier, S.jsonq, S.creer, S.un
 
 FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
             'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql',
-            'supabase-production.sql', 'supabase-rapports.sql')
+            'supabase-production.sql', 'supabase-rapports.sql', 'supabase-compte.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -63,6 +67,8 @@ COMPTES = {
     'jean@exemple.com': (JEAN, 'jean-essai-1', 'Jean Pierre'),
     'employe@goship.test': (EMPLOYE, 'employe-essai-1', 'Emma Employée'),
     'equipe@goship.test': (ADMIN, 'admin-essai-1', 'Ada Admin'),
+    'paul@exemple.com': (PAUL, 'paul-essai-1', 'Paul Supprime'),
+    'lea@exemple.com': (LEA, 'lea-essai-1', 'Léa Départ'),
 }
 
 PORT_PGRST = int(os.environ.get('GOSHIP_PORT_PGRST', '3999'))
@@ -212,6 +218,13 @@ def utilisateur(email, uid, meta=None):
             'identities': [{'id': uid, 'provider': 'email'}], 'created_at': '2026-01-01T00:00:00Z'}
 
 
+def compte_actif(etat, email):
+    """Comme GoTrue : l'e-mail doit être celui du compte, et le compte non bloqué."""
+    c = etat.comptes.get(email)
+    return bool(c) and un(etat.db, "select count(*) from auth.users where id = '%s' and email = %s "
+                                   "and banned_until is null;" % (c['id'], q(email))) == '1'
+
+
 def session(etat, email):
     c = etat.comptes[email]
     r = secrets.token_urlsafe(24)
@@ -310,14 +323,14 @@ def fabriquer_gestionnaire(etat):
                     if genre == 'password':
                         email = str(d.get('email', '')).strip().lower()
                         c = etat.comptes.get(email)
-                        if not c or c['mdp'] != d.get('password'):
+                        if not c or c['mdp'] != d.get('password') or not compte_actif(etat, email):
                             return self.repondre(400, {'code': 400, 'error_code': 'invalid_credentials',
                                                        'msg': 'Invalid login credentials'})
                         etat.revoques.discard(email)
                         return self.repondre(200, session(etat, email))
                     if genre == 'refresh_token':
                         email = etat.renouvellements.pop(d.get('refresh_token'), None)
-                        if not email:
+                        if not email or not compte_actif(etat, email):
                             return self.repondre(400, {'code': 400, 'error_code': 'refresh_token_not_found',
                                                        'msg': 'Invalid Refresh Token: Refresh Token Not Found'})
                         return self.repondre(200, session(etat, email))
@@ -335,7 +348,7 @@ def fabriquer_gestionnaire(etat):
                 email = str(d.get('email', '')).strip().lower()
                 meta = d.get('data') or {}
                 with etat.verrou:
-                    if email in etat.comptes:
+                    if email in etat.comptes and compte_actif(etat, email):
                         # Comme Supabase : une adresse déjà inscrite revient sans identité
                         u = utilisateur(email, str(uuid.uuid4()), meta)
                         u['identities'] = []
@@ -643,6 +656,84 @@ def essais(db, d):
     c, v, _ = appel('DELETE', '/appareils?jeton=eq.%s' % enc('ExponentPushToken[essai-marie]'), JEAN,
                     entetes={'Prefer': 'return=representation'})
     verifier('déconnexion de Jean : son téléphone est détaché', len(v), 1)
+
+    print('K. Supprimer mon compte (supabase-compte.sql)')
+    def auth_http(action, corps):
+        req = urllib.request.Request('http://127.0.0.1:%d/auth/v1/%s' % (PORT, action), method='POST',
+                                     headers={'Content-Type': 'application/json', 'apikey': 'cle-publique-essai'},
+                                     data=json.dumps(corps).encode())
+        try:
+            with urllib.request.urlopen(req, timeout=30) as rep:
+                return rep.status, json.loads(rep.read().decode() or '{}')
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read().decode() or '{}')
+    supprimer = lambda qui, mot='SUPPRIMER': rpc('supprimer_mon_compte', qui, {'p_confirmation': mot})
+    c, v, _ = appel('POST', '/rpc/supprimer_mon_compte', None, {'p_confirmation': 'SUPPRIMER'})
+    verifier('un visiteur : refusé', c in (401, 403), True)
+    c, v = supprimer(EMPLOYE)
+    verifier('un compte de l\'équipe : refusé (il se ferme depuis le tableau de bord)', (c, v.get('message')), (400, 'STAFF_ACCOUNT'))
+    c, v = supprimer(JEAN)
+    verifier('Jean, colis en route : refusé, avec la phrase à montrer',
+             (c, v.get('message'), v.get('hint'), 'remis' in (v.get('details') or '')), (400, 'ACCOUNT_HAS_SHIPMENTS', 'goship', True))
+    # Paul : un colis, sa facture, une pré-alerte en attente, un téléphone, une session
+    pc = creer(db, ADMIN, dict(client_id=PAUL, description='Colis de Paul', poids_lb=3, service='aerien',
+                               pays_destination='HT', destination='Jacmel', expediteur='Amazon',
+                               suivi_transporteur='TBAPAUL0001'), facturer=True)
+    rpc('creer_prealerte', PAUL, {'p_cle': str(uuid.uuid4()), 'p_magasin': 'SHEIN', 'p_description': 'Robe',
+                                  'p_suivi': 'SHEINPAUL01', 'p_valeur': 20, 'p_service': 'aerien'})
+    rpc('enregistrer_appareil', PAUL, {'p_jeton': 'ExponentPushToken[essai-paul]', 'p_plateforme': 'android', 'p_langue': 'fr'})
+    verifier('Paul a sa pré-alerte en attente et son téléphone',
+             un(db, "select (select count(*) from prealertes where client_id = '%s' and statut = 'attente') || '|' || "
+                    "(select count(*) from appareils where client_id = '%s');" % (PAUL, PAUL)), '1|1')
+    db.sql("insert into auth.identities (user_id, provider, identity_data) values ('%s', 'email', '{\"email\":\"paul@exemple.com\"}');"
+           "insert into auth.sessions (user_id) values ('%s');"
+           "insert into auth.refresh_tokens (user_id, token) values ('%s', 'jeton-paul');"
+           "update auth.users set encrypted_password = 'empreinte-bcrypt' where id = '%s';" % (PAUL, PAUL, PAUL, PAUL))
+    c, v = supprimer(PAUL, 'oui')
+    verifier('sans le mot SUPPRIMER : refusé', (c, v.get('message')), (400, 'CONFIRMATION_REQUIRED'))
+    c, v = supprimer(PAUL)
+    verifier('Paul, son colis vient d\'arriver à Miami : refusé', (c, v.get('message')), (400, 'ACCOUNT_HAS_SHIPMENTS'))
+    for t, lieu in (('COLIS_EMBALLE', None), ('COLIS_EXPEDIE', None), ('COLIS_ARRIVE', 'Jacmel'),
+                    ('COLIS_DISPONIBLE', 'Agence de Jacmel'), ('COLIS_LIVRE', None)):
+        op(db, ADMIN, pc['colis']['id'], t, lieu=lieu)
+    c, v = supprimer(PAUL)
+    verifier('colis livré, facture impayée : refusé', (c, v.get('message')), (400, 'ACCOUNT_HAS_BALANCE'))
+    verifier('les refus n\'ont rien changé', un(db, "select nom_complet || '|' || coalesce(supprime_le::text, '') "
+                                                     "from clients where id = '%s';" % PAUL), 'Paul Supprime|')
+    total = un(db, "select montant_usd from factures where id = '%s';" % pc['facture']['id'])
+    jsonq(db, ADMIN, "select public.enregistrer_paiement('%s', '{\"montant_usd\": %s, \"moyen\": \"especes\"}'::jsonb);"
+          % (pc['facture']['id'], total))
+    code_paul = un(db, "select code from clients where id = '%s';" % PAUL)
+    c, v = supprimer(PAUL)
+    verifier('tout livré, tout payé : supprimé', (c, v.get('supprime'), v.get('code')), (200, True, code_paul))
+    verifier('profil vidé, code gardé, date de suppression',
+             un(db, "select concat_ws('|', nom_complet, email, telephone, adresse, ville, region, code, supprime_le is not null) "
+                    "from clients where id = '%s';" % PAUL), 'Compte supprimé||||||%s|t' % code_paul)
+    verifier('colis et facture gardés, rattachés au profil vidé',
+             un(db, "select (select count(*) from colis where client_id = '%s') || '|' || "
+                    "(select count(*) from factures where client_id = '%s') || '|' || "
+                    "(select count(*) from paiements p join factures f on f.id = p.facture_id where f.client_id = '%s');"
+                % (PAUL, PAUL, PAUL)), '1|1|1')
+    verifier('pré-alerte en attente et téléphone effacés',
+             un(db, "select (select count(*) from prealertes where client_id = '%s' and statut = 'attente') || '|' || "
+                    "(select count(*) from appareils where client_id = '%s');" % (PAUL, PAUL)), '0|0')
+    verifier('compte de connexion : e-mail et mot de passe retirés, bloqué, sessions fermées',
+             un(db, "select concat_ws('|', email, coalesce(encrypted_password, 'null'), banned_until = 'infinity', "
+                    "raw_user_meta_data = '{}'::jsonb, (select count(*) from auth.identities where user_id = u.id), "
+                    "(select count(*) from auth.sessions where user_id = u.id), "
+                    "(select count(*) from auth.refresh_tokens where user_id = u.id::text)) from auth.users u where id = '%s';" % PAUL),
+             'supprime-%s@goship.invalid||t|t|0|0|0' % PAUL)
+    verifier('journal d\'audit : la suppression est notée',
+             un(db, "select count(*) from journal_audit where action = 'client.suppression_demandee' and entite_id = '%s';" % PAUL), '1')
+    c, v = supprimer(PAUL)
+    verifier('une seconde demande (ancienne session) : « déjà supprimé »', (c, v.get('message')), (400, 'ACCOUNT_ALREADY_DELETED'))
+    c, v = auth_http('token?grant_type=password', {'email': 'paul@exemple.com', 'password': 'paul-essai-1'})
+    verifier('Paul ne peut plus se connecter', (c, v.get('error_code')), (400, 'invalid_credentials'))
+    c, v = auth_http('signup', {'email': 'paul@exemple.com', 'password': 'nouveau-depart-1', 'data': {'nom_complet': 'Paul Retour'}})
+    nouveau = (v.get('user') or {}).get('id')
+    verifier('son adresse e-mail est libre : une nouvelle inscription donne un nouveau compte, vide',
+             (c, bool(nouveau) and nouveau != PAUL,
+              un(db, "select count(*) from colis where client_id = '%s';" % nouveau) if nouveau else None), (200, True, '0'))
 
     print('J. Volume')
     db.sql("insert into colis (client_id, numero, description, poids_lb, service, pays_destination, destination, statut, prix_usd, tarif_lb_usd) "

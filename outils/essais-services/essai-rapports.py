@@ -108,8 +108,9 @@ def main():
     print('A. Installation : la chaîne complète, rejouable, et la garde des permissions (depuis %s)' % AVANT)
     db = S.Base()
     db.sql(S.DOUBLURES)
-    # La version publiée (sans les permissions des rapports) : ce fichier refuse de s'installer
-    for f in CHAINE[:-1]:
+    # La version publiée (sans les permissions des rapports) : ce fichier refuse de s'installer.
+    # Seulement les fichiers d'avant lui : ceux qui le suivent n'existaient pas encore.
+    for f in CHAINE[:CHAINE.index('supabase-rapports.sql')]:
         db.fichier(fichier_git(f))
     A.comptes(db)
     S.creer(db, ADMIN, {'client_id': MARIE, 'description': 'Avant les rapports', 'poids_lb': 3, 'service': 'aerien',

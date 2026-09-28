@@ -334,13 +334,27 @@ copie démo (`REGLES_NOTIFICATIONS`, `TEXTES_NOTIFICATIONS` dans `api.js`) :
 `essai-notifications.py` compare les deux. Ne jamais marquer un envoi
 « envoye » ou « livre » sans réponse du fournisseur.
 
+### Supprimer mon compte (`outils/supabase-compte.sql`)
+
+`supprimer_mon_compte('SUPPRIMER')`, appelée par l'application mobile pour le compte
+connecté et lui seul. **On n'efface jamais la ligne du compte** : `clients.id` suit
+`auth.users` en cascade, et factures, paiements, pré-alertes suivent `clients` de la même
+façon. La fonction vide le profil (nom, e-mail, téléphone, adresse → « Compte
+supprimé », `clients.supprime_le`), garde le code client, efface les téléphones et les
+pré-alertes en attente, bloque le compte de connexion (e-mail remplacé, mot de passe
+retiré, `banned_until`, sessions fermées : l'adresse redevient libre) et journalise
+`client.suppression_demandee`. Refusée à un compte de l'équipe (`clients.view`), tant
+qu'un colis n'est pas livré ou qu'une facture a un solde. `essai-mobile.py` (section K)
+l'éprouve ; la doublure d'`auth` (`essai-services.py`, `DOUBLURES`) a les colonnes et
+tables de GoTrue qu'elle touche.
+
 ### L'application mobile (dépôt `goship-express-app`)
 
 L'espace client sur téléphone (Expo), cloné dans `application-mobile/` (ignoré ici).
 Même règle que le bureau : aucune logique métier, elle lit `mon_resume`,
 `mes_factures`, `suivre_colis`, `mes_permissions`, les tables `colis`,
-`colis_historique`, `prealertes`, et écrit par `creer_prealerte` et
-`enregistrer_appareil`. `outils/supabase-mobile.sql` ne fait qu'ajouter
+`colis_historique`, `prealertes`, et écrit par `creer_prealerte`,
+`enregistrer_appareil` et `supprimer_mon_compte`. `outils/supabase-mobile.sql` ne fait qu'ajouter
 `creer_prealerte` (clé d'envoi, doublon, validation) et un index ; l'insert direct
 dans `prealertes` reste ouvert pour les versions déjà installées — **ne le ferme pas**
 sans une période de transition. Une fonction dont l'application dépend ne se renomme
@@ -361,7 +375,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

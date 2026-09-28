@@ -29,7 +29,7 @@ node outils/essais-services/essai-rapports.js        # les rapports en démonstr
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `outils/production/` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `outils/production/` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`
