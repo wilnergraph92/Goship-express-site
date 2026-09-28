@@ -10,6 +10,11 @@ jetable pour prouver qu'elle est utilisable.
 Rien ne change dans l'architecture : Supabase, PostgreSQL, Supabase Auth, GitHub,
 Electron et Expo restent ce qu'ils sont. Aucun script de sauvegarde n'écrit dans la base.
 
+> Le **code** (dossier du projet) a sa propre sauvegarde, sur le Mac du propriétaire :
+> `outils/sauvegarde-locale/` (même bucket B2, dossier `goship-express/`). Celle-ci ne
+> concerne que la **base**, dans le dossier `base-supabase/` du même bucket, avec une
+> *Application Key* B2 distincte de celle du Mac.
+
 > Tant qu'une exécution réelle de `sauvegarde.yml` n'est pas **verte de bout en bout**
 > (les deux jobs), il n'y a **pas** de sauvegarde de production. Le workflow est rouge
 > tant qu'un secret manque : c'est voulu.
@@ -90,7 +95,7 @@ journal. Seuls les noms figurent ici.
 | `RESTAURATION_DESTINATAIRE` | oui | clé **publique** age de l'épreuve |
 | `RESTAURATION_CLE` | oui | clé **privée** age de l'épreuve (tout le fichier) |
 | `SAUVEGARDE_RCLONE_CONFIG` | oui | tout le contenu d'un `rclone.conf` décrivant la ou les destinations (il contient leurs clés d'accès) |
-| `SAUVEGARDE_STOCKAGE` | oui | destination A, `remote:chemin` (ex. `goship-a:goship-sauvegardes/production`) |
+| `SAUVEGARDE_STOCKAGE` | oui | destination A, `remote:chemin` (ex. `goship-a:goship-sauvegardes/base-supabase`) |
 | `SAUVEGARDE_STOCKAGE_B` | non | destination B, chez un **autre** fournisseur |
 | `ALERTE_WEBHOOK` | non | Slack, Discord ou ntfy (déjà utilisé par `surveillance.yml`) |
 | `STAGING_DB_URL` | pour une restauration vers staging | environnement `staging` : la base goship-staging (qui doit alors porter aussi `RESTAURATION_CLE`, `SAUVEGARDE_RCLONE_CONFIG`, `SAUVEGARDE_STOCKAGE`) |
@@ -177,7 +182,7 @@ l'environnement `staging` : `STAGING_DB_URL`, `RESTAURATION_CLE`,
 **À la main** (ordinateur de confiance, `pg_restore`/`psql` 17, `age`, `rclone`) :
 
 ```
-RCLONE_CONFIG=~/.config/rclone/rclone.conf SAUVEGARDE_STOCKAGE='goship-a:goship-sauvegardes/production' \
+RCLONE_CONFIG=~/.config/rclone/rclone.conf SAUVEGARDE_STOCKAGE='goship-a:goship-sauvegardes/base-supabase' \
   bash outils/production/stocker.sh recuperer derniere /tmp/restauration
 RESTORE_TARGET=staging CIBLE_DB_URL='postgresql://…projet-neuf…' \
   bash outils/production/restaurer.sh /tmp/restauration goship-… goship-sauvegarde.key

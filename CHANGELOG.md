@@ -11,6 +11,17 @@ base **avant** de publier le site.
 
 Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backup.md`.
 
+- 28/09/2026 : la branche rejoint la version actuelle du site (12 migrations,
+  onglet Rapport), sans les pages des notifications de la PR #13. Destination
+  recommandée : `goship-a:goship-sauvegardes/base-supabase`, à côté du dossier
+  `goship-express/` de la sauvegarde du code, avec sa propre clé B2.
+- Sauvegarde du code sur le Mac (`outils/sauvegarde-locale/`) : le script du
+  propriétaire, corrigé et versionné — première ligne (`#!/bin/bash`), PATH Homebrew,
+  échec écrit au journal et notifié, archive provisoire puis vérifiée, `.sha256`,
+  relecture sur B2, verrou, `node_modules` exclu, `--verifier` (relecture et
+  déchiffrement depuis B2). Même dossier, mêmes noms, même clé, même rétention.
+  Essai : `essai-sauvegarde-locale.sh`, sous Linux et sous le bash 3.2 de macOS.
+
 - `sauvegarde.yml` : rouge quand un secret manque (il affichait vert sans rien
   sauvegarder), stockage externe par rclone (destinations A et B), rétention 7 avec
   garde-fous, épreuve de restauration retéléchargée du stockage, rapport PASS/FAIL,

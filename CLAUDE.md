@@ -415,6 +415,11 @@ workflows (sans `pipefail`, `stocker.sh … | tee` masque l'échec d'un envoi).
 `SUPABASE_DB_URL` passe par `verifier-adresse.sh` (Session pooler 5432 seulement).
 `restaurer.sh` exige `RESTORE_TARGET`. Aucun de ces scripts ne connaît le domaine du
 site.
+Le **code** a sa propre sauvegarde, sur le Mac du propriétaire (launchd) :
+`outils/sauvegarde-locale/backup-goship.sh` (dossier du projet → age → B2, dossier
+`goship-express/` du bucket ; la base va dans `base-supabase/`). Il doit rester
+compatible avec le bash 3.2 de `/bin/bash` et les outils BSD : le job macOS de
+`essais.yml` le vérifie (`essai-sauvegarde-locale.sh`). Il ne contient aucun secret.
 
 Messages de commit : une phrase en français qui dit ce que ça change
 pour l'utilisateur, pas un préfixe technique. Voir `git log`.

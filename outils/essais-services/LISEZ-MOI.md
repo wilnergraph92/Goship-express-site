@@ -17,6 +17,7 @@ python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes
 python3 outils/essais-services/essai-mobile.py       # l'application mobile par l'API réelle : isolation, pré-alertes (Phase 10)
 python3 outils/essais-services/essai-notifications.py # les notifications : règles, file, envois (Phase 11)
 python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
+bash outils/essais-services/essai-sauvegarde-locale.sh # la sauvegarde du code sur le Mac (outils/sauvegarde-locale), sans vraie clé ni vrai bucket
 python3 outils/essais-services/essai-rapports.py     # les rapports : permissions, périodes, chiffres, journal, suppression
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
