@@ -7,12 +7,13 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — regroupement des factures : encaisser, retirer, sortir des colis
+## site-2026.09.28.7 — regroupement des factures : encaisser, retirer, sortir des colis (publié le 28/09/2026)
 
-Migration à passer : **un seul fichier**, `outils/supabase-regroupement.sql` (le dernier
-de la chaîne, 14ᵉ). Il ajoute une fonction ; il ne change aucune donnée. Contrôle
-attendu : `1 | false`. Sans lui, « Sortir du regroupement » répond « La base n'est pas à
-jour » ; le reste du tableau de bord marche comme avant.
+Migration : **un seul fichier**, `outils/supabase-regroupement.sql` (le dernier de la
+chaîne, 14ᵉ), passée par le propriétaire avant la publication (contrôle : `1 | false`).
+Il ajoute une fonction ; il ne change aucune donnée. Sans lui, « Sortir du
+regroupement » répondrait « La base n'est pas à jour » ; le reste du tableau de bord
+marcherait comme avant.
 
 - Fenêtre « Regrouper des factures » : chaque facture a « Encaisser » (la fenêtre du
   paiement s'ouvre ; payée, même en partie, elle quitte la liste) et « Retirer » (elle
