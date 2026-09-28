@@ -7,7 +7,7 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — nouvelles icônes (application de bureau, site)
+## site-2026.09.28.5 — nouvelles icônes (application de bureau, site) (publié le 28/09/2026)
 
 Aucune migration, aucune donnée modifiée. Toutes tirées du même dessin (le colis et
 sa flèche, fourni par le propriétaire).
