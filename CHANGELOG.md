@@ -7,6 +7,22 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.28.3 — tableau de bord : onglet « Rapport » (non publié)
+
+Migration **à passer par le propriétaire avant de publier** : `supabase.sql` (les
+permissions `reports.create`, `reports.edit`, `reports.delete`), puis toute la chaîne
+dans l'ordre jusqu'au nouveau `supabase-rapports.sql` (outils/migrations.txt).
+`supabase-rapports.sql` ajoute une table (`rapports`), trois index et des fonctions ; il
+ne change aucune donnée. Sans lui, l'onglet répond « La base n'est pas à jour ».
+
+- Onglet « Rapport » (administrateur, gérant) : période, statut du colis, état de la
+  facture, type ; cartes (colis, factures, payé, impayé, annulé, supprimées, encaissé,
+  clients, activité) ; colis, étapes, factures (et supprimées), paiements, clients,
+  activité du journal d'audit, page par page.
+- Rapports enregistrés : créer (administrateur, gérant), modifier et supprimer
+  (administrateur), détails, voir, imprimer, PDF ; journalisés.
+- Impression A4 portrait ou paysage : logo, en-tête, pied de page numéroté.
+
 ## site-2026.09.28.2 — tableau de bord : actions dans la fiche seulement (publié le 28/09/2026)
 
 Aucune migration, aucune donnée modifiée.

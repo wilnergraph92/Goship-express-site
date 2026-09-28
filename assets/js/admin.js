@@ -1626,6 +1626,8 @@
     'invoices.cancel': 'Annuler une facture',
     'payments.view': 'Voir les paiements', 'payments.create': 'Encaisser', 'payments.cancel': 'Annuler un paiement',
     'reports.view': 'Chiffres et contrôle de la facturation',
+    'reports.create': 'Créer un rapport', 'reports.edit': 'Modifier un rapport',
+    'reports.delete': 'Supprimer un rapport',
     'users.view': 'Voir l’équipe', 'roles.manage': 'Donner un rôle', 'settings.manage': 'Réglages du site',
     'audit_logs.view': 'Journal d’audit'
   };
@@ -1707,7 +1709,7 @@
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
-                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics' };
+                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
@@ -1727,6 +1729,7 @@
     if (vue === 'factures') chargerFactures();
     if (vue === 'apercu' && Date.now() - etatApercu.charge > 60000) chargerApercu();
     if (vue === 'analytics') afficherAnalytics();
+    if (vue === 'rapports') ouvrirVueRapports();
   }
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
@@ -5185,7 +5188,7 @@
     if (!corpsAnalytics.children.length) { toast('Rien à imprimer : chargez d’abord une rubrique.', true); return; }
     var feuille = el('div', 'gs-rapport');
     feuille.appendChild(el('h1', '', 'Goship Express — Analytics : ' + etatAnalytics.titre));
-    feuille.appendChild(el('p', 'gs-rapport__periode', periodeTexte()));
+    feuille.appendChild(el('p', 'gs-rapports__periode', periodeTexte()));
     var copie = corpsAnalytics.cloneNode(true);
     $$('select, button, .gs-pagination', copie).forEach(function (n) { n.remove(); });
     $$('details', copie).forEach(function (n) { n.open = true; });
@@ -5666,6 +5669,15 @@
     montrerFiche();
   }
 
+  // Une facture connue par son identifiant (ligne d'un rapport) : sa fiche, sans changer d'onglet
+  function ouvrirFicheFactureParId(id) {
+    API.admin.factures({ id: id, etat: '', parPage: 1 }).then(function (r) {
+      var facture = (r.lignes || [])[0];
+      if (!facture) { toast('Cette facture n’existe plus.', true); return; }
+      ouvrirFicheFacture(facture);
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
   // Le clic sur une ligne : la fiche du colis si la ligne en est un, sinon la fiche générique
   function ouvrirFicheDe(tr) {
     var d = FICHES.get(tr);
@@ -5673,6 +5685,8 @@
     if (d && d.facture) { ouvrirFicheFacture(d.facture); return; }
     if (d && d.client) { ouvrirFicheClient(d.client); return; }
     if (d && d.paiement) { ouvrirFichePaiement(d.paiement); return; }
+    if (d && d.rapport) { ouvrirFicheRapport(d.rapport); return; }
+    if (d && d.factureId) { ouvrirFicheFactureParId(d.factureId); return; }
     if (tr.hasAttribute('data-id') && tr.closest('.gs-tableau--colis')) {
       var colis = etat.colis.lignes.filter(function (l) { return l.id === tr.getAttribute('data-id'); })[0];
       if (colis) { ouvrirFicheColis(colis); return; }
@@ -5733,6 +5747,882 @@
       var li = e.target.closest && e.target.closest('li[data-numero]');
       if (li && e.key === 'Enter') ouvrirColisParNumero(li.getAttribute('data-numero'));
     });
+  }
+
+  /* ---- Les rapports (onglet « Rapport », outils/supabase-rapports.sql) -----------------
+     Une période, des filtres et les données à inclure → API.admin.donneesRapport
+     (rapport_donnees), qui compte tout dans la base et rend les lignes page par page : la
+     page ne fait que placer, jamais d'addition. Un rapport enregistré n'est que sa
+     définition (nom, type, période en dates, filtres, données) : l'ouvrir relit les
+     chiffres du jour. Imprimer et « PDF » passent par impression.js (cadre à part, A4,
+     pied de page numéroté) ; le PDF est celui de la fenêtre d'impression (« Enregistrer
+     au format PDF ») ou de l'application de bureau : aucune bibliothèque de plus.
+     Voir, imprimer : reports.view ; enregistrer : reports.create ; modifier : reports.edit ;
+     supprimer : reports.delete. Les boutons suivent peut(), la base revérifie tout.
+     Heures et jours : ceux de Santo Domingo, comme les bornes de la période. */
+  var TYPES_RAPPORT = { complet: 'Rapport complet', colis: 'Colis', factures: 'Factures', paiements: 'Paiements',
+                        clients: 'Clients', evenements: 'Événements', activite: 'Activité du système' };
+  var PERIODES_RAPPORT = { aujourdhui: 'Aujourd\'hui', journalier: 'Journalier', hebdomadaire: 'Hebdomadaire',
+                           mensuel: 'Mensuel', trimestriel: 'Trimestriel', annuel: 'Annuel',
+                           personnalise: 'Période personnalisée' };
+  var REFERENCES_RAPPORT = { journalier: 'Le jour', hebdomadaire: 'Semaine du', mensuel: 'Mois du',
+                             trimestriel: 'Trimestre du', annuel: 'Année du', personnalise: 'Du' };
+  var STATUTS_RAPPORT = { attente: 'En attente (reçu, emballé)', transit: 'En transit', disponible: 'Disponible',
+                          livre: 'Livré', incident: 'Action requise' };
+  var ETATS_RAPPORT = { payee: 'Payé', impayee: 'Impayé', annulee: 'Annulé', supprimee: 'Supprimé' };
+  var SECTIONS_RAPPORT = { finances: 'Statistiques financières', colis: 'Colis', evenements: 'Événements des colis',
+                           factures: 'Factures', paiements: 'Paiements', clients: 'Clients', activite: 'Activités' };
+  var ORDRE_RAPPORT = ['finances', 'colis', 'evenements', 'factures', 'paiements', 'clients', 'activite'];
+  var SECTIONS_DU_TYPE = { complet: ORDRE_RAPPORT, colis: ['colis', 'evenements'], factures: ['finances', 'factures'],
+                           paiements: ['finances', 'paiements'], clients: ['clients'], evenements: ['evenements'],
+                           activite: ['activite'] };
+  var ORIGINES_PAIEMENT = { saisie: 'Saisi', creation: 'À la création', reprise: 'Repris' };
+  var ACTIONS_JOURNAL = {
+    'colis.creation': 'Création d’un colis', 'colis.modification': 'Modification d’un colis',
+    'colis.statut': 'Changement de statut', 'colis.correction': 'Correction d’une étape',
+    'colis.suppression': 'Suppression d’un colis', 'client.creation': 'Création d’un client',
+    'client.modification': 'Modification d’un client', 'client.role': 'Changement de rôle',
+    'utilisateur.role': 'Changement de rôle', 'client.suppression': 'Suppression d’un client',
+    'facture.creation': 'Création d’une facture', 'facture.modification': 'Modification d’une facture',
+    'facture.paiement': 'Paiement d’une facture', 'facture.annulation': 'Annulation d’une facture',
+    'facture.regroupement': 'Regroupement de factures', 'facture.suppression': 'Suppression d’une facture',
+    'paiement.enregistrement': 'Paiement encaissé', 'paiement.annulation': 'Annulation d’un paiement',
+    'paiement.reprise': 'Paiement repris', 'rapport.creation': 'Création d’un rapport',
+    'rapport.modification': 'Modification d’un rapport', 'rapport.suppression': 'Suppression d’un rapport',
+    'notification.preference': 'Préférence de notification', 'notification.regle': 'Règle de notification',
+    'notification.test': 'Essai de notification'
+  };
+  var ENTITES_JOURNAL = { colis: 'Colis', client: 'Client', facture: 'Facture', paiement: 'Paiement',
+                          rapport: 'Rapport', notification: 'Notification' };
+  var CHAMPS_JOURNAL = {
+    statut: 'Statut', montant_usd: 'Montant', montant_paye_usd: 'Payé', frais_service_usd: 'Frais de service',
+    prix_usd: 'Prix', poids_lb: 'Poids', tarif_lb_usd: 'Tarif', numero: 'N°', role: 'Rôle', code: 'Code', champs: 'Champs',
+    moyen: 'Moyen', nom: 'Nom', type: 'Type', periode: 'Période', debut: 'Début', fin: 'Fin', filtres: 'Filtres',
+    sections: 'Données', role_createur: 'Rôle', cree_le: 'Créé le', reference: 'Référence', paye_le: 'Payé le',
+    origine: 'Origine', payee_le: 'Payée le', service: 'Mode', pays_destination: 'Pays', suivi_transporteur: 'Suivi vendeur',
+    description: 'Description', expediteur: 'Expéditeur', destination: 'Destination', recu_le: 'Reçu le', lieu: 'Lieu',
+    note: 'Note', email: 'E-mail', motif: 'Motif', facture: 'Facture'
+  };
+  // Les identifiants internes ne disent rien à un lecteur : le numéro, le code ou le nom suffisent
+  var CACHES_JOURNAL = /(^|_)id$|^cree_par$|^cle_idempotence$/;
+  // Une page de lignes à l'écran ; jusqu'à 2 000 par partie dans le document imprimé
+  var LIGNES_ECRAN = 25, LIGNES_DOCUMENT = 2000;
+
+  var formFiltresRapport = $('[data-rapport-filtres]');
+  var zoneResultat = $('[data-rapport-resultat]');
+  var corpsRapports = $('[data-lignes="rapports"]');
+  var dlgRapport = $('[data-dialogue="rapport"]');
+  var formRapport = $('form[data-form="rapport"]', dlgRapport);
+  var dlgSupprimerRapport = $('[data-dialogue="supprimer-rapport"]');
+  var etatRapports = { liste: { page: 0, parPage: 25, recherche: '' }, charge: false, rapport: null, definition: null,
+                       donnees: null, demande: 0, edite: null, aSupprimer: null };
+
+  // « 2026-09-12T14:05:00Z » → « 12 sept. 2026, 10:05 », à l'heure de Santo Domingo
+  function dateRapport(iso, avecHeure) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var o = { timeZone: 'America/Santo_Domingo', day: 'numeric', month: 'short', year: 'numeric' };
+    if (avecHeure) { o.hour = '2-digit'; o.minute = '2-digit'; o.hourCycle = 'h23'; }
+    try { return new Intl.DateTimeFormat('fr-FR', o).format(d); } catch (e) { return O.date(iso, avecHeure); }
+  }
+  function heureRapport(iso) {
+    if (!iso) return '';
+    try {
+      return new Intl.DateTimeFormat('fr-FR', { timeZone: 'America/Santo_Domingo', hour: '2-digit', minute: '2-digit',
+                                                hourCycle: 'h23' }).format(new Date(iso));
+    } catch (e) { return heure(iso); }
+  }
+  function periodeRapportTexte(r) {
+    return r.debut === r.fin ? 'Le ' + jourLisible(r.debut) : 'Du ' + jourLisible(r.debut) + ' au ' + jourLisible(r.fin);
+  }
+  function traduitRapport(t) {
+    return window.GoshipLangueTableau ? window.GoshipLangueTableau.traduire(t) : t;
+  }
+  function sectionsDe(def) {
+    return def.sections && def.sections.length ? def.sections : (SECTIONS_DU_TYPE[def.type] || ORDRE_RAPPORT);
+  }
+  // Ce que la base reçoit : un rapport enregistré garde SES dates (un « Aujourd'hui » du 3
+  // reste le 3), un aperçu suit sa période
+  function parametresRapport(def, rapport, limite) {
+    var p = { type: def.type || 'complet', filtres: def.filtres || {}, sections: sectionsDe(def), limite: limite };
+    if (rapport) { p.periode = 'personnalise'; p.debut = rapport.debut; p.fin = rapport.fin; }
+    else { p.periode = def.periode; p.debut = def.debut || null; p.fin = def.fin || null; }
+    return p;
+  }
+
+  // Le champ « date » suit le type de période : le jour, la semaine, le mois… qui la contient
+  function majChampsPeriode(form, libelle) {
+    var p = form.elements.periode.value;
+    var champDebut = $('[data-rapport-debut-champ]', form), champFin = $('[data-rapport-fin-champ]', form);
+    if (champDebut) champDebut.hidden = p === 'aujourdhui';
+    if (champFin) champFin.hidden = p !== 'personnalise';
+    if (libelle) libelle.textContent = REFERENCES_RAPPORT[p] || 'Du';
+  }
+  function definitionDuFormulaire(form) {
+    var f = form.elements;
+    var def = { periode: f.periode.value, debut: f.debut.value || null, fin: f.fin.value || null, type: f.type.value,
+                filtres: {} };
+    if (f.statut_colis.value) def.filtres.statut_colis = f.statut_colis.value;
+    if (f.etat_facture.value) def.filtres.etat_facture = f.etat_facture.value;
+    if (def.periode !== 'personnalise') def.fin = null;
+    if (def.periode === 'aujourdhui') def.debut = null;
+    return def;
+  }
+  // Même règle que la base (rapport_bornes) pour le message immédiat ; c'est la base qui décide
+  function bornesAvant(def) {
+    try { return O.bornesRapport(def.periode, def.debut, def.fin); } catch (e) { return { erreur: messageErreur(e) }; }
+  }
+
+  function montrerDatesFiltres() {
+    var b = bornesAvant(definitionDuFormulaire(formFiltresRapport));
+    $('[data-rapport-dates]').textContent = b.erreur ? '' : periodeRapportTexte(b) + ' (jours de Santo Domingo)';
+  }
+  formFiltresRapport.elements.periode.addEventListener('change', function () {
+    majChampsPeriode(formFiltresRapport, $('[data-rapport-debut-libelle]'));
+    montrerDatesFiltres();
+  });
+  ['debut', 'fin'].forEach(function (n) { formFiltresRapport.elements[n].addEventListener('change', montrerDatesFiltres); });
+  formFiltresRapport.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var def = definitionDuFormulaire(formFiltresRapport);
+    var b = bornesAvant(def);
+    if (b.erreur) { messageRapport(b.erreur); return; }
+    afficherRapport(def, null);
+  });
+
+  function messageRapport(texte) {
+    var m = $('[data-rapport-message]');
+    m.textContent = texte || '';
+    m.hidden = !texte;
+  }
+
+  function ouvrirVueRapports() {
+    if (!etatRapports.charge) {
+      etatRapports.charge = true;
+      formFiltresRapport.elements.debut.value = O.aujourdhui();
+      majChampsPeriode(formFiltresRapport, $('[data-rapport-debut-libelle]'));
+      montrerDatesFiltres();
+    }
+    chargerRapports();
+  }
+
+  /* La liste des rapports enregistrés ------------------------------------------------- */
+  var rechercheRapports = $('[data-recherche="rapports"]');
+  var minuteurRechercheRapports = null;
+  rechercheRapports.addEventListener('input', function () {
+    clearTimeout(minuteurRechercheRapports);
+    minuteurRechercheRapports = setTimeout(function () {
+      etatRapports.liste.recherche = rechercheRapports.value.trim();
+      etatRapports.liste.page = 0;
+      chargerRapports();
+    }, 300);
+  });
+
+  function chargerRapports() {
+    var p = etatRapports.liste;
+    return API.admin.rapports({ recherche: p.recherche, page: p.page, parPage: p.parPage }).then(function (r) {
+      afficherListeRapports(r.lignes || [], r.total || 0);
+    }).catch(function (err) {
+      corpsRapports.textContent = '';
+      var vide = $('[data-vide="rapports"]');
+      vide.textContent = messageErreur(err);
+      vide.hidden = false;
+    });
+  }
+
+  function badgeRapport(r) {
+    return el('span', 'gs-badge gs-badge--' + (r.statut === 'clos' ? 'livre' : 'disponible'),
+              r.statut === 'clos' ? 'Période close' : 'Période en cours');
+  }
+
+  // Un petit bouton d'action de la ligne (icône + texte court)
+  function actionRapport(texte, titre, action, classe) {
+    var b = el('button', 'gs-lien-bouton gs-rapports__action' + (classe ? ' ' + classe : ''), texte);
+    b.type = 'button';
+    b.title = titre;
+    b.setAttribute('aria-label', titre);
+    b.addEventListener('click', function (e) { e.stopPropagation(); action(b); });
+    return b;
+  }
+
+  function actionsDuRapport(r, conteneur, dansFiche) {
+    var liste = [
+      ['Voir', 'Voir le rapport ' + r.nom, function () { if (dansFiche) dlgFiche.close(); afficherRapport(r, r); }],
+      ['Détails', 'Détails du rapport ' + r.nom, function () { ouvrirFicheRapport(r); }],
+      ['Imprimer', 'Imprimer le rapport ' + r.nom, function (b) { imprimerRapport(r, r, b, false); }],
+      ['PDF', 'PDF du rapport ' + r.nom, function (b) { imprimerRapport(r, r, b, true); }]
+    ];
+    if (peut('reports.edit')) liste.push(['Modifier', 'Modifier le rapport ' + r.nom, function () { if (dansFiche) dlgFiche.close(); ouvrirFormulaireRapport(r); }]);
+    if (peut('reports.delete')) liste.push(['Supprimer', 'Supprimer le rapport ' + r.nom, function () { if (dansFiche) dlgFiche.close(); demanderSuppressionRapport(r); }, 'gs-lien-bouton--danger']);
+    liste.forEach(function (a) {
+      if (dansFiche && a[0] === 'Détails') return;
+      conteneur.appendChild(actionRapport(a[0], a[1], a[2], a[3]));
+    });
+  }
+
+  function afficherListeRapports(lignes, total) {
+    corpsRapports.textContent = '';
+    var vide = $('[data-vide="rapports"]');
+    vide.textContent = etatRapports.liste.recherche ? 'Aucun rapport ne porte ce nom.'
+      : 'Aucun rapport enregistré. Choisissez une période, affichez-la, puis enregistrez-la ; ou « Créer un rapport ».';
+    vide.hidden = lignes.length > 0;
+    lignes.forEach(function (r) {
+      var tr = el('tr');
+      FICHES.set(tr, { rapport: r });
+      var nom = el('td');
+      nom.setAttribute('data-libelle', 'Rapport');
+      nom.appendChild(el('strong', '', r.nom));
+      tr.appendChild(nom);
+      var type = el('td', '', TYPES_RAPPORT[r.type] || r.type);
+      type.setAttribute('data-libelle', 'Type');
+      tr.appendChild(type);
+      var per = el('td');
+      per.setAttribute('data-libelle', 'Période');
+      per.appendChild(el('span', '', PERIODES_RAPPORT[r.periode] || r.periode));
+      per.appendChild(el('span', 'gs-cellule-sous', periodeRapportTexte(r)));
+      tr.appendChild(per);
+      var par = el('td');
+      par.setAttribute('data-libelle', 'Créé par');
+      par.appendChild(el('span', '', r.cree_par_nom || '—'));
+      if (r.role_createur) par.appendChild(el('span', 'gs-cellule-sous', ROLES[r.role_createur] || r.role_createur));
+      tr.appendChild(par);
+      var cree = el('td', '', dateRapport(r.cree_le, true));
+      cree.setAttribute('data-libelle', 'Date de création');
+      tr.appendChild(cree);
+      var st = el('td');
+      st.setAttribute('data-libelle', 'Statut');
+      st.appendChild(badgeRapport(r));
+      tr.appendChild(st);
+      var act = el('td', 'gs-rapports__actions');
+      act.setAttribute('data-libelle', 'Actions');
+      act.setAttribute('data-fiche-ignorer', '');
+      actionsDuRapport(r, act, false);
+      tr.appendChild(act);
+      corpsRapports.appendChild(tr);
+    });
+    paginer('rapports', etatRapports.liste, total, chargerRapports);
+  }
+
+  /* Le rapport affiché : cartes, puis chaque partie --------------------------------------- */
+  function afficherRapport(def, rapport) {
+    messageRapport('');
+    var demande = ++etatRapports.demande;
+    etatRapports.rapport = rapport;
+    etatRapports.definition = { nom: def.nom || '', type: def.type || 'complet', periode: def.periode, debut: def.debut,
+                                fin: def.fin, filtres: def.filtres || {}, sections: sectionsDe(def) };
+    var bouton = $('[data-rapport-afficher]');
+    var fin = attente(bouton, 'Chargement…');
+    etatRapports.parametres = parametresRapport(etatRapports.definition, rapport, LIGNES_ECRAN);
+    return API.admin.donneesRapport(etatRapports.parametres).then(function (d) {
+      if (demande !== etatRapports.demande) return;
+      etatRapports.donnees = d;
+      dessinerRapport(d);
+    }).catch(function (err) {
+      if (demande !== etatRapports.demande) return;
+      messageRapport(messageErreur(err));
+    }).then(fin);
+  }
+
+  function carteRapport(zone, nomPicto, teinte, libelle, valeur, sous) {
+    var c = el('div', 'gs-kpi');
+    if (nomPicto && PICTOS[nomPicto]) {
+      var p = el('span', 'gs-kpi__picto gs-kpi__picto--' + (teinte || 'bleu'));
+      p.innerHTML = picto(nomPicto);
+      c.appendChild(p);
+    }
+    c.appendChild(el('span', 'gs-kpi__libelle', libelle));
+    c.appendChild(el('strong', 'gs-kpi__valeur', valeur));
+    if (sous) c.appendChild(el('span', 'gs-kpi__sous', sous));
+    zone.appendChild(c);
+  }
+
+  // Les cartes : ce que les parties du rapport comptent, tel que la base l'a compté
+  function cartesRapport(zone, d) {
+    var s = d.statistiques || {}, sec = d.sections || [];
+    var a = function (x) { return sec.indexOf(x) >= 0; };
+    if (a('colis') || a('evenements')) {
+      var c = s.colis || {};
+      carteRapport(zone, 'colis', 'bleu', 'Colis', entier(c.total), [
+        pluriel(c.attente, 'en attente', 'en attente'), pluriel(c.transit, 'en transit', 'en transit'),
+        pluriel(c.disponible, 'disponible', 'disponibles'), pluriel(c.livre, 'livré', 'livrés'),
+        pluriel(c.incident, 'action requise', 'actions requises'), pluriel(c.supprimes, 'supprimé', 'supprimés')].join(' · '));
+    }
+    if (a('finances') || a('factures') || a('paiements')) {
+      var f = s.factures || {}, p = s.paiements || {};
+      carteRapport(zone, 'facture', 'bleu', 'Factures', entier(f.total), [
+        pluriel(f.payees, 'payée', 'payées'), pluriel(f.impayees, 'impayée', 'impayées'),
+        pluriel(f.annulees, 'annulée', 'annulées')].join(' · '));
+      carteRapport(zone, 'argent', 'vert', 'Payé', argent(f.montant_paye), 'Facturé : ' + argent(f.montant_facture));
+      carteRapport(zone, 'horloge', 'orange', 'Impayé', argent(f.montant_impaye), pluriel(f.impayees, 'facture', 'factures'));
+      carteRapport(zone, 'alerte', 'rouge', 'Annulé', entier(f.annulees), argent(f.montant_annule));
+      carteRapport(zone, 'alerte', 'marine', 'Supprimées', entier(f.supprimees), argent(f.montant_supprime));
+      carteRapport(zone, 'portefeuille', 'vert', 'Encaissé pendant la période', argent(p.encaisse),
+                   pluriel(p.nombre, 'paiement', 'paiements'));
+    }
+    if (a('clients')) {
+      var cl = s.clients || {};
+      carteRapport(zone, 'clients', 'bleu', 'Clients actifs', entier(cl.actifs), pluriel(cl.nouveaux, 'nouveau', 'nouveaux'));
+    }
+    if (a('activite')) {
+      var ac = s.activite || {};
+      carteRapport(zone, 'scan', 'bleu', 'Activité', entier(ac.total), pluriel(ac.suppressions, 'suppression', 'suppressions'));
+    }
+  }
+
+  // Les colonnes de chaque partie : un titre et la valeur d'une ligne (texte), les mêmes à
+  // l'écran et sur papier
+  function valeurJournal(k, x) {
+    if (x == null || x === '') return '—';
+    if (k === 'statut') return STATUTS[x] || ETATS_FACTURE[x] || x;
+    if (/_usd$/.test(k)) return argent(x);
+    if (k === 'role' || k === 'role_createur') return ROLES[x] || x;
+    if (k === 'moyen') return MOYENS[x] || x;
+    if (k === 'origine') return ORIGINES_PAIEMENT[x] || x;
+    if (k === 'service') return SERVICES[x] || x;
+    if (k === 'pays_destination') return PAYS[x] || x;
+    if (k === 'type') return TYPES_RAPPORT[x] || x;
+    if (k === 'periode') return PERIODES_RAPPORT[x] || x;
+    if (k === 'poids_lb') return String(x).replace('.', ',') + ' lb';
+    if (k === 'sections' && Array.isArray(x)) return x.map(function (s) { return SECTIONS_RAPPORT[s] || s; }).join(', ');
+    if (k === 'filtres' && typeof x === 'object') {
+      return [STATUTS_RAPPORT[x.statut_colis], ETATS_RAPPORT[x.etat_facture]].filter(Boolean).join(', ') || 'Tous';
+    }
+    if (k === 'debut' || k === 'fin') return jourLisible(x);
+    if (/_le$/.test(k)) return dateRapport(x, true);
+    if (Array.isArray(x)) return x.join(', ');
+    if (typeof x === 'object') return JSON.stringify(x);
+    return String(x);
+  }
+  // L'avant ou l'après d'une ligne du journal : « Libellé : valeur », une par ligne
+  function valeursJournal(v) {
+    if (!v || typeof v !== 'object') return '';
+    return Object.keys(v).filter(function (k) { return !CACHES_JOURNAL.test(k); }).map(function (k) {
+      return (CHAMPS_JOURNAL[k] || k) + ' : ' + valeurJournal(k, v[k]);
+    });
+  }
+
+  var COLONNES_RAPPORT = {
+    colis: [
+      ['N° colis', function (l) { return l.numero; }],
+      ['Reçu le', function (l) { return dateRapport(l.recu_le, true); }],
+      ['Client', function (l) { return [l.client_nom, l.client_code].filter(Boolean).join(' · ') || '—'; }],
+      ['Expéditeur', function (l) { return l.expediteur || ''; }],
+      ['Description', function (l) { return l.description || ''; }],
+      ['Poids', function (l) { return l.poids_lb != null ? String(l.poids_lb).replace('.', ',') + ' lb' : ''; }],
+      ['Prix', function (l) { return l.prix_usd != null ? argent(l.prix_usd) : ''; }],
+      ['Mode', function (l) { return SERVICES[l.service] || l.service || ''; }],
+      ['Destination', function (l) { return [l.destination, PAYS[l.pays_destination]].filter(Boolean).join(', '); }],
+      ['Statut', function (l) { return STATUTS[l.statut] || l.statut; }],
+      ['Livré le', function (l) { return dateRapport(l.livre_le, true); }],
+      ['Créé par', function (l) { return l.cree_par || ''; }]
+    ],
+    evenements: [
+      ['Date', function (l) { return dateRapport(l.cree_le); }],
+      ['Heure', function (l) { return heureRapport(l.cree_le); }],
+      ['Colis', function (l) { return l.numero; }],
+      ['Événement', function (l) { return libelleEvenement(l.statut, { type_evenement: l.type_evenement, corrige: l.annule }); }],
+      ['Ancien statut', function (l) { return l.statut_precedent ? (STATUTS[l.statut_precedent] || l.statut_precedent) : ''; }],
+      ['Nouveau statut', function (l) { return STATUTS[l.statut] || l.statut; }],
+      ['Lieu', function (l) { return l.lieu || ''; }],
+      ['Utilisateur', function (l) { return l.auteur || ''; }],
+      ['Note', function (l) { return l.note || ''; }]
+    ],
+    factures: [
+      ['N° facture', function (l) { return l.numero; }],
+      ['Émise le', function (l) { return dateRapport(l.cree_le, true); }],
+      ['Client', function (l) { return [l.client_nom, l.client_code].filter(Boolean).join(' · ') || '—'; }],
+      ['Montant', function (l) { return argent(l.montant_usd); }],
+      ['Payé', function (l) { return argent(l.paye); }],
+      ['Solde', function (l) { return argent(l.solde); }],
+      ['État', function (l) { return ETATS_FACTURE[l.etat] || l.etat; }],
+      ['Moyen', function (l) { return MOYENS[l.moyen] || l.moyen || ''; }],
+      ['Annulation', function (l) {
+        return l.statut === 'annulee' ? [dateRapport(l.annulee_le), l.motif_annulation,
+                                         l.remplacee_par ? 'Remplacée par ' + l.remplacee_par : ''].filter(Boolean).join(' · ') : '';
+      }],
+      ['Créée par', function (l) { return l.cree_par || ''; }]
+    ],
+    supprimees: [
+      ['Supprimée le', function (l) { return dateRapport(l.supprimee_le, true); }],
+      ['N° facture', function (l) { return l.numero || '—'; }],
+      ['Montant', function (l) { return l.montant_usd != null ? argent(l.montant_usd) : '—'; }],
+      ['Statut avant', function (l) { return ETATS_FACTURE[l.statut] || l.statut || ''; }],
+      ['Utilisateur', function (l) { return l.auteur || ''; }]
+    ],
+    paiements: [
+      ['Date', function (l) { return dateRapport(l.paye_le, true); }],
+      ['Facture', function (l) { return l.facture_numero || ''; }],
+      ['Client', function (l) { return [l.client_nom, l.client_code].filter(Boolean).join(' · ') || '—'; }],
+      ['Montant', function (l) { return argent(l.montant_usd); }],
+      ['Moyen', function (l) { return MOYENS[l.moyen] || l.moyen || ''; }],
+      ['Référence', function (l) { return l.reference || ''; }],
+      ['Origine', function (l) { return ORIGINES_PAIEMENT[l.origine] || l.origine || ''; }],
+      ['État', function (l) { return l.annule_le ? 'Annulé le ' + dateRapport(l.annule_le) + (l.motif_annulation ? ' · ' + l.motif_annulation : '') : 'Valide'; }],
+      ['Saisi par', function (l) { return l.saisi_par || ''; }]
+    ],
+    clients: [
+      ['Code', function (l) { return l.code || ''; }],
+      ['Nom', function (l) { return l.nom || ''; }],
+      ['Pays / ville', function (l) { return [l.ville, PAYS[l.pays]].filter(Boolean).join(', '); }],
+      ['Inscrit le', function (l) { return dateRapport(l.cree_le) + (l.nouveau ? ' · nouveau' : ''); }],
+      ['Colis', function (l) { return entier(l.colis); }],
+      ['Facturé', function (l) { return argent(l.facture); }],
+      ['Payé', function (l) { return argent(l.paye); }],
+      ['Solde actuel', function (l) { return argent(l.solde); }]
+    ],
+    activite: [
+      ['Date', function (l) { return dateRapport(l.cree_le); }],
+      ['Heure', function (l) { return heureRapport(l.cree_le); }],
+      ['Utilisateur', function (l) { return l.auteur ? l.auteur + (l.auteur_role && ROLES[l.auteur_role] ? ' (' + ROLES[l.auteur_role] + ')' : '') : 'Système'; }],
+      ['Action', function (l) { return ACTIONS_JOURNAL[l.action] || l.action; }],
+      ['Élément', function (l) { return ENTITES_JOURNAL[l.entite] || l.entite; }],
+      ['Référence', function (l) { return l.reference || ''; }],
+      ['Ancienne valeur', function (l) { return valeursJournal(l.avant); }],
+      ['Nouvelle valeur', function (l) { return valeursJournal(l.apres); }]
+    ]
+  };
+  var VIDE_RAPPORT = 'Aucune donnée disponible pour cette période.';
+
+  function tableRapport(cle, lignes, pourPapier) {
+    var cadre = el('div', pourPapier ? 'gs-rapport-doc__cadre' : 'gs-tableau-cadre');
+    var t = el('table', pourPapier ? 'gs-rapport-doc__table' : 'gs-tableau gs-tableau--rapport');
+    var tete = el('thead'), tr = el('tr');
+    COLONNES_RAPPORT[cle].forEach(function (c) {
+      var th = el('th', '', pourPapier ? traduitRapport(c[0]) : c[0]);
+      th.scope = 'col';
+      tr.appendChild(th);
+    });
+    tete.appendChild(tr);
+    t.appendChild(tete);
+    var corps = el('tbody');
+    lignes.forEach(function (l) { corps.appendChild(ligneRapport(cle, l, pourPapier)); });
+    t.appendChild(corps);
+    cadre.appendChild(t);
+    return { cadre: cadre, corps: corps };
+  }
+  function ligneRapport(cle, l, pourPapier) {
+    var tr = el('tr');
+    if (!pourPapier) {
+      // Un colis ou une facture de la liste ouvre sa fiche, comme dans leurs onglets
+      if (cle === 'colis' || cle === 'evenements') FICHES.set(tr, { numero: l.numero });
+      else if (cle === 'factures' && l.id) FICHES.set(tr, { factureId: l.id });
+      else if (cle === 'paiements' && l.facture_id) FICHES.set(tr, { factureId: l.facture_id });
+    }
+    COLONNES_RAPPORT[cle].forEach(function (c) {
+      var v = c[1](l);
+      var td = el('td', '', Array.isArray(v) ? '' : pourPapier ? traduitRapport(v) : v);
+      // Plusieurs valeurs (l'avant et l'après du journal) : une par ligne, chacune traduisible
+      if (Array.isArray(v)) {
+        v.forEach(function (x) { td.appendChild(el('span', 'gs-rapports__valeur', pourPapier ? traduitRapport(x) : x)); });
+      }
+      td.setAttribute('data-libelle', pourPapier ? traduitRapport(c[0]) : c[0]);
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function dessinerRapport(d) {
+    var def = etatRapports.definition, r = etatRapports.rapport;
+    zoneResultat.hidden = false;
+    $('[data-rapport-type]', zoneResultat).textContent = (TYPES_RAPPORT[def.type] || 'Rapport') +
+      ' · ' + (PERIODES_RAPPORT[def.periode] || def.periode);
+    $('[data-rapport-titre]', zoneResultat).textContent = r ? r.nom : 'Aperçu (non enregistré)';
+    $('[data-rapport-periode-texte]', zoneResultat).textContent =
+      periodeRapportTexte(d.periode) + ' (jours de Santo Domingo)' +
+      (d.periode.en_cours ? ' · période en cours : les chiffres peuvent encore changer' : '');
+    $('[data-action="rapport-details"]', zoneResultat).hidden = !r;
+    $('[data-action="rapport-modifier"]', zoneResultat).hidden = !r;
+    $('[data-action="rapport-enregistrer"]', zoneResultat).hidden = !!r;
+    var kpis = $('[data-rapport-kpis]', zoneResultat);
+    kpis.textContent = '';
+    cartesRapport(kpis, d);
+    var zone = $('[data-rapport-sections]', zoneResultat);
+    zone.textContent = '';
+    (d.sections || []).forEach(function (cle) { zone.appendChild(sectionEcran(cle, d)); });
+    if (zoneResultat.scrollIntoView) zoneResultat.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  // Les chiffres de la partie « Statistiques financières » : ceux de la base, en lignes
+  function lignesFinances(d) {
+    var f = (d.statistiques || {}).factures || {}, p = (d.statistiques || {}).paiements || {};
+    return [
+      ['Factures émises', entier(f.total)], ['Payées', entier(f.payees)], ['Impayées', entier(f.impayees)],
+      ['dont en retard', entier(f.en_retard)], ['Annulées', entier(f.annulees)], ['dont regroupées', entier(f.regroupees)],
+      ['Supprimées (hors total)', entier(f.supprimees)],
+      ['Montant facturé (hors annulées)', argent(f.montant_facture)], ['Montant payé', argent(f.montant_paye)],
+      ['Montant impayé', argent(f.montant_impaye)], ['Montant annulé', argent(f.montant_annule)],
+      ['Montant des factures supprimées', argent(f.montant_supprime)],
+      ['Encaissé pendant la période', argent(p.encaisse)], ['Paiements valides', entier(p.nombre)],
+      ['Paiements annulés', entier(p.annules) + ' · ' + argent(p.montant_annule)],
+      ['Restait dû à la fin de la période', argent(p.creances_fin)]
+    ];
+  }
+  function blocFinances(d, pourPapier) {
+    var T = pourPapier ? traduitRapport : function (x) { return x; };
+    var bloc = el('div', pourPapier ? 'gs-rapport-doc__finances' : 'gs-rapports__finances');
+    var dl = el('dl', pourPapier ? 'gs-rapport-doc__chiffres' : 'gs-rapports__chiffres');
+    lignesFinances(d).forEach(function (x) {
+      var ligne = el('div');
+      ligne.appendChild(el('dt', '', T(x[0])));
+      ligne.appendChild(el('dd', '', x[1]));
+      dl.appendChild(ligne);
+    });
+    bloc.appendChild(dl);
+    var moyens = ((d.statistiques || {}).paiements || {}).par_moyen || [];
+    if (moyens.length) {
+      var t = el('table', pourPapier ? 'gs-rapport-doc__table' : 'gs-tableau gs-tableau--rapport');
+      var tr = el('tr');
+      ['Moyen', 'Paiements', 'Montant'].forEach(function (x) { var th = el('th', '', T(x)); th.scope = 'col'; tr.appendChild(th); });
+      var tete = el('thead');
+      tete.appendChild(tr);
+      t.appendChild(tete);
+      var corps = el('tbody');
+      moyens.forEach(function (m) {
+        var l = el('tr');
+        [T(MOYENS[m.moyen] || m.moyen), entier(m.nombre), argent(m.montant)].forEach(function (v) { l.appendChild(el('td', '', v)); });
+        corps.appendChild(l);
+      });
+      t.appendChild(corps);
+      var moyensBloc = el('div');
+      moyensBloc.appendChild(el('p', pourPapier ? 'gs-rapport-doc__sous-titre' : 'gs-rapports__sous-titre', T('Encaissé par moyen de paiement')));
+      var cadre = el('div', pourPapier ? 'gs-rapport-doc__cadre' : 'gs-tableau-cadre');
+      cadre.appendChild(t);
+      moyensBloc.appendChild(cadre);
+      bloc.appendChild(moyensBloc);
+    }
+    return bloc;
+  }
+
+  // Une partie à l'écran : son titre, son total, une page de lignes et sa pagination
+  // (les pages suivantes se lisent dans la base, partie seule)
+  function sectionEcran(cle, d) {
+    var s = el('section', 'gs-rapports__partie');
+    var titre = el('h4', 'gs-rapports__partie-titre', SECTIONS_RAPPORT[cle] || cle);
+    s.appendChild(titre);
+    if (cle === 'finances') { s.appendChild(blocFinances(d, false)); return s; }
+    var partie = (d.donnees || {})[cle] || { total: 0, lignes: [] };
+    titre.appendChild(el('span', 'gs-rapports__total', pluriel(partie.total, 'ligne', 'lignes')));
+    var vide = el('p', 'gs-admin-vide', VIDE_RAPPORT);
+    vide.hidden = partie.total > 0;
+    s.appendChild(vide);
+    var t = tableRapport(cle, partie.lignes || [], false);
+    t.cadre.hidden = !partie.total;
+    s.appendChild(t.cadre);
+    var pag = el('div', 'gs-pagination');
+    s.appendChild(pag);
+    var p = { page: 0, parPage: LIGNES_ECRAN };
+    function recharger() {
+      var params = Object.assign({}, etatRapports.parametres, { section: cle, limite: p.parPage, decalage: p.page * p.parPage });
+      var demande = etatRapports.demande;
+      API.admin.donneesRapport(params).then(function (r) {
+        if (demande !== etatRapports.demande) return;
+        var x = (r.donnees || {})[cle] || { total: 0, lignes: [] };
+        t.corps.textContent = '';
+        x.lignes.forEach(function (l) { t.corps.appendChild(ligneRapport(cle, l, false)); });
+        paginer(pag, p, x.total, recharger);
+      }).catch(function (err) { toast(messageErreur(err), true); });
+    }
+    paginer(pag, p, partie.total, recharger);
+    if (cle === 'factures' && partie.supprimees && partie.supprimees.total) {
+      s.appendChild(el('h5', 'gs-rapports__sous-titre', 'Factures supprimées (hors total)'));
+      s.appendChild(tableRapport('supprimees', partie.supprimees.lignes, false).cadre);
+    }
+    return s;
+  }
+
+  $('[data-action="rapport-fermer"]').addEventListener('click', function () {
+    zoneResultat.hidden = true;
+    etatRapports.demande++;
+    etatRapports.rapport = null;
+  });
+  $('[data-action="rapport-enregistrer"]').addEventListener('click', function () {
+    ouvrirFormulaireRapport(null, etatRapports.definition);
+  });
+  $('[data-action="rapport-details"]').addEventListener('click', function () {
+    if (etatRapports.rapport) ouvrirFicheRapport(etatRapports.rapport);
+  });
+  $('[data-action="rapport-modifier"]').addEventListener('click', function () {
+    if (etatRapports.rapport) ouvrirFormulaireRapport(etatRapports.rapport);
+  });
+  $('[data-action="rapport-imprimer"]').addEventListener('click', function () {
+    imprimerRapport(etatRapports.definition, etatRapports.rapport, this, false);
+  });
+  $('[data-action="rapport-pdf"]').addEventListener('click', function () {
+    imprimerRapport(etatRapports.definition, etatRapports.rapport, this, true);
+  });
+
+  /* Créer, modifier ------------------------------------------------------------------ */
+  function nomProposeRapport(def) {
+    var b = bornesAvant(def);
+    if (b.erreur) return '';
+    var mois = function (j) {
+      return ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre',
+              'Novembre', 'Décembre'][Number(j.slice(5, 7)) - 1] + ' ' + j.slice(0, 4);
+    };
+    var quoi = def.periode === 'mensuel' ? 'Rapport mensuel - ' + mois(b.debut)
+      : def.periode === 'annuel' ? 'Rapport annuel - ' + b.debut.slice(0, 4)
+      : def.periode === 'trimestriel' ? 'Rapport trimestriel - T' + (Math.floor((Number(b.debut.slice(5, 7)) - 1) / 3) + 1) + ' ' + b.debut.slice(0, 4)
+      : def.periode === 'hebdomadaire' ? 'Rapport hebdomadaire - ' + jourLisible(b.debut)
+      : def.periode === 'personnalise' ? 'Rapport - ' + jourLisible(b.debut) + ' au ' + jourLisible(b.fin)
+      : 'Rapport journalier - ' + jourLisible(b.debut);
+    return quoi;
+  }
+  function cocherSections(liste) {
+    $$('input[name="sections"]', formRapport).forEach(function (c) { c.checked = liste.indexOf(c.value) >= 0; });
+  }
+  function majDatesFormulaire(normaliser) {
+    var f = formRapport.elements, p = f.periode.value;
+    f.debut.disabled = p === 'aujourdhui';
+    f.fin.disabled = p !== 'personnalise';
+    var aide = $('[data-rapport-dlg-dates]', formRapport);
+    var b = bornesAvant({ periode: p, debut: f.debut.value || null, fin: p === 'personnalise' ? f.fin.value || null : null });
+    if (b.erreur) { aide.textContent = b.erreur; return; }
+    // Hors période personnalisée, la date choisie est ramenée au début de son jour, sa
+    // semaine, son mois… et la fin suit
+    if (normaliser && p !== 'personnalise') { f.debut.value = b.debut; f.fin.value = b.fin; }
+    aide.textContent = periodeRapportTexte(b) + ' (jours de Santo Domingo)';
+  }
+  formRapport.elements.periode.addEventListener('change', function () { majDatesFormulaire(true); });
+  formRapport.elements.debut.addEventListener('change', function () { majDatesFormulaire(true); });
+  formRapport.elements.fin.addEventListener('change', function () { majDatesFormulaire(false); });
+  formRapport.elements.type.addEventListener('change', function () {
+    cocherSections(SECTIONS_DU_TYPE[formRapport.elements.type.value] || ORDRE_RAPPORT);
+  });
+
+  function ouvrirFormulaireRapport(rapport, depart) {
+    etatRapports.edite = rapport || null;
+    var def = rapport || depart || definitionDuFormulaire(formFiltresRapport);
+    var f = formRapport.elements;
+    formRapport.reset();
+    erreurFormulaire(formRapport, '');
+    $('[data-rapport-dlg-titre]', formRapport).textContent = rapport ? 'Modifier le rapport' : 'Créer un rapport';
+    $('[data-rapport-dlg-valider]', formRapport).textContent = rapport ? 'Enregistrer les modifications' : 'Générer le rapport';
+    f.type.value = def.type || 'complet';
+    f.periode.value = def.periode || 'mensuel';
+    var b = bornesAvant(def);
+    f.debut.value = rapport ? rapport.debut : (b.debut || def.debut || O.aujourdhui());
+    f.fin.value = rapport ? rapport.fin : (b.fin || def.fin || '');
+    f.statut_colis.value = (def.filtres || {}).statut_colis || '';
+    f.etat_facture.value = (def.filtres || {}).etat_facture || '';
+    cocherSections(sectionsDe(def));
+    majDatesFormulaire(!rapport);
+    f.nom.value = rapport ? rapport.nom : nomProposeRapport(def);
+    dlgRapport.showModal();
+    f.nom.focus();
+  }
+  $('[data-action="rapport-creer"]').addEventListener('click', function () { ouvrirFormulaireRapport(null); });
+
+  formRapport.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = formRapport.elements;
+    var def = { nom: f.nom.value.trim(), type: f.type.value, periode: f.periode.value,
+                debut: f.periode.value === 'aujourdhui' ? null : f.debut.value || null,
+                fin: f.periode.value === 'personnalise' ? f.fin.value || null : null,
+                filtres: {}, sections: $$('input[name="sections"]:checked', formRapport).map(function (c) { return c.value; }) };
+    if (f.statut_colis.value) def.filtres.statut_colis = f.statut_colis.value;
+    if (f.etat_facture.value) def.filtres.etat_facture = f.etat_facture.value;
+    if (!def.nom) { erreurFormulaire(formRapport, 'Donnez un nom au rapport.'); f.nom.focus(); return; }
+    if (!def.sections.length) { erreurFormulaire(formRapport, 'Choisissez au moins une donnée à inclure.'); return; }
+    var b = bornesAvant(def);
+    if (b.erreur) { erreurFormulaire(formRapport, b.erreur); return; }
+    erreurFormulaire(formRapport, '');
+    var edite = etatRapports.edite;
+    var fin = attente($('[data-rapport-dlg-valider]', formRapport), edite ? 'Enregistrement…' : 'Génération…');
+    (edite ? API.admin.modifierRapport(edite.id, def) : API.admin.creerRapport(def)).then(function (r) {
+      dlgRapport.close();
+      toast(edite ? 'Rapport modifié.' : 'Rapport enregistré.');
+      chargerRapports();
+      return afficherRapport(r, r);
+    }).catch(function (err) {
+      erreurFormulaire(formRapport, messageErreur(err));
+    }).then(fin);
+  });
+
+  /* Supprimer : le rapport enregistré seulement -------------------------------------- */
+  var formSupprimerRapport = $('form[data-form="supprimer-rapport"]', dlgSupprimerRapport);
+  function demanderSuppressionRapport(r) {
+    etatRapports.aSupprimer = r;
+    erreurFormulaire(formSupprimerRapport, '');
+    $('[data-supprimer-rapport-nom]', dlgSupprimerRapport).textContent = r.nom;
+    dlgSupprimerRapport.showModal();
+    $('[data-action="fermer"].gs-bouton', dlgSupprimerRapport).focus();
+  }
+  formSupprimerRapport.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var r = etatRapports.aSupprimer;
+    if (!r) return;
+    var fin = attente($('[data-supprimer-rapport-valider]', formSupprimerRapport), 'Suppression…');
+    API.admin.supprimerRapport(r.id).then(function () {
+      dlgSupprimerRapport.close();
+      toast('Rapport supprimé. Les colis, factures et paiements restent intacts.');
+      if (etatRapports.rapport && etatRapports.rapport.id === r.id) {
+        zoneResultat.hidden = true;
+        etatRapports.rapport = null;
+      }
+      chargerRapports();
+    }).catch(function (err) {
+      erreurFormulaire(formSupprimerRapport, messageErreur(err));
+    }).then(fin);
+  });
+
+  /* Les détails : la fiche du rapport (tout ce qui sert à le générer) ----------------- */
+  function ouvrirFicheRapport(r) {
+    preparerFiche('Rapport', r.nom, periodeRapportTexte(r) + ' (jours de Santo Domingo)', badgeRapport(r));
+    sectionFiche('Rapport');
+    champFiche('Type', TYPES_RAPPORT[r.type] || r.type);
+    champFiche('Période', PERIODES_RAPPORT[r.periode] || r.periode);
+    champFiche('Du', jourLisible(r.debut));
+    champFiche('Au', jourLisible(r.fin));
+    sectionFiche('Filtres');
+    champFiche('Statut du colis', STATUTS_RAPPORT[(r.filtres || {}).statut_colis] || 'Tous');
+    champFiche('Paiement / facture', ETATS_RAPPORT[(r.filtres || {}).etat_facture] || 'Tous');
+    sectionFiche('Données incluses');
+    champFiche('Données', (r.sections || []).map(function (s) { return SECTIONS_RAPPORT[s] || s; }), true);
+    sectionFiche('Création');
+    champFiche('Créé par', [r.cree_par_nom || '—', ROLES[r.role_createur] || r.role_createur]);
+    champFiche('Créé le', dateRapport(r.cree_le, true));
+    if (r.modifie_le) champFiche('Modifié le', [dateRapport(r.modifie_le, true), r.modifie_par_nom]);
+    var stats = sectionFiche('Statistiques', true);
+    var demande = ficheDemande;
+    var attenteStats = el('p', 'gs-fiche__attente', 'Chargement…');
+    stats.appendChild(attenteStats);
+    API.admin.donneesRapport({ periode: 'personnalise', debut: r.debut, fin: r.fin, type: r.type, filtres: r.filtres,
+                               sections: r.sections, limite: 1 }).then(function (d) {
+      if (demande !== ficheDemande) return;
+      attenteStats.remove();
+      var grille = $('dl', stats);
+      var s = d.statistiques || {};
+      var ajout = function (libelle, valeur) {
+        var bloc = el('div', 'gs-fiche__champ');
+        bloc.appendChild(el('dt', '', libelle));
+        var dd = el('dd');
+        dd.appendChild(el('span', 'gs-fiche__valeur', valeur));
+        bloc.appendChild(dd);
+        grille.appendChild(bloc);
+      };
+      ajout('Colis', entier((s.colis || {}).total));
+      ajout('Factures', entier((s.factures || {}).total));
+      ajout('Payé', argent((s.factures || {}).montant_paye));
+      ajout('Impayé', argent((s.factures || {}).montant_impaye));
+      ajout('Annulé', argent((s.factures || {}).montant_annule));
+      ajout('Encaissé pendant la période', argent((s.paiements || {}).encaisse));
+      ajout('Clients actifs', entier((s.clients || {}).actifs));
+      ajout('Activité', entier((s.activite || {}).total));
+      stats.appendChild(el('p', 'gs-fiche__attente', 'Calculé le ' + dateRapport(d.genere_le, true) + ', sur les données actuelles.'));
+    }).catch(function (err) {
+      if (demande === ficheDemande) attenteStats.textContent = messageErreur(err);
+    });
+    actionsDuRapport(r, actionsFiche, true);
+    $$('.gs-rapports__action', actionsFiche).forEach(function (b, i) {
+      b.className = 'gs-bouton ' + (b.classList.contains('gs-lien-bouton--danger') ? 'gs-bouton--danger'
+        : i === 0 ? 'gs-bouton--plein' : 'gs-bouton--contour');
+    });
+    montrerFiche();
+  }
+
+  /* Le document imprimé (A4) : en-tête au logo, cartes, parties, pied numéroté --------- */
+  function orientationRapport(def) {
+    var choix = $('[data-rapport-orientation]').value;
+    if (choix === 'portrait' || choix === 'paysage') return choix;
+    // Les tableaux larges (colis, étapes, factures, paiements, activité) passent en paysage
+    return sectionsDe(def).some(function (s) { return s !== 'finances' && s !== 'clients'; }) ? 'paysage' : 'portrait';
+  }
+
+  function documentRapport(def, rapport, d) {
+    var T = traduitRapport;
+    var doc = el('div', 'gs-rapport-doc');
+    var tete = el('header', 'gs-rapport-doc__tete');
+    var logo = el('img', 'gs-rapport-doc__logo');
+    logo.src = new URL('assets/img/logo-goship.png', document.baseURI).href;
+    logo.alt = 'Goship Express';
+    tete.appendChild(logo);
+    var id = el('div', 'gs-rapport-doc__identite');
+    id.appendChild(el('p', 'gs-rapport-doc__entreprise', 'Goship Express'));
+    id.appendChild(el('h1', 'gs-rapport-doc__titre', rapport ? rapport.nom : T('Rapport') + ' — ' + T(TYPES_RAPPORT[def.type] || '')));
+    var infos = el('dl', 'gs-rapport-doc__infos');
+    [['Type', T(TYPES_RAPPORT[def.type] || def.type) + ' · ' + T(PERIODES_RAPPORT[def.periode] || def.periode)],
+     ['Période', T(periodeRapportTexte(d.periode) + ' (jours de Santo Domingo)')],
+     ['Filtres', [T(STATUTS_RAPPORT[(def.filtres || {}).statut_colis] || 'Tous'),
+                  T(ETATS_RAPPORT[(def.filtres || {}).etat_facture] || 'Tous')].join(' · ')],
+     ['Généré le', T(dateRapport(d.genere_le, true)) + (d.genere_par ? ' · ' + d.genere_par : '')]].forEach(function (x) {
+      var ligne = el('div');
+      ligne.appendChild(el('dt', '', T(x[0])));
+      ligne.appendChild(el('dd', '', x[1]));
+      infos.appendChild(ligne);
+    });
+    id.appendChild(infos);
+    tete.appendChild(id);
+    doc.appendChild(tete);
+    if (d.periode.en_cours) doc.appendChild(el('p', 'gs-rapport-doc__note', T('Période en cours : les chiffres peuvent encore changer.')));
+
+    var cartes = el('div', 'gs-rapport-doc__cartes');
+    cartesRapport(cartes, d);
+    $$('.gs-kpi__picto', cartes).forEach(function (n) { n.remove(); });
+    $$('.gs-kpi__libelle, .gs-kpi__sous', cartes).forEach(function (n) { n.textContent = T(n.textContent); });
+    doc.appendChild(cartes);
+
+    (d.sections || []).forEach(function (cle) {
+      var s = el('section', 'gs-rapport-doc__section');
+      s.appendChild(el('h2', 'gs-rapport-doc__section-titre', T(SECTIONS_RAPPORT[cle] || cle)));
+      if (cle === 'finances') { s.appendChild(blocFinances(d, true)); doc.appendChild(s); return; }
+      var partie = (d.donnees || {})[cle] || { total: 0, lignes: [] };
+      if (!partie.total) {
+        s.appendChild(el('p', 'gs-rapport-doc__vide', T(VIDE_RAPPORT)));
+      } else {
+        s.appendChild(tableRapport(cle, partie.lignes, true).cadre);
+        s.appendChild(el('p', 'gs-rapport-doc__compte', partie.lignes.length < partie.total
+          ? T('Les ' + entier(partie.lignes.length) + ' premières lignes sur ' + entier(partie.total) +
+              ' — affinez la période ou les filtres pour le reste.')
+          : T(pluriel(partie.total, 'ligne', 'lignes'))));
+      }
+      if (cle === 'factures' && partie.supprimees && partie.supprimees.total) {
+        s.appendChild(el('h3', 'gs-rapport-doc__sous-titre', T('Factures supprimées (hors total)')));
+        s.appendChild(tableRapport('supprimees', partie.supprimees.lignes, true).cadre);
+      }
+      doc.appendChild(s);
+    });
+    var pied = el('footer', 'gs-rapport-doc__pied');
+    pied.appendChild(el('span', '', 'Goship Express · ' + T('Généré le') + ' ' + T(dateRapport(d.genere_le, true)) +
+                                    (d.genere_par ? ' · ' + d.genere_par : '')));
+    doc.appendChild(pied);
+    return doc;
+  }
+
+  // Lit tout le rapport (2 000 lignes par partie au plus), dessine le document, l'envoie à
+  // l'imprimante ; pour « PDF », la même fenêtre, où l'on choisit « Enregistrer au format PDF »
+  function imprimerRapport(def, rapport, bouton, pdf) {
+    if (!def) return;
+    if (!IMP) { toast("L'impression demande le fichier assets/js/impression.js.", true); return; }
+    var params = parametresRapport(def, rapport, LIGNES_DOCUMENT);
+    var fin = bouton ? attente(bouton, 'Préparation…') : function () {};
+    API.admin.donneesRapport(params).then(function (d) {
+      var doc = documentRapport(def, rapport, d);
+      var nom = (rapport ? rapport.nom : 'Rapport ' + (TYPES_RAPPORT[def.type] || '')) + ' ' + d.periode.debut +
+                (d.periode.fin !== d.periode.debut ? ' ' + d.periode.fin : '');
+      var pied = 'Goship Express · ' + traduitRapport('Généré le') + ' ' + traduitRapport(dateRapport(d.genere_le, true)) +
+                 (d.genere_par ? ' · ' + d.genere_par : '');
+      if (pdf) toast(traduitRapport('Dans la fenêtre qui s’ouvre, choisissez « Enregistrer au format PDF ».'));
+      return IMP.imprimer(doc, {
+        titre: nom.replace(/[\\/:*?"<>|]+/g, '-'), papier: orientationRapport(def) === 'paysage' ? 'A4 landscape' : 'A4',
+        marge: '14mm 12mm 16mm', pied: pied, numeroter: traduitRapport('Page'),
+        langue: window.GoshipLangueTableau ? window.GoshipLangueTableau.langue() : 'fr'
+      });
+    }).catch(function (err) { toast(messageErreur(err), true); }).then(fin);
+  }
+
+  // admin.html#rapports ouvre le tableau de bord sur les rapports (si le rôle le permet :
+  // choisirVue retombe sinon sur la vue générale)
+  if (location.hash === '#rapports') {
+    var ecranTableau = $('[data-ecran="tableau"]');
+    var allerRapports = function () {
+      if (ecranTableau && !ecranTableau.hidden) { choisirVue('rapports'); return true; }
+      return false;
+    };
+    if (!allerRapports() && ecranTableau && window.MutationObserver) {
+      var obsRapports = new MutationObserver(function () { if (allerRapports()) obsRapports.disconnect(); });
+      obsRapports.observe(ecranTableau, { attributes: true, attributeFilter: ['hidden'] });
+    }
   }
 
   /* ---- Démonstration --------------------------------------------------------- */

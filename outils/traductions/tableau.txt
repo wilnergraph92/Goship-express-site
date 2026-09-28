@@ -20,10 +20,14 @@
 7 derniers jours
 7 jours
 72 h à 7 jours
+A4 automatique
+A4 paysage
+A4 portrait
 Absent quand la période précédente vaut zéro : on écrit « nouveau » plutôt qu’un pourcentage infini.
 Accès réservé
 Actifs
 Actifs sur la période
+Action
 Action requise
 Action requise par destination
 Action réservée : votre rôle ne le permet pas, ou la session a expiré (reconnectez-vous).
@@ -32,7 +36,9 @@ Actions
 Actives
 Activité
 Activité des clients actifs
+Activité du système
 Activité récente
+Activités
 Activé
 Actualiser
 Administrateur
@@ -40,6 +46,7 @@ Adresse
 Affichage
 Affichage et réglages
 Affichage par défaut rétabli.
+Afficher
 Afficher plus de factures
 Agence
 Agence où le client retire son colis
@@ -48,7 +55,13 @@ Ajouter des exemples
 Alertes
 Aller au contenu
 Analytics
+Ancien statut
+Ancienne valeur
 Animations
+Annuel
+Annulation
+Annulation d’un paiement
+Annulation d’une facture
 Annuler
 Annuler cette facture
 Annuler la facture
@@ -56,11 +69,14 @@ Annuler la sélection
 Annuler le paiement
 Annuler un paiement
 Annuler une facture
+Annulé
 Annulée
 Annulées
+Année du
 Anomalie
 Anomalies
 Anomalies de facturation
+Aperçu (non enregistré)
 Aperçu de l'e-mail
 Aperçu de l'e-mail envoyé au client
 Aperçu de l’e-mail
@@ -89,6 +105,8 @@ Aucun colis sur ces deux périodes.
 Aucun paiement reçu pendant cette période.
 Aucun paiement reçu pour l'instant.
 Aucun paiement reçu pour l’instant.
+Aucun rapport enregistré. Choisissez une période, affichez-la, puis enregistrez-la ; ou « Créer un rapport ».
+Aucun rapport ne porte ce nom.
 Aucun scan pour l'instant.
 Aucun événement depuis ce nombre de jours : chiffre, alerte et liste à traiter.
 Aucun événement pour l'instant.
@@ -135,15 +153,20 @@ Ce mois-ci
 Ce paiement dépasse ce qui reste à payer.
 Ce que chaque rôle peut faire
 Ce qui restait dû à la fin de la période, reconstitué à partir des factures et des paiements datés.
+Ce rapport n'existe plus.
 Celle qui s'affiche à l'ouverture du tableau de bord.
 Celles de cet appareil
 Centre de distribution
 Certaines fonctionnalités sont indisponibles : aucune opération n'est enregistrée tant que la connexion n'est pas revenue.
 Cette action ne peut pas être annulée.
+Cette action supprimera le rapport enregistré. Les données originales des colis, factures et paiements ne seront pas supprimées.
 Cette année
 Cette facture n’existe plus : rechargez la liste.
 Cette facture n’existe plus.
 Cette version du poste de travail est trop ancienne pour certaines fonctions du tableau de bord.
+Champs
+Changement de rôle
+Changement de statut
 Changer le rôle
 Changer le statut
 Changer un statut
@@ -158,8 +181,10 @@ Chaîne logistique
 Chercher
 Chiffres clés et facturé
 Chiffres et contrôle de la facturation
+Chiffres, analytics et rapports
 Choisir un pays
 Choisir…
+Choisissez au moins une donnée à inclure.
 Choisissez le nouveau statut.
 Choisissez une date de début et une date de fin.
 Clair
@@ -171,6 +196,7 @@ Client introuvable : choisissez un client existant.
 Client prévenu
 Client supprimé
 Clients
+Clients actifs
 Clients avec solde
 Clients concernés
 Clients correspondants
@@ -178,6 +204,7 @@ Clients inscrits
 Clients inscrits (fin de période)
 Clients les plus actifs
 Cochez les blocs à afficher et rangez-les avec les flèches. Gardé sur cet appareil seulement.
+Code
 Code client
 Code client, nom, téléphone, e-mail, ville…
 Code-barres
@@ -224,22 +251,37 @@ Connexion…
 Consolidé
 Consulter, puis choisir l'opération
 Consulter, puis choisir l’opération
+Consultez, générez et imprimez les rapports de GoShip Express.
 Contenu
 Contenu du colis
 Contrôle de la facturation
 Contrôler
 Coordonnées
 Correction
+Correction d’une étape
 Corriger une étape
 Coupé
 Créances en fin de période
 Créances, maintenant
+Création
+Création d’un client
+Création d’un colis
+Création d’un rapport
+Création d’une facture
 Créer un client
+Créer un rapport
 Créer une facture
+Créé le
+Créé par
 Créée le
+Créée par
+Dans la fenêtre qui s’ouvre, choisissez « Enregistrer au format PDF ».
 Date
+Date de création
 Date de réception
+Date début
 Date et heure affichées
+Date fin
 Depuis
 Dernier scan
 Dernier événement
@@ -250,6 +292,7 @@ Dernière activité
 Dernière activité et colis par statut
 Des faits chiffrés, sans explication : les causes ne se lisent pas dans les données.
 Descendre
+Description
 Destinataire (client)
 Destination
 Destinations et clients
@@ -262,8 +305,11 @@ Disponibles
 Disposition par défaut rétablie.
 Donner ce rôle
 Donner un rôle
+Donnez un nom au rapport.
 Données
+Données incluses
 Données incomplètes.
+Données à inclure
 Dont frais de service
 Dont transport
 Du
@@ -271,6 +317,7 @@ Durée moyenne
 Durée moyenne dans l’état
 Durée médiane
 Durées négatives
+Début
 Déconnexion
 Découpage
 Décrivez le contenu du colis.
@@ -290,6 +337,7 @@ Déplier le menu
 Détail
 Détail du colis
 Détails
+Détails du rapport
 Dû en fin de période
 E-mail
 E-mail du compte
@@ -303,11 +351,13 @@ Embarqué → Disponible (acheminement)
 Embarqués
 Employé
 En action requise maintenant
+En attente (reçu, emballé)
 En cours
 En cours (tous sauf livrés)
 En direct
 En pause
 En retard
+En transit
 Encaissements
 Encaissements et créances
 Encaisser
@@ -315,8 +365,10 @@ Encaisser un paiement
 Encaissé
 Encaissé ce mois-ci
 Encaissé par moyen de paiement
+Encaissé pendant la période
 Enregistrement…
 Enregistrer
+Enregistrer ce rapport
 Enregistrer le colis
 Enregistrer le paiement
 Enregistrer les modifications
@@ -324,6 +376,7 @@ Enregistrer un autre colis
 Enregistrer un colis
 Erreur
 Espèces
+Essai de notification
 Ex. 4,5
 Ex. Amazon, SHEIN, Temu…
 Ex. Ciudad Juan Bosch
@@ -345,6 +398,7 @@ Facture
 Facture mise à jour.
 Facture moyenne
 Factures
+Factures supprimées (hors total)
 Factures à regrouper
 Factures émises
 Facturé
@@ -352,6 +406,7 @@ Facturé et encaissé
 Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé, l’autre ce qui est entré.
 Facturé sur la période
 Fermer
+Fermer le rapport
 Fiche complète
 Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
 Filtrer les clients
@@ -362,6 +417,7 @@ Filtrer par statut
 Filtres
 Filtres de la vue générale
 Filtres indisponibles : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
+Fin
 Finance
 Finances
 Fois
@@ -374,17 +430,24 @@ Gestion
 Goship Express — voir le site
 Grand total
 Gravité
+Génération…
+Générer le rapport
+Généré le
 Gérant
 Haïti
+Hebdomadaire
+Heure
 Heure de réception
 Historique
 Historique interne
 Identifiant
 Identifiant GSE, nom ou e-mail
+Impayé
 Impayées
 Imprimer
 Imprimer / PDF
 Imprimer l'étiquette d'expédition
+Imprimer le rapport
 Imprimer les étiquettes
 Inactifs
 Indicateur
@@ -400,9 +463,11 @@ Inspecté
 Intervalle médian entre deux opérations
 Jour
 Journal d’audit
+Journalier
 Jours
 Jours avec des scans
 L'heure en haut de l'écran, à la seconde près.
+La date de début doit être antérieure à la date de fin.
 La date de fin est avant la date de début.
 La personne crée d'abord son compte sur le site (« Créer un compte »), puis vous lui donnez son rôle ici. Chaque changement est noté au journal : qui, quand, ancien et nouveau rôle. Vous ne pouvez pas changer votre propre rôle.
 Laissez vide : lien PayPal créé automatiquement
@@ -411,9 +476,11 @@ Langue
 Langue du tableau de bord
 Le colis a changé de statut entre-temps : rechargez la liste.
 Le compte
+Le jour
 Le plus de colis en cours
 Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
 Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
+Les chiffres se lisent dans la base à chaque ouverture du rapport.
 Les dépenses ne sont pas suivies : aucune marge n'est calculée.
 Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, poste de scan et colis à traiter restent entiers.
 Les icônes seulement, pour laisser plus de place aux listes (ordinateur).
@@ -431,6 +498,7 @@ Liste
 Listes des colis, des clients et des colis à traiter.
 Livraison
 Livré
+Livré le
 Livrés
 Livrés (30 jours)
 Livrés pendant la période
@@ -442,6 +510,7 @@ Maj
 Maritime
 Maximum
 Membre de l’équipe
+Mensuel
 Menu du tableau de bord
 Menu latéral réduit
 Message pour le client
@@ -461,18 +530,31 @@ Mode
 Mode de transport
 Mode démonstration.
 Mode rapide
+Modification d’un client
+Modification d’un colis
+Modification d’un rapport
+Modification d’une facture
 Modifier
+Modifier le rapport
 Modifier les informations du colis
 Modifier un client
 Modifier un colis
+Modifier un rapport
 Modifier une facture
+Modifié le
 Moins de 24 h
 Mois
+Mois du
 Mois précédent
 Mon compte
 Montant
+Montant annulé
+Montant des factures supprimées
 Montant du transport
 Montant dû
+Montant facturé (hors annulées)
+Montant impayé
+Montant payé
 Montant reçu (US $)
 Montant total (US $)
 Montants
@@ -487,6 +569,8 @@ Même nombre de jours juste avant ; « ce mois » : le mois précédent aux mêm
 Même taux, période précédente
 Nom
 Nom (A → Z)
+Nom du rapport
+Nom du rapport…
 Nombre
 Nombre de jours sans mouvement
 Non disponible
@@ -497,22 +581,28 @@ Note interne
 Note pour le client
 Note pour le client (facultatif)
 Notes les plus fréquentes
+Notification
 Notifications du poste de travail
 Nouveau statut
 Nouveaux
 Nouveaux clients
 Nouvelle facture
+Nouvelle valeur
+N°
+N° colis
 N° de colis
 N° de colis, code client, nom, suivi vendeur…
 N° de facture
 N° de reçu, de transaction…
 N° de suivi du vendeur
+N° facture
 Opération
 Opérations
 Opérations au poste de scan
 Opérations au scanner
 Opérations aujourd’hui
 Opérations par jour
+Orientation de la page imprimée
 Origine
 Ouverture…
 Ouvrir
@@ -520,9 +610,19 @@ Ouvrir la fiche
 Ouvrir la fiche du colis
 Ouvrir le menu
 Ouvrir le poste de scan
+PDF
+PDF du rapport
+Page
+Paiement
+Paiement / facture
 Paiement annulé.
+Paiement d’une facture
+Paiement encaissé
+Paiement repris
 Paiement reçu
 Paiements
+Paiements annulés
+Paiements valides
 Paiements valides reçus pendant la période, quelle que soit la facture. Source : paiements.
 Par compte
 Par employé
@@ -540,9 +640,11 @@ Parcours
 Part
 Passés en action requise
 Pays
+Pays / ville
 Pays de destination
 Pays non précisé
 Payé
+Payé le
 Payé par
 Payée
 Payée en partie
@@ -554,6 +656,7 @@ Permission
 Permissions
 Personnaliser
 Personnaliser le tableau de bord
+Personnalisé
 Personnalisée…
 Petite
 Plus de 7 jours
@@ -568,17 +671,24 @@ Poids total
 Poste de scan
 Pour info
 Pourcentage
+Prix
 Prix arrêté à l’enregistrement du colis.
 Prix du colis (US $)
 Prix du transport
 Prix moyen
 Prix moyen d’un colis
 Précédente
+Préférence de notification
+Préparation…
 Prévenir le client
 Prêt : scannez un colis
 Période
 Période choisie comparée à la période précédente de même longueur.
+Période close
 Période de la vue générale
+Période en cours
+Période en cours : les chiffres peuvent encore changer.
+Période personnalisée
 Période précédente
 Périodes
 Qualité des données
@@ -586,21 +696,33 @@ Raccourcis
 Raison de l’action requise
 Raison, visible par le client (ex. adresse à vérifier)
 Rapide
+Rapport
+Rapport complet
+Rapport enregistré.
+Rapport modifié.
+Rapport supprimé. Les colis, factures et paiements restent intacts.
+Rapports
+Rapports enregistrés
 Recherche du client…
 Recherche impossible
 Recherche rapide : colis, clients, factures
 Rechercher
 Rechercher un client
 Rechercher un colis
+Rechercher un rapport
 Recherche…
 Reconnectez-vous pour continuer.
+Regroupement de factures
 Regrouper
 Regrouper avec d'autres factures de ce client
 Regrouper des factures
+Remplacée par
 Rendus disponibles
 Renseignez votre e-mail et votre mot de passe.
 Reprendre le direct
+Repris
 Rescanner
+Restait dû à la fin de la période
 Reste dû
 Reste sur les factures de la période
 Reste à payer
@@ -627,6 +749,7 @@ Routes et destinations
 Routes et villes
 Rubriques Analytics
 Rubriques des réglages
+Règle de notification
 Règlement des factures
 Réduire le menu
 Réessayer
@@ -640,6 +763,8 @@ Résultats de la recherche rapide
 Rétablir l'affichage par défaut
 Rétablir la disposition
 Rôle
+Saisi
+Saisi par
 Sans mouvement
 Sans mouvement depuis
 Sans échéance
@@ -651,6 +776,7 @@ Se déconnecter
 Secondes dans l'horloge
 Segments
 Semaine
+Semaine du
 Service
 Ses colis
 Ses factures
@@ -659,16 +785,33 @@ Seuls les colis de ce client apparaissent : une facture ne peut pas mélanger de
 Situation
 Solde
 Solde (maintenant)
+Solde actuel
 Solde le plus élevé
 Sombre
 Son
+Statistiques
+Statistiques financières
 Statut
+Statut avant
+Statut du colis
 Suivante
 Suivi du vendeur
 Suivi vendeur
+Suppression d’un client
+Suppression d’un colis
+Suppression d’un rapport
+Suppression d’une facture
+Suppression…
 Supprimer
 Supprimer ce colis
+Supprimer ce rapport ?
+Supprimer le rapport
 Supprimer un colis
+Supprimer un rapport
+Supprimé
+Supprimée le
+Supprimées
+Supprimées (hors total)
 Sur aucune facture active
 Sur la période
 Suspendre le direct
@@ -678,6 +821,7 @@ Sélectionner tous les colis affichés
 Tableau de bord
 Tableau de bord à activer
 Tableau de bord — Goship Express
+Tarif
 Tarif (US $ / lb)
 Tarif de la maison : 5 $/lb. À ne changer que pour un accord particulier.
 Tarif, frais de service, statuts, permissions : ces règles vivent dans la base de données et ne se changent pas depuis cet écran.
@@ -709,8 +853,11 @@ Transition
 Transitions de statut
 Transport facturé
 Trier les clients
+Trimestre du
+Trimestriel
 Trop de tentatives. Patientez quelques minutes.
 Type
+Type de rapport
 Téléphone
 USA
 Un acompte suffit : la facture reste à payer pour le reste.
@@ -720,7 +867,10 @@ Un scanner USB ou Bluetooth (mode clavier) n'a rien à installer : scannez un co
 Une erreur est survenue. Réessayez.
 Une notification du système quand une alerte apparaît (action requise, facture en retard…) et que la fenêtre n'est pas au premier plan.
 Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.
+Une période de trois ans au plus.
+Utilisateur
 Valeurs extrêmes
+Valide
 Ville
 Ville de livraison
 Villes de destination
@@ -733,6 +883,7 @@ Voir ce que chaque rôle peut faire
 Voir la facture
 Voir le client
 Voir le détail, période par période
+Voir le rapport
 Voir le site
 Voir le tableau
 Voir les clients
@@ -747,7 +898,10 @@ Vous n’avez pas la permission d’utiliser le poste de scan.
 Vue d'ensemble logistique
 Vue générale
 action requise
+actions requises
 anglais
+annulée
+annulées
 au
 aucun colis
 aucune facture sur la période
@@ -774,6 +928,8 @@ colis, maintenant
 créole
 disponible
 disponibles
+dont en retard
+dont regroupées
 du facturé déjà payé
 dû aujourd’hui
 emballé
@@ -781,8 +937,10 @@ emballés
 embarqué
 embarqués
 en action requise
+en attente
 en baisse
 en hausse
+en transit
 enregistrées au poste de scan
 espagnol
 facture
@@ -793,11 +951,15 @@ factures ouvertes
 factures échues
 fermer
 français
+impayée
+impayées
 jour
 jours
 lb
 les dix premières
 les siens
+ligne
+lignes
 livré
 livrés
 maintenant
@@ -805,6 +967,7 @@ même compte, même jour
 nouveau
 nouveau client
 nouveau client sur la période
+nouveaux
 nouveaux clients
 nouveaux clients sur la période
 opérations enregistrées
@@ -816,11 +979,14 @@ par e-mail et WhatsApp que son colis est reçu
 par jour
 par mois
 par semaine
+payée
 payée en partie
+payées
 payées en partie
 poids non renseigné
 poste de scan ·
 prix arrêté à l’enregistrement
+période en cours : les chiffres peuvent encore changer
 recherche rapide ·
 reçu
 reçus
@@ -828,6 +994,10 @@ rien reçu
 rien à payer
 résultat
 résultats
+suppression
+suppressions
+supprimé
+supprimés
 sur aucune facture active
 sur ces factures
 sur la période
@@ -835,6 +1005,7 @@ transféré à la succursale
 transférés à la succursale
 · mot de passe
 À encaisser
+À la création
 À payer
 À payer avant le
 À recouvrer
@@ -845,6 +1016,8 @@ transférés à la succursale
 Âge des créances (depuis l’émission)
 Échap
 Échue le
+Élément
+Émise le
 Équipe
 Étape
 Étape mise à jour
@@ -853,6 +1026,8 @@ transférés à la succursale
 Étiquette
 Évolution
 Événement
+Événements
+Événements des colis
 ℹ DÉJÀ FAIT
 ↗ nouveau
 ⚠ ACTION NON AUTORISÉE

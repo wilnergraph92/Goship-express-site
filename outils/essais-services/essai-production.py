@@ -178,7 +178,7 @@ def main():
     verifier('avec les droits Supabase, un visiteur n\'appelle que suivre_colis et sante', ouvertes,
              ['sante, suivre_colis'])
     migr = [v for c, v, o, _d in lignes if c == 'Migrations']
-    verifier('les 11 migrations sont reconnues', migr, ['OK'] * len(CHAINE))
+    verifier('les %d migrations sont reconnues' % len(CHAINE), migr, ['OK'] * len(CHAINE))
     verrous = [(o, v) for c, v, o, _d in lignes if c == 'Verrous métier']
     verifier('les quatre verrous métier sont actifs', sorted(verrous),
              [('evenement_immuable', 'OK'), ('garde_facture', 'OK'), ('verrou_role', 'OK'), ('verrou_statut', 'OK')])
@@ -457,7 +457,8 @@ def main():
     r = chaine()
     verifier('rejouée une seconde fois : toujours sans erreur', r.returncode, 0)
     r = chaine('supabase-notifications.sql')
-    verifier('à partir d\'un fichier : lui et ceux qui le suivent seulement', (r.returncode, r.stdout.count('OK     ')), (0, 2))
+    verifier('à partir d\'un fichier : lui et ceux qui le suivent seulement', (r.returncode, r.stdout.count('OK     ')),
+             (0, len(CHAINE) - CHAINE.index('supabase-notifications.sql')))
     r = chaine(url='postgresql://postgres:x@db.gpfdyslysqjmojgzggib.supabase.co:5432/postgres')
     verifier('adresse de la production : refus (code 3) avant toute connexion',
              (r.returncode, 'REFUS' in r.stdout), (3, True))

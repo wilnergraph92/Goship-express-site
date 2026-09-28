@@ -54,7 +54,8 @@ supabase-mobile.sql|creer_prealerte|p_cle=00000000-0000-0000-0000-000000000000&p
 supabase-notifications.sql|regles_notifications||non
 supabase-notifications.sql|notifications_non_lues||non
 supabase-notifications.sql|mes_notifications||non
-supabase-production.sql|sante||oui'
+supabase-production.sql|sante||oui
+supabase-rapports.sql|liste_rapports||non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

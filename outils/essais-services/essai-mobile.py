@@ -55,7 +55,7 @@ verifier, jsonq, creer, un = S.verifier, S.jsonq, S.creer, S.un
 FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
             'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql',
-            'supabase-production.sql')
+            'supabase-production.sql', 'supabase-rapports.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {

@@ -91,7 +91,13 @@
     [/^(.+) \(démonstration\)$/, ['{1} (demo)', '{1} (demo)', '{1} (demo)']],
     [/^Facture (\d{4}-\d{2}-\d+)$/, ['Invoice $1', 'Factura $1', 'Fakti $1']],
     [/^Miami → ([^·]+)$/, ['Miami → {1}', 'Miami → {1}', 'Miami → {1}']],
-    [/^(.+), (Haïti|République dominicaine|États-Unis)$/, ['$1, {2}', '$1, {2}', '$1, {2}']]
+    [/^(.+), (Haïti|République dominicaine|États-Unis)$/, ['$1, {2}', '$1, {2}', '$1, {2}']],
+    // Les rapports (onglet « Rapport »)
+    [/^(Voir le rapport|Détails du rapport|Imprimer le rapport|PDF du rapport|Modifier le rapport|Supprimer le rapport) (.+)$/, ['{1} $2', '{1} $2', '{1} $2']],
+    [/^(\d+)–(\d+) sur (\d+)$/, ['$1–$2 of $3', '$1–$2 de $3', '$1–$2 sou $3']],
+    [/^Calculé le (.+), sur les données actuelles\.$/, ['Calculated on {1}, from current data.', 'Calculado el {1}, con los datos actuales.', 'Kalkile le {1}, sou done aktyèl yo.']],
+    [/^(.+) \((Administrateur|Gérant|Employé)\)$/, ['$1 ({2})', '$1 ({2})', '$1 ({2})']],
+    [/^Les (\S+) premières lignes sur (\S+) — affinez la période ou les filtres pour le reste\.$/, ['First $1 rows of $2 — narrow the period or the filters for the rest.', 'Primeras $1 filas de $2 — acote el período o los filtros para ver el resto.', '$1 premye liy sou $2 — chwazi yon peryòd oswa filt ki pi jis pou rès la.']]
   ];
   // « 1 colis » : le singulier, là où le français ne change pas
   var SINGULIERS = { colis: ['package', 'paquete', 'koli'] };

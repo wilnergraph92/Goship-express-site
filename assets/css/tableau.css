@@ -774,6 +774,59 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
   .gs-fiche__grille{grid-template-columns:1fr}
 }
 
+/* ---- Les rapports (onglet « Rapport ») ------------------------------------------------------
+   Mêmes briques que le reste : barre de filtres (gs-apercu__barre), cartes (gs-kpi), tableaux
+   (gs-tableau), pagination. Sur téléphone, les filtres passent l'un sous l'autre et les
+   tableaux défilent de côté dans leur cadre. */
+.gs-rapports__tete{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 20px;margin:0 0 16px}
+.gs-rapports__titre{margin:0;font-size:24px;line-height:1.2;color:var(--ink)}
+.gs-rapports__intro{margin:4px 0 0;font-size:15px;color:#5b6782}
+.gs-rapports__filtres{align-items:flex-end}
+.gs-rapports__filtres .gs-apercu__etat{flex-basis:100%;margin:0}
+.gs-rapports__resultat{margin:0 0 24px;padding:18px 20px 20px;border:1px solid var(--app-bord);border-radius:var(--app-rayon);background:#fff;box-shadow:var(--app-ombre)}
+.gs-rapports__resultat-tete{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px 20px;margin:0 0 16px}
+.gs-rapports__type{margin:0;font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent2)}
+.gs-rapports__nom{margin:2px 0 0;font-size:20px;line-height:1.25;color:var(--ink)}
+.gs-rapports__periode{margin:4px 0 0;font-size:14px;color:#5b6782}
+.gs-rapports__boutons{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.gs-rapports__orientation{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#6b7690}
+.gs-rapports__kpis{margin:0 0 8px}
+.gs-rapports__partie{margin:22px 0 0}
+.gs-rapports__partie-titre{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:0 0 10px;font-size:17px;color:var(--ink)}
+.gs-rapports__total{font-size:13px;font-weight:600;color:#6b7690}
+.gs-rapports__sous-titre{margin:16px 0 8px;font-size:14.5px;color:var(--ink)}
+.gs-rapports__partie .gs-pagination{margin-top:10px}
+.gs-tableau--rapport td{min-width:150px;max-width:320px;white-space:normal;vertical-align:top}
+.gs-tableau--rapport td:first-child{min-width:0;white-space:nowrap}
+.gs-rapports__resultat{scroll-margin-top:110px}
+.gs-rapports__valeur{display:block}
+.gs-rapports__finances{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start}
+.gs-rapports__chiffres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px;margin:0;padding:6px 16px;border:1px solid var(--app-bord);border-radius:16px;background:#fbfcfe}
+.gs-rapports__chiffres div{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #eef2f8}
+.gs-rapports__chiffres dt{font-size:13.5px;color:#5b6782}
+.gs-rapports__chiffres dd{margin:0;font-weight:800;color:var(--ink);white-space:nowrap}
+.gs-rapports__finances .gs-rapports__sous-titre{margin:0 0 8px}
+.gs-rapports__liste{margin:8px 0 0}
+.gs-rapports__liste .gs-admin-outils{align-items:center}
+.gs-rapports__liste-titre{margin:0 auto 0 0;font-size:18px;color:var(--ink)}
+.gs-rapports__actions{white-space:nowrap}
+.gs-rapports__actions .gs-rapports__action{margin-right:10px;font-size:13.5px}
+.gs-rapports__inclure{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin:18px 0 0;padding:14px 16px;border:1px solid var(--app-bord);border-radius:14px}
+.gs-rapports__inclure legend{padding:0 6px;font-weight:800;color:var(--ink)}
+.gs-rapports__inclure label{display:flex;align-items:center;gap:8px;font-size:14.5px;cursor:pointer}
+@media (max-width:900px){
+  .gs-rapports__finances{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:640px){
+  .gs-rapports__filtres .gs-apercu__choix{flex:1 1 100%}
+  .gs-rapports__filtres .gs-apercu__choix select,.gs-rapports__filtres .gs-apercu__choix input{width:100%}
+  .gs-rapports__resultat{padding:14px 12px}
+  .gs-rapports__boutons{width:100%}
+  .gs-rapports__boutons .gs-bouton{flex:1 1 auto;justify-content:center}
+  .gs-rapports__chiffres,.gs-rapports__inclure{grid-template-columns:minmax(0,1fr)}
+  .gs-rapports__tete .gs-bouton{width:100%;justify-content:center}
+}
+
 /* ---- L'apparence sombre (réglage « Apparence ») -----------------------------------------
    Posée par apparence.js et admin.js sur <html data-apparence="sombre">, pour le tableau
    de bord seulement. D'abord la contrepartie sombre de chaque couleur claire des cartes,
@@ -1234,6 +1287,18 @@ html[data-apparence="sombre"] body.gs-admin-body{--ink:#e7edf9;--ink2:#c3d0ee;--
 [data-apparence="sombre"] .gs-admin-body .gs-fiche__point{border-color:#2a3a5f;background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-fait .gs-fiche__point{border-color:#1f5fe0;background-color:#1f5fe0}
 [data-apparence="sombre"] .gs-admin-body .gs-fiche__etape.is-actuel .gs-fiche__point{border-color:#f4600d;background-color:#f4600d}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__titre,[data-apparence="sombre"] .gs-admin-body .gs-rapports__nom{color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__intro,[data-apparence="sombre"] .gs-admin-body .gs-rapports__periode{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__type{color:#8fb3ff}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__resultat{border-color:#22304f;background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body :is(.gs-rapports__partie-titre,.gs-rapports__sous-titre,.gs-rapports__liste-titre){color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body :is(.gs-rapports__total,.gs-rapports__orientation){color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__chiffres{border-color:#22304f;background-color:#0b1429}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__chiffres div{border-bottom-color:#1f2b48}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__chiffres dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__chiffres dd{color:#e7edf9}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__inclure{border-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-rapports__inclure legend{color:#dce5f7}
 @media screen and (prefers-reduced-motion:no-preference){
   html[data-apparence="sombre"]:not([data-animations="non"]) .gs-vg__carte.is-vu:hover{box-shadow:0 1px 2px rgba(0,0,0,.4),0 26px 50px -30px rgba(0,0,0,.95)}
 }

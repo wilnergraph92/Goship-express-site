@@ -606,6 +606,28 @@
   // format (thermique pour l'étiquette, bureau pour la facture), PDF, et un
   // vrai message si l'imprimante refuse. Même HTML, même impression.css,
   // même @page : aucun second format de facture ni d'étiquette.
+  // La règle @page : format, marges et, pour un rapport, le pied de page imprimé dans la
+  // marge du bas de CHAQUE page (options.pied à gauche, « Page 2 / 5 » à droite si
+  // options.numeroter donne le mot « Page » dans la langue voulue). Les navigateurs qui
+  // n'impriment pas encore les marges de page (@bottom-left…) gardent le pied écrit à la
+  // fin du document lui-même.
+  function chaineCss(t) {
+    // « < » et « > » s'écrivent en codes CSS : un nom de compte ne peut pas fermer la balise <style>
+    return '"' + String(t == null ? '' : t).replace(/[\\"]/g, '\\$&').replace(/[\r\n]+/g, ' ')
+      .replace(/</g, '\\3c ').replace(/>/g, '\\3e ') + '"';
+  }
+  function reglePage(papier, marge, options) {
+    var marges = '';
+    if (options.pied) {
+      marges += '@bottom-left{content:' + chaineCss(options.pied) + ';font:8pt Arial,sans-serif;color:#5b6478}';
+    }
+    if (options.numeroter) {
+      marges += '@bottom-right{content:' + chaineCss(options.numeroter + ' ') + ' counter(page) " / " counter(pages);' +
+                'font:8pt Arial,sans-serif;color:#5b6478}';
+    }
+    return '@page{size:' + papier + ';margin:' + marge + ';' + marges + '}';
+  }
+
   function texteHtml(t) {
     return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -613,11 +635,11 @@
   }
   function imprimerBureau(bureau, liste, options) {
     var papier = /^[\w .]{1,20}$/.test(options.papier || '') ? options.papier : 'A4';
-    var marge = /^[\w .]{1,12}$/.test(options.marge || '') ? options.marge : '0';
+    var marge = /^[\w .]{1,20}$/.test(options.marge || '') ? options.marge : '0';
     var html = '<!doctype html><html lang="' + texteHtml(options.langue || 'fr') + '"><head><meta charset="utf-8">' +
       '<base href="' + texteHtml(BASE) + '"><title>' + texteHtml(options.titre || 'Goship Express') + '</title>' +
       '<link rel="stylesheet" href="' + texteHtml(BASE + 'assets/css/impression.css') + '">' +
-      '<style>@page{size:' + papier + ';margin:' + marge + '}</style></head><body>' +
+      '<style>' + reglePage(papier, marge, options) + '</style></head><body>' +
       liste.map(function (n) { return n.outerHTML; }).join('') + '</body></html>';
     return bureau.imprimer({ html: html, titre: options.titre || 'Goship Express', papier: papier }).then(function (r) {
       return !!r && (r.etat === 'imprime' || r.etat === 'pdf');
@@ -648,7 +670,7 @@
     // Le format du papier : seule une règle @page peut le fixer, et elle ne
     // peut pas dépendre d'une classe — d'où cette ligne posée ici.
     var papier = doc.createElement('style');
-    papier.textContent = '@page{size:' + (options.papier || 'A4') + ';margin:' + (options.marge || '0') + '}';
+    papier.textContent = reglePage(options.papier || 'A4', options.marge || '0', options);
     doc.head.appendChild(papier);
     liste.forEach(function (n) { doc.body.appendChild(doc.importNode(n, true)); });
 

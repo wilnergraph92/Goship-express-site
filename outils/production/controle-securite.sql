@@ -57,7 +57,8 @@ migrations(ordre, fichier, present) as (values
   (8,  'supabase-analytics.sql',       exists (select 1 from pg_proc where proname = 'analytics_synthese')),
   (9,  'supabase-mobile.sql',          exists (select 1 from pg_proc where proname = 'creer_prealerte')),
   (10, 'supabase-notifications.sql',   to_regclass('public.notification_envois') is not null),
-  (11, 'supabase-production.sql',      exists (select 1 from pg_proc where proname = 'sante'))),
+  (11, 'supabase-production.sql',      exists (select 1 from pg_proc where proname = 'sante')),
+  (12, 'supabase-rapports.sql',        to_regclass('public.rapports') is not null)),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,
