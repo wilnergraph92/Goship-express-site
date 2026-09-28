@@ -68,6 +68,7 @@
       <p class="gs-td__rubrique" id="menu-gestion">Gestion</p>
       <div class="gs-td__nav" role="tablist" aria-labelledby="menu-gestion" aria-orientation="vertical">
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/></svg><span class="gs-td__libelle">Analytics</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="rapports" data-permission="reports.view" tabindex="-1" title="Rapport"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 18v-3M12 18v-6M16 18v-4"/></svg><span class="gs-td__libelle">Rapport</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
       </div>
       <div class="gs-td__nav">
@@ -675,6 +676,125 @@
       <div class="gs-analytics__corps" data-analytics-corps aria-live="polite"></div>
     </div>
 
+    <!-- Les rapports (outils/supabase-rapports.sql) : une période, des filtres, les données
+         à inclure → les chiffres et les lignes, lus dans la base ; imprimés en A4 ou
+         enregistrés en PDF. Un rapport enregistré n'est que sa définition. -->
+    <div class="gs-admin-vue gs-rapports" data-vue="rapports" data-permission="reports.view" role="tabpanel" hidden>
+      <div class="gs-rapports__tete">
+        <div>
+          <h2 class="gs-rapports__titre">Rapports</h2>
+          <p class="gs-rapports__intro">Consultez, générez et imprimez les rapports de GoShip Express.</p>
+        </div>
+        <button type="button" class="gs-bouton gs-bouton--plein" data-action="rapport-creer" data-permission="reports.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Créer un rapport</button>
+      </div>
+
+      <form class="gs-apercu__barre gs-rapports__filtres" data-rapport-filtres novalidate>
+        <label class="gs-apercu__choix">
+          <span>Période</span>
+          <select class="gs-admin-filtre" name="periode" data-rapport-periode>
+            <option value="aujourdhui">Aujourd'hui</option>
+            <option value="journalier">Journalier</option>
+            <option value="hebdomadaire">Hebdomadaire</option>
+            <option value="mensuel" selected>Mensuel</option>
+            <option value="trimestriel">Trimestriel</option>
+            <option value="annuel">Annuel</option>
+            <option value="personnalise">Période personnalisée</option>
+          </select>
+        </label>
+        <label class="gs-apercu__choix" data-rapport-debut-champ><span data-rapport-debut-libelle>Mois du</span><input type="date" class="gs-admin-date" name="debut"></label>
+        <label class="gs-apercu__choix" data-rapport-fin-champ hidden><span>Au</span><input type="date" class="gs-admin-date" name="fin"></label>
+        <label class="gs-apercu__choix">
+          <span>Statut du colis</span>
+          <select class="gs-admin-filtre" name="statut_colis">
+            <option value="">Tous</option>
+            <option value="attente">En attente (reçu, emballé)</option>
+            <option value="transit">En transit</option>
+            <option value="disponible">Disponible</option>
+            <option value="livre">Livré</option>
+            <option value="incident">Action requise</option>
+          </select>
+        </label>
+        <label class="gs-apercu__choix">
+          <span>Paiement / facture</span>
+          <select class="gs-admin-filtre" name="etat_facture">
+            <option value="">Tous</option>
+            <option value="payee">Payé</option>
+            <option value="impayee">Impayé</option>
+            <option value="annulee">Annulé</option>
+            <option value="supprimee">Supprimé</option>
+          </select>
+        </label>
+        <label class="gs-apercu__choix">
+          <span>Type de rapport</span>
+          <select class="gs-admin-filtre" name="type">
+            <option value="complet">Rapport complet</option>
+            <option value="colis">Colis</option>
+            <option value="factures">Factures</option>
+            <option value="paiements">Paiements</option>
+            <option value="clients">Clients</option>
+            <option value="evenements">Événements</option>
+            <option value="activite">Activité du système</option>
+          </select>
+        </label>
+        <button type="submit" class="gs-bouton gs-bouton--petit gs-bouton--sombre" data-rapport-afficher><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>Afficher</button>
+        <p class="gs-apercu__etat" data-rapport-dates role="status"></p>
+      </form>
+      <p class="gs-apercu__message" data-rapport-message role="alert" hidden></p>
+
+      <section class="gs-rapports__resultat" data-rapport-resultat hidden aria-labelledby="rapport-titre">
+        <div class="gs-rapports__resultat-tete">
+          <div>
+            <p class="gs-rapports__type" data-rapport-type></p>
+            <h3 class="gs-rapports__nom" id="rapport-titre" data-rapport-titre></h3>
+            <p class="gs-rapports__periode" data-rapport-periode-texte></p>
+          </div>
+          <div class="gs-rapports__boutons">
+            <label class="gs-rapports__orientation">
+              <span>Page</span>
+              <select class="gs-admin-filtre gs-admin-filtre--petit" data-rapport-orientation aria-label="Orientation de la page imprimée">
+                <option value="auto">A4 automatique</option>
+                <option value="portrait">A4 portrait</option>
+                <option value="paysage">A4 paysage</option>
+              </select>
+            </label>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="rapport-imprimer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>Imprimer</button>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="rapport-pdf"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></svg>PDF</button>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="rapport-details" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>Détails</button>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="rapport-modifier" data-permission="reports.edit" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Modifier</button>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="rapport-enregistrer" data-permission="reports.create"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Enregistrer ce rapport</button>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="rapport-fermer" aria-label="Fermer le rapport"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg>Fermer</button>
+          </div>
+        </div>
+        <div class="gs-kpis gs-rapports__kpis" data-rapport-kpis></div>
+        <div class="gs-rapports__parties" data-rapport-sections aria-live="polite"></div>
+      </section>
+
+      <section class="gs-rapports__liste" aria-labelledby="rapports-liste-titre">
+        <div class="gs-admin-outils">
+          <h3 class="gs-rapports__liste-titre" id="rapports-liste-titre">Rapports enregistrés</h3>
+          <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche="rapports" placeholder="Nom du rapport…" aria-label="Rechercher un rapport" autocomplete="off" spellcheck="false"></label>
+        </div>
+        <div class="gs-tableau-cadre">
+          <table class="gs-tableau gs-tableau--rapports">
+            <thead>
+              <tr>
+                <th scope="col">Rapport</th>
+                <th scope="col">Type</th>
+                <th scope="col">Période</th>
+                <th scope="col">Créé par</th>
+                <th scope="col">Date de création</th>
+                <th scope="col">Statut</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody data-lignes="rapports"></tbody>
+          </table>
+        </div>
+        <p class="gs-admin-vide" data-vide="rapports" hidden></p>
+        <div class="gs-pagination" data-pagination="rapports" hidden></div>
+      </section>
+    </div>
+
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>
       <div class="gs-finances" data-resume-factures data-permission="reports.view" hidden>
         <div class="gs-finances__case">
@@ -1150,6 +1270,119 @@
      « La fiche d'une ligne »). Un colis y montre tout ce que la base en sait, son parcours et
      ses actions (mettre à jour, facture, étiquette, client) ; les autres lignes, leurs
      colonnes et les boutons de la ligne. Rien ne s'y calcule. -->
+<dialog class="gs-dialogue" data-dialogue="rapport" aria-labelledby="dlg-rapport-titre">
+  <form class="gs-form" data-form="rapport" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-rapport-titre" data-rapport-dlg-titre>Créer un rapport</h2>
+        <p class="gs-dialogue__sous-titre">Les chiffres se lisent dans la base à chaque ouverture du rapport.</p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <div class="gs-champ">
+        <label for="rapport-nom">Nom du rapport</label>
+        <input id="rapport-nom" name="nom" type="text" maxlength="120" required placeholder="Rapport mensuel - Septembre 2026" autocomplete="off">
+      </div>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="rapport-type">Type</label>
+          <select id="rapport-type" name="type">
+            <option value="complet">Rapport complet</option>
+            <option value="colis">Colis</option>
+            <option value="factures">Factures</option>
+            <option value="paiements">Paiements</option>
+            <option value="activite">Activités</option>
+            <option value="clients">Clients</option>
+            <option value="evenements">Événements</option>
+          </select>
+        </div>
+        <div class="gs-champ">
+          <label for="rapport-periode">Période</label>
+          <select id="rapport-periode" name="periode">
+            <option value="aujourdhui">Aujourd'hui</option>
+            <option value="journalier">Journalier</option>
+            <option value="hebdomadaire">Hebdomadaire</option>
+            <option value="mensuel" selected>Mensuel</option>
+            <option value="trimestriel">Trimestriel</option>
+            <option value="annuel">Annuel</option>
+            <option value="personnalise">Personnalisé</option>
+          </select>
+        </div>
+      </div>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="rapport-debut">Date début</label>
+          <input id="rapport-debut" name="debut" type="date">
+        </div>
+        <div class="gs-champ">
+          <label for="rapport-fin">Date fin</label>
+          <input id="rapport-fin" name="fin" type="date">
+        </div>
+      </div>
+      <p class="gs-champ__aide" data-rapport-dlg-dates></p>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="rapport-statut-colis">Statut du colis</label>
+          <select id="rapport-statut-colis" name="statut_colis">
+            <option value="">Tous</option>
+            <option value="attente">En attente (reçu, emballé)</option>
+            <option value="transit">En transit</option>
+            <option value="disponible">Disponible</option>
+            <option value="livre">Livré</option>
+            <option value="incident">Action requise</option>
+          </select>
+        </div>
+        <div class="gs-champ">
+          <label for="rapport-etat-facture">Paiement / facture</label>
+          <select id="rapport-etat-facture" name="etat_facture">
+            <option value="">Tous</option>
+            <option value="payee">Payé</option>
+            <option value="impayee">Impayé</option>
+            <option value="annulee">Annulé</option>
+            <option value="supprimee">Supprimé</option>
+          </select>
+        </div>
+      </div>
+      <fieldset class="gs-rapports__inclure">
+        <legend>Données à inclure</legend>
+        <label><input type="checkbox" name="sections" value="colis"> Colis</label>
+        <label><input type="checkbox" name="sections" value="factures"> Factures</label>
+        <label><input type="checkbox" name="sections" value="paiements"> Paiements</label>
+        <label><input type="checkbox" name="sections" value="activite"> Activités</label>
+        <label><input type="checkbox" name="sections" value="clients"> Clients</label>
+        <label><input type="checkbox" name="sections" value="evenements"> Événements des colis</label>
+        <label><input type="checkbox" name="sections" value="finances"> Statistiques financières</label>
+      </fieldset>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-rapport-dlg-valider>Générer le rapport</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="supprimer-rapport" aria-labelledby="dlg-supprimer-rapport-titre">
+  <form class="gs-form" data-form="supprimer-rapport" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-supprimer-rapport-titre">Supprimer ce rapport ?</h2>
+        <p class="gs-dialogue__sous-titre" data-supprimer-rapport-nom></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Cette action supprimera le rapport enregistré. Les données originales des colis, factures et paiements ne seront pas supprimées.</p>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--danger" data-supprimer-rapport-valider>Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="gs-dialogue gs-fiche" data-dialogue="fiche" aria-labelledby="dlg-fiche-titre">
   <div class="gs-form">
     <div class="gs-dialogue__tete">

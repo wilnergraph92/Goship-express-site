@@ -112,7 +112,7 @@ Un rôle par compte (`clients.role`) : `client`, `employe`, `gerant`,
 (`permissions_du_role`, `supabase.sql` partie 4, avec `peut` et
 `exiger_permission`) : **aucune règle ne teste un nom de rôle**. Toute
 nouvelle fonction ou règle RLS demande une permission (`clients.*`,
-`shipments.*`, `invoices.*`, `payments.*`, `reports.view`, `users.view`,
+`shipments.*`, `invoices.*`, `payments.*`, `reports.*`, `users.view`,
 `roles.manage`, `settings.manage`, `audit_logs.view`) ; une fonction qui
 n'existe pas n'a pas de permission. `est_admin()` n'est gardée que pour
 l'application mobile et les anciennes pages. Le rôle ne change que par
@@ -245,6 +245,24 @@ sa ligne dans `tableau.txt`, ses trois traductions, puis `traduire.py`.** Aucune
 ne doit lire un texte affiché pour décider (il peut être traduit) : un attribut
 `data-*` le fait. Factures et étiquettes imprimées gardent la langue du client.
 
+**Les rapports** (onglet « Rapport », `admin.html#rapports`, `outils/supabase-rapports.sql`,
+dernier de la chaîne) : une période (aujourd'hui, jour, semaine du lundi au dimanche,
+mois, trimestre, année, personnalisée ; jours de Santo Domingo, `rapport_bornes`), deux
+filtres (statut du colis par groupe, état de la facture) et les données à inclure →
+`rapport_donnees`, qui compte tout (définitions d'`analytics_mesures`) et rend les lignes
+page par page (50 à l'écran, 2 000 au plus pour le papier). Un rapport enregistré
+(table `rapports`, aucune lecture ni écriture directe) n'est que sa **définition** ; ses
+chiffres se relisent à chaque ouverture, avec SES dates. Factures « supprimées » et colis
+supprimés : lus dans `journal_audit` (une facture ne se supprime qu'avec le compte de son
+client), jamais comptés dans le facturé. L'activité est `journal_audit`, filtrée ligne à
+ligne par la permission de ce dont elle parle. Permissions : `reports.view` (voir,
+imprimer, PDF), `reports.create` (administrateur, gérant), `reports.edit` et
+`reports.delete` (administrateur) ; supprimer un rapport n'efface que lui (journal
+`rapport.suppression`). Impression et PDF : `impression.js` (options `pied` et
+`numeroter` : pied de page et « Page 2 / 5 » par `@page`), le PDF est celui de la
+fenêtre d'impression ou de l'application de bureau — aucune bibliothèque. Copie démo :
+`donneesRapportDemo`, `bornesRapport`… ; `essai-rapports.py` / `essai-rapports.js`.
+
 ### Analytics
 
 `outils/supabase-analytics.sql` (onglet `admin.html#analytics`) : ce qui
@@ -331,7 +349,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

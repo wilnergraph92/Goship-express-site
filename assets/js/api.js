@@ -82,14 +82,14 @@
             'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
             'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
             'payments.view', 'payments.create', 'payments.cancel',
-            'reports.view',
+            'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
             'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view'],
     gerant: ['clients.view', 'clients.create', 'clients.edit',
              'shipments.view', 'shipments.create', 'shipments.edit',
              'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
              'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
              'payments.view', 'payments.create', 'payments.cancel',
-             'reports.view',
+             'reports.view', 'reports.create',
              'users.view'],
     employe: ['clients.view', 'clients.create',
               'shipments.view', 'shipments.create', 'shipments.edit',
@@ -1054,6 +1054,38 @@
           params.p_decalage = (o.page || 0) * parPage;
         }
         return sb().then(function (c) { return c.rpc(RPC[module], params); }).then(resultat);
+      },
+
+      /* ---- Rapports (outils/supabase-rapports.sql) ---------------------------
+         Un rapport enregistré n'est qu'une définition (nom, période, filtres,
+         données à inclure) ; ses chiffres et ses lignes se relisent dans la base
+         à chaque ouverture (rapport_donnees), qui compte tout. Lire demande
+         reports.view, enregistrer reports.create, modifier reports.edit,
+         supprimer reports.delete : la base refuse d'elle-même. Une base qui n'a
+         pas encore ce fichier répond « absent ». */
+      // o : { recherche, page, parPage } → { total, lignes }
+      rapports: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50;
+        return sb().then(function (c) {
+          return c.rpc('liste_rapports', { p_recherche: o.recherche || null, p_limite: parPage,
+                                           p_decalage: (o.page || 0) * parPage });
+        }).then(resultat);
+      },
+      // r : { nom, type, periode, debut, fin, filtres, sections }
+      creerRapport: function (r) {
+        return sb().then(function (c) { return c.rpc('creer_rapport', { p_rapport: r }); }).then(resultat);
+      },
+      modifierRapport: function (id, r) {
+        return sb().then(function (c) { return c.rpc('modifier_rapport', { p_id: id, p_rapport: r }); }).then(resultat);
+      },
+      // N'efface que le rapport enregistré, jamais les colis, factures ou paiements
+      supprimerRapport: function (id) {
+        return sb().then(function (c) { return c.rpc('supprimer_rapport', { p_id: id }); }).then(resultat);
+      },
+      // p : { periode, debut, fin, type, filtres, sections, limite, decalage, section }
+      donneesRapport: function (p) {
+        return sb().then(function (c) { return c.rpc('rapport_donnees', { p_parametres: p || {} }); }).then(resultat);
       },
 
       /* ---- Tableau de bord (outils/supabase-tableau-de-bord.sql) -------
@@ -2756,6 +2788,374 @@
     };
   }
 
+  /* ---- Les rapports : la copie démo de outils/supabase-rapports.sql ---------------
+     Mêmes périodes (jours de Santo Domingo), mêmes filtres, mêmes définitions, même
+     forme de réponse, mêmes refus : essai-rapports.py compare les deux. Un rapport
+     enregistré n'est qu'une définition (d.rapports) ; ses chiffres se relisent dans
+     les données à chaque ouverture. Le supprimer n'efface que lui. ---- */
+  var TYPES_RAPPORT = ['complet', 'colis', 'factures', 'paiements', 'clients', 'evenements', 'activite'];
+  var SECTIONS_RAPPORT = ['finances', 'colis', 'evenements', 'factures', 'paiements', 'clients', 'activite'];
+  var STATUTS_RAPPORT = { attente: ['recu', 'emballe'], transit: ['embarque', 'distribution', 'succursale'],
+                          disponible: ['disponible'], livre: ['livre'], incident: ['incident'] };
+
+  // rapport_date : AAAA-MM-JJ → la date, ou une erreur lisible
+  function dateRapport(texte) {
+    if (texte == null || String(texte).trim() === '') return null;
+    texte = String(texte);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(texte)) throw Erreur('INVALID_PERIOD', 'Date illisible : ' + texte.slice(0, 20) + '.');
+    var t = new Date(texte + 'T00:00:00Z');
+    if (isNaN(t.getTime()) || t.toISOString().slice(0, 10) !== texte) {
+      throw Erreur('INVALID_PERIOD', 'Date impossible : ' + texte.slice(0, 20) + '.');
+    }
+    return texte;
+  }
+
+  function finDuMois(jour) {
+    var t = new Date(jour.slice(0, 7) + '-01T00:00:00Z');
+    t.setUTCMonth(t.getUTCMonth() + 1);
+    t.setUTCDate(0);
+    return t.toISOString().slice(0, 10);
+  }
+
+  // rapport_bornes : le type de période et sa date de référence → { debut, fin }
+  function bornesRapport(periode, debut, fin) {
+    var ref = debut || aujourdhui();
+    var an = ref.slice(0, 4), mois = Number(ref.slice(5, 7));
+    switch (periode || '') {
+      case 'aujourdhui': return { debut: aujourdhui(), fin: aujourdhui() };
+      case 'journalier': return { debut: ref, fin: ref };
+      case 'hebdomadaire': {
+        var lundi = decalerJour(ref, -((new Date(ref + 'T00:00:00Z').getUTCDay() + 6) % 7));
+        return { debut: lundi, fin: decalerJour(lundi, 6) };
+      }
+      case 'mensuel': return { debut: ref.slice(0, 8) + '01', fin: finDuMois(ref) };
+      case 'trimestriel': {
+        var m1 = Math.floor((mois - 1) / 3) * 3 + 1, d1 = an + '-' + (m1 < 10 ? '0' : '') + m1 + '-01';
+        return { debut: d1, fin: finDuMois(an + '-' + (m1 + 2 < 10 ? '0' : '') + (m1 + 2) + '-01') };
+      }
+      case 'annuel': return { debut: an + '-01-01', fin: an + '-12-31' };
+      case 'personnalise':
+        if (!debut || !fin) throw Erreur('INVALID_PERIOD', 'Choisissez une date de début et une date de fin.');
+        if (debut > fin) throw Erreur('INVALID_PERIOD', 'La date de début doit être antérieure à la date de fin.');
+        if ((new Date(fin + 'T00:00:00Z') - new Date(debut + 'T00:00:00Z')) / 864e5 > 1095) {
+          throw Erreur('INVALID_PERIOD', 'Une période de trois ans au plus.');
+        }
+        return { debut: debut, fin: fin };
+      default:
+        throw Erreur('INVALID_PERIOD', 'Période inconnue : ' + String(periode || '').slice(0, 30) + '.');
+    }
+  }
+
+  // rapport_filtres : vérifiés, une clé vide retirée
+  function filtresRapport(f) {
+    var r = {};
+    if (f == null) return r;
+    if (typeof f !== 'object' || Array.isArray(f)) throw Erreur('INVALID_INPUT', 'Les filtres forment un objet.');
+    Object.keys(f).forEach(function (k) {
+      if (k !== 'statut_colis' && k !== 'etat_facture') throw Erreur('INVALID_INPUT', 'Filtre inconnu : ' + k.slice(0, 20) + '.');
+      if (f[k] != null && typeof f[k] !== 'string') throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » est un texte.');
+      var v = String(f[k] || '').trim().toLowerCase();
+      if (!v) return;
+      if (k === 'statut_colis' && !STATUTS_RAPPORT[v]) throw Erreur('INVALID_INPUT', 'Statut de colis inconnu : ' + v.slice(0, 20) + '.');
+      if (k === 'etat_facture' && ['payee', 'impayee', 'annulee', 'supprimee'].indexOf(v) < 0) {
+        throw Erreur('INVALID_INPUT', 'État de facture inconnu : ' + v.slice(0, 20) + '.');
+      }
+      r[k] = v;
+    });
+    return r;
+  }
+
+  // rapport_sections : celles reçues (dans l'ordre du rapport), ou celles du type
+  function sectionsRapport(liste, type) {
+    if (liste == null || (Array.isArray(liste) && !liste.length)) {
+      return { complet: SECTIONS_RAPPORT.slice(), colis: ['colis', 'evenements'], factures: ['finances', 'factures'],
+               paiements: ['finances', 'paiements'], clients: ['clients'], evenements: ['evenements'],
+               activite: ['activite'] }[type] || SECTIONS_RAPPORT.slice();
+    }
+    if (!Array.isArray(liste)) throw Erreur('INVALID_INPUT', 'Les données à inclure forment une liste.');
+    liste.forEach(function (s) {
+      if (SECTIONS_RAPPORT.indexOf(s) < 0) throw Erreur('INVALID_INPUT', 'Donnée inconnue : ' + String(s).slice(0, 20) + '.');
+    });
+    return SECTIONS_RAPPORT.filter(function (s) { return liste.indexOf(s) >= 0; });
+  }
+
+  function nomCompteDemo(d, id) {
+    var c = d.comptes.filter(function (x) { return x.id === id; })[0];
+    return c ? (c.nom_complet || c.email || '') : '';
+  }
+
+  // rapport_valider : ce que la page envoie → une définition prête
+  function validerRapportDemo(p) {
+    if (!p || typeof p !== 'object') throw Erreur('INVALID_INPUT', 'Rapport illisible.');
+    var nom = String(p.nom || '').trim();
+    if (!nom || nom.length > 120) throw Erreur('INVALID_INPUT', 'Donnez un nom au rapport (120 caractères au plus).');
+    var type = p.type || 'complet';
+    if (TYPES_RAPPORT.indexOf(type) < 0) throw Erreur('INVALID_INPUT', 'Type de rapport inconnu : ' + String(type).slice(0, 20) + '.');
+    var b = bornesRapport(p.periode || '', dateRapport(p.debut), dateRapport(p.fin));
+    return { nom: nom, type: type, periode: p.periode, debut: b.debut, fin: b.fin,
+             filtres: filtresRapport(p.filtres), sections: sectionsRapport(p.sections, type) };
+  }
+
+  function resumeRapportDemo(r) {
+    return { nom: r.nom, type: r.type, periode: r.periode, debut: r.debut, fin: r.fin, filtres: r.filtres,
+             sections: r.sections, cree_par: r.cree_par, role_createur: r.role_createur, cree_le: r.cree_le };
+  }
+
+  // rapport_json : un rapport tel que la page le lit
+  function rapportJsonDemo(d, r) {
+    return { id: r.id, nom: r.nom, type: r.type, periode: r.periode, debut: r.debut, fin: r.fin,
+             filtres: r.filtres, sections: r.sections.slice(), cree_par: r.cree_par,
+             cree_par_nom: nomCompteDemo(d, r.cree_par), role_createur: r.role_createur, cree_le: r.cree_le,
+             modifie_le: r.modifie_le || null, modifie_par_nom: nomCompteDemo(d, r.modifie_par) || null,
+             statut: r.fin >= aujourdhui() ? 'en_cours' : 'clos' };
+  }
+
+  function comparerRapport(cles) {
+    return function (a, b) {
+      for (var i = 0; i < cles.length; i++) {
+        var x = cles[i](a), y = cles[i](b);
+        if (x < y) return -1;
+        if (x > y) return 1;
+      }
+      return 0;
+    };
+  }
+
+  // rapport_donnees : la période, les statistiques et les lignes de chaque partie
+  function donneesRapportDemo(d, moi, p) {
+    p = p || {};
+    if (typeof p !== 'object' || Array.isArray(p)) throw Erreur('INVALID_INPUT', 'Paramètres du rapport illisibles.');
+    var b = bornesRapport(p.periode || 'personnalise', dateRapport(p.debut), dateRapport(p.fin));
+    var d1 = b.debut, d2 = b.fin;
+    var filtres = filtresRapport(p.filtres);
+    var statuts = STATUTS_RAPPORT[filtres.statut_colis] || null;
+    var etat = filtres.etat_facture || null;
+    var sections = sectionsRapport(p.sections, p.type || 'complet');
+    function entier(v, defaut, mini, maxi) {
+      if (v == null) return defaut;
+      if (typeof v !== 'number' || !/^\d+$/.test(String(v))) throw Erreur('INVALID_INPUT', 'Nombre entier attendu.');
+      return Math.min(Math.max(v, mini), maxi);
+    }
+    var limite = entier(p.limite, 50, 1, 2000), decalage = entier(p.decalage, 0, 0, 1000000);
+    var seule = p.section || null;
+    if (seule && sections.indexOf(seule) < 0) {
+      throw Erreur('INVALID_INPUT', 'Cette donnée n\'est pas dans le rapport : ' + String(seule).slice(0, 20) + '.');
+    }
+    function dans(iso) { return entreJours(iso, d1, d2); }
+    function page(liste) { return liste.slice(decalage, decalage + limite); }
+    function statutOk(s) { return !statuts || statuts.indexOf(s) >= 0; }
+    function compte(id) { return d.comptes.filter(function (c) { return c.id === id; })[0] || null; }
+    function premierAuteur(entite, id, action) {
+      var j = (d.journal || []).filter(function (x) { return x.entite === entite && x.entite_id === String(id) && x.action === action; })
+        .sort(comparerRapport([function (x) { return x.cree_le; }]))[0];
+      return j ? (nomCompteDemo(d, j.auteur_id) || null) : null;
+    }
+    var tout = peutCompte(moi, 'audit_logs.view');
+    var lire = { colis: tout || peutCompte(moi, 'shipments.view_history'), facture: tout || peutCompte(moi, 'invoices.view'),
+                 paiement: tout || peutCompte(moi, 'payments.view'), clients: tout || peutCompte(moi, 'clients.view'),
+                 roles: tout || peutCompte(moi, 'users.view') };
+    function journalVisible(j) {
+      var role = j.action === 'client.role' || j.action === 'utilisateur.role';
+      return tout || (j.entite === 'colis' && lire.colis) || (j.entite === 'facture' && lire.facture) ||
+             (j.entite === 'paiement' && lire.paiement) || (j.entite === 'client' && (role ? lire.roles : lire.clients)) ||
+             j.entite === 'rapport';
+    }
+
+    var colis = d.colis.filter(function (c) { return dans(c.recu_le) && statutOk(c.statut); })
+      .sort(comparerRapport([function (c) { return c.recu_le; }, function (c) { return c.numero; }]));
+    var parColis = {};
+    d.colis.forEach(function (c) { parColis[c.id] = c; });
+    var etapes = d.historique.filter(function (h) { return dans(h.cree_le) && parColis[h.colis_id] && statutOk(parColis[h.colis_id].statut); })
+      .sort(comparerRapport([function (h) { return h.cree_le; }, function (h) { return h.id; }]));
+    var factures = (d.factures || []).filter(function (f) { return dans(f.cree_le); }).map(function (f) {
+      var c = factureComplete(d, f);
+      return Object.assign({}, f, { etat: c.etat_paiement, paye: c.paye_usd, solde: c.solde_usd });
+    }).filter(function (f) {
+      return !etat || (etat === 'payee' && f.etat === 'payee') ||
+             (etat === 'impayee' && ['a_payer', 'partielle', 'en_retard'].indexOf(f.etat) >= 0) ||
+             (etat === 'annulee' && f.statut === 'annulee');
+    }).sort(comparerRapport([function (f) { return f.cree_le; }, function (f) { return f.numero; }]));
+    var supprimees = (d.journal || []).filter(function (j) {
+      return j.action === 'facture.suppression' && dans(j.cree_le) && (!etat || etat === 'supprimee');
+    }).sort(comparerRapport([function (j) { return j.cree_le; }, function (j) { return j.id; }]));
+    var paiements = [];
+    (d.factures || []).forEach(function (f) {
+      (f.paiements || []).forEach(function (x) { if (dans(x.paye_le)) paiements.push({ p: x, f: f }); });
+    });
+    paiements.sort(comparerRapport([function (x) { return x.p.paye_le; }, function (x) { return x.p.id; }]));
+    var journal = (d.journal || []).filter(function (j) { return dans(j.cree_le) && journalVisible(j); })
+      .sort(comparerRapport([function (j) { return j.cree_le; }, function (j) { return j.id; }]));
+    function somme(liste, f) { return arrondi(liste.reduce(function (t, x) { return t + (Number(f(x)) || 0); }, 0)); }
+    function actif(c) {
+      return d.colis.some(function (x) { return x.client_id === c.id && dans(x.recu_le); }) ||
+             (d.factures || []).some(function (x) { return x.client_id === c.id && dans(x.cree_le); }) ||
+             paiements.some(function (x) { return x.p.client_id === c.id; });
+    }
+
+    var r = {
+      periode: { debut: d1, fin: d2, jours: Math.round((new Date(d2 + 'T00:00:00Z') - new Date(d1 + 'T00:00:00Z')) / 864e5) + 1,
+                 fuseau: 'America/Santo_Domingo', en_cours: d2 >= aujourdhui() },
+      filtres: filtres, sections: sections, genere_le: maintenant(), genere_par: nomCompteDemo(d, moi.id),
+      limite: limite, decalage: decalage
+    };
+    if (!seule) {
+      var actives = factures.filter(function (f) { return f.statut !== 'annulee'; });
+      var annulees = factures.filter(function (f) { return f.statut === 'annulee'; });
+      var valides = paiements.filter(function (x) { return !x.p.annule_le; });
+      var annules = paiements.filter(function (x) { return x.p.annule_le; });
+      var moyens = {};
+      valides.forEach(function (x) {
+        var m = moyens[x.p.moyen] = moyens[x.p.moyen] || { moyen: x.p.moyen, nombre: 0, montant: 0 };
+        m.nombre++;
+        m.montant = arrondi(m.montant + x.p.montant_usd);
+      });
+      var parEntite = {};
+      journal.forEach(function (j) { parEntite[j.entite] = (parEntite[j.entite] || 0) + 1; });
+      r.statistiques = {
+        colis: {
+          total: colis.length,
+          attente: colis.filter(function (c) { return STATUTS_RAPPORT.attente.indexOf(c.statut) >= 0; }).length,
+          transit: colis.filter(function (c) { return STATUTS_RAPPORT.transit.indexOf(c.statut) >= 0; }).length,
+          disponible: colis.filter(function (c) { return c.statut === 'disponible'; }).length,
+          livre: colis.filter(function (c) { return c.statut === 'livre'; }).length,
+          incident: colis.filter(function (c) { return c.statut === 'incident'; }).length,
+          poids: somme(colis, function (c) { return c.poids_lb; }), valeur: somme(colis, function (c) { return c.prix_usd; }),
+          supprimes: (d.journal || []).filter(function (j) {
+            return j.action === 'colis.suppression' && dans(j.cree_le) && (!statuts || statuts.indexOf((j.avant || {}).statut) >= 0);
+          }).length
+        },
+        evenements: {
+          total: etapes.length,
+          corrections: etapes.filter(function (h) { return h.type_evenement === 'CORRECTION'; }).length,
+          livraisons: etapes.filter(function (h) { return h.statut === 'livre' && h.statut_precedent !== 'livre'; }).length
+        },
+        factures: {
+          total: factures.length,
+          payees: factures.filter(function (f) { return f.etat === 'payee'; }).length,
+          impayees: factures.filter(function (f) { return ['a_payer', 'partielle', 'en_retard'].indexOf(f.etat) >= 0; }).length,
+          partielles: factures.filter(function (f) { return f.etat === 'partielle'; }).length,
+          en_retard: factures.filter(function (f) { return f.etat === 'en_retard'; }).length,
+          annulees: annulees.length,
+          regroupees: annulees.filter(function (f) { return f.remplacee_par; }).length,
+          supprimees: supprimees.length,
+          montant_facture: somme(actives, function (f) { return f.montant_usd; }),
+          montant_paye: somme(actives, function (f) { return f.paye; }),
+          montant_impaye: somme(actives, function (f) { return f.solde; }),
+          montant_annule: somme(annulees, function (f) { return f.montant_usd; }),
+          montant_supprime: somme(supprimees, function (j) { return (j.avant || {}).montant_usd; })
+        },
+        paiements: {
+          nombre: valides.length, encaisse: somme(valides, function (x) { return x.p.montant_usd; }),
+          annules: annules.length, montant_annule: somme(annules, function (x) { return x.p.montant_usd; }),
+          par_moyen: Object.keys(moyens).map(function (k) { return moyens[k]; }).sort(function (a, b) {
+            return b.montant - a.montant || (a.moyen < b.moyen ? -1 : 1);
+          }),
+          creances_fin: creancesAu(d, d2)
+        },
+        clients: {
+          nouveaux: d.comptes.filter(function (c) { return c.role === 'client' && dans(c.cree_le); }).length,
+          actifs: d.comptes.filter(function (c) { return c.role === 'client' && actif(c); }).length
+        },
+        activite: {
+          total: journal.length,
+          suppressions: journal.filter(function (j) { return /\.suppression$/.test(j.action); }).length,
+          par_entite: parEntite
+        }
+      };
+    }
+
+    var s = {};
+    function voulu(nom) { return sections.indexOf(nom) >= 0 && (!seule || seule === nom); }
+    if (voulu('colis')) {
+      s.colis = { total: colis.length, lignes: page(colis).map(function (c) {
+        var cl = compte(c.client_id) || {};
+        var livre = d.historique.filter(function (h) {
+          return h.colis_id === c.id && h.statut === 'livre' && h.statut_precedent !== 'livre' && !corrigeDemo(d, h);
+        }).map(function (h) { return h.cree_le; }).sort().pop() || null;
+        return { id: c.id, numero: c.numero, recu_le: c.recu_le, client_code: cl.code || null, client_nom: cl.nom_complet || null,
+                 expediteur: c.expediteur || '', description: c.description || '', poids_lb: c.poids_lb == null ? null : c.poids_lb,
+                 prix_usd: c.prix_usd == null ? null : c.prix_usd, service: c.service, pays_destination: c.pays_destination,
+                 destination: c.destination || '', statut: c.statut, livre_le: livre,
+                 cree_par: premierAuteur('colis', c.id, 'colis.creation') };
+      }) };
+    }
+    if (voulu('evenements')) {
+      s.evenements = { total: etapes.length, lignes: page(etapes).map(function (h) {
+        return { id: h.id, cree_le: h.cree_le, numero: parColis[h.colis_id].numero, type_evenement: h.type_evenement || null,
+                 statut_precedent: h.statut_precedent == null ? null : h.statut_precedent, statut: h.statut,
+                 lieu: h.lieu || '', note: h.note || '', auteur: nomCompteDemo(d, h.auteur_id) || null,
+                 auteur_role: h.auteur_role || null, visibilite: h.visibilite || 'publique', corrige_id: h.corrige_id || null,
+                 source: (h.metadonnees || {}).source || '', annule: corrigeDemo(d, h) };
+      }) };
+    }
+    if (voulu('factures')) {
+      s.factures = {
+        total: factures.length,
+        lignes: page(factures).map(function (f) {
+          var cl = compte(f.client_id) || {};
+          var nouvelle = f.remplacee_par ? (d.factures || []).filter(function (x) { return x.id === f.remplacee_par; })[0] : null;
+          return { id: f.id, numero: f.numero, cree_le: f.cree_le, client_code: cl.code || null, client_nom: cl.nom_complet || null,
+                   montant_usd: f.montant_usd, frais_service_usd: f.frais_service_usd || 0, paye: f.paye, solde: f.solde,
+                   etat: f.etat, statut: f.statut, moyen: f.moyen || '', echeance_le: f.echeance_le || null,
+                   annulee_le: f.annulee_le || null, motif_annulation: f.motif_annulation || '',
+                   remplacee_par: nouvelle ? nouvelle.numero : null, cree_par: premierAuteur('facture', f.id, 'facture.creation') };
+        }),
+        supprimees: { total: supprimees.length, lignes: supprimees.slice(0, limite).map(function (j) {
+          var a = j.avant || {};
+          return { supprimee_le: j.cree_le, numero: a.numero || null, montant_usd: a.montant_usd == null ? null : a.montant_usd,
+                   statut: a.statut || null, auteur: nomCompteDemo(d, j.auteur_id) || null };
+        }) }
+      };
+    }
+    if (voulu('paiements')) {
+      s.paiements = { total: paiements.length, lignes: page(paiements).map(function (x) {
+        var cl = compte(x.p.client_id) || {};
+        return { id: x.p.id, paye_le: x.p.paye_le, facture_id: x.f.id, facture_numero: x.f.numero, client_code: cl.code || null,
+                 client_nom: cl.nom_complet || null, montant_usd: x.p.montant_usd, moyen: x.p.moyen, reference: x.p.reference || '',
+                 origine: x.p.origine || 'saisie', annule_le: x.p.annule_le || null, motif_annulation: x.p.motif_annulation || '',
+                 saisi_par: nomCompteDemo(d, x.p.cree_par) || null };
+      }) };
+    }
+    if (voulu('clients')) {
+      var clients = d.comptes.filter(function (c) { return c.role === 'client' && (dans(c.cree_le) || actif(c)); })
+        .sort(comparerRapport([function (c) { return String(c.nom_complet || '').toLowerCase(); }, function (c) { return c.code || ''; }]));
+      s.clients = { total: clients.length, lignes: page(clients).map(function (c) {
+        return { id: c.id, code: c.code || null, nom: c.nom_complet || '', pays: c.pays || '', ville: c.ville || '',
+                 cree_le: c.cree_le, nouveau: dans(c.cree_le),
+                 colis: d.colis.filter(function (x) { return x.client_id === c.id && dans(x.recu_le); }).length,
+                 facture: somme((d.factures || []).filter(function (x) {
+                   return x.client_id === c.id && x.statut !== 'annulee' && dans(x.cree_le);
+                 }), function (x) { return x.montant_usd; }),
+                 paye: somme(paiements.filter(function (x) { return x.p.client_id === c.id && !x.p.annule_le; }),
+                             function (x) { return x.p.montant_usd; }),
+                 solde: somme((d.factures || []).filter(function (x) { return x.client_id === c.id; }),
+                              function (x) { return factureComplete(d, x).solde_usd; }) };
+      }) };
+    }
+    if (voulu('activite')) {
+      s.activite = { total: journal.length, lignes: page(journal).map(function (j) {
+        var a = j.avant || {}, n = j.apres || {}, ref = '';
+        if (j.entite === 'colis') ref = n.numero || a.numero || ((parColis[j.entite_id] || {}).numero) || '';
+        else if (j.entite === 'facture') {
+          ref = n.numero || a.numero || (((d.factures || []).filter(function (f) { return f.id === j.entite_id; })[0] || {}).numero) || '';
+        } else if (j.entite === 'paiement') {
+          (d.factures || []).forEach(function (f) {
+            if ((f.paiements || []).some(function (x) { return x.id === j.entite_id; })) ref = f.numero;
+          });
+        } else if (j.entite === 'client') ref = (compte(j.entite_id) || {}).code || a.code || n.code || '';
+        else if (j.entite === 'rapport') {
+          ref = n.nom || a.nom || (((d.rapports || []).filter(function (x) { return x.id === j.entite_id; })[0] || {}).nom) || '';
+        }
+        var auteur = compte(j.auteur_id);
+        return { id: j.id, cree_le: j.cree_le, auteur: auteur ? (auteur.nom_complet || auteur.email) : null,
+                 auteur_role: auteur ? auteur.role : null, action: j.action, entite: j.entite, entite_id: j.entite_id,
+                 reference: ref, avant: j.avant || null, apres: j.apres || null };
+      }) };
+    }
+    r.donnees = s;
+    return r;
+  }
+
   var demoAPI = {
     identifiantsAdmin: ADMIN_DEMO,
 
@@ -3985,6 +4385,68 @@
         } catch (e) { return rejeter(e); }
       },
 
+      // Rapports : liste_rapports, creer_rapport, modifier_rapport, supprimer_rapport,
+      // rapport_donnees (outils/supabase-rapports.sql), mêmes permissions
+      rapports: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return rejeter(e); }
+        var texte = String(o.recherche || '').trim().toLowerCase(), parPage = o.parPage || 50, p = o.page || 0;
+        var lignes = (d.rapports || []).filter(function (r) { return !texte || r.nom.toLowerCase().indexOf(texte) >= 0; })
+          .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : a.cree_le > b.cree_le ? -1 : (a.id < b.id ? -1 : 1); });
+        return plusTard({ total: lignes.length, lignes: lignes.slice(p * parPage, p * parPage + parPage).map(function (r) {
+          return rapportJsonDemo(d, r);
+        }) });
+      },
+      creerRapport: function (r) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.create');
+          var v = validerRapportDemo(r);
+          d.seqRapport = (d.seqRapport || 0) + 1;
+          var nouveau = Object.assign(v, { id: 'rap-' + d.seqRapport + '-' + identifiant().slice(0, 8), cree_par: moi.id,
+                                           role_createur: moi.role, cree_le: maintenant(), modifie_le: null, modifie_par: null });
+          d.rapports = (d.rapports || []).concat([nouveau]);
+          journaliser(d, moi, 'rapport.creation', 'rapport', nouveau.id, null, resumeRapportDemo(nouveau));
+          ecrireDonnees(d, 'rapports');
+          return plusTard(rapportJsonDemo(d, nouveau));
+        } catch (e) { return rejeter(e); }
+      },
+      modifierRapport: function (id, r) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.edit');
+          var v = validerRapportDemo(r);
+          var ancien = (d.rapports || []).filter(function (x) { return x.id === id; })[0];
+          if (!ancien) throw Erreur('NOT_FOUND', 'Ce rapport n\'existe plus.');
+          var avant = resumeRapportDemo(ancien);
+          Object.assign(ancien, v, { modifie_le: maintenant(), modifie_par: moi.id });
+          var diff = difference(avant, resumeRapportDemo(ancien), Object.keys(avant));
+          if (diff) journaliser(d, moi, 'rapport.modification', 'rapport', id, diff.avant, diff.apres);
+          ecrireDonnees(d, 'rapports');
+          return plusTard(rapportJsonDemo(d, ancien));
+        } catch (e) { return rejeter(e); }
+      },
+      supprimerRapport: function (id) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.delete');
+          var ancien = (d.rapports || []).filter(function (x) { return x.id === id; })[0];
+          if (!ancien) throw Erreur('NOT_FOUND', 'Ce rapport n\'existe plus.');
+          d.rapports = d.rapports.filter(function (x) { return x.id !== id; });
+          journaliser(d, moi, 'rapport.suppression', 'rapport', id, resumeRapportDemo(ancien), null);
+          ecrireDonnees(d, 'rapports');
+          return plusTard({ id: id, supprime: true });
+        } catch (e) { return rejeter(e); }
+      },
+      donneesRapport: function (p) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.view');
+          return plusTard(donneesRapportDemo(d, moi, p));
+        } catch (e) { return rejeter(e); }
+      },
+
       notifications: function (id) {
         var d = lireDonnees();
         try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
@@ -4220,7 +4682,11 @@
     texte: texte, date: date, nombre: nombre, argent: argent, etapeDe: etapeDe,
     remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier,
     prixColis: prixColis, totauxFacture: totauxFacture, tarifDe: tarifDe, arrondi: arrondi,
-    etatFacture: etatFacture, soldeDe: soldeDe, payeDe: payeDe
+    etatFacture: etatFacture, soldeDe: soldeDe, payeDe: payeDe,
+    // Les jours d'une période de rapport (aperçu du formulaire) : la base refait le
+    // calcul (rapport_bornes) et c'est le sien qui compte
+    bornesRapport: function (periode, debut, fin) { return bornesRapport(periode, debut || null, fin || null); },
+    aujourdhui: aujourdhui
   };
 
   // Gelés : une page qui écrirait « API.tarifs.fraisService = 0 » n'obtiendrait

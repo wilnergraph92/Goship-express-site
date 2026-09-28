@@ -17,17 +17,19 @@ python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes
 python3 outils/essais-services/essai-mobile.py       # l'application mobile par l'API réelle : isolation, pré-alertes (Phase 10)
 python3 outils/essais-services/essai-notifications.py # les notifications : règles, file, envois (Phase 11)
 python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
+python3 outils/essais-services/essai-rapports.py     # les rapports : permissions, périodes, chiffres, journal, suppression
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
 node outils/essais-services/essai-permissions.js     # les rôles en démonstration
 node outils/essais-services/essai-tableau.js         # le tableau de bord en démonstration
 node outils/essais-services/essai-analytics.js       # les Analytics en démonstration
+node outils/essais-services/essai-rapports.js        # les rapports en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `outils/production/` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `outils/production/` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`

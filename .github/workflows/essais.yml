@@ -38,7 +38,7 @@ jobs:
       matrix:
         # notifications : ajouté avec les pages de la Phase 11 (sa copie démo vit dans api.js)
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
-               mobile, production]
+               mobile, production, rapports]
     steps:
       # Tout l'historique : plusieurs bancs rejouent la migration depuis une
       # version publiée plus ancienne (git show <commit>:outils/…)
@@ -75,7 +75,7 @@ jobs:
       - run: pip install pgserver==0.1.4
       - name: Le mode démonstration (api.js), hors navigateur
         run: |
-          for f in demo scanner finances permissions tableau analytics; do
+          for f in demo scanner finances permissions tableau analytics rapports; do
             echo "== essai-$f.js"; node "outils/essais-services/essai-$f.js"
           done
       - name: E-mails et factures client (outils/essais-sql)

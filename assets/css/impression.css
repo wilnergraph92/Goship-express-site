@@ -268,3 +268,49 @@ svg{display:block}
   body{padding:12px;background:#e7edf9}
   .et,.fa,.gs-rapport{margin:0 auto 12px;background:#fff;box-shadow:0 10px 30px -18px rgba(6,26,63,.6)}
 }
+
+
+/* --------------------------------------------------------------------------
+   Le rapport (onglet « Rapport » du tableau de bord) — A4, portrait ou paysage
+   --------------------------------------------------------------------------
+   En-tête au logo, cartes des chiffres, une partie par donnée incluse, ses
+   tableaux au trait fin. L'en-tête des colonnes se répète en haut de chaque
+   page (thead), une ligne ne se coupe jamais en deux, un titre ne reste pas
+   seul en bas de page. Le pied (date, auteur, numéro de page) est imprimé
+   dans la marge du bas par la règle @page qu'écrit impression.js ; il est
+   aussi écrit à la fin du document, pour les navigateurs qui n'impriment pas
+   les marges de page.
+   -------------------------------------------------------------------------- */
+.gs-rapport-doc{font-size:9pt;line-height:1.35}
+.gs-rapport-doc__tete{display:flex;align-items:flex-start;gap:6mm;padding-bottom:3mm;border-bottom:1.4pt solid var(--or)}
+.gs-rapport-doc__logo{flex:none;width:42mm;height:auto}
+.gs-rapport-doc__identite{flex:1;min-width:0}
+.gs-rapport-doc__entreprise{font-size:8pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or-fonce)}
+.gs-rapport-doc__titre{margin:.5mm 0 2mm;font-size:16pt;line-height:1.2}
+.gs-rapport-doc__infos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8mm 6mm;margin:0}
+.gs-rapport-doc__infos div{display:flex;gap:2mm}
+.gs-rapport-doc__infos dt{flex:none;font-weight:700;color:var(--gris)}
+.gs-rapport-doc__infos dd{margin:0}
+.gs-rapport-doc__note{margin:2mm 0 0;font-size:8.5pt;color:var(--or-fonce)}
+.gs-rapport-doc__cartes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2mm;margin:4mm 0 1mm}
+.gs-rapport-doc__cartes .gs-kpi{display:flex;flex-direction:column;gap:.6mm;padding:2mm 2.4mm;border:.6pt solid #cfd8e8;border-radius:2mm;break-inside:avoid}
+.gs-rapport-doc__cartes .gs-kpi__libelle{font-size:7.5pt;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gris)}
+.gs-rapport-doc__cartes .gs-kpi__valeur{font-size:13pt}
+.gs-rapport-doc__cartes .gs-kpi__sous{font-size:7.5pt;color:var(--gris)}
+.gs-rapport-doc__section{margin-top:5mm}
+.gs-rapport-doc__section-titre{margin:0 0 1.5mm;padding-bottom:1mm;border-bottom:.6pt solid #cfd8e8;font-size:12pt;break-after:avoid}
+.gs-rapport-doc__sous-titre{margin:3mm 0 1mm;font-size:10pt;font-weight:700;break-after:avoid}
+.gs-rapport-doc__table{width:100%;border-collapse:collapse;font-size:8pt}
+.gs-rapport-doc__table thead{display:table-header-group}
+.gs-rapport-doc__table th,.gs-rapport-doc__table td{padding:1mm 1.4mm;border-bottom:.4pt solid #d6ddec;text-align:left;vertical-align:top;overflow-wrap:break-word}
+/* Un en-tête, une heure, un montant ne se coupent jamais au milieu d'un mot */
+.gs-rapport-doc__table th{background:#eef2f8;font-weight:700;white-space:nowrap}
+.gs-rapport-doc__table tr{break-inside:avoid}
+.gs-rapport-doc__table .gs-rapports__valeur{display:block}
+.gs-rapport-doc__compte,.gs-rapport-doc__vide{margin:1mm 0 0;font-size:8pt;color:var(--gris)}
+.gs-rapport-doc__finances{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:5mm;align-items:start}
+.gs-rapport-doc__chiffres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 5mm;margin:0}
+.gs-rapport-doc__chiffres div{display:flex;justify-content:space-between;gap:2mm;padding:.9mm 0;border-bottom:.4pt solid #e3e8f2;break-inside:avoid}
+.gs-rapport-doc__chiffres dt{color:var(--gris)}
+.gs-rapport-doc__chiffres dd{margin:0;font-weight:700;white-space:nowrap}
+.gs-rapport-doc__pied{margin-top:6mm;padding-top:2mm;border-top:.6pt solid #cfd8e8;font-size:8pt;color:var(--gris)}

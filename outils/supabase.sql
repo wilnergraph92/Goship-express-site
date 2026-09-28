@@ -291,7 +291,12 @@ $$;
 --                      interne (view_history)
 --   invoices.*         factures : voir, créer, modifier, annuler
 --   payments.*         paiements : voir, encaisser, annuler
---   reports.view       chiffres de la facturation et contrôle des anomalies
+--   reports.view       chiffres de la facturation et contrôle des anomalies ;
+--                      lire, imprimer et exporter les rapports (onglet Rapport)
+--   reports.create     enregistrer un rapport (supabase-rapports.sql)
+--   reports.edit       modifier un rapport enregistré
+--   reports.delete     supprimer un rapport enregistré (jamais les données
+--                      dont il est tiré)
 --   users.view         voir l'équipe et ses rôles
 --   roles.manage       donner ou retirer un rôle
 --   settings.manage    réglages du site (logo des e-mails, renvoi des e-mails)
@@ -313,7 +318,7 @@ as $$
       'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
       'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
       'payments.view', 'payments.create', 'payments.cancel',
-      'reports.view',
+      'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
       'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view']
     when 'gerant' then array[
       'clients.view', 'clients.create', 'clients.edit',
@@ -321,7 +326,7 @@ as $$
       'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
       'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
       'payments.view', 'payments.create', 'payments.cancel',
-      'reports.view',
+      'reports.view', 'reports.create',
       'users.view']
     when 'employe' then array[
       'clients.view', 'clients.create',

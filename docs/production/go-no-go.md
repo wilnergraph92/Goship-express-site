@@ -26,6 +26,7 @@ Un essai local, de démonstration ou de CI ne prouve pas l'état de la productio
 | 26/09 18:06 | `deploy.yml`, job `verifier` (`645e08a`) | 6 pages 200 ; aucune clé secrète publiée ; `CLAUDE.md`, `README.md`, SQL, `docs/`, `bureau/` en 404 ; HTTP → HTTPS ; Auth et suivi public répondent ; `sante()` absente |
 | 26/09 18:44 | `surveillance.yml` lancée à la main sur `main` | vert |
 | 26/09 18:47 | `audit-production.yml` (`sonder.sh`, clé publique, GET en lecture seule) | migrations **1 à 9 présentes** ; **`supabase-notifications.sql` et `supabase-production.sql` absentes** ; aucune fonction ouverte aux visiteurs sans raison ; Auth : **confirmation des adresses e-mail DÉSACTIVÉE**, inscriptions ouvertes, seul fournisseur : e-mail |
+| 28/09 08:31 | `audit-production.yml` lancée à la main sur `rapports` (après la chaîne relancée par le propriétaire dans le SQL Editor) | **12 migrations présentes sur 12** ; aucune fonction ouverte aux visiteurs sans raison ; Auth : confirmation des adresses e-mail toujours **DÉSACTIVÉE** |
 
 Limite de la sonde : une fonction témoin présente prouve que son fichier est
 passé, pas qu'il l'est **dans sa dernière version**. Seul `controler.sh`
@@ -37,7 +38,7 @@ passé, pas qu'il l'est **dans sa dernière version**. Seul `controler.sh`
 |---|---|---|---|
 | C1 | Secrets | **vérifié** | audit des deux dépôts et de tout leur historique ; barrière de `deploy.yml` ; contrôle du site publié (aucune clé secrète) ; `controle-paquet.mjs` (mobile). *Secret scanning* de GitHub : non vérifiable (outil indisponible sans GitHub Advanced Security) |
 | C2 | Tests verts | **vérifié** | site : 10 bancs sur base réelle (dont `essai-production.py` 70/70, `essai-mobile.py` 87/87), démo, SQL ; mobile : 52/52, navigateur 84/84, Maestro Android et iOS ; bureau : installateurs Windows et macOS |
-| C3 | Chaîne complète en production | **non rempli** | 9 sur 11 (sonde du 26/09 18:47) |
+| C3 | Chaîne complète en production | **présente** (sonde) | 12 sur 12 (sonde du 28/09 08:31) ; « dernière version » non vérifiée sans `controler.sh` (A4) |
 | C4 | Sécurité de la production | **partiel** | aucune fonction ouverte aux visiteurs (sonde) ; RLS, verrous, comptes, Vault : `controler.sh` jamais lancé en production |
 | C5 | Intégrité de la production | **non vérifié** | `controler.sh` jamais lancé en production. NB : une base avec des lignes orphelines **ne se restaure pas** (clés étrangères) — C5 conditionne C6 |
 | C6 | Sauvegarde + restauration réelle | **non rempli** | outils éprouvés (`essai-production.py` F et K) ; secrets non posés ; aucune sauvegarde de production n'existe |
