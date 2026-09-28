@@ -158,7 +158,12 @@ sont des états déduits. Même copie démo que le reste (`ajouterPaiementDemo`,
 
 Le prix d'un colis se calcule dans la base (`prix_transport`, appelé par
 `regles_colis`) : celui qu'envoie une page est ignoré. Le champ prix du
-formulaire admin n'est qu'un aperçu en lecture seule. Une nouvelle facture
+formulaire admin n'est qu'un aperçu en lecture seule, sauf « Fixer le prix à
+la main » : `colis.prix_fixe_usd` (0 à 100 000 $, `invoices.edit`, vérifié et
+journalisé par `regles_colis`) remplace alors poids × tarif, `tarif_lb_usd`
+devient null (la ligne de facture n'affiche aucun $/lb) ; null = prix calculé.
+Les frais de service restent ajoutés. Copie démo : `reglesColis`, `tarifLigne`.
+Une nouvelle facture
 passe par `creer_facture` / `facturer_colis`, qui refusent un colis déjà
 sur une facture active (`INVOICE_ALREADY_EXISTS`).
 
@@ -232,6 +237,13 @@ actions ne sont que dans la fiche (`ouvrirFicheColis`, `actionsClient`,
 `actionsFacture`, selon `peut()`) ; un bouton d'impression porte `data-imprimer` et
 laisse la fiche ouverte. Le poste de scan demande la fiche
 par l'événement `goship:fiche-colis`. Rien ne s'y calcule.
+
+**Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
+dialogues) : un clic à côté ne fait rien. Une saisie de l'utilisateur (événement
+`isTrusted` dans un formulaire) pose `data-saisie` ; Échap, × ou « Annuler » ouvrent
+alors `data-dialogue="abandon"` (« Fermer sans enregistrer ? »), et une fermeture
+imprévue du navigateur rouvre la fenêtre. `d.close()` appelé par le code (après un
+enregistrement) ferme sans question. Une nouvelle fenêtre n'a rien à faire de plus.
 
 **La langue du tableau de bord** (`tableau-langue.js`, sélecteur
 `[data-langue-tableau]` dans la barre, préférence `gse-tableau-langue`) : le

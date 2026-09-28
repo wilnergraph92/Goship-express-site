@@ -938,6 +938,10 @@
           <input id="col-prix" name="prix_usd" inputmode="decimal" maxlength="10" autocomplete="off" placeholder="0,00" readonly tabindex="-1" data-prix-colis>
           <p class="gs-champ__aide" data-calcul-prix aria-live="polite">Calculé par le système : poids × tarif.</p>
         </div>
+        <label class="gs-case gs-champ--large" data-permission="invoices.edit">
+          <input type="checkbox" name="prix_manuel" data-prix-manuel>
+          <span><strong>Fixer le prix à la main</strong> au lieu du calcul poids × tarif (forfait, accord particulier)</span>
+        </label>
         <div class="gs-champ">
           <label for="col-service">Service</label>
           <select id="col-service" name="service">
@@ -1381,6 +1385,24 @@
       <button type="submit" class="gs-bouton gs-bouton--danger" data-supprimer-rapport-valider>Supprimer</button>
     </div>
   </form>
+</dialog>
+
+<!-- Fermer une fenêtre où l'on a déjà saisi quelque chose : on le confirme d'abord -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="abandon" aria-labelledby="dlg-abandon-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-abandon-titre">Fermer sans enregistrer ?</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Les informations saisies dans cette fenêtre seront perdues.</p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--danger" data-abandon-confirmer>Fermer sans enregistrer</button>
+      <button type="button" class="gs-bouton gs-bouton--plein" data-abandon-continuer autofocus>Continuer la saisie</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="gs-dialogue gs-fiche" data-dialogue="fiche" aria-labelledby="dlg-fiche-titre">

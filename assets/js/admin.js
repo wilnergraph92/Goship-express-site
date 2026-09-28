@@ -1745,10 +1745,72 @@
     });
   });
 
-  /* ---- Fenêtres (enregistrer un colis, mettre à jour un statut) -------------- */
+  /* ---- Fenêtres : elles ne se ferment que sur demande -------------------------
+     Un clic à côté d'une fenêtre ne la ferme plus : un clic manqué, une
+     sélection de texte qui déborde du champ faisaient perdre toute la saisie.
+     Seuls ses boutons (×, Annuler, Fermer) et la touche Échap la ferment ; et
+     si l'on y a déjà saisi quelque chose, « Fermer sans enregistrer ? » le fait
+     confirmer. Une fermeture décidée par la page (après un enregistrement, une
+     session expirée) passe par d.close() et ne demande rien.
+     -------------------------------------------------------------------------- */
+  var dlgAbandon = $('[data-dialogue="abandon"]');
+  var fenetreAbandonnee = null;
+
+  function saisieEnCours(d) { return d.hasAttribute('data-saisie'); }
+
+  function demanderFermeture(d) {
+    if (!saisieEnCours(d)) { d.close(); return; }
+    fenetreAbandonnee = d;
+    dlgAbandon.showModal();
+  }
+
+  $('[data-abandon-confirmer]', dlgAbandon).addEventListener('click', function () {
+    var d = fenetreAbandonnee;
+    fenetreAbandonnee = null;
+    dlgAbandon.close();
+    if (d && d.open) d.close();
+  });
+  $('[data-abandon-continuer]', dlgAbandon).addEventListener('click', function () { dlgAbandon.close(); });
+  // Échap sur la question : on reste dans la fenêtre, rien n'est perdu
+  dlgAbandon.addEventListener('close', function () { fenetreAbandonnee = null; });
+
   $$('.gs-dialogue').forEach(function (d) {
-    d.addEventListener('click', function (e) { if (e.target === d) d.close(); });
-    $$('[data-action="fermer"]', d).forEach(function (b) { b.addEventListener('click', function () { d.close(); }); });
+    if (d === dlgAbandon) return;
+    // d.close() : une fermeture voulue par la page, jamais contestée
+    var fermerVraiment = d.close.bind(d);
+    var voulue = false;
+    d.close = function (valeur) {
+      if (!d.open) return;
+      voulue = true;
+      d.removeAttribute('data-saisie');
+      fermerVraiment(valeur);
+    };
+    // Seule une vraie saisie compte (isTrusted) : les valeurs que la page
+    // remplit elle-même en ouvrant la fenêtre ne sont pas « à perdre »
+    function saisie(e) {
+      if (e.isTrusted && e.target.closest && e.target.closest('form')) d.setAttribute('data-saisie', '');
+    }
+    d.addEventListener('input', saisie);
+    d.addEventListener('change', saisie);
+    // Échap : même règle que le bouton de fermeture
+    d.addEventListener('cancel', function (e) {
+      e.preventDefault();
+      demanderFermeture(d);
+    });
+    // Certains navigateurs ferment quand même au second Échap : on rouvre la
+    // fenêtre telle quelle (ses champs sont intacts) et on pose la question
+    d.addEventListener('close', function () {
+      if (!voulue && saisieEnCours(d)) {
+        d.showModal();
+        demanderFermeture(d);
+        return;
+      }
+      voulue = false;
+      d.removeAttribute('data-saisie');
+    });
+    $$('[data-action="fermer"]', d).forEach(function (b) {
+      b.addEventListener('click', function () { demanderFermeture(d); });
+    });
   });
 
   // Enregistrer ou modifier un colis
@@ -1901,6 +1963,26 @@
   // modifier les factures (la base refuse de toute façon un autre tarif).
   var champPrix = $('[data-prix-colis]', formColis);
   var aidePrix = $('[data-calcul-prix]', formColis);
+  // « Fixer le prix à la main » : le prix saisi remplace poids × tarif
+  // (prix_fixe_usd). Comme un tarif particulier, c'est un geste de facturation :
+  // la case n'apparaît qu'à qui peut modifier les factures, et la base refuse
+  // de toute façon un prix fixé par un autre compte.
+  var casePrixManuel = $('[data-prix-manuel]', formColis);
+  var PRIX_MAX = 100000;
+
+  function prixManuel() { return casePrixManuel.checked; }
+
+  // Le prix se saisit seulement en mode manuel ; le tarif, alors, ne sert plus
+  function appliquerModePrix() {
+    var factureur = peut('invoices.edit');
+    var manuel = prixManuel();
+    champPrix.readOnly = !(manuel && factureur);
+    champPrix.tabIndex = champPrix.readOnly ? -1 : 0;
+    champTarif.readOnly = manuel || !factureur;
+    champTarif.title = manuel ? 'Sans effet : le prix du colis est fixé à la main'
+      : (!factureur ? 'Tarif de la maison : un tarif particulier est réservé à qui peut modifier les factures' : '');
+    recalculerPrix();
+  }
 
   function nombreSaisi(valeur) {
     var n = Number(String(valeur == null ? '' : valeur).replace(',', '.').trim());
@@ -1918,6 +2000,20 @@
   }
 
   function recalculerPrix() {
+    if (prixManuel()) {
+      var saisi = champPrix.value.trim();
+      var montant = nombreSaisi(saisi);
+      if (!saisi) {
+        aidePrix.textContent = 'Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.';
+      } else if (!(montant >= 0 && montant <= PRIX_MAX)) {
+        aidePrix.textContent = 'Prix invalide : un montant en dollars, de 0 à 100 000.';
+      } else {
+        aidePrix.textContent = 'Prix fixé à la main : ' + argent(montant) +
+          (colisEdite ? ' · une facture déjà émise ne change pas.'
+                      : ' · frais de service ' + argent(API.tarifs.fraisService) + ' ajoutés sur la facture.');
+      }
+      return;
+    }
     var poids = nombreSaisi(formColis.elements.poids_lb.value);
     var tarif = tarifSaisi();
     if (!(tarif >= 0)) {
@@ -1927,8 +2023,9 @@
     }
     // Un colis déjà enregistré garde le prix arrêté tant que ni son poids ni
     // son tarif ne changent : il a pu être facturé.
+    // (Un colis qui avait un prix fixé, lui, repasse au calcul : on montre le calcul.)
     if (colisEdite && colisEdite.prix_usd != null && poids === Number(colisEdite.poids_lb) &&
-        tarif === O.tarifDe(colisEdite)) {
+        tarif === O.tarifDe(colisEdite) && (colisEdite.prix_fixe_usd == null || colisEdite.prix_fixe_usd === '')) {
       ecrireMontant(champPrix, Number(colisEdite.prix_usd));
       aidePrix.textContent = 'Prix arrêté à l’enregistrement du colis.';
       return;
@@ -1947,6 +2044,18 @@
 
   formColis.elements.poids_lb.addEventListener('input', recalculerPrix);
   champTarif.addEventListener('input', recalculerPrix);
+  champPrix.addEventListener('input', recalculerPrix);
+  casePrixManuel.addEventListener('change', function () {
+    // En passant au prix manuel, on part du prix calculé ; en revenant, le
+    // calcul reprend la main
+    if (prixManuel() && !champPrix.value.trim()) {
+      var poids = nombreSaisi(formColis.elements.poids_lb.value);
+      var tarif = tarifSaisi();
+      if (poids > 0 && tarif >= 0) ecrireMontant(champPrix, API.regles.prixTransport(poids, tarif));
+    }
+    appliquerModePrix();
+    if (prixManuel() && !champPrix.readOnly) { champPrix.focus(); champPrix.select(); }
+  });
 
   var delaiCode = null;
   champCode.addEventListener('input', function () {
@@ -2028,15 +2137,21 @@
       // Un colis déjà enregistré garde son prix tel quel : il a pu être
       // facturé, et sa facture ne doit pas bouger derrière son dos.
       champTarif.value = colisEdite.tarif_lb_usd != null ? String(colisEdite.tarif_lb_usd).replace('.', ',') : '';
-      recalculerPrix();
+      // Un prix fixé à la main se montre tel quel ; sans le droit de facturer,
+      // il reste affiché mais ne se change pas
+      casePrixManuel.checked = colisEdite.prix_fixe_usd != null && colisEdite.prix_fixe_usd !== '';
+      if (casePrixManuel.checked) {
+        ecrireMontant(champPrix, Number(colisEdite.prix_fixe_usd));
+        if (!champTarif.value) champTarif.value = String(API.tarifs.parLivre);
+      }
     } else {
       f.code.value = options.code || etat.colis.clientCode || '';
       f.lieu.value = 'Miami (Medley), FL';
       champTarif.value = String(API.tarifs.parLivre);
-      recalculerPrix();
+      casePrixManuel.checked = false;
+      champPrix.value = '';
     }
-    champTarif.readOnly = !peut('invoices.edit');
-    champTarif.title = champTarif.readOnly ? 'Tarif de la maison : un tarif particulier est réservé à qui peut modifier les factures' : '';
+    appliquerModePrix();
     dlgColis.showModal();
     if (f.code.value) chercherClient(!colisEdite);
     (f.code.value ? f.description : f.code).focus();
@@ -2072,6 +2187,12 @@
       f.date_reception.focus();
       return;
     }
+    var prixSaisi = prixManuel() ? champPrix.value.trim() : '';
+    if (prixManuel() && !(prixSaisi && nombreSaisi(prixSaisi) >= 0 && nombreSaisi(prixSaisi) <= PRIX_MAX)) {
+      erreurFormulaire(formColis, 'Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».');
+      champPrix.focus();
+      return;
+    }
     attente(bouton, 'Enregistrement…');
     (clientChoisi ? Promise.resolve(clientChoisi) : chercherClient(false)).then(function (client) {
       if (!client) {
@@ -2092,7 +2213,10 @@
         destination: f.destination.value.trim(),
         // Tel que saisi : la base lit « 5,5 » comme 5.5, et refuse ce qui
         // n'est pas un tarif (INVALID_RATE). Vide : le tarif de la maison.
-        tarif_lb_usd: champTarif.value.trim() || null
+        tarif_lb_usd: champTarif.value.trim() || null,
+        // Prix fixé à la main, ou null pour le prix calculé (poids × tarif).
+        // Sans changement, la base ne demande aucun droit particulier.
+        prix_fixe_usd: prixSaisi || null
       };
       // Ni prix ni statut : la base calcule l'un et fait naître le colis
       // « Reçu ». Le lieu et le message sont ceux de ce premier événement.
@@ -5369,7 +5493,8 @@
     champFiche('Destination', [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', '));
     if (colis.prix_usd != null && colis.prix_usd !== '') {
       champFiche('Prix du transport', [argent(colis.prix_usd),
-        colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '']);
+        colis.prix_fixe_usd != null && colis.prix_fixe_usd !== '' ? 'Prix fixé à la main'
+          : (colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '')]);
     }
     champFiche('Message pour le client', colis.note, true);
 

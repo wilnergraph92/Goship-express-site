@@ -61,6 +61,11 @@
 
 alter table public.colis add column if not exists prix_usd     numeric(10, 2);
 alter table public.colis add column if not exists tarif_lb_usd numeric(10, 2);
+-- Prix fixé à la main : il remplace poids × tarif pour ce colis (un forfait, un
+-- accord particulier). Vide, le prix se calcule comme d'habitude. Voir regles_colis.
+alter table public.colis add column if not exists prix_fixe_usd numeric(10, 2);
+comment on column public.colis.prix_fixe_usd is
+  'Prix du transport fixé à la main (remplace poids x tarif) ; null = prix calculé';
 alter table public.factures add column if not exists frais_service_usd numeric(10, 2) not null default 0;
 alter table public.factures add column if not exists montant_paye_usd  numeric(10, 2) not null default 0
   check (montant_paye_usd >= 0);
@@ -407,7 +412,7 @@ as $$
 declare
   d jsonb;
   v_resume text[] := array['numero', 'client_id', 'statut', 'poids_lb', 'tarif_lb_usd', 'prix_usd',
-                           'service', 'pays_destination', 'suivi_transporteur'];
+                           'prix_fixe_usd', 'service', 'pays_destination', 'suivi_transporteur'];
 begin
   if tg_op = 'INSERT' then
     perform public.auditer('colis.creation', 'colis', new.id::text, null,
@@ -602,34 +607,63 @@ begin
     end if;
   end if;
 
-  -- Tarif et prix. Le prix n'est jamais accepté tel qu'envoyé : il est
-  -- recalculé quand le poids ou le tarif change, et sinon il reste celui qui a
-  -- été arrêté — une facture déjà remise ne bouge pas.
-  if v_nouveau then
-    new.tarif_lb_usd := coalesce(new.tarif_lb_usd, (t ->> 'par_livre')::numeric);
+  -- Prix fixé à la main (prix_fixe_usd) : il remplace poids × tarif. Aucun tarif
+  -- à la livre ne s'applique alors (tarif_lb_usd vide, et la facture n'en
+  -- affiche pas). Comme un tarif particulier, c'est un geste de facturation
+  -- (invoices.edit). prix_usd, lui, n'est toujours jamais pris tel qu'envoyé.
+  if new.prix_fixe_usd is not null then
+    if (v_nouveau or new.prix_fixe_usd is distinct from old.prix_fixe_usd)
+       and (new.prix_fixe_usd < 0 or new.prix_fixe_usd > 100000) then
+      perform public.erreur_metier('INVALID_PRICE', 'Le prix du colis doit être compris entre 0 et 100 000 $.');
+    end if;
+    if auth.uid() is not null and not public.peut('invoices.edit')
+       and (v_nouveau or new.prix_fixe_usd is distinct from old.prix_fixe_usd) then
+      perform public.erreur_metier('PERMISSION_DENIED',
+        'Un prix fixé à la main est réservé à qui peut modifier les factures.');
+    end if;
+    new.prix_fixe_usd := round(new.prix_fixe_usd, 2);
+    new.tarif_lb_usd := null;
+    new.prix_usd := new.prix_fixe_usd;
   else
-    new.tarif_lb_usd := coalesce(new.tarif_lb_usd, old.tarif_lb_usd, (t ->> 'par_livre')::numeric);
-  end if;
-  if (v_nouveau or new.tarif_lb_usd is distinct from old.tarif_lb_usd)
-     and (new.tarif_lb_usd < 0 or new.tarif_lb_usd > 1000) then
-    perform public.erreur_metier('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
-  end if;
-  -- Un tarif autre que celui de la maison change ce que paiera le client :
-  -- c'est un geste de facturation (invoices.edit), pas d'entrepôt. Le SQL
-  -- Editor, sans compte connecté, reste libre.
-  if auth.uid() is not null and not public.peut('invoices.edit')
-     and ((v_nouveau and new.tarif_lb_usd is distinct from (t ->> 'par_livre')::numeric)
-          or (not v_nouveau and new.tarif_lb_usd is distinct from old.tarif_lb_usd)) then
-    perform public.erreur_metier('PERMISSION_DENIED',
-      'Un tarif particulier est réservé à qui peut modifier les factures.');
-  end if;
-  if v_nouveau
-     or new.poids_lb is distinct from old.poids_lb
-     or new.tarif_lb_usd is distinct from old.tarif_lb_usd
-     or old.prix_usd is null then
-    new.prix_usd := public.prix_transport(new.poids_lb, new.tarif_lb_usd);
-  else
-    new.prix_usd := old.prix_usd;
+    -- Revenir au prix calculé, pour un colis qui avait un prix fixé : c'est
+    -- aussi un geste de facturation.
+    if not v_nouveau and old.prix_fixe_usd is not null
+       and auth.uid() is not null and not public.peut('invoices.edit') then
+      perform public.erreur_metier('PERMISSION_DENIED',
+        'Un prix fixé à la main est réservé à qui peut modifier les factures.');
+    end if;
+    -- Tarif et prix. Le prix n'est jamais accepté tel qu'envoyé : il est
+    -- recalculé quand le poids ou le tarif change, et sinon il reste celui qui
+    -- a été arrêté — une facture déjà remise ne bouge pas.
+    if v_nouveau then
+      new.tarif_lb_usd := coalesce(new.tarif_lb_usd, (t ->> 'par_livre')::numeric);
+    else
+      new.tarif_lb_usd := coalesce(new.tarif_lb_usd, old.tarif_lb_usd, (t ->> 'par_livre')::numeric);
+    end if;
+    if (v_nouveau or new.tarif_lb_usd is distinct from old.tarif_lb_usd)
+       and (new.tarif_lb_usd < 0 or new.tarif_lb_usd > 1000) then
+      perform public.erreur_metier('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
+    end if;
+    -- Un tarif autre que celui de la maison change ce que paiera le client :
+    -- c'est un geste de facturation (invoices.edit), pas d'entrepôt. Le SQL
+    -- Editor, sans compte connecté, reste libre.
+    if auth.uid() is not null and not public.peut('invoices.edit')
+       and ((v_nouveau and new.tarif_lb_usd is distinct from (t ->> 'par_livre')::numeric)
+            or (not v_nouveau and old.prix_fixe_usd is null
+                and new.tarif_lb_usd is distinct from old.tarif_lb_usd)) then
+      perform public.erreur_metier('PERMISSION_DENIED',
+        'Un tarif particulier est réservé à qui peut modifier les factures.');
+    end if;
+    -- Le prix se recalcule aussi quand on quitte un prix fixé
+    if v_nouveau
+       or new.poids_lb is distinct from old.poids_lb
+       or new.tarif_lb_usd is distinct from old.tarif_lb_usd
+       or old.prix_usd is null
+       or old.prix_fixe_usd is not null then
+      new.prix_usd := public.prix_transport(new.poids_lb, new.tarif_lb_usd);
+    else
+      new.prix_usd := old.prix_usd;
+    end if;
   end if;
 
   -- Statut. Un colis naît « Reçu » : c'est l'événement initial de son
@@ -930,7 +964,7 @@ begin
   end;
 
   insert into public.colis (client_id, description, expediteur, suivi_transporteur, poids_lb, service,
-                            pays_destination, destination, recu_le, tarif_lb_usd, lieu, note,
+                            pays_destination, destination, recu_le, tarif_lb_usd, prix_fixe_usd, lieu, note,
                             statut, cle_idempotence)
   values (v_client,
           coalesce(p_colis ->> 'description', ''),
@@ -942,6 +976,7 @@ begin
           coalesce(p_colis ->> 'destination', ''),
           v_recu,
           public.lire_nombre(p_colis -> 'tarif_lb_usd', 'INVALID_RATE', 'Tarif illisible.'),
+          public.lire_nombre(p_colis -> 'prix_fixe_usd', 'INVALID_PRICE', 'Prix du colis illisible.'),
           coalesce(nullif(p_colis ->> 'lieu', ''), 'Miami (Medley), FL'),
           coalesce(p_colis ->> 'note', ''),
           'recu',
@@ -1002,7 +1037,11 @@ begin
                               else recu_le end,
     tarif_lb_usd       = case when v ? 'tarif_lb_usd'
                               then public.lire_nombre(v -> 'tarif_lb_usd', 'INVALID_RATE', 'Tarif illisible.')
-                              else tarif_lb_usd end
+                              else tarif_lb_usd end,
+    -- null (ou vide) : revenir au prix calculé ; absent : inchangé
+    prix_fixe_usd      = case when v ? 'prix_fixe_usd'
+                              then public.lire_nombre(v -> 'prix_fixe_usd', 'INVALID_PRICE', 'Prix du colis illisible.')
+                              else prix_fixe_usd end
   where id = p_id;
 
   return public.colis_json(p_id);

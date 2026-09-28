@@ -2165,5 +2165,19 @@
   "🛒 2. AliExpress : le paradis des acheteurs en ligne": "🛒 2. AliExpress : paradi moun ki achte sou entènèt",
   "🛠️ 3. Banggood : pour les passionnés de technologie et les bricoleurs": "🛠️ 3. Banggood : pou moun ki renmen teknoloji ak ti travay manyèl",
   "🤔 Alors, quelle est ta boutique préférée ?": "🤔 Alò, ki magazen ou pi renmen?",
-  "🥇 1. Shein : de la mode pour tous les goûts et tous les budgets": "🥇 1. Shein : mòd pou tout gou ak tout bidjè"
+  "🥇 1. Shein : de la mode pour tous les goûts et tous les budgets": "🥇 1. Shein : mòd pou tout gou ak tout bidjè",
+  "Fixer le prix à la main": "Fikse pri a alamen",
+  "au lieu du calcul poids × tarif (forfait, accord particulier)": "olye kalkil pwa × tarif la (fòfè, akò espesyal)",
+  "Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.": "Antre pri koli a, an dola : li ranplase kalkil pwa × tarif la.",
+  "Prix invalide : un montant en dollars, de 0 à 100 000.": "Pri a pa valab : yon montan an dola, ant 0 ak 100 000.",
+  "Prix fixé à la main": "Pri fikse alamen",
+  "Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».": "Antre pri koli a, an dola (ant 0 ak 100 000), oswa retire tchèk « Fikse pri a alamen ».",
+  "Sans effet : le prix du colis est fixé à la main": "Pa gen efè : pri koli a fikse alamen",
+  "Fermer sans enregistrer ?": "Fèmen san anrejistre ?",
+  "Les informations saisies dans cette fenêtre seront perdues.": "Enfòmasyon ou antre nan fenèt sa a ap pèdi.",
+  "Fermer sans enregistrer": "Fèmen san anrejistre",
+  "Continuer la saisie": "Kontinye antre enfòmasyon yo",
+  "Un prix fixé à la main est réservé à qui peut modifier les factures.": "Se sèlman moun ki ka modifye fakti yo ki ka fikse yon pri alamen.",
+  "Le prix du colis doit être compris entre 0 et 100 000 $.": "Pri koli a dwe ant 0 ak 100 000 $.",
+  "Prix du colis illisible.": "Pri koli a pa ka li."
 }

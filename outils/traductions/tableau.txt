@@ -254,6 +254,7 @@ Consulter, puis choisir l’opération
 Consultez, générez et imprimez les rapports de GoShip Express.
 Contenu
 Contenu du colis
+Continuer la saisie
 Contrôle de la facturation
 Contrôler
 Coordonnées
@@ -407,6 +408,8 @@ Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé,
 Facturé sur la période
 Fermer
 Fermer le rapport
+Fermer sans enregistrer
+Fermer sans enregistrer ?
 Fiche complète
 Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
 Filtrer les clients
@@ -420,6 +423,7 @@ Filtres indisponibles : la base attend la mise à jour de outils/supabase-analyt
 Fin
 Finance
 Finances
+Fixer le prix à la main
 Fois
 Forte
 Frais de service
@@ -453,6 +457,7 @@ Inactifs
 Indicateur
 Indicateurs de qualité
 Indiquez le motif.
+Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».
 Indiquez l’agence où le client peut retirer son colis.
 Informations générales
 Informations personnelles
@@ -478,12 +483,14 @@ Le colis a changé de statut entre-temps : rechargez la liste.
 Le compte
 Le jour
 Le plus de colis en cours
+Le prix du colis doit être compris entre 0 et 100 000 $.
 Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
 Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
 Les chiffres se lisent dans la base à chaque ouverture du rapport.
 Les dépenses ne sont pas suivies : aucune marge n'est calculée.
 Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, poste de scan et colis à traiter restent entiers.
 Les icônes seulement, pour laisser plus de place aux listes (ordinateur).
+Les informations saisies dans cette fenêtre seront perdues.
 Lien de paiement
 Lien de paiement (facultatif)
 Lien de paiement prêt
@@ -674,7 +681,10 @@ Pourcentage
 Prix
 Prix arrêté à l’enregistrement du colis.
 Prix du colis (US $)
+Prix du colis illisible.
 Prix du transport
+Prix fixé à la main
+Prix invalide : un montant en dollars, de 0 à 100 000.
 Prix moyen
 Prix moyen d’un colis
 Précédente
@@ -765,6 +775,8 @@ Rétablir la disposition
 Rôle
 Saisi
 Saisi par
+Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.
+Sans effet : le prix du colis est fixé à la main
 Sans mouvement
 Sans mouvement depuis
 Sans échéance
@@ -862,6 +874,7 @@ Téléphone
 USA
 Un acompte suffit : la facture reste à payer pour le reste.
 Un paiement enregistré ne se modifie plus. En cas d'erreur, annulez-le avec son motif, puis saisissez le bon : les deux restent visibles.
+Un prix fixé à la main est réservé à qui peut modifier les factures.
 Un rôle ne se change que depuis l'onglet « Équipe », par un administrateur. La base vérifie chaque permission à chaque action : un menu masqué ici n'est qu'un confort.
 Un scanner USB ou Bluetooth (mode clavier) n'a rien à installer : scannez un code pour le vérifier.
 Une erreur est survenue. Réessayez.
@@ -903,6 +916,7 @@ anglais
 annulée
 annulées
 au
+au lieu du calcul poids × tarif (forfait, accord particulier)
 aucun colis
 aucune facture sur la période
 aucune opération encore

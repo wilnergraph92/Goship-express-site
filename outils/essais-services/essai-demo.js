@@ -213,6 +213,39 @@ function code(promesse) {
   verifier('une facture annulée ne se modifie plus', await code(A.modifierFacture(fa.id, { note: 'x' })),
            'INVOICE_LOCKED');
 
+  // Mêmes cas que essai-services.py, section 16 bis : les deux côtés doivent répondre pareil
+  console.log('\n7 bis. Prix fixé à la main');
+  var rf = await A.creerColis(avec({ description: 'Forfait', prix_fixe_usd: '35,5', tarif_lb_usd: 8, prix_usd: 1 }));
+  var cf = rf.colis;
+  verifier('prix fixé : pris tel quel, sans tarif à la livre', [cf.prix_usd, cf.prix_fixe_usd, cf.tarif_lb_usd], [35.5, 35.5, null]);
+  verifier('facture : ce prix + 10 $, pas de « $/lb » sur la ligne',
+           [rf.facture.montant_usd, rf.facture.facture_lignes[0].montant_usd, rf.facture.facture_lignes[0].tarif_lb_usd],
+           [45.5, 35.5, null]);
+  verifier('poids changé : le prix fixé ne bouge pas', (await A.modifierColis(cf.id, { poids_lb: 9 })).prix_usd, 35.5);
+  m = await A.modifierColis(cf.id, { prix_fixe_usd: 40 });
+  verifier('prix fixé corrigé ; la facture émise garde 45,50',
+           [m.prix_usd, (await A.factureDuColis(cf.id)).montant_usd], [40, 45.5]);
+  m = await A.modifierColis(cf.id, { prix_fixe_usd: null });
+  verifier('revenir au prix calculé (9 × 5)', [m.prix_usd, m.prix_fixe_usd, m.tarif_lb_usd], [45, null, 5]);
+  m = await A.modifierColis(cf.id, { prix_fixe_usd: 0 });
+  verifier('prix fixé à 0 : accepté', [m.prix_usd, m.tarif_lb_usd], [0, null]);
+  for (var v of [-1, 100001, 'trente']) {
+    verifier('prix fixé ' + v + ' : refusé', await code(A.creerColis(avec({ prix_fixe_usd: v }))), 'INVALID_PRICE');
+  }
+  var fixe = (await A.creerColis(avec({ description: 'Forfait 2', prix_fixe_usd: 50 }))).colis.id;
+  await API.deconnecter();
+  await API.connecter('employe@goship.demo', 'demo1234');
+  verifier('un employé ne fixe pas un prix à la création', await code(A.creerColis(avec({ prix_fixe_usd: 12 }))), 'non-autorise');
+  var ce = (await A.creerColis(avec({ description: 'Colis de l\'entrepôt', prix_fixe_usd: null }))).colis;
+  verifier('… il enregistre au prix calculé', [ce.prix_usd, ce.prix_fixe_usd], [21, null]);
+  var me = await A.modifierColis(fixe, { description: 'Forfait 2 (étiqueté)', prix_fixe_usd: 50, poids_lb: 7 });
+  verifier('il corrige un colis à prix fixé sans y toucher', [me.prix_usd, me.description], [50, 'Forfait 2 (étiqueté)']);
+  verifier('… mais ne change pas son prix fixé', await code(A.modifierColis(fixe, { prix_fixe_usd: 60 })), 'non-autorise');
+  verifier('… ni ne le ramène au prix calculé', await code(A.modifierColis(fixe, { prix_fixe_usd: null })), 'non-autorise');
+  verifier('… ni ne fixe le prix d\'un colis calculé', await code(A.modifierColis(ce.id, { prix_fixe_usd: 5 })), 'non-autorise');
+  await API.deconnecter();
+  await API.connecter('admin@goship.demo', 'demo1234');
+
   console.log('\n8. Journal et permissions');
   var actions = (await A.journal({ parPage: 500 })).lignes.map(function (l) { return l.action; });
   verifier('créations, statuts, modifications, paiements journalisés',

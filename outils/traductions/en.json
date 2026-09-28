@@ -2165,5 +2165,19 @@
   "🛒 2. AliExpress : le paradis des acheteurs en ligne": "🛒 2. AliExpress: an online shopper's paradise",
   "🛠️ 3. Banggood : pour les passionnés de technologie et les bricoleurs": "🛠️ 3. Banggood: for tech lovers and DIYers",
   "🤔 Alors, quelle est ta boutique préférée ?": "🤔 So, what's your favorite store?",
-  "🥇 1. Shein : de la mode pour tous les goûts et tous les budgets": "🥇 1. Shein: fashion for every taste and every budget"
+  "🥇 1. Shein : de la mode pour tous les goûts et tous les budgets": "🥇 1. Shein: fashion for every taste and every budget",
+  "Fixer le prix à la main": "Set the price manually",
+  "au lieu du calcul poids × tarif (forfait, accord particulier)": "instead of the weight × rate calculation (flat fee, special agreement)",
+  "Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.": "Enter the package price, in dollars: it replaces the weight × rate calculation.",
+  "Prix invalide : un montant en dollars, de 0 à 100 000.": "Invalid price: an amount in dollars, from 0 to 100,000.",
+  "Prix fixé à la main": "Price set manually",
+  "Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».": "Enter the package price, in dollars (from 0 to 100,000), or uncheck “Set the price manually”.",
+  "Sans effet : le prix du colis est fixé à la main": "No effect: the package price is set manually",
+  "Fermer sans enregistrer ?": "Close without saving?",
+  "Les informations saisies dans cette fenêtre seront perdues.": "The information entered in this window will be lost.",
+  "Fermer sans enregistrer": "Close without saving",
+  "Continuer la saisie": "Keep editing",
+  "Un prix fixé à la main est réservé à qui peut modifier les factures.": "A manually set price is reserved for those who can edit invoices.",
+  "Le prix du colis doit être compris entre 0 et 100 000 $.": "The package price must be between $0 and $100,000.",
+  "Prix du colis illisible.": "Unreadable package price."
 }

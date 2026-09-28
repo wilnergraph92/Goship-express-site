@@ -41,10 +41,12 @@
 
   var STATUTS = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre', 'incident'];
   var CHAMPS_PROFIL = ['nom_complet', 'pays', 'region', 'ville', 'adresse', 'telephone', 'langue'];
-  // Ce que la page peut proposer pour un colis. Ni le prix, ni le statut, ni le
-  // numéro : la base les décide (outils/supabase-services.sql, regles_colis).
+  // Ce que la page peut proposer pour un colis. Ni le prix calculé, ni le statut,
+  // ni le numéro : la base les décide (outils/supabase-services.sql, regles_colis).
+  // prix_fixe_usd est un prix saisi à la main, qui remplace poids × tarif ; la
+  // base le réserve à qui peut modifier les factures.
   var CHAMPS_MODIFIABLES = ['client_id', 'suivi_transporteur', 'expediteur', 'description', 'poids_lb', 'service',
-                            'pays_destination', 'destination', 'recu_le', 'tarif_lb_usd'];
+                            'pays_destination', 'destination', 'recu_le', 'tarif_lb_usd', 'prix_fixe_usd'];
   // À la création s'ajoutent le lieu et le message de l'événement initial.
   var CHAMPS_CREATION = CHAMPS_MODIFIABLES.concat(['lieu', 'note']);
   // Ce qu'une page peut encore changer sur une facture émise. Le payé, le
@@ -139,7 +141,20 @@
   function prixColis(colis) {
     var c = colis || {};
     if (c.prix_usd != null && c.prix_usd !== '') return arrondi(c.prix_usd);
+    if (prixFixe(c)) return arrondi(c.prix_fixe_usd);
     return prixTransport(c.poids_lb, tarifDe(c));
+  }
+
+  // Un prix fixé à la main (prix_fixe_usd) remplace poids × tarif
+  function prixFixe(colis) {
+    var p = (colis || {}).prix_fixe_usd;
+    return p != null && p !== '';
+  }
+
+  // Le tarif recopié sur une ligne de facture : aucun pour un prix fixé à la
+  // main (la facture n'affiche alors pas de « $/lb »), comme dans la base
+  function tarifLigne(colis) {
+    return prixFixe(colis) ? null : tarifDe(colis);
   }
 
   /* ---- Les transitions de statut ----------------------------------------------
@@ -1584,9 +1599,11 @@
     return n ? { avant: a, apres: b } : null;
   }
 
-  var RESUME_COLIS = ['numero', 'client_id', 'statut', 'poids_lb', 'tarif_lb_usd', 'prix_usd', 'service',
-                      'pays_destination', 'suivi_transporteur', 'description', 'expediteur', 'destination',
-                      'recu_le', 'lieu', 'note'];
+  // Les 10 premiers : ceux que la base journalise à la création (journaliser_colis)
+  var RESUME_COLIS = ['numero', 'client_id', 'statut', 'poids_lb', 'tarif_lb_usd', 'prix_usd', 'prix_fixe_usd',
+                      'service', 'pays_destination', 'suivi_transporteur', 'description', 'expediteur',
+                      'destination', 'recu_le', 'lieu', 'note'];
+  var RESUME_CREATION = 10;
 
   // regles_colis : c est le colis tel qu'il sera écrit, avant la version
   // précédente (null à la création). Complète c (tarif, prix, textes bornés)
@@ -1633,20 +1650,44 @@
       }
     }
 
-    if (c.tarif_lb_usd == null) c.tarif_lb_usd = nouveau || avant.tarif_lb_usd == null ? TARIF_LB_DEFAUT : avant.tarif_lb_usd;
-    if (change('tarif_lb_usd') && (c.tarif_lb_usd < 0 || c.tarif_lb_usd > 1000)) {
-      throw Erreur('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
-    }
-    // Un tarif autre que celui de la maison est un geste de facturation
     var auteur = compteConnecte(d);
-    if (auteur && !peutCompte(auteur, 'invoices.edit') &&
-        ((nouveau && c.tarif_lb_usd !== TARIF_LB_DEFAUT) || (!nouveau && c.tarif_lb_usd !== avant.tarif_lb_usd))) {
-      throw Erreur('non-autorise', 'Un tarif particulier est réservé à qui peut modifier les factures.');
-    }
-    if (nouveau || change('poids_lb') || change('tarif_lb_usd') || avant.prix_usd == null) {
-      c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
+    var factureur = !auteur || peutCompte(auteur, 'invoices.edit');
+    var etaitFixe = !nouveau && prixFixe(avant);
+    if (prixFixe(c)) {
+      // Prix fixé à la main : il remplace poids × tarif, sans tarif à la livre
+      c.prix_fixe_usd = Number(c.prix_fixe_usd);
+      var fixeChange = nouveau || !etaitFixe || arrondi(c.prix_fixe_usd) !== arrondi(avant.prix_fixe_usd);
+      if (fixeChange && !(c.prix_fixe_usd >= 0 && c.prix_fixe_usd <= 100000)) {
+        throw Erreur('INVALID_PRICE', 'Le prix du colis doit être compris entre 0 et 100 000 $.');
+      }
+      if (fixeChange && !factureur) {
+        throw Erreur('non-autorise', 'Un prix fixé à la main est réservé à qui peut modifier les factures.');
+      }
+      c.prix_fixe_usd = arrondi(c.prix_fixe_usd);
+      c.tarif_lb_usd = null;
+      c.prix_usd = c.prix_fixe_usd;
     } else {
-      c.prix_usd = avant.prix_usd;
+      c.prix_fixe_usd = null;
+      // Revenir au prix calculé est aussi un geste de facturation
+      if (etaitFixe && !factureur) {
+        throw Erreur('non-autorise', 'Un prix fixé à la main est réservé à qui peut modifier les factures.');
+      }
+      if (c.tarif_lb_usd == null) c.tarif_lb_usd = nouveau || avant.tarif_lb_usd == null ? TARIF_LB_DEFAUT : avant.tarif_lb_usd;
+      if (change('tarif_lb_usd') && (c.tarif_lb_usd < 0 || c.tarif_lb_usd > 1000)) {
+        throw Erreur('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
+      }
+      // Un tarif autre que celui de la maison est un geste de facturation
+      if (!factureur &&
+          ((nouveau && c.tarif_lb_usd !== TARIF_LB_DEFAUT) ||
+           (!nouveau && !etaitFixe && c.tarif_lb_usd !== avant.tarif_lb_usd))) {
+        throw Erreur('non-autorise', 'Un tarif particulier est réservé à qui peut modifier les factures.');
+      }
+      // Le prix se recalcule aussi quand on quitte un prix fixé
+      if (nouveau || change('poids_lb') || change('tarif_lb_usd') || avant.prix_usd == null || etaitFixe) {
+        c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
+      } else {
+        c.prix_usd = avant.prix_usd;
+      }
     }
 
     if (nouveau) {
@@ -1768,7 +1809,7 @@
     f.facture_lignes = (colis || []).map(function (c, i) {
       return { id: i + 1, facture_id: f.id, colis_id: c.id, libelle: c.description || 'Transport',
                montant_usd: prixColis(c), quantite: 1, poids_lb: c.poids_lb != null ? c.poids_lb : null,
-               tarif_lb_usd: tarifDe(c) };
+               tarif_lb_usd: tarifLigne(c) };
     });
     d.factures.push(f);
     journaliser(d, moi, 'facture.creation', 'facture', f.id, null,
@@ -3450,6 +3491,7 @@
           c.id = identifiant();
           c.poids_lb = lireNombre(x.poids_lb, 'INVALID_WEIGHT', 'Poids illisible.');
           c.tarif_lb_usd = lireNombre(x.tarif_lb_usd, 'INVALID_RATE', 'Tarif illisible.');
+          c.prix_fixe_usd = lireNombre(x.prix_fixe_usd, 'INVALID_PRICE', 'Prix du colis illisible.');
           c.service = c.service || 'aerien';
           c.pays_destination = c.pays_destination || 'HT';
           c.lieu = c.lieu || 'Miami (Medley), FL';
@@ -3462,7 +3504,7 @@
           c.numero = 'GSE-' + d.seqColis + '-' + c.pays_destination;
           d.colis.push(c);
           historiser(d, c, c.recu_le);
-          journaliser(d, moi, 'colis.creation', 'colis', c.id, null, choisir(c, RESUME_COLIS.slice(0, 9)));
+          journaliser(d, moi, 'colis.creation', 'colis', c.id, null, choisir(c, RESUME_COLIS.slice(0, RESUME_CREATION)));
           var facture = facturerColisDemo(d, moi, c).facture;
           ecrireDonnees(d);
           prevenir('factures');
@@ -3484,6 +3526,10 @@
           if ('poids_lb' in champs) nouveau.poids_lb = lireNombre(champs.poids_lb, 'INVALID_WEIGHT', 'Poids illisible.');
           if ('tarif_lb_usd' in champs) {
             nouveau.tarif_lb_usd = lireNombre(champs.tarif_lb_usd, 'INVALID_RATE', 'Tarif illisible.');
+          }
+          // null ou vide : revenir au prix calculé ; absent : inchangé
+          if ('prix_fixe_usd' in champs) {
+            nouveau.prix_fixe_usd = lireNombre(champs.prix_fixe_usd, 'INVALID_PRICE', 'Prix du colis illisible.');
           }
           reglesColis(d, nouveau, c);
           var diff = difference(c, nouveau, RESUME_COLIS);
@@ -3634,7 +3680,7 @@
         var moi;
         try { moi = exiger(d, 'shipments.delete'); } catch (e) { return echec(e.code); }
         var parti = trouverColisDemo(d, id);
-        if (parti) journaliser(d, moi, 'colis.suppression', 'colis', id, choisir(parti, RESUME_COLIS.slice(0, 9)), null);
+        if (parti) journaliser(d, moi, 'colis.suppression', 'colis', id, choisir(parti, RESUME_COLIS.slice(0, RESUME_CREATION)), null);
         d.colis = d.colis.filter(function (c) { return c.id !== id; });
         d.historique = d.historique.filter(function (h) { return h.colis_id !== id; });
         d.notifications = (d.notifications || []).filter(function (n) { return n.colis_id !== id; });
@@ -4005,7 +4051,7 @@
         return plusTard({
           lignes: colis.map(function (c) {
             return { colis_id: c.id, numero: c.numero, description: c.description, poids_lb: c.poids_lb,
-                     tarif_lb_usd: tarifDe(c), prix_usd: prixColis(c) };
+                     tarif_lb_usd: tarifLigne(c), prix_usd: prixColis(c) };
           }),
           sous_total: sousTotal, frais_service: frais, total: arrondi(sousTotal + frais)
         });
