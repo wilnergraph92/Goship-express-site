@@ -7,6 +7,25 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — « Supprimer mon compte » dans l'application mobile
+
+Migration à passer avant de publier la nouvelle version de l'application : **un seul
+fichier**, `outils/supabase-compte.sql` (le dernier de la chaîne). Il ajoute une
+colonne vide (`clients.supprime_le`) et une fonction ; il ne change aucune donnée.
+Sans lui, l'application répond « La suppression du compte n'est pas encore
+disponible » et renvoie vers WhatsApp.
+
+- `supprimer_mon_compte` : le client connecté supprime son compte lui-même. Profil
+  vidé (nom, e-mail, téléphone, adresse), connexion bloquée pour toujours, sessions
+  fermées, téléphones et pré-alertes en attente effacés, adresse e-mail libérée.
+  Colis, factures et paiements restent, sans ses coordonnées (la ligne du compte n'est
+  jamais effacée : factures et paiements la suivent en cascade). Refusé à un compte
+  de l'équipe, tant qu'un colis n'est pas livré ou qu'une facture reste à payer.
+  Journalisé (`client.suppression_demandee`).
+- Bancs : `essai-mobile.py` section K (18 cas) ; la doublure d'`auth` a les colonnes
+  et tables de GoTrue que la fonction touche ; `sonder.sh` et `controle-securite.sql`
+  connaissent la 13ᵉ migration.
+
 ## site-2026.09.28.5 — nouvelles icônes (application de bureau, site) (publié le 28/09/2026)
 
 Aucune migration, aucune donnée modifiée. Toutes tirées du même dessin (le colis et

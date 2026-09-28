@@ -47,8 +47,17 @@ create table auth.users (
   id uuid primary key,
   email text,
   email_confirmed_at timestamptz,
-  raw_user_meta_data jsonb default '{}'::jsonb
+  raw_user_meta_data jsonb default '{}'::jsonb,
+  -- Les colonnes et tables de GoTrue que touche supprimer_mon_compte (supabase-compte.sql)
+  encrypted_password text,
+  phone text,
+  banned_until timestamptz
 );
+create table auth.identities (id text primary key default gen_random_uuid()::text, user_id uuid, provider text,
+                              identity_data jsonb default '{}'::jsonb);
+create table auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid);
+create table auth.refresh_tokens (id bigint generated always as identity primary key, user_id varchar(255),
+                                  token varchar(255));
 
 -- Chez Supabase, auth.uid() est lu dans le jeton envoyé par le navigateur
 create function auth.uid() returns uuid language sql stable as $$
