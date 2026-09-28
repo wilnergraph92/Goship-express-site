@@ -384,6 +384,20 @@ l'ajouter à la liste blanche de `controle-securite.sql` (section 6), sinon le
 contrôle la signale. `essai-production.py` éprouve tout cela, sauvegarde et
 restauration comprises. Changements notables : `CHANGELOG.md` (non publié).
 
+**Sauvegardes** (le projet reste sur l'offre gratuite de Supabase, sans sauvegarde
+fournie) : guide `outils/README-backup.md`. `sauvegarde.yml` chaque jour :
+`sauvegarder.sh` (`pg_dump -Fc`, age, SHA-256), `verifier-sauvegarde.sh`,
+`stocker.sh` (rclone vers un stockage externe, relecture, rétention 7 avec
+garde-fous), puis `epreuve-restauration.sh` sur une base jetable (qu'il habille
+lui-même, rôles `anon` / `authenticated` / `service_role` compris : le conteneur du
+workflow n'en a aucun) ; `restauration-test.yml` à la demande. Tout ce qui manque ou
+échoue rend le workflow **rouge** : ne jamais réintroduire un « avis » vert quand
+aucune sauvegarde n'a été faite, ni retirer `defaults: run: shell: bash` de ces
+workflows (sans `pipefail`, `stocker.sh … | tee` masque l'échec d'un envoi).
+`SUPABASE_DB_URL` passe par `verifier-adresse.sh` (Session pooler 5432 seulement).
+`restaurer.sh` exige `RESTORE_TARGET`. Aucun de ces scripts ne connaît le domaine du
+site.
+
 Messages de commit : une phrase en français qui dit ce que ça change
 pour l'utilisateur, pas un préfixe technique. Voir `git log`.
 

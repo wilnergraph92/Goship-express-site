@@ -595,6 +595,29 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
   .is-app .gs-td__menu,.gs-td__panneau{transition:none;animation:none}
 }
 
+/* ---- Vue « Notifications » (outils/supabase-notifications.sql) ------------------------------ */
+.gs-notifs-centre__filtres{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 16px}
+.gs-notifs-centre__alertes{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.gs-tableau--envois{margin-top:16px}
+.gs-envois__statut.gs-envoi__ligne--ok{color:#0e7a55;font-weight:700}
+.gs-envois__statut.gs-envoi__ligne--alerte{color:#b42318;font-weight:700}
+.gs-notifs-canaux{list-style:none;margin:0 0 8px;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.gs-notifs-canaux__canal{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid #e3e8f2;border-radius:14px;background:#fff;color:#5b6782}
+.gs-notifs-canaux__canal strong{color:var(--ink)}
+.gs-notifs-canaux__canal.is-configure span{color:#0e7a55;font-weight:700}
+.gs-notifs-canaux__canal .gs-lien-bouton{align-self:flex-start}
+.gs-tableau--regles tr.is-inactif td{color:#8a93ac}
+.gs-regle__priorite,.gs-regle__sensible{display:block;font-size:12px;color:#5b6782}
+.gs-regle__priorite{color:#b45309;font-weight:700}
+.gs-regle__evenement{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12.5px}
+.gs-regle__canaux{display:flex;flex-wrap:wrap;gap:6px 14px}
+.gs-case--petite{font-size:13px;gap:6px}
+.gs-suivi-notif{margin:0;padding:0 0 0 20px;display:grid;gap:10px}
+.gs-suivi-notif li{display:flex;flex-direction:column;gap:2px}
+.gs-suivi-notif li span{color:#5b6782}
+.gs-suivi-notif li.gs-envoi__ligne--ok strong{color:#0e7a55}
+.gs-suivi-notif li.gs-envoi__ligne--alerte strong{color:#b42318}
+
 /* ---- Le menu en trois groupes, le panneau « Affichage » -----------------------------
    Opérations, Finance, Gestion : un groupe dont le rôle ne peut rien ouvrir disparaît. */
 .gs-td__groupe{display:flex;flex-direction:column;gap:4px;margin-bottom:18px}
@@ -828,6 +851,11 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-solde__note{color:#fca5a5}
 [data-apparence="sombre"] .gs-admin-body .gs-messages__ligne{border-bottom-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-messages__ligne span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-filtres-notifs__choix{background-color:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-notif__bouton:hover,[data-apparence="sombre"] .gs-admin-body .gs-notif__bouton:focus-visible{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-notif__date{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-notifs-reglages summary{color:#c3d0ee}
+[data-apparence="sombre"] .gs-admin-body .gs-notifs-reglages__grille th,[data-apparence="sombre"] .gs-admin-body .gs-notifs-reglages__grille td{border-bottom-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-adresse span{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-infos dt{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-deconnexion{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
@@ -1092,6 +1120,12 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-interrupteur::after{background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-reglages__infos div{border-bottom-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-reglages__infos dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-envois__statut.gs-envoi__ligne--alerte{color:#fca5a5}
+[data-apparence="sombre"] .gs-admin-body .gs-notifs-canaux__canal{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau--regles tr.is-inactif td{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-regle__priorite,[data-apparence="sombre"] .gs-admin-body .gs-regle__sensible{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-suivi-notif li span{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-suivi-notif li.gs-envoi__ligne--alerte strong{color:#fca5a5}
 [data-apparence="sombre"] .gs-admin-body .gs-td__separateur{border-top-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-td__lien--danger,[data-apparence="sombre"] .gs-admin-body .gs-td__panneau .gs-td__lien--danger{color:#fca5a5}
 [data-apparence="sombre"] .gs-admin-body .gs-td__panneau .gs-td__lien--danger:hover{background-color:rgba(220,38,38,.16);color:#fca5a5}

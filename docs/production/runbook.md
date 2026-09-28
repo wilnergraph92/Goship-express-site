@@ -49,7 +49,7 @@ restaurée (**Sauvegarde de la base** > Run workflow, deux jobs verts) → contr
 ## Restaurer une sauvegarde
 
 Dans un projet **neuf**, jamais sur la production en service :
-`CIBLE_DB_URL=… bash outils/production/restaurer.sh <dossier> goship-<date> <clé privée>`,
+`RESTORE_TARGET=staging CIBLE_DB_URL=… bash outils/production/restaurer.sh <dossier> goship-<date> <clé privée>`,
 puis chaîne, contrôles, Vault, Auth. Détail : backup.md § Restaurer.
 
 ## Comptes de l'équipe

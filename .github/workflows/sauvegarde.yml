@@ -1,26 +1,31 @@
 # ==========================================================================
-#  Sauvegarde chiffrée de la base de production, puis restauration d'épreuve
+#  Sauvegarde autonome de la base (compatible Supabase Free), puis restauration d'épreuve
 # ==========================================================================
-#  Chaque jour à 5 h 23 UTC (et à la demande) :
+#  Chaque jour à 5 h 23 UTC, et à la demande (Actions > Sauvegarde de la base >
+#  Run workflow). L'offre gratuite de Supabase ne garde aucune sauvegarde
+#  téléchargeable : celle-ci ne dépend que de PostgreSQL, de GitHub Actions et d'un
+#  stockage externe. Guide complet : outils/README-backup.md.
 #
-#  1. « sauvegarder » — outils/production/sauvegarder.sh : copie logique (schéma
-#     public complet + comptes), chiffrée avec age pour deux destinataires :
-#       SAUVEGARDE_DESTINATAIRE    la clé du propriétaire (clé privée HORS LIGNE)
-#       RESTAURATION_DESTINATAIRE  la clé de l'épreuve ci-dessous (facultative)
-#     Gardée 90 jours en artefact. Sans clé privée, elle ne vaut rien.
+#  1. « sauvegarder » : pg_dump (schéma public complet + comptes auth), vérifié,
+#     chiffré avec age, empreintes SHA-256 (sauvegarder.sh, verifier-sauvegarde.sh),
+#     puis envoyé vers le stockage externe (stocker.sh : rclone, destination A et,
+#     si posée, B), relu, et rétention des 7 dernières. Copie de secours : artefact
+#     GitHub, 7 jours (chiffré : le dépôt est public).
+#  2. « restaurer » : la sauvegarde est RETÉLÉCHARGÉE du stockage externe, vérifiée,
+#     déchiffrée avec RESTAURATION_CLE, restaurée dans un PostgreSQL 17 jetable
+#     habillé en projet Supabase, la chaîne de migrations rejouée, la base vérifiée
+#     (verifier-restauration.sh). Le résumé donne chaque durée : le RTO mesuré de la
+#     base (téléchargement + vérification + restauration + chaîne + validation).
+#  3. « alerter » : en cas d'échec, ALERTE_WEBHOOK s'il est posé.
 #
-#  2. « restaurer » — la sauvegarde qu'on vient de faire est RESTAURÉE dans un
-#     PostgreSQL 17 jetable (doublures des schémas Supabase), avec la clé privée
-#     RESTAURATION_CLE : empreintes vérifiées, lignes comparées table par table au
-#     manifeste, chaîne de migrations rejouée, contrôles de sécurité et d'intégrité.
-#     Le résumé du job donne l'âge de la sauvegarde (RPO réel) et la durée de la
-#     restauration (RTO de la base, mesuré). Aucune donnée dans le journal.
-#     Ce n'est pas un vrai projet Supabase : la restauration dans un projet neuf
-#     reste à répéter à la main chaque trimestre (docs/production/backup.md).
+#  Tout ce qui manque ou échoue rend le workflow ROUGE : un jour sans sauvegarde
+#  vérifiée ne doit jamais s'afficher en vert.
 #
-#  Environnement « production » : SUPABASE_DB_URL, SAUVEGARDE_DESTINATAIRE,
-#  RESTAURATION_DESTINATAIRE, RESTAURATION_CLE. Sans les deux premiers, rien ne
-#  se fait (avis) ; sans les deux derniers, pas d'épreuve (avis).
+#  Environnement « production » (secrets) : SUPABASE_DB_URL, SAUVEGARDE_DESTINATAIRE,
+#  RESTAURATION_DESTINATAIRE, RESTAURATION_CLE, SAUVEGARDE_RCLONE_CONFIG,
+#  SAUVEGARDE_STOCKAGE, SAUVEGARDE_STOCKAGE_B (facultatif). ALERTE_WEBHOOK (facultatif).
+#  Aucun de ces scripts ne connaît l'adresse du site : un changement de domaine ne
+#  les concerne pas.
 # ==========================================================================
 
 name: Sauvegarde de la base
@@ -33,68 +38,127 @@ on:
 permissions:
   contents: read
 
+# Chaque étape sous « bash -eo pipefail » (shell: bash explicite). Sans cela, GitHub lance
+# « bash -e » : dans « stocker.sh envoyer … | tee », l'échec de l'envoi serait masqué par
+# tee et l'étape resterait verte. Une commande qui échoue avant un tube fait échouer l'étape.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: sauvegarde
   cancel-in-progress: false
 
 jobs:
   sauvegarder:
-    name: Copie chiffrée de la base
+    name: Copie chiffrée, stockage externe, rétention
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
     outputs:
-      pret: ${{ steps.pret.outputs.pret }}
+      nom: ${{ steps.copie.outputs.nom }}
+      stockage: ${{ steps.pret.outputs.stockage }}
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
       RESTAURATION_DESTINATAIRE: ${{ secrets.RESTAURATION_DESTINATAIRE }}
+      SAUVEGARDE_RCLONE_CONFIG: ${{ secrets.SAUVEGARDE_RCLONE_CONFIG }}
+      SAUVEGARDE_STOCKAGE: ${{ secrets.SAUVEGARDE_STOCKAGE }}
+      SAUVEGARDE_STOCKAGE_B: ${{ secrets.SAUVEGARDE_STOCKAGE_B }}
     steps:
       - name: Secrets posés ?
         id: pret
         run: |
-          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$SAUVEGARDE_DESTINATAIRE" ]; then
-            echo "::notice::Sauvegarde non configurée : poser SUPABASE_DB_URL et SAUVEGARDE_DESTINATAIRE (docs/production/backup.md)."
-            echo "pret=non" >> "$GITHUB_OUTPUT"
+          manque=""
+          [ -n "$SUPABASE_DB_URL" ] || manque="$manque SUPABASE_DB_URL"
+          [ -n "$SAUVEGARDE_DESTINATAIRE" ] || manque="$manque SAUVEGARDE_DESTINATAIRE"
+          if [ -n "$manque" ]; then
+            echo "::error::Aucune sauvegarde faite : secrets absents de l'environnement production :$manque (outils/README-backup.md)."
+            exit 1
+          fi
+          if [ -n "$SAUVEGARDE_RCLONE_CONFIG" ] && [ -n "$SAUVEGARDE_STOCKAGE" ]; then
+            echo "stockage=oui" >> "$GITHUB_OUTPUT"
           else
-            echo "pret=oui" >> "$GITHUB_OUTPUT"
+            echo "::error::Stockage externe non configuré (SAUVEGARDE_RCLONE_CONFIG, SAUVEGARDE_STOCKAGE) : la sauvegarde ne restera que 7 jours dans GitHub. Le workflow finira en échec."
+            echo "stockage=non" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        if: steps.pret.outputs.pret == 'oui'
         with:
           sparse-checkout: outils/production
           sparse-checkout-cone-mode: false
 
       # pg_dump doit être au moins de la version du serveur : le client 17 lit les
-      # serveurs 15, 16 et 17 (Supabase)
-      - name: Outils (pg_dump 17, age)
-        if: steps.pret.outputs.pret == 'oui'
+      # serveurs 15, 16 et 17 (Supabase). rclone : paquet d'Ubuntu.
+      - name: Outils (pg_dump 17, age, rclone)
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17 age
+          sudo apt-get install -y -qq postgresql-client-17 age rclone
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
-      - name: Sauvegarder
-        if: steps.pret.outputs.pret == 'oui'
-        run: bash outils/production/sauvegarder.sh sauvegarde
+      - name: Sauvegarder (pg_dump, vérification, chiffrement, SHA-256)
+        id: copie
+        run: |
+          bash outils/production/sauvegarder.sh "$RUNNER_TEMP/goship-backup"
+          publique=("$RUNNER_TEMP"/goship-backup/goship-*.public.dump.age)
+          nom="$(basename "${publique[0]}" .public.dump.age)"
+          echo "nom=$nom" >> "$GITHUB_OUTPUT"
 
+      - name: Vérifier la sauvegarde (fichiers, tailles, SHA-256, chiffrement)
+        run: bash outils/production/verifier-sauvegarde.sh "$RUNNER_TEMP/goship-backup" "${{ steps.copie.outputs.nom }}"
+
+      - name: Stockage externe (envoi relu, rétention 7)
+        id: stockage
+        if: steps.pret.outputs.stockage == 'oui'
+        run: |
+          umask 077
+          printf '%s\n' "$SAUVEGARDE_RCLONE_CONFIG" > "$RUNNER_TEMP/rclone.conf"
+          export RCLONE_CONFIG="$RUNNER_TEMP/rclone.conf"
+          bash outils/production/stocker.sh envoyer "$RUNNER_TEMP/goship-backup" "${{ steps.copie.outputs.nom }}" | tee "$RUNNER_TEMP/stockage.txt"
+          bash outils/production/stocker.sh retention 7 | tee -a "$RUNNER_TEMP/stockage.txt"
+
+      # Copie de secours, et source de l'épreuve si le stockage externe manque
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: steps.pret.outputs.pret == 'oui'
         with:
           name: goship-sauvegarde-${{ github.run_number }}
-          path: sauvegarde/
-          retention-days: 90
+          path: ${{ runner.temp }}/goship-backup/
+          retention-days: 7
           if-no-files-found: error
 
+      - name: Résumé
+        if: always()
+        run: |
+          d="$RUNNER_TEMP/goship-backup"
+          {
+            echo "### Sauvegarde : ${{ steps.copie.outputs.nom || 'aucune' }}"
+            if [ -d "$d" ]; then
+              echo "| Fichier | Taille |"
+              echo "|---|---|"
+              for f in "$d"/*.age; do echo "| \`$(basename "$f")\` | $(du -h "$f" | cut -f1) |"; done
+            fi
+            echo
+            echo "Stockage externe : ${{ steps.pret.outputs.stockage == 'oui' && 'configuré' || 'NON configuré' }} — étape : ${{ steps.stockage.outcome || 'non lancée' }}"
+            if [ -f "$RUNNER_TEMP/stockage.txt" ]; then echo '```'; cat "$RUNNER_TEMP/stockage.txt"; echo '```'; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nettoyer (configuration rclone, fichiers)
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/rclone.conf" "$RUNNER_TEMP/goship-backup"
+
+      - name: Sans stockage externe, la sauvegarde n'est pas en sûreté
+        if: steps.pret.outputs.stockage != 'oui'
+        run: |
+          echo "::error::Sauvegarde faite, mais gardée seulement 7 jours dans GitHub : configurer SAUVEGARDE_RCLONE_CONFIG et SAUVEGARDE_STOCKAGE (outils/README-backup.md)."
+          exit 1
+
   restaurer:
-    name: Restauration d'épreuve (RPO, RTO mesurés)
+    name: Restauration d'épreuve (RTO mesuré)
     needs: sauvegarder
-    if: needs.sauvegarder.outputs.pret == 'oui'
+    if: always() && needs.sauvegarder.outputs.nom != ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
@@ -108,97 +172,101 @@ jobs:
           --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       RESTAURATION_CLE: ${{ secrets.RESTAURATION_CLE }}
-      SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
+      SAUVEGARDE_RCLONE_CONFIG: ${{ secrets.SAUVEGARDE_RCLONE_CONFIG }}
+      SAUVEGARDE_STOCKAGE: ${{ secrets.SAUVEGARDE_STOCKAGE }}
       CIBLE_DB_URL: postgresql://postgres:epreuve-jetable@localhost:5432/postgres
+      NOM: ${{ needs.sauvegarder.outputs.nom }}
+      STOCKAGE: ${{ needs.sauvegarder.outputs.stockage }}
     steps:
       - name: Clé de restauration posée ?
-        id: pret
         run: |
           if [ -z "$RESTAURATION_CLE" ]; then
-            echo "::warning::Restauration d'épreuve non configurée : poser RESTAURATION_CLE et RESTAURATION_DESTINATAIRE (docs/production/backup.md). La sauvegarde du jour n'a PAS été vérifiée."
-            echo "pret=non" >> "$GITHUB_OUTPUT"
-          else
-            echo "pret=oui" >> "$GITHUB_OUTPUT"
+            echo "::error::RESTAURATION_CLE absente : la sauvegarde du jour n'a PAS été déchiffrée ni restaurée, donc pas vérifiée (outils/README-backup.md)."
+            exit 1
           fi
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        if: steps.pret.outputs.pret == 'oui'
         with:
           sparse-checkout: |
             outils
           sparse-checkout-cone-mode: false
 
-      - name: Outils (pg_restore 17, age)
-        if: steps.pret.outputs.pret == 'oui'
+      - name: Outils (pg_restore 17, age, rclone)
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-17 age
+          sudo apt-get install -y -qq postgresql-client-17 age rclone
           echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        if: steps.pret.outputs.pret == 'oui'
-        with:
-          name: goship-sauvegarde-${{ github.run_number }}
-          path: sauvegarde
-
-      - name: Une base comme un projet Supabase neuf
-        if: steps.pret.outputs.pret == 'oui'
-        run: |
-          # Les rôles de Supabase que citent les droits sauvegardés, et la publication
-          # du temps réel, avant les doublures des schémas auth / vault / net / storage
-          psql "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1 <<'SQL'
-          do $$ declare r text; begin
-            foreach r in array array['supabase_admin', 'supabase_auth_admin', 'supabase_storage_admin',
-                                     'dashboard_user', 'pgbouncer', 'supabase_realtime_admin',
-                                     'supabase_replication_admin', 'supabase_read_only_user'] loop
-              if not exists (select 1 from pg_roles where rolname = r) then
-                execute format('create role %I nologin', r);
-              end if;
-            end loop;
-          end $$;
-          create publication supabase_realtime;
-          SQL
-          python3 outils/production/doublures-supabase.py | psql "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1
-
-      - name: Restaurer, comparer, rejouer la chaîne
-        if: steps.pret.outputs.pret == 'oui'
+      # La preuve que la sauvegarde se RELIT depuis le stockage externe (sinon, l'artefact)
+      - name: Télécharger depuis le stockage externe
+        id: telecharger
+        if: env.STOCKAGE == 'oui'
         run: |
           umask 077
-          printf '%s\n' "$RESTAURATION_CLE" > "$RUNNER_TEMP/cle-restauration.txt"
-          nom="$(ls sauvegarde | sed -n 's/\.public\.dump\.age$//p' | head -1)"
+          printf '%s\n' "$SAUVEGARDE_RCLONE_CONFIG" > "$RUNNER_TEMP/rclone.conf"
           debut=$(date +%s)
-          RESTAURATION_ESSAI=1 bash outils/production/restaurer.sh sauvegarde "$nom" "$RUNNER_TEMP/cle-restauration.txt"
-          SANS_PG_NET=1 bash outils/production/appliquer-chaine.sh
-          fin=$(date +%s)
-          rm -f "$RUNNER_TEMP/cle-restauration.txt"
-          # RPO : âge de la sauvegarde restaurée ; RTO (base) : restauration + chaîne
-          prise="$(echo "$nom" | sed -E 's/^goship-([0-9-]+)T([0-9]{2})([0-9]{2})Z$/\1 \2:\3 UTC/')"
-          age_min=$(( ( fin - $(date -u -d "$prise" +%s) ) / 60 ))
-          {
-            echo "### Restauration d'épreuve : réussie"
-            echo "| Mesure | Valeur |"
-            echo "|---|---|"
-            echo "| Sauvegarde | \`$nom\` |"
-            echo "| Âge au moment de la restauration | $age_min min |"
-            echo "| Durée restauration + chaîne (RTO de la base, mesuré) | $(( fin - debut )) s |"
-            echo "| Lignes | identiques au manifeste, table par table |"
-          } >> "$GITHUB_STEP_SUMMARY"
+          RCLONE_CONFIG="$RUNNER_TEMP/rclone.conf" bash outils/production/stocker.sh recuperer "$NOM" "$RUNNER_TEMP/restauration"
+          echo "duree=$(( $(date +%s) - debut ))" >> "$GITHUB_OUTPUT"
+          rm -f "$RUNNER_TEMP/rclone.conf"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: env.STOCKAGE != 'oui'
+        with:
+          name: goship-sauvegarde-${{ github.run_number }}
+          path: ${{ runner.temp }}/restauration
+
+      # Habiller le PostgreSQL jetable en projet Supabase neuf, puis vérifier, déchiffrer,
+      # restaurer, rejouer la chaîne, vérifier la base (epreuve-restauration.sh)
+      - name: Restaurer et vérifier (rapport, RTO et RPO mesurés)
+        env:
+          TELECHARGEMENT: ${{ steps.telecharger.outputs.duree || '0' }}
+        run: |
+          umask 077
+          cle="$RUNNER_TEMP/cle-restauration.txt"
+          printf '%s\n' "$RESTAURATION_CLE" > "$cle"
+          trap 'rm -f "$cle"' EXIT
+          RESTORE_TARGET=essai PREPARER_CIBLE=1 bash outils/production/epreuve-restauration.sh \
+            "$RUNNER_TEMP/restauration" "$NOM" "$cle" "$TELECHARGEMENT"
+          echo "Source : $( [ "$STOCKAGE" = oui ] && echo 'stockage externe (destination A)' || echo 'artefact GitHub (stockage externe non configuré)')" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Contrôles sur la base restaurée
-        if: steps.pret.outputs.pret == 'oui'
         # pg_cron / pg_net n'existent pas dans ce PostgreSQL : l'alerte « Extensions »
         # y est attendue. Le détail chiffré dit s'il y a autre chose.
         continue-on-error: true
+        env:
+          SAUVEGARDE_DESTINATAIRE: ${{ secrets.SAUVEGARDE_DESTINATAIRE }}
         run: bash outils/production/controler.sh controle
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: steps.pret.outputs.pret == 'oui' && always()
+        if: always()
         with:
           name: controle-restauration-${{ github.run_number }}
           path: controle/*.age
           retention-days: 30
           if-no-files-found: ignore
+
+      - name: Nettoyer
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/restauration" "$RUNNER_TEMP/rclone.conf" "$RUNNER_TEMP/cle-restauration.txt"
+
+  alerter:
+    name: Alerte en cas d'échec
+    needs: [sauvegarder, restaurer]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          sparse-checkout: outils/production
+          sparse-checkout-cone-mode: false
+      - name: Prévenir
+        env:
+          ALERTE_WEBHOOK: ${{ secrets.ALERTE_WEBHOOK }}
+          LIEN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          bash outils/production/alerter.sh "GoShip Express — sauvegarde de la base : ÉCHEC. Journal : $LIEN"

@@ -7,6 +7,36 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — sauvegarde autonome de la base (Supabase Free)
+
+Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backup.md`.
+
+- `sauvegarde.yml` : rouge quand un secret manque (il affichait vert sans rien
+  sauvegarder), stockage externe par rclone (destinations A et B), rétention 7 avec
+  garde-fous, épreuve de restauration retéléchargée du stockage, rapport PASS/FAIL,
+  RTO par étape, alerte `ALERTE_WEBHOOK`. Corrige une épreuve qui aurait échoué au
+  premier passage (publication `supabase_realtime` créée deux fois).
+- Nouveaux : `verifier-sauvegarde.sh`, `stocker.sh`, `verifier-restauration.sh`,
+  `epreuve-restauration.sh`, `alerter.sh`, `restauration-test.yml`.
+- `sauvegarder.sh` : connexion vérifiée (message sans mot de passe), contrôles de
+  structure et de taille, SHA-256 des fichiers chiffrés, nom à la seconde, comptes
+  dans le manifeste. `restaurer.sh` : `RESTORE_TARGET` obligatoire, confirmation pour
+  la production, SHA-256 vérifié avant de déchiffrer.
+- Domaine de production (`www.goshipexpress.net`) : configuration Auth décrite à part
+  (`docs/production/environment.md`).
+- Revue du 27/09/2026 (rapport, section 0) :
+  - l'épreuve de restauration réussit sur un PostgreSQL neuf : elle crée elle-même
+    `anon`, `authenticated`, `service_role` et `authenticator` ; elle aurait échoué
+    chaque jour dans le conteneur du workflow ;
+  - un envoi raté vers le stockage fait maintenant échouer le workflow : chaque étape
+    tourne sous `pipefail`, alors que `| tee` masquait l'échec et qu'une destination B
+    en panne laissait le workflow vert. Une B non configurée s'affiche `SKIPPED` ;
+  - `SUPABASE_DB_URL` est vérifiée avant toute connexion (`verifier-adresse.sh`) :
+    Session pooler 5432 seulement, adresse jamais affichée ;
+  - le journal annonce le vrai nombre de fonctions ;
+  - le manifeste garde la valeur des séquences et le détail des comptes (identités,
+    mots de passe, confirmés), comparés après restauration.
+
 ## site-2026.09.28.2 — tableau de bord : actions dans la fiche seulement (publié le 28/09/2026)
 
 Aucune migration, aucune donnée modifiée.
