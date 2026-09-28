@@ -7,11 +7,12 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## site-2026.09.28.3 — tableau de bord : onglet « Rapport » (non publié)
+## site-2026.09.28.3 — tableau de bord : onglet « Rapport » (publié le 28/09/2026)
 
-Migration **à passer par le propriétaire avant de publier** : `supabase.sql` (les
+Migration passée par le propriétaire avant la publication : `supabase.sql` (les
 permissions `reports.create`, `reports.edit`, `reports.delete`), puis toute la chaîne
-dans l'ordre jusqu'au nouveau `supabase-rapports.sql` (outils/migrations.txt).
+dans l'ordre jusqu'au nouveau `supabase-rapports.sql` (outils/migrations.txt) ;
+`audit-production.yml` : 12 migrations présentes sur 12.
 `supabase-rapports.sql` ajoute une table (`rapports`), trois index et des fonctions ; il
 ne change aucune donnée. Sans lui, l'onglet répond « La base n'est pas à jour ».
 

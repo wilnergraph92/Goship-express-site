@@ -27,14 +27,11 @@ Procédure de production : deployment.md § 1. Une migration n'a pas de « down 
 on revient en arrière par une nouvelle migration ou une restauration
 (rollback.md § Base).
 
-### État de la production (26/09/2026, `audit-production.yml`)
+### État de la production (28/09/2026, `audit-production.yml`)
 
 | Migration | Production |
 |---|---|
-| `supabase.sql` à `supabase-mobile.sql` (1 à 9) | présentes (fonction témoin de chacune) |
-| `supabase-notifications.sql` (10) | **absente** |
-| `supabase-production.sql` (11) | **absente** |
-| `supabase-rapports.sql` (12, ajoutée le 28/09/2026) | **absente** (demande `supabase.sql` relancé : permissions des rapports) |
+| `supabase.sql` à `supabase-rapports.sql` (1 à 12) | présentes (fonction témoin de chacune) ; chaîne entière relancée par le propriétaire le 28/09/2026, contrôle de `supabase-rapports.sql` : `5 \| 0 \| true \| true` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de
