@@ -7,6 +7,14 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — le favicon se met à jour dans les navigateurs
+
+Aucune migration. Les adresses des icônes du site portent maintenant un numéro
+(`?v=2026-09-28`, `ICONES_VERSION` dans `outils/generateur/build.py`) : un navigateur
+qui gardait l'ancien favicon sous la même adresse recharge le nouveau. Les pages
+traduites (`en/`, `es/`, `ht/`) demandaient `favicon.ico` dans leur propre dossier, où
+il n'existe pas : `traduire.py` le fait maintenant pointer vers celui de la racine.
+
 ## site-2026.09.28.7 — regroupement des factures : encaisser, retirer, sortir des colis (publié le 28/09/2026)
 
 Migration : **un seul fichier**, `outils/supabase-regroupement.sql` (le dernier de la

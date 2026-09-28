@@ -194,6 +194,9 @@ def textes_compte(prefixes=None):
     return s
 
 
+# Numéro des icônes du site (favicon, écran d'accueil) : à changer avec le dessin.
+ICONES_VERSION = '2026-09-28'
+
 ICON_FONT = ('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0'
              '&amp;icon_names=directions_boat,flight,inventory_2,local_shipping,sensors,support_agent,timer&amp;display=block')
 TEXT_FONTS = ('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900'
@@ -1110,10 +1113,12 @@ def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(),
     lines += [
         # favicon.ico à la racine : c'est lui que réclament d'office les navigateurs,
         # les favoris et les moteurs de recherche. Les PNG servent aux écrans fins.
-        f'<link rel="icon" href="{prefix}favicon.ico" sizes="32x32">',
-        f'<link rel="icon" href="{prefix}assets/img/favicon-32.png" type="image/png" sizes="32x32">',
-        f'<link rel="icon" href="{prefix}assets/img/favicon-64.png" type="image/png" sizes="64x64">',
-        f'<link rel="apple-touch-icon" href="{prefix}assets/img/apple-touch-icon.png">',
+        # ICONES_VERSION : les navigateurs gardent une icône des semaines sous la même
+        # adresse ; en changer le numéro quand le dessin change la leur fait recharger.
+        f'<link rel="icon" href="{prefix}favicon.ico?v={ICONES_VERSION}" sizes="32x32">',
+        f'<link rel="icon" href="{prefix}assets/img/favicon-32.png?v={ICONES_VERSION}" type="image/png" sizes="32x32">',
+        f'<link rel="icon" href="{prefix}assets/img/favicon-64.png?v={ICONES_VERSION}" type="image/png" sizes="64x64">',
+        f'<link rel="apple-touch-icon" href="{prefix}assets/img/apple-touch-icon.png?v={ICONES_VERSION}">',
         '<link rel="preconnect" href="https://fonts.googleapis.com">',
         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
         '<link rel="preconnect" href="https://images.unsplash.com">',
