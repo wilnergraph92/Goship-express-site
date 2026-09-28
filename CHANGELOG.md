@@ -7,7 +7,7 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — le favicon se met à jour dans les navigateurs
+## site-2026.09.28.8 — le favicon se met à jour dans les navigateurs (publié le 28/09/2026)
 
 Aucune migration. Les adresses des icônes du site portent maintenant un numéro
 (`?v=2026-09-28`, `ICONES_VERSION` dans `outils/generateur/build.py`) : un navigateur
