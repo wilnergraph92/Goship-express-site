@@ -197,6 +197,11 @@ def main():
     for f in NOUVEAUX[3:]:
         db.fichier(f)
     verifier('tarifs remis : 5 $/lb', un(db, "select public.tarifs() ->> 'par_livre';"), '5')
+    p = creer(db, ADMIN, dict(base, description='Forfait', poids_lb=10, prix_fixe_usd=18))
+    verifier('prix fixé à la main (18 $) : la ligne le garde, sans tarif à la livre ; facture 28 $',
+             (un(db, "select coalesce(tarif_lb_usd::text, 'aucun') || ' ' || montant_usd from facture_lignes "
+                     "where facture_id = '%s';" % p['facture']['id']), p['facture']['montant_usd']),
+             ('aucun 18.00', 28))
 
     print('\nD. Regroupement : 20 + 15 + 30 + 10 = 75 $')
     c3 = [creer(db, ADMIN, dict(base, description='Groupe %d' % p, poids_lb=p), facturer=False)['colis']['id']

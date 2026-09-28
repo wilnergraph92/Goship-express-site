@@ -7,6 +7,23 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — formulaire du colis : prix fixé à la main ; fenêtres protégées
+
+Migration à passer **avant** de publier : `supabase-services.sql`, puis toute la chaîne
+qui le suit dans l'ordre jusqu'à `supabase-rapports.sql` (outils/migrations.txt). Elle
+ajoute une colonne (`colis.prix_fixe_usd`, vide par défaut : tous les colis existants
+gardent leur prix calculé) et ne change aucune donnée. Sans elle, l'ancienne base
+ignorerait le prix saisi et facturerait poids × tarif.
+
+- « Enregistrement du colis » : case « Fixer le prix à la main » (qui peut modifier les
+  factures : administrateur, gérant). Le prix saisi (0 à 100 000 $) remplace poids ×
+  tarif ; les frais de service restent ajoutés sur la facture. La base le vérifie
+  (`regles_colis`) et le journalise ; décocher la case revient au prix calculé. La
+  ligne de facture n'affiche alors aucun tarif au livre ; la fiche dit « Prix fixé à la main ».
+- Toutes les fenêtres du tableau de bord : un clic à côté ne les ferme plus. Échap, ×
+  ou « Annuler » sur une fenêtre où l'on a commencé à saisir demandent « Fermer sans
+  enregistrer ? » ; sans saisie, elles se ferment comme avant.
+
 ## site-2026.09.28.3 — tableau de bord : onglet « Rapport » (publié le 28/09/2026)
 
 Migration passée par le propriétaire avant la publication : `supabase.sql` (les

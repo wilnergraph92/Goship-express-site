@@ -2165,5 +2165,19 @@
   "🛒 2. AliExpress : le paradis des acheteurs en ligne": "🛒 2. AliExpress: el paraíso de los compradores en línea",
   "🛠️ 3. Banggood : pour les passionnés de technologie et les bricoleurs": "🛠️ 3. Banggood: para los amantes de la tecnología y el bricolaje",
   "🤔 Alors, quelle est ta boutique préférée ?": "🤔 Entonces, ¿cuál es su tienda favorita?",
-  "🥇 1. Shein : de la mode pour tous les goûts et tous les budgets": "🥇 1. Shein: moda para todos los gustos y todos los bolsillos"
+  "🥇 1. Shein : de la mode pour tous les goûts et tous les budgets": "🥇 1. Shein: moda para todos los gustos y todos los bolsillos",
+  "Fixer le prix à la main": "Fijar el precio a mano",
+  "au lieu du calcul poids × tarif (forfait, accord particulier)": "en lugar del cálculo peso × tarifa (tarifa fija, acuerdo especial)",
+  "Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.": "Ingrese el precio del paquete, en dólares: reemplaza el cálculo peso × tarifa.",
+  "Prix invalide : un montant en dollars, de 0 à 100 000.": "Precio no válido: un monto en dólares, de 0 a 100 000.",
+  "Prix fixé à la main": "Precio fijado a mano",
+  "Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».": "Indique el precio del paquete, en dólares (de 0 a 100 000), o desmarque «Fijar el precio a mano».",
+  "Sans effet : le prix du colis est fixé à la main": "Sin efecto: el precio del paquete está fijado a mano",
+  "Fermer sans enregistrer ?": "¿Cerrar sin guardar?",
+  "Les informations saisies dans cette fenêtre seront perdues.": "La información ingresada en esta ventana se perderá.",
+  "Fermer sans enregistrer": "Cerrar sin guardar",
+  "Continuer la saisie": "Seguir editando",
+  "Un prix fixé à la main est réservé à qui peut modifier les factures.": "Un precio fijado a mano está reservado a quien puede modificar las facturas.",
+  "Le prix du colis doit être compris entre 0 et 100 000 $.": "El precio del paquete debe estar entre 0 y 100 000 $.",
+  "Prix du colis illisible.": "Precio del paquete ilegible."
 }

@@ -83,6 +83,8 @@
     [/^par rapport au (.+)$/, ['vs. $1', 'respecto al $1', 'konpare ak $1']],
     [/^(\d+) j ou plus$/, ['$1 d or more', '$1 d o más', '$1 j oswa plis']],
     [/^Rapide : (.+) à chaque scan$/, ['Fast: {1} on each scan', 'Rápido: {1} en cada escaneo', 'Rapid : {1} nan chak eskan']],
+    [/^Prix fixé à la main : (.+) · une facture déjà émise ne change pas\.$/, ['Price set manually: $1 · an invoice already issued does not change.', 'Precio fijado a mano: $1 · una factura ya emitida no cambia.', 'Pri fikse alamen : $1 · yon fakti ki deja soti pa chanje.']],
+    [/^Prix fixé à la main : (.+) · frais de service (.+) ajoutés sur la facture\.$/, ['Price set manually: $1 · $2 service fee added to the invoice.', 'Precio fijado a mano: $1 · cargo por servicio de $2 añadido a la factura.', 'Pri fikse alamen : $1 · frè sèvis $2 ajoute sou fakti a.']],
     [/^(.+) : (.+), contre aucun sur la période précédente\.$/, ['{1}: $2, versus none in the previous period.', '{1}: $2, frente a ninguno en el período anterior.', '{1} : $2, kont zewo nan peryòd anvan an.']],
     [/^(.+) : stable \((.+)\)\.$/, ['{1}: stable ($2).', '{1}: estable ($2).', '{1} : estab ($2).']],
     [/^(.+) \((\d+) lignes?\)$/, ['{1} ($2 rows)', '{1} ($2 filas)', '{1} ($2 liy)']],

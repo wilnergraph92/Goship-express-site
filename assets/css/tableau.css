@@ -665,6 +665,9 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-disposition[open]{display:flex;flex-direction:column}
 .gs-disposition .gs-dialogue__corps{display:block;flex:1;min-height:0}
 .gs-disposition .gs-dialogue__pied{flex:none}
+/* « Fermer sans enregistrer ? » : une question courte, par-dessus la fenêtre */
+.gs-dialogue--confirmation{width:min(580px,calc(100vw - 24px))}
+.gs-dialogue--confirmation .gs-dialogue__pied{flex-wrap:wrap}
 .gs-disposition__liste{display:grid;gap:8px;margin:12px 0 0;padding:0;list-style:none;counter-reset:bloc}
 .gs-disposition__ligne{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
 .gs-disposition__nom{display:flex;flex:1;align-items:center;gap:12px;min-width:0;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer}
