@@ -13,7 +13,8 @@ couleur) et {br} marque un retour à la ligne : une traduction doit reprendre
 exactement les mêmes repères.
 
 Usage :
-    python3 outils/traduire.py               génère les pages traduites
+    python3 outils/traduire.py               génère les pages traduites (et les
+                                             textes du tableau de bord)
     python3 outils/traduire.py --manquants   liste les textes sans traduction
 """
 import glob
@@ -467,6 +468,26 @@ def ecrire_si_change(chemin, contenu):
             f.write(contenu)
 
 
+def ecrire_textes_tableau():
+    """assets/js/tableau-textes.js : chaque texte de outils/traductions/tableau.txt avec
+    ses traductions (anglais, espagnol, créole), tirées des dictionnaires du site. Un
+    texte qui manque dans une langue y reste en français. Rend les manquants par langue."""
+    with open(os.path.join(DOSSIER_TRAD, 'tableau.txt'), encoding='utf-8') as f:
+        cles = [l.rstrip('\n') for l in f if l.strip() and not l.startswith('#')]
+    dicos = {l: charger(l) for l in ('en', 'es', 'ht')}
+    manquants = {l: sorted(c for c in cles if c not in dicos[l]) for l in dicos}
+    lignes = ['  %s: [%s]' % (json.dumps(c, ensure_ascii=False),
+                               ', '.join(json.dumps(dicos[l].get(c, c), ensure_ascii=False) for l in ('en', 'es', 'ht')))
+              for c in sorted(set(cles))]
+    contenu = ('/* Généré par outils/traduire.py — ne pas modifier à la main.\n'
+               '   Les textes du tableau de bord (outils/traductions/tableau.txt) et leurs traductions\n'
+               '   [anglais, espagnol, créole], tirées des dictionnaires du site\n'
+               '   (outils/traductions/<langue>.json). Lu par assets/js/tableau-langue.js. */\n'
+               'window.GoshipTextesTableau = {\n' + ',\n'.join(lignes) + '\n};\n')
+    ecrire_si_change(os.path.join(RACINE, 'assets', 'js', 'tableau-textes.js'), contenu)
+    return manquants
+
+
 def pages_francaises():
     return sorted(os.path.basename(p) for p in glob.glob(os.path.join(RACINE, '*.html'))
                   if os.path.basename(p) not in NON_TRADUITES)
@@ -525,6 +546,10 @@ def main():
                          '<?xml version="1.0" encoding="UTF-8"?>\n'
                          '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + '</urlset>\n')
 
+    # 4. Les textes du tableau de bord : admin.html n'a pas de copie traduite, il se
+    #    traduit à l'écran (assets/js/tableau-langue.js) avec les mêmes dictionnaires
+    rapport_tableau = ecrire_textes_tableau()
+
     for langue, manquants in rapport.items():
         textes = sorted({t for t, _ in manquants})
         etat = 'complet' if not textes else f'{len(textes)} texte(s) sans traduction (laissés en français)'
@@ -537,6 +562,13 @@ def main():
                 print(f'  {p}')
                 for t in ts:
                     print(f'    - {t}')
+    for langue in TRADUITES:
+        textes = rapport_tableau[langue]
+        etat = 'complet' if not textes else f'{len(textes)} texte(s) sans traduction (laissés en français)'
+        print(f'{LANGUES[langue]["nom"]:<8} tableau de bord : {etat}')
+        if textes and '--manquants' in args:
+            for t in textes:
+                print(f'    - {t}')
 
 
 if __name__ == '__main__':

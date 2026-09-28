@@ -44,7 +44,8 @@ bureau/                             app de bureau Windows/macOS (Electron) — j
 | `scan-parser.js` | Lecture d'un code scanné (étiquette, QR, suivi vendeur) — aucune requête |
 | `scanner.js` | Onglet « Scanner » du tableau de bord (`admin.html#scanner`) |
 | `lieux.js` | Régions et villes (Haïti, Rép. dominicaine, États des USA) : adresse du client (`compte.js`), filtre « Destination » du tableau de bord |
-| `tableau-langue.js` | Langue du tableau de bord (fr, en, es, ht) : dictionnaire et traduction à l'écran |
+| `tableau-langue.js` | Langue du tableau de bord (fr, en, es, ht) : traduction à l'écran |
+| `tableau-textes.js` | **Généré** par `outils/traduire.py` : les textes du tableau de bord et leurs traductions |
 | `notifications.js` | E-mail et WhatsApp |
 | `config.js` | Clés Supabase et réglages — **contient des secrets** |
 
@@ -195,9 +196,11 @@ que les parties que le rôle peut voir. Périodes en jours de Santo Domingo
 `bornesPeriode`, `jourSD`…) ; `essai-tableau.py` compare la forme des
 réponses des deux côtés.
 
-Les filtres de la vue générale — pays (Haïti, Santo Domingo, USA : listes
-fixes), destination (toutes les villes du pays choisi, `lieux.js`, plus celles
-que les colis portent), mode (aérienne, maritime, terrestre), statut, agence
+Les filtres de la vue générale — pays (Haïti, Santo Domingo, USA : codes
+`HT`, `DO`, `US` de la base), destination (les villes que les colis vers ce pays
+portent vraiment, `options_filtres`, rangées par département via `lieux.js` ;
+jamais une ville sans colis), mode (aérienne, maritime, terrestre : `aerien`,
+`maritime`, `terrestre`), statut (inchangé), agence
 (USA = au dépôt de Miami, reçu ou emballé ; Haïti, Santo Domingo = arrivé dans
 le pays : distribution, succursale, disponible ; la règle est dans
 `colis_filtre`, clé `agence`) : `vue_generale_filtree`, section 11 de
@@ -213,22 +216,30 @@ reprend `vue_generale` et désactive les filtres ; une base d'avant la clé
 `agence` (pas d'`options.agences`) désactive ce seul filtre. Copie démo :
 `vueGeneraleFiltree`, `filtresColisDemo`, `optionsFiltresDemo`, `agenceDuColis`.
 
-**La fiche d'une ligne** (`admin.js`, `<dialog data-dialogue="fiche">`) : un clic
-ou Entrée sur une ligne de n'importe quel tableau l'ouvre. Un colis montre tout
-ce que la liste en sait, son parcours en sept étapes (datées par
-`API.admin.historique`) et « Mettre à jour », « Voir la facture », « Étiquette »,
-« Voir le client ». Les autres lignes montrent leurs colonnes (`data-libelle`)
-et une copie de leurs boutons, qui déclenche le bouton de la ligne (un bouton
-d'impression porte `data-imprimer` et laisse la fiche ouverte). Un bouton, un
-lien, une case de la ligne gardent leur rôle. Rien ne s'y calcule.
+**La fiche d'une ligne** (`admin.js`, `<dialog data-dialogue="fiche">`, une seule
+pour tous les onglets) : un clic ou Entrée sur une ligne de n'importe quel tableau
+l'ouvre ; un bouton, un lien, une case de la ligne gardent leur rôle. Par sections
+(`sectionFiche`, `champFiche`) : un champ que la base ne connaît pas n'est pas
+affiché. Colis (`ouvrirFicheColis`) : informations générales et code-barres,
+destinataire (le client), expéditeur (le magasin), colis, parcours en sept étapes et
+historique complet (`API.admin.historique`, lu à l'ouverture) ; « Mettre à jour »,
+« Modifier », « Voir la facture », « Étiquette » selon `peut()`. Facture : lignes,
+paiements, montants par `totauxFacture`. Client : ses derniers colis, ses factures
+et leurs paiements, lus à l'ouverture. Paiement reçu : sa facture. Les autres lignes
+montrent leurs colonnes (`data-libelle`). Les actions d'une facture ou d'un client
+sont des copies des boutons de sa ligne, qui les déclenchent (un bouton d'impression
+porte `data-imprimer` et laisse la fiche ouverte). Le poste de scan demande la fiche
+par l'événement `goship:fiche-colis`. Rien ne s'y calcule.
 
 **La langue du tableau de bord** (`tableau-langue.js`, sélecteur
 `[data-langue-tableau]` dans la barre, préférence `gse-tableau-langue`) : le
 tableau de bord s'écrit en français ; ce fichier remplace à l'écran les textes
-qu'il connaît (dictionnaire français → anglais, espagnol, créole, plus quelques
-phrases à trous et les dates), y compris ceux qu'`admin.js` écrit plus tard
-(MutationObserver). Noms, notes et adresses restent tels quels. **Un texte
-ajouté au tableau de bord demande sa ligne dans ce dictionnaire.** Aucune logique
+qu'il connaît, y compris ceux qu'`admin.js` écrit plus tard (MutationObserver),
+plus quelques phrases à trous et les dates. Les traductions sont **celles du site**
+(`outils/traductions/<langue>.json`) : `outils/traductions/tableau.txt` liste les
+textes du tableau de bord, et `traduire.py` en écrit `assets/js/tableau-textes.js`.
+Noms, notes et adresses restent tels quels. **Un texte ajouté au tableau de bord :
+sa ligne dans `tableau.txt`, ses trois traductions, puis `traduire.py`.** Aucune logique
 ne doit lire un texte affiché pour décider (il peut être traduit) : un attribut
 `data-*` le fait. Factures et étiquettes imprimées gardent la langue du client.
 

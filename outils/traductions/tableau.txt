@@ -1,0 +1,868 @@
+# Les textes du tableau de bord (admin.html, admin.js, scanner.js) à traduire à l'écran.
+# Une ligne par texte français, tel qu'il s'affiche ; ses traductions vivent dans
+# en.json, es.json et ht.json, comme celles du site. outils/traduire.py en tire
+# assets/js/tableau-textes.js, que lit assets/js/tableau-langue.js.
+# Un texte ajouté au tableau de bord : sa ligne ici et ses trois traductions.
+(facultatif)
+(interne, obligatoire)
+(obligatoire, gardé au journal)
++ Colis
+0 à 30 jours
+12 derniers mois
+14 jours
+3 derniers mois
+3 jours
+30 derniers jours
+30 jours
+31 à 60 jours
+6 derniers mois
+61 à 90 jours
+7 derniers jours
+7 jours
+72 h à 7 jours
+Absent quand la période précédente vaut zéro : on écrit « nouveau » plutôt qu’un pourcentage infini.
+Accès réservé
+Actifs
+Actifs sur la période
+Action requise
+Action requise par destination
+Action réservée : votre rôle ne le permet pas, ou la session a expiré (reconnectez-vous).
+Action résolue
+Actions
+Actives
+Activité
+Activité des clients actifs
+Activité récente
+Activé
+Actualiser
+Administrateur
+Adresse
+Affichage
+Affichage et réglages
+Affichage par défaut rétabli.
+Afficher plus de factures
+Agence
+Agence où le client retire son colis
+Agence où retirer le colis
+Ajouter des exemples
+Alertes
+Aller au contenu
+Analytics
+Animations
+Annuler
+Annuler cette facture
+Annuler la facture
+Annuler la sélection
+Annuler le paiement
+Annuler un paiement
+Annuler une facture
+Annulée
+Annulées
+Anomalie
+Anomalies
+Anomalies de facturation
+Aperçu de l'e-mail
+Aperçu de l'e-mail envoyé au client
+Aperçu de l’e-mail
+Apparence
+Application
+Appliquer
+Argent
+Arrivé au centre de distribution
+Au
+Aucun
+Aucun changement de statut pendant cette période.
+Aucun client actif pendant cette période.
+Aucun client inscrit pour l’instant. Les comptes créés sur le site apparaissent ici, avec leur code GSE.
+Aucun client ne correspond à cette recherche.
+Aucun client ne correspond.
+Aucun colis en cours
+Aucun colis en cours. Cliquez sur « Enregistrer un colis » à la réception d’un paquet à Miami.
+Aucun colis en « action requise ».
+Aucun colis enregistré.
+Aucun colis ne correspond à ces filtres.
+Aucun colis passé en action requise pendant cette période.
+Aucun colis reçu ni livré sur cette période.
+Aucun colis reçu pendant cette période.
+Aucun colis reçu sur la période.
+Aucun colis sur ces deux périodes.
+Aucun paiement reçu pendant cette période.
+Aucun paiement reçu pour l'instant.
+Aucun paiement reçu pour l’instant.
+Aucun scan pour l'instant.
+Aucun événement depuis ce nombre de jours : chiffre, alerte et liste à traiter.
+Aucun événement pour l'instant.
+Aucun événement pour l’instant.
+Aucune alerte critique.
+Aucune anomalie de facturation.
+Aucune donnée
+Aucune donnée disponible pour cette période.
+Aucune facture pour ce filtre.
+Aucune facture à payer. Créez-en une avec « Nouvelle facture ».
+Aucune facture échue
+Aucune facture émise sur la période.
+Aucune facture.
+Aucune incohérence trouvée.
+Aucune note.
+Aucune opération pendant cette période.
+Aucune opération permise pour ce colis à ce statut.
+Aucune opération sur la période.
+Aucune ville dans les colis
+Aucune ville de destination sur la période.
+Aucune ville indiquée.
+Aucune étape achevée pendant cette période.
+Aujourd'hui
+Aujourd’hui
+Autre
+Autre moyen
+Autres villes
+Autres villes des colis
+Avant le
+Avec des colis en cours
+Avec un solde à payer
+Azul (carte)
+Aérien
+Aérienne
+Base de données en ligne (Supabase)
+COLIS DÉJÀ LIVRÉ
+Calculé par le système : poids × tarif.
+Calculé à partir des colis cochés, frais de service compris.
+Ce changement de statut n’est pas permis.
+Ce colis est déjà sur une facture.
+Ce colis n’existe plus : rechargez la liste.
+Ce colis n’existe plus.
+Ce mois-ci
+Ce paiement dépasse ce qui reste à payer.
+Ce que chaque rôle peut faire
+Ce qui restait dû à la fin de la période, reconstitué à partir des factures et des paiements datés.
+Celle qui s'affiche à l'ouverture du tableau de bord.
+Celles de cet appareil
+Centre de distribution
+Certaines fonctionnalités sont indisponibles : aucune opération n'est enregistrée tant que la connexion n'est pas revenue.
+Cette action ne peut pas être annulée.
+Cette année
+Cette facture n’existe plus : rechargez la liste.
+Cette facture n’existe plus.
+Cette version du poste de travail est trop ancienne pour certaines fonctions du tableau de bord.
+Changer le rôle
+Changer le statut
+Changer un statut
+Chaque membre de l'équipe a un rôle, et chaque rôle une liste de permissions. La base de données les vérifie à chaque action : un bouton masqué ici n'est qu'un confort, jamais la protection.
+Chaque scan affiche le colis et les opérations permises.
+Chargement des alertes…
+Chargement des chiffres…
+Chargement des données…
+Chargement…
+Chargé
+Chaîne logistique
+Chercher
+Chiffres clés et facturé
+Chiffres et contrôle de la facturation
+Choisir un pays
+Choisir…
+Choisissez le nouveau statut.
+Choisissez une date de début et une date de fin.
+Clair
+Claire, sombre, ou celle du système de cet appareil.
+Client
+Client (retire l'accès au tableau de bord)
+Client actif
+Client introuvable : choisissez un client existant.
+Client prévenu
+Client supprimé
+Clients
+Clients avec solde
+Clients concernés
+Clients correspondants
+Clients inscrits
+Clients inscrits (fin de période)
+Clients les plus actifs
+Cochez les blocs à afficher et rangez-les avec les flèches. Gardé sur cet appareil seulement.
+Code client
+Code client, nom, téléphone, e-mail, ville…
+Code-barres
+Colis
+Colis au statut « Action requise » : le client ou l’équipe doit agir. Les plus anciens d’abord ; la note dit pourquoi.
+Colis disponible
+Colis dont la réception à Miami (date saisie à l’arrivée) tombe dans la période. Source : colis.
+Colis du client
+Colis en cours
+Colis enregistré
+Colis facturés
+Colis livré : plus aucune opération. Une erreur se corrige depuis sa fiche, onglet Colis.
+Colis livrés
+Colis par client actif
+Colis par jour et règlement des factures
+Colis par statut
+Colis par statut, maintenant
+Colis passés en action requise
+Colis passés à ce statut pendant la période, chacun une fois, sans les étapes annulées par une correction. Source : les événements (colis_historique).
+Colis reçu
+Colis reçus
+Colis reçus et livrés
+Colis reçus par jour
+Colis reçus, jour par jour
+Colis sans facture
+Colis sans progression, maintenant
+Colis scanné
+Colis scannés
+Colis supprimé.
+Colis « sans mouvement »
+Colis à facturer
+Colis à traiter
+Colis, facture, suivi, code-barres, nom, téléphone…
+Compte
+Comptes et colis sont enregistrés uniquement dans ce navigateur. Une fois Supabase configuré (voir le fichier README.md), ce tableau de bord utilise la vraie base de données.
+Comptées en jours de Santo Domingo
+Confirmer
+Conformes
+Connexion administrateur
+Connexion impossible. Vérifiez la connexion Internet, puis réessayez.
+Connexion perdue.
+Connexion rétablie : les données sont actualisées.
+Connexion…
+Consolidé
+Consulter, puis choisir l'opération
+Consulter, puis choisir l’opération
+Contenu
+Contenu du colis
+Contrôle de la facturation
+Contrôler
+Coordonnées
+Correction
+Corriger une étape
+Coupé
+Créances en fin de période
+Créances, maintenant
+Créer un client
+Créer une facture
+Créée le
+Date
+Date de réception
+Date et heure affichées
+Depuis
+Dernier scan
+Dernier événement
+Derniers colis
+Derniers paiements reçus
+Derniers scans
+Dernière activité
+Dernière activité et colis par statut
+Des faits chiffrés, sans explication : les causes ne se lisent pas dans les données.
+Descendre
+Destinataire (client)
+Destination
+Destinations et clients
+Destinations les plus actives
+Direct repris.
+Direct suspendu : les chiffres restent ceux affichés.
+Disponible
+Disponible → Livré (retrait)
+Disponibles
+Disposition par défaut rétablie.
+Donner ce rôle
+Donner un rôle
+Données
+Données incomplètes.
+Dont frais de service
+Dont transport
+Du
+Durée moyenne
+Durée moyenne dans l’état
+Durée médiane
+Durées négatives
+Déconnexion
+Découpage
+Décrivez le contenu du colis.
+Définition
+Définitions et sources
+Déjà payé
+Délai moyen
+Délai moyen Reçu → Livré
+Délai médian Reçu → Livré
+Démo
+Démonstration :
+Démonstration : données enregistrées dans ce navigateur seulement
+Départ
+Départ d’un colis
+Dépenses, dettes et résultat
+Déplier le menu
+Détail
+Détail du colis
+Détails
+Dû en fin de période
+E-mail
+E-mail du compte
+E-mail ou mot de passe incorrect.
+Effacer la démo
+Effacer les filtres
+Emballé
+Emballés
+Embarqué
+Embarqué → Disponible (acheminement)
+Embarqués
+Employé
+En action requise maintenant
+En cours
+En cours (tous sauf livrés)
+En direct
+En pause
+En retard
+Encaissements
+Encaissements et créances
+Encaisser
+Encaisser un paiement
+Encaissé
+Encaissé ce mois-ci
+Encaissé par moyen de paiement
+Enregistrement…
+Enregistrer
+Enregistrer le colis
+Enregistrer le paiement
+Enregistrer les modifications
+Enregistrer un autre colis
+Enregistrer un colis
+Erreur
+Espèces
+Ex. 4,5
+Ex. Amazon, SHEIN, Temu…
+Ex. Ciudad Juan Bosch
+Ex. Miami (Medley), FL
+Ex. Port-au-Prince
+Ex. Retrait possible à partir de demain 10 h
+Ex. TBA304918577000
+Ex. Vêtements, chaussures…
+Exemples ajoutés : 3 clients et 7 colis.
+Expéditeur
+Expéditeur (magasin)
+Expéditions
+Expédié
+Expédiés
+Expédiés (embarqués)
+Expédiés, rendus disponibles, livrés, action requise
+Facturation
+Facture
+Facture mise à jour.
+Facture moyenne
+Factures
+Factures à regrouper
+Factures émises
+Facturé
+Facturé et encaissé
+Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé, l’autre ce qui est entré.
+Facturé sur la période
+Fermer
+Fiche complète
+Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
+Filtrer les clients
+Filtrer les factures
+Filtrer par pays de destination
+Filtrer par service
+Filtrer par statut
+Filtres
+Filtres de la vue générale
+Filtres indisponibles : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
+Finance
+Finances
+Fois
+Forte
+Frais de service
+Frais de service (une fois)
+GSE-1001-HT, QR de l'étiquette ou suivi du vendeur
+Gardés sur cet appareil seulement : chaque membre de l'équipe règle le sien.
+Gestion
+Goship Express — voir le site
+Grand total
+Gravité
+Gérant
+Haïti
+Heure de réception
+Historique
+Historique interne
+Identifiant
+Identifiant GSE, nom ou e-mail
+Impayées
+Imprimer
+Imprimer / PDF
+Imprimer l'étiquette d'expédition
+Imprimer les étiquettes
+Inactifs
+Indicateur
+Indicateurs de qualité
+Indiquez le motif.
+Indiquez l’agence où le client peut retirer son colis.
+Informations générales
+Informations personnelles
+Inscrit le
+Inscrits (fin de période)
+Inscrits récemment
+Inspecté
+Intervalle médian entre deux opérations
+Jour
+Journal d’audit
+Jours
+Jours avec des scans
+L'heure en haut de l'écran, à la seconde près.
+La date de fin est avant la date de début.
+La personne crée d'abord son compte sur le site (« Créer un compte »), puis vous lui donnez son rôle ici. Chaque changement est noté au journal : qui, quand, ancien et nouveau rôle. Vous ne pouvez pas changer votre propre rôle.
+Laissez vide : lien PayPal créé automatiquement
+Laissé vide, un lien PayPal est créé avec le montant : le client paie par carte Visa ou Mastercard. Vous pouvez aussi coller un lien Azul.
+Langue
+Langue du tableau de bord
+Le colis a changé de statut entre-temps : rechargez la liste.
+Le compte
+Le plus de colis en cours
+Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
+Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
+Les dépenses ne sont pas suivies : aucune marge n'est calculée.
+Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, poste de scan et colis à traiter restent entiers.
+Les icônes seulement, pour laisser plus de place aux listes (ordinateur).
+Lien de paiement
+Lien de paiement (facultatif)
+Lien de paiement prêt
+Lieu
+Lieu actuel
+Lieu de ce poste
+Lieu de réception
+Lieu du poste
+Lieu non indiqué
+Lignes par page
+Liste
+Listes des colis, des clients et des colis à traiter.
+Livraison
+Livré
+Livrés
+Livrés (30 jours)
+Livrés pendant la période
+Livrés, expédiés
+Livrés, taux
+Localisation
+Là où se trouve le colis : USA = au dépôt de Miami (reçu, emballé) ; Haïti, Santo Domingo = arrivé dans le pays (centre de distribution, succursale, disponible)
+Maj
+Maritime
+Maximum
+Membre de l’équipe
+Menu du tableau de bord
+Menu latéral réduit
+Message pour le client
+Messages envoyés au client
+Mettez à jour l'application GoShip Express.
+Mettre à jour
+Mettre à jour le statut
+Miami → Haïti / République dominicaine
+Miami → Haïti · République dominicaine
+Minimum
+Mis à jour
+Mis à jour à l’instant
+Mise à jour chaque minute
+Mise à jour…
+Mises à jour en direct
+Mode
+Mode de transport
+Mode démonstration.
+Mode rapide
+Modifier
+Modifier les informations du colis
+Modifier un client
+Modifier un colis
+Modifier une facture
+Moins de 24 h
+Mois
+Mois précédent
+Mon compte
+Montant
+Montant du transport
+Montant dû
+Montant reçu (US $)
+Montant total (US $)
+Montants
+Monter
+Mot de passe
+Motif
+Motif de la correction
+Moyen
+Moyenne
+Médiane
+Même nombre de jours juste avant ; « ce mois » : le mois précédent aux mêmes dates ; « cette année » : l’année précédente aux mêmes dates.
+Même taux, période précédente
+Nom
+Nom (A → Z)
+Nombre
+Nombre de jours sans mouvement
+Non disponible
+Non renseigné
+Non échues
+Note
+Note interne
+Note pour le client
+Note pour le client (facultatif)
+Notes les plus fréquentes
+Notifications du poste de travail
+Nouveau statut
+Nouveaux
+Nouveaux clients
+Nouvelle facture
+N° de colis
+N° de colis, code client, nom, suivi vendeur…
+N° de facture
+N° de reçu, de transaction…
+N° de suivi du vendeur
+Opération
+Opérations
+Opérations au poste de scan
+Opérations au scanner
+Opérations aujourd’hui
+Opérations par jour
+Origine
+Ouverture…
+Ouvrir
+Ouvrir la fiche
+Ouvrir la fiche du colis
+Ouvrir le menu
+Ouvrir le poste de scan
+Paiement annulé.
+Paiement reçu
+Paiements
+Paiements valides reçus pendant la période, quelle que soit la facture. Source : paiements.
+Par compte
+Par employé
+Par jour
+Par lieu
+Par mois
+Par montant facturé
+Par montant payé
+Par nombre de colis
+Par opération
+Par poids
+Par semaine
+Par solde
+Parcours
+Part
+Passés en action requise
+Pays
+Pays de destination
+Pays non précisé
+Payé
+Payé par
+Payée
+Payée en partie
+Payée le
+Payées
+Payées en partie
+Performance des routes
+Permission
+Permissions
+Personnaliser
+Personnaliser le tableau de bord
+Personnalisée…
+Petite
+Plus de 7 jours
+Plus de 90 jours
+Poids
+Poids (lb)
+Poids en cours
+Poids invalide : indiquez un nombre de livres supérieur à zéro.
+Poids moyen
+Poids reçu
+Poids total
+Poste de scan
+Pour info
+Pourcentage
+Prix arrêté à l’enregistrement du colis.
+Prix du colis (US $)
+Prix du transport
+Prix moyen
+Prix moyen d’un colis
+Précédente
+Prévenir le client
+Prêt : scannez un colis
+Période
+Période choisie comparée à la période précédente de même longueur.
+Période de la vue générale
+Période précédente
+Périodes
+Qualité des données
+Raccourcis
+Raison de l’action requise
+Raison, visible par le client (ex. adresse à vérifier)
+Rapide
+Recherche du client…
+Recherche impossible
+Recherche rapide : colis, clients, factures
+Rechercher
+Rechercher un client
+Rechercher un colis
+Recherche…
+Reconnectez-vous pour continuer.
+Regrouper
+Regrouper avec d'autres factures de ce client
+Regrouper des factures
+Rendus disponibles
+Renseignez votre e-mail et votre mot de passe.
+Reprendre le direct
+Rescanner
+Reste dû
+Reste sur les factures de la période
+Reste à payer
+Retour
+Reçu
+Reçu le
+Reçu à l'entrepôt
+Reçu → Embarqué (entrepôt de Miami)
+Reçu → Livré (total)
+Reçus
+Reçus du
+Reçus jusqu'au
+Reçus à partir du
+Rien de facturé ni d’encaissé sur cette période.
+Rien d’anormal
+Rien n’a été enregistré. Vérifiez la connexion, puis réessayez.
+Rien sur cette période.
+Rien à exporter : chargez d’abord une rubrique.
+Rien à imprimer : chargez d’abord une rubrique.
+Rien à payer
+Route
+Routes
+Routes et destinations
+Routes et villes
+Rubriques Analytics
+Rubriques des réglages
+Règlement des factures
+Réduire le menu
+Réessayer
+Référence
+Réglages
+Réglages du site
+Réinitialiser les filtres
+République dominicaine
+Réservé à l'équipe Goship Express.
+Résultats de la recherche rapide
+Rétablir l'affichage par défaut
+Rétablir la disposition
+Rôle
+Sans mouvement
+Sans mouvement depuis
+Sans échéance
+Santo Domingo
+Scanner
+Scannez un colis — ou tapez son numéro
+Se connecter
+Se déconnecter
+Secondes dans l'horloge
+Segments
+Semaine
+Service
+Ses colis
+Ses factures
+Session expirée
+Seuls les colis de ce client apparaissent : une facture ne peut pas mélanger deux clients.
+Situation
+Solde
+Solde (maintenant)
+Solde le plus élevé
+Sombre
+Son
+Statut
+Suivante
+Suivi du vendeur
+Suivi vendeur
+Supprimer
+Supprimer ce colis
+Supprimer un colis
+Sur aucune facture active
+Sur la période
+Suspendre le direct
+Synthèse
+Système
+Sélectionner tous les colis affichés
+Tableau de bord
+Tableau de bord à activer
+Tableau de bord — Goship Express
+Tarif (US $ / lb)
+Tarif de la maison : 5 $/lb. À ne changer que pour un accord particulier.
+Tarif, frais de service, statuts, permissions : ces règles vivent dans la base de données et ne se changent pas depuis cet écran.
+Taux de livraison
+Taux de livraison de la cohorte
+Temps de traitement
+Tendances
+Terminé
+Terrestre
+Total
+Total colis
+Total de la facture
+Total des factures émises pendant la période, hors annulées ; montants arrêtés à la création (un changement de tarif ne les modifie pas).
+Tous
+Tous les clients
+Tous les colis
+Tous les réglages
+Tous les réglages…
+Tous les services
+Tout sélectionner
+Toutes
+Toutes les destinations
+Toutes les factures
+Transfert d'argent (Western Union, Ria…)
+Transfert d’argent
+Transféré à la succursale
+Transférés à la succursale
+Transition
+Transitions de statut
+Transport facturé
+Trier les clients
+Trop de tentatives. Patientez quelques minutes.
+Type
+Téléphone
+USA
+Un acompte suffit : la facture reste à payer pour le reste.
+Un paiement enregistré ne se modifie plus. En cas d'erreur, annulez-le avec son motif, puis saisissez le bon : les deux restent visibles.
+Un rôle ne se change que depuis l'onglet « Équipe », par un administrateur. La base vérifie chaque permission à chaque action : un menu masqué ici n'est qu'un confort.
+Un scanner USB ou Bluetooth (mode clavier) n'a rien à installer : scannez un code pour le vérifier.
+Une erreur est survenue. Réessayez.
+Une notification du système quand une alerte apparaît (action requise, facture en retard…) et que la fenêtre n'est pas au premier plan.
+Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.
+Valeurs extrêmes
+Ville
+Ville de livraison
+Villes de destination
+Villes des colis
+Villes les plus fréquentes
+Virement bancaire
+Visible par le client dans son espace
+Voir
+Voir ce que chaque rôle peut faire
+Voir la facture
+Voir le client
+Voir le détail, période par période
+Voir le site
+Voir le tableau
+Voir les clients
+Voir les colis
+Voir les factures
+Voir les paiements
+Voir l’équipe
+Voir tous les colis
+Volume
+Volume par période
+Vous n’avez pas la permission d’utiliser le poste de scan.
+Vue d'ensemble logistique
+Vue générale
+action requise
+anglais
+au
+aucun colis
+aucune facture sur la période
+aucune opération encore
+aujourd’hui
+centre de distribution
+client
+client a un colis en cours
+client inscrit
+clients
+clients inscrits
+clients ont un colis en cours
+colis
+colis au total
+colis correspond aux filtres
+colis correspondent aux filtres
+colis dans la vue
+colis en cours
+colis pesés seulement
+colis reçus sur la période
+colis sans ville
+colis sans ville indiquée
+colis, maintenant
+créole
+disponible
+disponibles
+du facturé déjà payé
+dû aujourd’hui
+emballé
+emballés
+embarqué
+embarqués
+en action requise
+en baisse
+en hausse
+enregistrées au poste de scan
+espagnol
+facture
+facture ouverte
+facture échue
+factures
+factures ouvertes
+factures échues
+fermer
+français
+jour
+jours
+lb
+les dix premières
+les siens
+livré
+livrés
+maintenant
+même compte, même jour
+nouveau
+nouveau client
+nouveau client sur la période
+nouveaux clients
+nouveaux clients sur la période
+opérations enregistrées
+ou
+paiement
+paiements
+par e-mail et WhatsApp que son colis est disponible
+par e-mail et WhatsApp que son colis est reçu
+par jour
+par mois
+par semaine
+payée en partie
+payées en partie
+poids non renseigné
+poste de scan ·
+prix arrêté à l’enregistrement
+recherche rapide ·
+reçu
+reçus
+rien reçu
+rien à payer
+résultat
+résultats
+sur aucune facture active
+sur ces factures
+sur la période
+transféré à la succursale
+transférés à la succursale
+· mot de passe
+À encaisser
+À payer
+À payer avant le
+À recouvrer
+À regarder
+À surveiller
+Âge
+Âge des créances
+Âge des créances (depuis l’émission)
+Échap
+Échue le
+Équipe
+Étape
+Étape mise à jour
+État
+États-Unis
+Étiquette
+Évolution
+Événement
+ℹ DÉJÀ FAIT
+↗ nouveau
+⚠ ACTION NON AUTORISÉE
+⚠ ACTION REQUISE
+⚠ BASE PAS À JOUR
+⚠ CODE INVALIDE
+⚠ CONNEXION IMPOSSIBLE
+⚠ ERREUR SERVEUR
+⚠ LE COLIS A CHANGÉ ENTRE-TEMPS
+⚠ OPÉRATION IMPOSSIBLE
+✓ COLIS TROUVÉ
+✓ trouvé
+✕ COLIS INTROUVABLE

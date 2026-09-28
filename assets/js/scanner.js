@@ -277,6 +277,12 @@
     st.appendChild(el('i', 'gs-pastille gs-pastille--' + c.statut));
     st.appendChild(document.createTextNode(LIBELLES[c.statut] || c.statut));
     tete.appendChild(st);
+    // Toutes ses informations, sa facture, son étiquette : la fiche du colis (admin.js)
+    var complete = bouton('Fiche complète', 'gs-bouton--contour', function () {
+      document.dispatchEvent(new CustomEvent('goship:fiche-colis', { detail: { numero: c.numero } }));
+    });
+    complete.setAttribute('data-scan-fiche-complete', '');
+    tete.appendChild(complete);
     zoneFiche.appendChild(tete);
 
     var dl = el('dl', 'gs-scan__infos');

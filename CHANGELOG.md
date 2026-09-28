@@ -7,6 +7,23 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.28 — tableau de bord : fiches complètes, destinations réelles (publié le 28/09/2026)
+
+Aucune migration nouvelle (celle de `site-2026.09.27.3` reste à relancer pour le
+filtre « Agence »). Aucune donnée modifiée.
+
+- Destination : seulement les villes que les colis vers le pays choisi portent
+  vraiment, rangées par département ou province ; plus aucune ville sans colis.
+- Filtre Statut : affichage rendu identique à avant le 27/09 (« (0) » compris).
+- Fiche d'un colis par sections : informations générales et code-barres,
+  destinataire, expéditeur, colis, parcours, historique complet ; « Modifier » en
+  plus, chaque action selon les permissions du rôle.
+- Fiches d'une facture (colis facturés, paiements, montants), d'un client (derniers
+  colis, factures, paiements, lus à l'ouverture) et d'un paiement reçu.
+- Poste de scan : « Fiche complète » ouvre la fiche du colis scanné.
+- Langue : les traductions du tableau de bord rejoignent les dictionnaires du site
+  (`outils/traductions/`) ; les mots déjà traduits sur le site sont repris tels quels.
+
 ## site-2026.09.27.3 — tableau de bord : filtres fixes, fiche d'une ligne, langue (publié le 27/09/2026)
 
 Migration en lecture seule **à relancer par le propriétaire**, sans urgence :

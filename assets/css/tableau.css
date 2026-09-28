@@ -742,6 +742,25 @@ html[data-animations="non"] .gs-vg__halo,html[data-animations="non"] .gs-vg__dir
 .gs-fiche__etape.is-fait,.gs-fiche__etape.is-actuel{color:var(--ink)}
 .gs-fiche__etape.is-actuel .gs-fiche__etape-nom{font-weight:800}
 .gs-fiche__etape-date{font-size:13px;color:#6b7690;white-space:nowrap}
+.gs-fiche__sections{display:grid;gap:18px}
+.gs-fiche__sections:empty{display:none}
+.gs-fiche__section{display:grid;gap:12px;padding-top:16px;border-top:1px solid #eef2f8}
+.gs-fiche__section:first-child{padding-top:0;border-top:0}
+.gs-fiche__parcours+.gs-fiche__sections .gs-fiche__section:first-child{padding-top:16px;border-top:1px solid #eef2f8}
+.gs-fiche__section h3{margin:0;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#2d3850}
+.gs-fiche__section .gs-fiche__grille:empty{display:none}
+.gs-fiche__codebarre{align-items:start}
+.gs-fiche__codebarre svg{width:min(260px,100%);height:44px}
+.gs-fiche__attente{margin:0;font-size:14px;color:#6b7690}
+.gs-fiche__liste{display:grid;gap:6px;margin:0;padding:0;list-style:none}
+.gs-fiche__liste:empty{display:none}
+.gs-fiche__ligne-corps{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 12px;border:1px solid #eef2f8;border-radius:12px;background:#fafbfe;color:inherit;font:inherit;text-align:left}
+button.gs-fiche__ligne-corps{cursor:pointer}
+button.gs-fiche__ligne-corps:hover{border-color:#c9d3e6;background:#fff}
+button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-offset:2px}
+.gs-fiche__ligne-texte{display:grid;gap:2px;min-width:0}
+.gs-fiche__ligne-texte .gs-fiche__valeur{font-size:14.5px}
+.gs-fiche__ligne-droite{flex:none;font-weight:800;font-variant-numeric:tabular-nums}
 .gs-fiche__pied{flex-direction:column;align-items:stretch;justify-content:flex-start}
 .gs-fiche__actions{display:flex;flex-wrap:wrap;gap:10px}
 .gs-fiche__actions:empty,.gs-fiche__liens:empty{display:none}
@@ -1192,6 +1211,12 @@ html[data-apparence="sombre"] body.gs-admin-body{--ink:#e7edf9;--ink2:#c3d0ee;--
 [data-apparence="sombre"] .gs-disposition__ligne,[data-apparence="sombre"] .gs-disposition__fleche{border-color:#22304f;background:#0b1429}
 [data-apparence="sombre"] .gs-disposition__fleche:hover:not(:disabled){border-color:#8fb3ff}
 [data-apparence="sombre"] .gs-reglages__infos kbd{border-color:#2a3a5f;background:#132041}
+[data-apparence="sombre"] .gs-admin-body :is(.gs-fiche__section,.gs-fiche__parcours+.gs-fiche__sections .gs-fiche__section:first-child){border-top-color:#22304f}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__section h3{color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__attente{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__codebarre svg{border-radius:6px}
+[data-apparence="sombre"] .gs-admin-body .gs-fiche__ligne-corps{border-color:#22304f;background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body button.gs-fiche__ligne-corps:hover{border-color:#3b4d76;background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-td__langue{border-color:#22304f;background-color:#0e1830;color:#e7edf9}
 [data-apparence="sombre"] .gs-admin-body .gs-td__langue .gs-ico{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-td__langue select{color:#e7edf9}
