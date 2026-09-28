@@ -36,6 +36,8 @@ verifier, jsonq, un, js, dater = S.verifier, S.jsonq, S.un, A.js, A.dater
 REFUS = 'PERMISSION_DENIED'
 CHAINE = [l.strip() for l in open(os.path.join(OUTILS, 'migrations.txt'), encoding='utf-8')
           if l.strip() and not l.startswith('#')]
+# La version publiée avant les rapports (fixe : en CI, HEAD est déjà cette branche)
+AVANT = os.environ.get('GOSHIP_AVANT', '5f45410')
 MARS = {'periode': 'personnalise', 'debut': '2026-03-01', 'fin': '2026-03-31'}
 PHOTO = ("select (select count(*) from colis) || '|' || (select count(*) from factures) || '|' || "
          "(select count(*) from facture_lignes) || '|' || (select count(*) from paiements) || '|' || "
@@ -51,7 +53,7 @@ def donnees(db, params, compte=ADMIN):
     return jsonq(db, compte, 'select public.rapport_donnees(%s);' % js(params))
 
 
-def fichier_git(nom, version='HEAD'):
+def fichier_git(nom, version=AVANT):
     texte = subprocess.run(['git', '-C', RACINE, 'show', '%s:outils/%s' % (version, nom)],
                            capture_output=True, text=True, check=True).stdout
     chemin = os.path.join(TRAVAIL, 'publie-' + nom)
@@ -103,7 +105,7 @@ def payer(db, f, montant, moyen, quand):
 
 
 def main():
-    print('A. Installation : la chaîne complète, rejouable, et la garde des permissions')
+    print('A. Installation : la chaîne complète, rejouable, et la garde des permissions (depuis %s)' % AVANT)
     db = S.Base()
     db.sql(S.DOUBLURES)
     # La version publiée (sans les permissions des rapports) : ce fichier refuse de s'installer
