@@ -414,6 +414,10 @@
     return new URL(nom, location.href).href.split('#')[0];
   }
 
+  // Se connecter avec un compte d'ailleurs (Supabase > Authentication > Providers).
+  // Un fournisseur de plus : son nom ici, son bouton dans connexion et inscription.
+  var FOURNISSEURS = ['google'];
+
   // Longueur minimale du mot de passe. 6 est le plancher de Supabase : sa
   // console ne descend pas plus bas, et accepter moins ici ne servirait qu'à
   // laisser passer un mot de passe que le serveur refuserait ensuite.
@@ -600,6 +604,30 @@
         }).data.subscription;
       }).catch(function () { /* sans client, pas de session à perdre */ });
       return function () { arrete = true; if (abonnement) abonnement.unsubscribe(); };
+    },
+
+    // Les fournisseurs que Supabase a vraiment activés (Authentication > Providers),
+    // d'après ses réglages publics. Un bouton dont le fournisseur n'est pas activé
+    // mènerait à une page d'erreur de Supabase : il reste caché.
+    fournisseursConnexion: function () {
+      return fetch(String(CFG.supabaseUrl).replace(/\/+$/, '') + '/auth/v1/settings', {
+        headers: { apikey: CFG.supabaseKey }
+      }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {
+        var actifs = (d && d.external) || {};
+        return FOURNISSEURS.filter(function (f) { return actifs[f] === true; });
+      }).catch(function () { return []; });
+    },
+
+    // Quitte la page pour celle du fournisseur ; il renvoie ensuite sur « retour »,
+    // avec la session dans l'adresse (lue par detectSessionInUrl) ou une erreur.
+    connecterAvec: function (fournisseur, retour) {
+      if (FOURNISSEURS.indexOf(fournisseur) < 0) return Promise.reject(Erreur('inconnu'));
+      return sb().then(function (c) {
+        return c.auth.signInWithOAuth({ provider: fournisseur, options: { redirectTo: urlPage(retour) } });
+      }).then(function (res) {
+        if (res.error) throw erreurSupabase(res.error);
+        return {};
+      });
     },
 
     envoyerLienMotDePasse: function (email) {
@@ -3260,6 +3288,10 @@
       return function () { window.removeEventListener('storage', ecoute); };
     },
 
+    // En démonstration, aucun compte Google : les boutons restent cachés.
+    fournisseursConnexion: function () { return plusTard([]); },
+    connecterAvec: function () { return Promise.reject(Erreur('inconnu')); },
+
     // En démonstration, aucun e-mail n'est envoyé : le lien est affiché à l'écran.
     envoyerLienMotDePasse: function (email) {
       var compte = trouverCompte(lireDonnees(), email);
@@ -4668,6 +4700,7 @@
     inscrire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
     surSessionPerdue: function () { return function () {}; },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
+    fournisseursConnexion: function () { return Promise.resolve([]); }, connecterAvec: ferme,
     changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme, monResume: ferme,
     surveiller: function () { return function () {}; },
     suivre: ferme, estAdmin: function () { return Promise.resolve(false); },

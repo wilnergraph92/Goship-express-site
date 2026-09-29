@@ -2201,5 +2201,11 @@
   "Le colis sorti, sur sa facture": "The package taken out, on its invoice",
   "Le colis qui reste, sur sa facture": "The remaining package, on its invoice",
   "Colis sortis d’un regroupement": "Packages taken out of a merged invoice",
-  "Compte supprimé par le client": "Account deleted by the client"
+  "Compte supprimé par le client": "Account deleted by the client",
+  "Continuer avec Google": "Continue with Google",
+  "Complétez votre profil": "Complete your profile",
+  "Indiquez votre pays, votre ville et votre téléphone : nous en avons besoin pour vous remettre vos colis et vous prévenir de leur arrivée.": "Enter your country, city and phone number: we need them to hand over your packages and let you know when they arrive.",
+  "Compléter mon profil": "Complete my profile",
+  "Connexion avec Google annulée. Réessayez, ou utilisez votre e-mail et votre mot de passe.": "Google sign-in cancelled. Try again, or use your email and password.",
+  "La connexion avec Google n'a pas abouti. Réessayez dans un instant, ou utilisez votre e-mail et votre mot de passe.": "Google sign-in did not go through. Try again in a moment, or use your email and password."
 }

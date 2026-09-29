@@ -356,6 +356,21 @@ qu'un colis n'est pas livré ou qu'une facture a un solde. `essai-mobile.py` (se
 l'éprouve ; la doublure d'`auth` (`essai-services.py`, `DOUBLURES`) a les colonnes et
 tables de GoTrue qu'elle touche.
 
+### Continuer avec Google (`outils/supabase-connexion.sql`)
+
+La connexion passe par Supabase Auth (`signInWithOAuth`), rien d'autre : aucune clé Google
+dans le dépôt, le fournisseur s'active dans Supabase > Authentication > Providers. Le site
+ne montre le bouton (`[data-social]`, connexion et inscription) que si les réglages
+publics de Supabase (`/auth/v1/settings`, `external.google`) le disent actif :
+`API.fournisseursConnexion()` ; `API.connecterAvec()` part chez le fournisseur et revient
+toujours sur `connexion.html` (session dans l'adresse, ou `error=` dit par la page). Un
+fournisseur de plus : `FOURNISSEURS` dans `api.js` et son bouton. Le profil d'un compte
+Google naît par le même déclencheur (`creer_profil_client`), qui lit le nom et la langue
+envoyés par Google (`nom_depuis_metadonnees`, `langue_depuis_metadonnees`, fermées à tous) ;
+pays, ville et téléphone manquent : « Mon compte » affiche « Complétez votre profil »
+(`[data-completer]`). E-mails de bienvenue et « Supprimer mon compte » (qui efface
+`auth.identities`) n'ont pas changé. `essai-mobile.py` (section L) l'éprouve.
+
 ### L'application mobile (dépôt `goship-express-app`)
 
 L'espace client sur téléphone (Expo), cloné dans `application-mobile/` (ignoré ici).
@@ -383,7 +398,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

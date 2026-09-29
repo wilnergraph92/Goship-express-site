@@ -21,3 +21,4 @@ supabase-production.sql
 supabase-rapports.sql
 supabase-compte.sql
 supabase-regroupement.sql
+supabase-connexion.sql

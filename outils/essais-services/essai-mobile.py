@@ -60,7 +60,7 @@ FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
             'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql',
             'supabase-production.sql', 'supabase-rapports.sql', 'supabase-compte.sql',
-            'supabase-regroupement.sql')
+            'supabase-regroupement.sql', 'supabase-connexion.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -735,6 +735,47 @@ def essais(db, d):
     verifier('son adresse e-mail est libre : une nouvelle inscription donne un nouveau compte, vide',
              (c, bool(nouveau) and nouveau != PAUL,
               un(db, "select count(*) from colis where client_id = '%s';" % nouveau) if nouveau else None), (200, True, '0'))
+
+    print('L. Se connecter avec Google (supabase-connexion.sql)')
+    # Ce que Supabase écrit dans auth.users à la première connexion Google : pas de
+    # nom_complet, mais les champs du fournisseur ; l'adresse arrive déjà vérifiée.
+    rose, sam, ana, lise = (str(uuid.uuid4()) for _ in range(4))
+    for uid, email, meta in (
+            (rose, 'rose@gmail.test', {'full_name': 'Rose Google', 'name': 'Rose G.', 'avatar_url': 'https://x/y.png',
+                                       'email_verified': True, 'locale': 'es-419', 'iss': 'https://accounts.google.com'}),
+            (sam, 'sam@gmail.test', {'name': 'Sam Seul', 'locale': 'de'}),
+            (ana, 'ana@gmail.test', {'given_name': 'Ana', 'family_name': 'Diaz', 'locale': 'ht'}),
+            (lise, 'lise@exemple.com', {'nom_complet': 'Lise Formulaire', 'full_name': 'Autre Nom', 'langue': 'en',
+                                        'locale': 'es', 'pays': 'ht', 'ville': 'Jacmel', 'telephone': '+509 1111 2222'})):
+        db.sql("insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values ('%s', '%s', now(), '%s'::jsonb);"
+               % (uid, email, json.dumps(meta).replace("'", "''")))
+    COMPTES['rose@gmail.test'] = (rose, None, 'Rose Google')   # jeton d'essai pour les appels REST
+    profil = lambda uid: un(db, "select concat_ws('|', nom_complet, langue, pays, ville, telephone, code ~ '^GSE-[0-9]{4,}$', email) "
+                                "from clients where id = '%s';" % uid)
+    verifier('Google : le nom (full_name) et la langue du compte (es-419 → es), un code client',
+             profil(rose), 'Rose Google|es||||t|rose@gmail.test')
+    verifier('sans full_name : « name » ; une langue que le site n\'a pas : le français', profil(sam), 'Sam Seul|fr||||t|sam@gmail.test')
+    verifier('prénom et nom séparés : réunis', profil(ana), 'Ana Diaz|ht||||t|ana@gmail.test')
+    verifier('le formulaire (nom_complet, langue) passe avant ce que dit le fournisseur',
+             profil(lise), 'Lise Formulaire|en|HT|Jacmel|+509 1111 2222|t|lise@exemple.com')
+    verifier('un nom trop long est coupé à 120 caractères',
+             un(db, "select length(public.nom_depuis_metadonnees('{\"full_name\": \"%s\"}'::jsonb));" % ('x' * 300)), '120')
+    verifier('rien du tout : une chaîne vide, à compléter par le client',
+             un(db, "select '[' || public.nom_depuis_metadonnees('{}'::jsonb) || ']' || public.langue_depuis_metadonnees('{}'::jsonb);"),
+             '[]fr')
+    c, v, _ = appel('POST', '/rpc/nom_depuis_metadonnees', None, {'p_meta': {}})
+    verifier('les deux outils du déclencheur ne sont ouverts ni aux visiteurs…', c in (401, 403), True)
+    c, v, _ = appel('POST', '/rpc/langue_depuis_metadonnees', MARIE, {'p_meta': {}})
+    verifier('… ni aux clients connectés', c in (401, 403), True)
+    verifier('Rose voit son profil (la même règle que pour un compte e-mail)',
+             [x.get('nom_complet') for x in appel('GET', '/clients?select=nom_complet', rose)[1]], ['Rose Google'])
+    # Supprimer un compte Google retire le lien Google : on ne peut plus s'y reconnecter
+    db.sql("insert into auth.identities (user_id, provider, identity_data) values ('%s', 'google', '{\"sub\":\"1234\"}');" % rose)
+    c, v = supprimer(rose)
+    verifier('un compte Google se supprime comme les autres',
+             (c, v.get('supprime'),
+              un(db, "select (select count(*) from auth.identities where user_id = u.id) || '|' || (banned_until = 'infinity') "
+                     "from auth.users u where id = '%s';" % rose)), (200, True, '0|true'))
 
     print('J. Volume')
     db.sql("insert into colis (client_id, numero, description, poids_lb, service, pays_destination, destination, statut, prix_usd, tarif_lb_usd) "
