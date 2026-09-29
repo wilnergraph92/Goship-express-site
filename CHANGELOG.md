@@ -7,9 +7,9 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — « Continuer avec Google » (site et application)
+## site-2026.09.29.1 — « Continuer avec Google » (publié le 29/09/2026)
 
-Migration à passer : **un seul fichier**, `outils/supabase-connexion.sql` (le dernier de la
+Migration passée le 29/09/2026 par le propriétaire (contrôle `2 | false | true`) : **un seul fichier**, `outils/supabase-connexion.sql` (le dernier de la
 chaîne, 15ᵉ). Il ajoute deux fonctions fermées à tous et remplace le déclencheur qui crée
 le profil d'un nouveau compte ; il ne change aucune donnée. Contrôle attendu :
 `2 | false | true`. Puis les réglages de Google et de Supabase (README, « Continuer avec
