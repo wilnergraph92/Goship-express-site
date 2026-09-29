@@ -277,8 +277,10 @@ et dans Supabase. Comptez 20 minutes.
    l'entreprise) : créez un projet « GoShip Express ».
    - *Google Auth Platform* (ou *APIs & Services* > *OAuth consent screen*) : nom de
      l'application « GoShip Express », adresse d'assistance, public **External**. Dans
-     *Branding* > *Authorized domains*, ajoutez `supabase.co` et `github.io`, puis
-     publiez l'application (*Audience* > *Publish app*, « In production ») : sinon seuls
+     *Branding* : page d'accueil, `confidentialite.html` et `termes-et-conditions.html`
+     du site, pas de logo (un logo impose une vérification de Google) ; *Authorized
+     domains* : `wilnergraph92.github.io` et `<votre-projet>.supabase.co` (Google refuse
+     `supabase.co` et `github.io` seuls, domaines partagés). Puis publiez l'application (*Audience* > *Publish app*, « In production ») : sinon seuls
      les comptes de test peuvent se connecter. Pour le nom et l'adresse e-mail seulement,
      Google ne demande pas de vérification.
    - *Clients* > *Create client* > **Web application** :
