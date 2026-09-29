@@ -830,10 +830,11 @@
       }
     };
     boutonModifier.addEventListener('click', function () { editer(true); });
-    $('[data-action="completer-profil"]').addEventListener('click', function () {
+    var completerProfil = function () {
       editer(true);
       try { formProfil.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { formProfil.scrollIntoView(); }
-    });
+    };
+    $('[data-action="completer-profil"]').addEventListener('click', completerProfil);
     $('[data-action="annuler-profil"]').addEventListener('click', function () { editer(false); });
     formProfil.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -875,6 +876,10 @@
       if (!p) { location.replace('connexion.html?retour=mon-compte.html'); return; }
       profil = p;
       afficherProfil();
+      // Profil incomplet (compte ouvert avec Google, le plus souvent) : le formulaire
+      // s'ouvre de lui-même, sans attendre qu'on remarque le bandeau. Sans téléphone ni
+      // ville, l'équipe ne peut pas remettre un colis, et la base refuse les pré-alertes.
+      if (!$('[data-completer]').hidden) completerProfil();
       if (/[?&]bienvenue=1/.test(location.search)) {
         var bienvenue = $('[data-bienvenue]');
         bienvenue.hidden = false;

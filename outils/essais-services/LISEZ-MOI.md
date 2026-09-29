@@ -29,7 +29,7 @@ node outils/essais-services/essai-rapports.js        # les rapports en démonstr
 
 **À relancer après toute modification de `supabase.sql`,
 `supabase-services.sql`, `supabase-evenements.sql`, `supabase-finances.sql`,
-`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `outils/production/` ou des règles dans
+`supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`, `supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `outils/production/` ou des règles dans
 `api.js`.**
 
 ## Ce que prouve `essai-services.py`
@@ -254,7 +254,8 @@ jeton d'un client — comme quelqu'un qui contournerait l'application :
 - **Étapes** : une opération interne ou une étape corrigée n'est pas montrée.
 - **Pré-alertes** (`creer_prealerte`) : sept refus avec leur code, doublon, colis
   déjà arrivé, même envoi répété, cinq requêtes simultanées → une pré-alerte,
-  ancien chemin toujours ouvert, limite de 60.
+  ancien chemin toujours ouvert, limite de 60. Pas de pré-alerte sans nom,
+  téléphone, pays et ville, par les deux chemins (section M).
 - **Argent** : `mon_resume` et `mes_factures` disent les mêmes soldes ; un client
   n'écrit ni paiement ni montant payé.
 - **Compte de l'équipe** : filtré sur son compte, « Mes colis » ne montre pas ceux

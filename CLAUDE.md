@@ -368,8 +368,16 @@ fournisseur de plus : `FOURNISSEURS` dans `api.js` et son bouton. Le profil d'un
 Google naît par le même déclencheur (`creer_profil_client`), qui lit le nom et la langue
 envoyés par Google (`nom_depuis_metadonnees`, `langue_depuis_metadonnees`, fermées à tous) ;
 pays, ville et téléphone manquent : « Mon compte » affiche « Complétez votre profil »
-(`[data-completer]`). E-mails de bienvenue et « Supprimer mon compte » (qui efface
+(`[data-completer]`) et ouvre de lui-même le formulaire du profil ; l'application ouvre
+l'écran « Mes informations ». E-mails de bienvenue et « Supprimer mon compte » (qui efface
 `auth.identities`) n'ont pas changé. `essai-mobile.py` (section L) l'éprouve.
+
+**Pas de pré-alerte sans profil complet** (`outils/supabase-profil-complet.sql`) : le
+déclencheur `exiger_profil_prealerte` (avant insertion dans `prealertes`, donc aussi pour
+l'écriture directe des anciennes versions de l'application) refuse avec
+`PROFILE_INCOMPLETE` tant que `profil_complet(client)` est faux : nom, téléphone, pays et
+ville non vides — les mêmes champs que le bandeau du site et la carte de l'application.
+Les pré-alertes déjà enregistrées ne sont pas touchées. `essai-mobile.py` (section M).
 
 ### L'application mobile (dépôt `goship-express-app`)
 
@@ -398,7 +406,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
