@@ -32,7 +32,7 @@ on revient en arrière par une nouvelle migration ou une restauration
 | Migration | Production |
 |---|---|
 | `supabase.sql` à `supabase-rapports.sql` (1 à 12) | présentes (fonction témoin de chacune) ; chaîne entière relancée par le propriétaire le 28/09/2026, contrôle de `supabase-rapports.sql` : `5 \| 0 \| true \| true` |
-| `supabase-compte.sql` (13, « Supprimer mon compte » de l'application) | exécuté par le propriétaire le 28/09/2026 ; contrôle : `1 \| false \| 1` |
+| `supabase-compte.sql` (13, « Supprimer mon compte » de l'application) | exécuté par le propriétaire le 28/09/2026 ; contrôle : `1 \| false \| 1`. **À relancer** (avec 14 à 16) pour la réparation du 29/09 (blocage lisible par Supabase) ; contrôle attendu : `1 \| false \| 1 \| 0` |
 | `supabase-regroupement.sql` (14, sortir des colis d'une facture regroupée) | exécuté par le propriétaire le 28/09/2026 ; contrôle : `1 \| false` |
 | `supabase-connexion.sql` (15, profil d'un compte ouvert avec Google) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| true` |
 | `supabase-profil-complet.sql` (16, pas de pré-alerte sans profil complet) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| 1` |

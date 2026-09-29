@@ -4,8 +4,9 @@
 -- À exécuter une fois : Supabase > SQL Editor > New query > coller tout ce
 -- fichier (bouton « Copy raw file » sur GitHub) > Run. Sans risque : ce fichier
 -- AJOUTE une colonne vide (clients.supprime_le) et une fonction. Il ne supprime
--- rien, ne change aucune donnée existante, et peut être relancé autant de fois
--- qu'on veut.
+-- rien et peut être relancé autant de fois qu'on veut. La seule donnée qu'il
+-- change est la date de blocage des comptes déjà supprimés par sa première
+-- version (partie 4, voir plus bas).
 --
 -- Ordre d'installation : le dernier de la chaîne (outils/migrations.txt), après
 -- supabase-rapports.sql.
@@ -39,7 +40,8 @@
 --    1. garde : la chaîne est-elle à jour ?
 --    2. la colonne supprime_le
 --    3. supprimer_mon_compte
---    4. contrôle
+--    4. réparation des comptes bloqués « pour toujours » (29/09/2026)
+--    5. contrôle
 -- =============================================================================
 
 
@@ -119,12 +121,16 @@ begin
 
   -- Le compte de connexion : bloqué, sans e-mail ni mot de passe, sessions fermées.
   -- L'adresse d'origine redevient libre pour une nouvelle inscription.
+  -- Bloqué pour cent ans, pas « infinity » : Supabase (GoTrue, écrit en Go) ne sait
+  -- pas lire une date infinie, et chaque lecture du compte échouait alors
+  -- (« Database error loading user ») — y compris pour le supprimer depuis
+  -- Authentication. Cent ans le bloquent tout autant.
   update auth.users
      set email = 'supprime-' || v_moi::text || '@goship.invalid',
          encrypted_password = '',
          phone = null,
          raw_user_meta_data = '{}'::jsonb,
-         banned_until = 'infinity'::timestamptz
+         banned_until = now() + interval '100 years'
    where id = v_moi;
   delete from auth.identities where user_id = v_moi;
   delete from auth.sessions where user_id = v_moi;
@@ -142,8 +148,18 @@ revoke execute on function public.supprimer_mon_compte(text) from public, anon;
 grant execute on function public.supprimer_mon_compte(text) to authenticated;
 
 
--- 4. Contrôle ---------------------------------------------------------------------------------
--- fonction : 1 ; ouverte_aux_visiteurs : false ; colonne : 1.
+-- 4. Réparation (29/09/2026) --------------------------------------------------------------------
+-- La première version bloquait avec banned_until = 'infinity', une date que Supabase
+-- ne sait pas lire : le compte ne pouvait plus être ouvert ni supprimé dans
+-- Authentication > Users. Même blocage, en date lisible. Ne touche que ces comptes-là ;
+-- relancé, ne trouve plus rien à faire.
+update auth.users
+   set banned_until = now() + interval '100 years'
+ where banned_until = 'infinity'::timestamptz;
+
+
+-- 5. Contrôle ---------------------------------------------------------------------------------
+-- fonction : 1 ; ouverte_aux_visiteurs : false ; colonne : 1 ; dates_illisibles : 0.
 select (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public' and p.proname = 'supprimer_mon_compte')                as fonction,
        (select bool_or(has_function_privilege('anon', p.oid, 'execute'))
@@ -151,4 +167,5 @@ select (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronames
         where n.nspname = 'public' and p.proname = 'supprimer_mon_compte')                as ouverte_aux_visiteurs,
        (select count(*) from information_schema.columns
         where table_schema = 'public' and table_name = 'clients' and column_name = 'supprime_le')
-                                                                                          as colonne;
+                                                                                          as colonne,
+       (select count(*) from auth.users where not isfinite(banned_until))                  as dates_illisibles;

@@ -719,7 +719,8 @@ def essais(db, d):
              un(db, "select (select count(*) from prealertes where client_id = '%s' and statut = 'attente') || '|' || "
                     "(select count(*) from appareils where client_id = '%s');" % (PAUL, PAUL)), '0|0')
     verifier('compte de connexion : e-mail et mot de passe retirés, bloqué, sessions fermées',
-             un(db, "select concat_ws('|', email, coalesce(encrypted_password, 'null'), banned_until = 'infinity', "
+             un(db, "select concat_ws('|', email, coalesce(encrypted_password, 'null'), "
+                    "banned_until > now() + interval '99 years' and isfinite(banned_until), "
                     "raw_user_meta_data = '{}'::jsonb, (select count(*) from auth.identities where user_id = u.id), "
                     "(select count(*) from auth.sessions where user_id = u.id), "
                     "(select count(*) from auth.refresh_tokens where user_id = u.id::text)) from auth.users u where id = '%s';" % PAUL),
@@ -774,8 +775,16 @@ def essais(db, d):
     c, v = supprimer(rose)
     verifier('un compte Google se supprime comme les autres',
              (c, v.get('supprime'),
-              un(db, "select (select count(*) from auth.identities where user_id = u.id) || '|' || (banned_until = 'infinity') "
+              un(db, "select (select count(*) from auth.identities where user_id = u.id) || '|' || (banned_until > now() + interval '99 years' and isfinite(banned_until)) "
                      "from auth.users u where id = '%s';" % rose)), (200, True, '0|true'))
+    # Un compte supprimé par la première version (banned_until = 'infinity', illisible
+    # pour Supabase) : relancer supabase-compte.sql et la suite le rend lisible, toujours bloqué.
+    db.sql("update auth.users set banned_until = 'infinity' where id = '%s';" % rose)
+    for f in FICHIERS[FICHIERS.index('supabase-compte.sql'):]:
+        db.fichier(os.path.join(RACINE, 'outils', f))
+    verifier('réparation : plus aucune date de blocage infinie, le compte reste bloqué cent ans',
+             un(db, "select (select count(*) from auth.users where not isfinite(banned_until)) || '|' || "
+                    "(banned_until > now() + interval '99 years') from auth.users where id = '%s';" % rose), '0|true')
 
     print('M. Un profil complet avant la première pré-alerte (supabase-profil-complet.sql)')
     # Nina s'inscrit avec Google : ni téléphone, ni pays, ni ville

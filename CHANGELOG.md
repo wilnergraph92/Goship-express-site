@@ -7,6 +7,22 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.29.3 — un compte supprimé depuis l'application peut être effacé dans Supabase
+
+**Migration à passer** (propriétaire) : relancer `outils/supabase-compte.sql`, puis les
+fichiers qui le suivent dans la chaîne (`supabase-regroupement.sql`, `supabase-connexion.sql`,
+`supabase-profil-complet.sql`). Contrôle attendu de `supabase-compte.sql` : `1 | false | 1 | 0`.
+
+- « Supprimer mon compte » bloquait le compte de connexion avec une date infinie
+  (`banned_until = 'infinity'`), que Supabase ne sait pas lire : le compte
+  `supprime-…@goship.invalid` ne s'ouvrait plus dans Authentication > Users, et sa
+  suppression échouait (« Failed to delete user: Database error loading user »). Le blocage
+  dure désormais cent ans, une date lisible. Le client supprimé ne peut toujours pas se
+  reconnecter.
+- La migration répare les comptes déjà supprimés par l'ancienne version (même blocage, date
+  lisible) ; relancée, elle ne trouve plus rien à faire.
+- `essai-mobile.py` : 125 vérifications (la réparation d'un compte à date infinie comprise).
+
 ## 29/09/2026 — « Continuer avec Google » vérifié de bout en bout
 
 Aucun changement de code. Le propriétaire a fait l'aller-retour réel avec Google sur le site
