@@ -58,7 +58,8 @@ supabase-production.sql|sante||oui
 supabase-rapports.sql|liste_rapports||non
 supabase-compte.sql|supprimer_mon_compte|p_confirmation=sonde|non
 supabase-regroupement.sql|sortir_du_regroupement|p_facture=00000000-0000-0000-0000-000000000000&p_colis=%7B%7D|non
-supabase-connexion.sql|nom_depuis_metadonnees|p_meta=%7B%7D|non'
+supabase-connexion.sql|nom_depuis_metadonnees|p_meta=%7B%7D|non
+supabase-profil-complet.sql|profil_complet|p_client=00000000-0000-0000-0000-000000000000|non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

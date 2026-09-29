@@ -22,3 +22,4 @@ supabase-rapports.sql
 supabase-compte.sql
 supabase-regroupement.sql
 supabase-connexion.sql
+supabase-profil-complet.sql

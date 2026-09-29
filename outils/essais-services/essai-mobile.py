@@ -60,7 +60,7 @@ FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql',
             'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
             'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql',
             'supabase-production.sql', 'supabase-rapports.sql', 'supabase-compte.sql',
-            'supabase-regroupement.sql', 'supabase-connexion.sql')
+            'supabase-regroupement.sql', 'supabase-connexion.sql', 'supabase-profil-complet.sql')
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -102,7 +102,7 @@ def installer():
     db.fichier(os.path.join(RACINE, 'outils', 'supabase-mobile.sql'))
     for email, (uid, _mdp, nom) in COMPTES.items():
         db.sql("""insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
-                  values ('%s', '%s', now(), '{"nom_complet":"%s","pays":"HT","ville":"Pétion-Ville"}'::jsonb);"""
+                  values ('%s', '%s', now(), '{"nom_complet":"%s","pays":"HT","ville":"Pétion-Ville","telephone":"+509 3000 0000"}'::jsonb);"""
                % (uid, email, nom))
     db.sql("select public.definir_admin('equipe@goship.test');")
     jsonq(db, ADMIN, "select public.changer_role('employe@goship.test', 'employe');")
@@ -776,6 +776,42 @@ def essais(db, d):
              (c, v.get('supprime'),
               un(db, "select (select count(*) from auth.identities where user_id = u.id) || '|' || (banned_until = 'infinity') "
                      "from auth.users u where id = '%s';" % rose)), (200, True, '0|true'))
+
+    print('M. Un profil complet avant la première pré-alerte (supabase-profil-complet.sql)')
+    # Nina s'inscrit avec Google : ni téléphone, ni pays, ni ville
+    nina = str(uuid.uuid4())
+    db.sql("insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values "
+           "('%s', 'nina@gmail.test', now(), '{\"full_name\": \"Nina Google\"}'::jsonb);" % nina)
+    COMPTES['nina@gmail.test'] = (nina, None, 'Nina Google')
+    pa = lambda cle, suivi: appel('POST', '/rpc/creer_prealerte', nina,
+                                  {'p_cle': cle, 'p_magasin': 'Amazon', 'p_description': 'Chaussures',
+                                   'p_suivi': suivi, 'p_valeur': 30, 'p_service': 'aerien'})
+    cle = str(uuid.uuid4())
+    c, v, _ = pa(cle, 'NINA000001')
+    verifier('profil sans téléphone ni ville : pré-alerte refusée, avec la phrase',
+             (c, v.get('message'), 'Complétez votre profil' in (v.get('details') or '')), (400, 'PROFILE_INCOMPLETE', True))
+    c, v, _ = appel('POST', '/prealertes', nina, {'client_id': nina, 'magasin': 'Amazon', 'description': 'Chaussures'})
+    verifier('… même par l\'écriture directe des anciennes versions de l\'application', (c, v.get('message')),
+             (400, 'PROFILE_INCOMPLETE'))
+    verifier('rien n\'est enregistré', un(db, "select count(*) from prealertes where client_id = '%s';" % nina), '0')
+    c, _, _ = appel('PATCH', '/clients?id=eq.%s' % nina, nina, {'telephone': '+509 3456 7890', 'pays': 'HT'})
+    c, v, _ = pa(cle, 'NINA000001')
+    verifier('téléphone et pays, mais pas de ville : toujours refusée', v.get('message'), 'PROFILE_INCOMPLETE')
+    appel('PATCH', '/clients?id=eq.%s' % nina, nina, {'ville': '   '})
+    verifier('une ville faite d\'espaces ne compte pas', pa(cle, 'NINA000001')[1].get('message'), 'PROFILE_INCOMPLETE')
+    appel('PATCH', '/clients?id=eq.%s' % nina, nina, {'ville': 'Jacmel'})
+    c, v, _ = pa(cle, 'NINA000001')
+    verifier('profil complet : la pré-alerte passe', (c, v.get('statut') if isinstance(v, dict) else v), (200, 'attente'))
+    appel('PATCH', '/clients?id=eq.%s' % nina, nina, {'telephone': ''})
+    c, v, _ = pa(cle, 'NINA000001')
+    verifier('la même requête rejouée rend la pré-alerte déjà faite, même si le profil a changé depuis',
+             (c, un(db, "select count(*) from prealertes where client_id = '%s';" % nina)), (200, '1'))
+    verifier('une pré-alerte déjà enregistrée se modifie encore (seules les nouvelles sont tenues)',
+             appel('PATCH', '/prealertes?client_id=eq.%s' % nina, nina, {'description': 'Baskets'})[0] in (200, 204), True)
+    c, v, _ = appel('POST', '/rpc/profil_complet', None, {'p_client': nina})
+    verifier('profil_complet n\'est ouverte ni aux visiteurs…', c in (401, 403), True)
+    c, v, _ = appel('POST', '/rpc/profil_complet', MARIE, {'p_client': nina})
+    verifier('… ni aux clients connectés (elle dirait si un autre compte est complet)', c in (401, 403), True)
 
     print('J. Volume')
     db.sql("insert into colis (client_id, numero, description, poids_lb, service, pays_destination, destination, statut, prix_usd, tarif_lb_usd) "

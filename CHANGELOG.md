@@ -7,6 +7,21 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — un profil complet avant la première pré-alerte
+
+Migration à passer : **un seul fichier**, `outils/supabase-profil-complet.sql` (le dernier de
+la chaîne, 16ᵉ). Il ajoute une fonction et un déclencheur fermés à tous ; il ne change aucune
+donnée. Contrôle attendu : `2 | false | 1`.
+
+- La base refuse une nouvelle pré-alerte (`PROFILE_INCOMPLETE`) tant que le profil du client
+  n'a pas son nom, son téléphone, son pays et sa ville — par `creer_prealerte` comme par
+  l'écriture directe des anciennes versions de l'application. Les pré-alertes déjà
+  enregistrées ne sont pas touchées.
+- *Mon compte* ouvre de lui-même le formulaire du profil quand il est incomplet (compte
+  ouvert avec Google, le plus souvent), sous le bandeau « Complétez votre profil ».
+- Bancs : `essai-mobile.py` section M (10 cas) ; la sonde et `controle-securite.sql`
+  connaissent la 16ᵉ migration ; les clients d'essai ont un téléphone.
+
 ## site-2026.09.29.1 — « Continuer avec Google » (publié le 29/09/2026)
 
 Migration passée le 29/09/2026 par le propriétaire (contrôle `2 | false | true`) : **un seul fichier**, `outils/supabase-connexion.sql` (le dernier de la
