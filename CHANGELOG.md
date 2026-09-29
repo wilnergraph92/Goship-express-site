@@ -7,7 +7,7 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — un profil complet avant la première pré-alerte
+## site-2026.09.29.2 — un profil complet avant la première pré-alerte (publié le 29/09/2026 ; migration à passer)
 
 Migration à passer : **un seul fichier**, `outils/supabase-profil-complet.sql` (le dernier de
 la chaîne, 16ᵉ). Il ajoute une fonction et un déclencheur fermés à tous ; il ne change aucune
