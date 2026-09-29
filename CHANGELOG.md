@@ -9,9 +9,9 @@ base **avant** de publier le site.
 
 ## site-2026.09.29.3 — un compte supprimé depuis l'application peut être effacé dans Supabase
 
-**Migration à passer** (propriétaire) : relancer `outils/supabase-compte.sql`, puis les
-fichiers qui le suivent dans la chaîne (`supabase-regroupement.sql`, `supabase-connexion.sql`,
-`supabase-profil-complet.sql`). Contrôle attendu de `supabase-compte.sql` : `1 | false | 1 | 0`.
+Migration passée le 29/09/2026 par le propriétaire : `outils/supabase-compte.sql` relancé,
+puis les fichiers qui le suivent dans la chaîne. Contrôles : `1 | false | 1 | 0`,
+`1 | false`, `2 | false | true`, `2 | false | 1`.
 
 - « Supprimer mon compte » bloquait le compte de connexion avec une date infinie
   (`banned_until = 'infinity'`), que Supabase ne sait pas lire : le compte
