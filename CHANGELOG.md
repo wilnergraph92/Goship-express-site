@@ -7,6 +7,15 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## 29/09/2026 — « Continuer avec Google » vérifié de bout en bout
+
+Aucun changement de code. Le propriétaire a fait l'aller-retour réel avec Google sur le site
+(compte créé, nom repris de Google, formulaire du profil ouvert) et dans l'application
+Android construite depuis `main` (3294441, profil `preview`). Dans l'application, le retour
+tombait d'abord sur le site : l'adresse `goshipexpress://…` n'était pas encore acceptée dans
+Supabase > URL Configuration. Le guide (README, « Continuer avec Google ») donne désormais
+les trois adresses de l'application.
+
 ## site-2026.09.29.2 — un profil complet avant la première pré-alerte (publié le 29/09/2026)
 
 Migration passée le 29/09/2026 par le propriétaire (contrôle `2 | false | 1`) : **un seul fichier**, `outils/supabase-profil-complet.sql` (le dernier de

@@ -295,7 +295,10 @@ et dans Supabase. Comptez 20 minutes.
    l'envoyez à personne, ne le mettez dans aucun fichier.
 4. **Les adresses de retour** : *Authentication* > *URL Configuration* > *Redirect URLs*,
    ajoutez `https://wilnergraph92.github.io/Goship-express-site/**` (le site, dans les
-   quatre langues) et `goshipexpress://**` (l'application mobile).
+   quatre langues) et, pour l'application mobile, `goshipexpress://**`,
+   `goshipexpress://connexion` et `goshipexpress:///connexion`. Une adresse absente de cette
+   liste est remplacée par la *Site URL* (le site) : le téléphone s'ouvre alors sur le site
+   au lieu de revenir dans l'application.
 
 Rechargez *Se connecter* : le bouton apparaît. Pour l'application, il apparaît au
 prochain lancement, dans la version construite après cette mise à jour. Un client qui
