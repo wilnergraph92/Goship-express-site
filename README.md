@@ -259,6 +259,45 @@ Bon à savoir :
 - Sur l'offre gratuite, Supabase met en pause un projet resté 7 jours sans aucune activité (il suffit de le réactiver depuis supabase.com). Avec une activité quotidienne, cela n'arrive pas ; l'offre Pro supprime cette limite.
 - Les données se consultent et s'exportent depuis Supabase (*Table Editor* : tables `clients`, `colis`, `colis_historique`).
 
+### Continuer avec Google
+
+Sur les pages *Se connecter* et *Créer un compte*, et dans l'application mobile, le bouton
+« Continuer avec Google » ouvre ou crée le compte du client avec son compte Google. Un
+client déjà inscrit avec la même adresse retrouve son compte ; un nouveau client reçoit
+son code et ses deux e-mails de bienvenue, puis le site et l'application lui demandent
+son pays, sa ville et son téléphone (« Complétez votre profil »). **Le bouton n'apparaît
+que lorsque Google est activé dans Supabase** : tant que les étapes ci-dessous ne sont pas
+faites, rien ne change. Aucune clé Google ne va dans le dépôt : tout se règle dans Google
+et dans Supabase. Comptez 20 minutes.
+
+1. **La base** : *SQL Editor* > *New query*, collez `outils/supabase-connexion.sql`
+   (bouton « Copy raw file » sur GitHub), *Run*. Contrôle attendu : `2 | false | true`. Il
+   donne au profil d'un compte Google le nom et la langue du compte Google.
+2. **Google Cloud** (https://console.cloud.google.com, avec le compte Google de
+   l'entreprise) : créez un projet « GoShip Express ».
+   - *Google Auth Platform* (ou *APIs & Services* > *OAuth consent screen*) : nom de
+     l'application « GoShip Express », adresse d'assistance, public **External**. Dans
+     *Branding* > *Authorized domains*, ajoutez `supabase.co` et `github.io`, puis
+     publiez l'application (*Audience* > *Publish app*, « In production ») : sinon seuls
+     les comptes de test peuvent se connecter. Pour le nom et l'adresse e-mail seulement,
+     Google ne demande pas de vérification.
+   - *Clients* > *Create client* > **Web application** :
+     *Authorized JavaScript origins* = `https://wilnergraph92.github.io` ;
+     *Authorized redirect URIs* = `https://<votre-projet>.supabase.co/auth/v1/callback`
+     (l'adresse *Callback URL* affichée par Supabase à l'étape 3, à recopier telle quelle).
+     Google affiche un **Client ID** et un **Client secret**.
+3. **Supabase** : *Authentication* > *Sign In / Providers* > **Google** : activez-le,
+   collez le *Client ID* et le *Client secret*, *Save*. Le secret reste dans Supabase : ne
+   l'envoyez à personne, ne le mettez dans aucun fichier.
+4. **Les adresses de retour** : *Authentication* > *URL Configuration* > *Redirect URLs*,
+   ajoutez `https://wilnergraph92.github.io/Goship-express-site/**` (le site, dans les
+   quatre langues) et `goshipexpress://**` (l'application mobile).
+
+Rechargez *Se connecter* : le bouton apparaît. Pour l'application, il apparaît au
+prochain lancement, dans la version construite après cette mise à jour. Un client qui
+refuse chez Google revient sur *Se connecter* avec « Connexion avec Google annulée ».
+Supprimer son compte (application) retire aussi le lien avec Google.
+
 ## Les langues
 
 Chaque page a sa version dans chaque langue, à la même adresse dans un sous-dossier : `a-propos.html` (français), `en/a-propos.html`, `es/a-propos.html`, `ht/a-propos.html`. Le sélecteur « Langue » de l'en-tête (drapeau + liste déroulante) passe d'une version à l'autre sans quitter la page.
@@ -493,7 +532,7 @@ d'impression du navigateur sert d'aperçu ; on peut aussi y choisir « Enregistr
 
 Les règles qui comptent — le prix d'un colis, l'ordre des statuts, qui peut faire quoi, une seule facture par colis — sont appliquées **par la base de données**, et non par les pages. Une page se modifie en trois clics dans la console d'un navigateur ; la base, non. Le site, l'application mobile et les outils à venir (scanner, poste de bureau) obéissent ainsi aux mêmes règles, qu'ils le veuillent ou non.
 
-**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, `outils/supabase-finances.sql`, `outils/supabase-tableau-de-bord.sql`, `outils/supabase-analytics.sql`, `outils/supabase-mobile.sql`, `outils/supabase-notifications.sql`, `outils/supabase-production.sql`, `outils/supabase-rapports.sql`, `outils/supabase-compte.sql`, puis `outils/supabase-regroupement.sql` (la liste fait foi dans `outils/migrations.txt`). **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les quatorze, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql` ; `tableau_sur_12 = 12`, `index_sur_8 = 8` et `ouvertes_aux_visiteurs = 0` à la fin de `supabase-tableau-de-bord.sql` ; `analytics_sur_15 = 15`, `ouvertes_aux_visiteurs = 0` et `creances_egales = true` à la fin de `supabase-analytics.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false`, `index_sur_2 = 2` et `colonne = 1` à la fin de `supabase-mobile.sql` ; `regles = 13`, `declencheurs = 2`, `ancien_push = 0`, `ouvertes_aux_visiteurs = false` et `planificateur = 2` à la fin de `supabase-notifications.sql` ; `status = ok` et `pret = true` à la fin de `supabase-production.sql` ; `rapports_sur_5 = 5`, `ouvertes_aux_visiteurs = 0`, `table_fermee = true` et `journal = true` à la fin de `supabase-rapports.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false` et `colonne = 1` à la fin de `supabase-compte.sql` ; `fonction = 1` et `ouverte_aux_visiteurs = false` à la fin de `supabase-regroupement.sql` (si `planificateur` vaut 0, activez l'extension **pg_cron** dans Database > Extensions et relancez ce fichier : sans elle, les e-mails et notifications du téléphone attendent). Les notifications — règles, canaux, clés à poser, dépannage — sont décrites dans `docs/notifications.md`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
+**À installer**, dans cet ordre : Supabase > *SQL Editor* > *New query* > coller le fichier > *Run*, pour `outils/supabase.sql`, `outils/supabase-facturation.sql`, `outils/supabase-services.sql`, `outils/supabase-evenements.sql`, `outils/supabase-scanner.sql`, `outils/supabase-finances.sql`, `outils/supabase-tableau-de-bord.sql`, `outils/supabase-analytics.sql`, `outils/supabase-mobile.sql`, `outils/supabase-notifications.sql`, `outils/supabase-production.sql`, `outils/supabase-rapports.sql`, `outils/supabase-compte.sql`, `outils/supabase-regroupement.sql`, puis `outils/supabase-connexion.sql` (la liste fait foi dans `outils/migrations.txt`). **Relancer l'un impose de relancer ceux qui le suivent** : depuis la Phase 6 (rôles et permissions), qui modifie `supabase.sql`, relancez donc les quinze, dans l'ordre, sans pause entre eux. Tous sont sans risque et relançables. **Copiez-les depuis GitHub avec le bouton « Copy raw file »** : un aperçu n'affiche souvent que les premières lignes, et un fichier coupé échoue avec « unterminated dollar-quoted string ». **Lancez-les avant de mettre en ligne la nouvelle version du site** : sans eux, le tableau de bord affiche « La base n'est pas à jour » au lieu d'enregistrer. Contrôles attendus : `services_sur_5 = 5` et `regles_sur_6 = 6` à la fin de `supabase-services.sql` ; `moteur_sur_8 = 8`, `gardes_sur_3 = 3` et `colonnes_sur_8 = 8` à la fin de `supabase-evenements.sql` ; `finances_sur_9 = 9`, `gardes_sur_6 = 6` et `factures_sans_paiement = 0` à la fin de `supabase-finances.sql` ; `roles_sur_4 = 4`, `regles_encore_admin = 0` et `administrateurs` ≥ 1 à la fin de `supabase.sql` ; `tableau_sur_12 = 12`, `index_sur_8 = 8` et `ouvertes_aux_visiteurs = 0` à la fin de `supabase-tableau-de-bord.sql` ; `analytics_sur_15 = 15`, `ouvertes_aux_visiteurs = 0` et `creances_egales = true` à la fin de `supabase-analytics.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false`, `index_sur_2 = 2` et `colonne = 1` à la fin de `supabase-mobile.sql` ; `regles = 13`, `declencheurs = 2`, `ancien_push = 0`, `ouvertes_aux_visiteurs = false` et `planificateur = 2` à la fin de `supabase-notifications.sql` ; `status = ok` et `pret = true` à la fin de `supabase-production.sql` ; `rapports_sur_5 = 5`, `ouvertes_aux_visiteurs = 0`, `table_fermee = true` et `journal = true` à la fin de `supabase-rapports.sql` ; `fonction = 1`, `ouverte_aux_visiteurs = false` et `colonne = 1` à la fin de `supabase-compte.sql` ; `fonction = 1` et `ouverte_aux_visiteurs = false` à la fin de `supabase-regroupement.sql` ; `fonctions = 2`, `ouvertes_aux_visiteurs = false` et `profil_google = true` à la fin de `supabase-connexion.sql` (si `planificateur` vaut 0, activez l'extension **pg_cron** dans Database > Extensions et relancez ce fichier : sans elle, les e-mails et notifications du téléphone attendent). Les notifications — règles, canaux, clés à poser, dépannage — sont décrites dans `docs/notifications.md`. Si `suivi_unique` vaut 0, c'est que des colis partagent déjà un numéro de suivi vendeur (`suivis_en_double` dit combien) : la règle vaut quand même pour tous les nouveaux colis, mais la base ne peut pas encore la rendre absolue. Pour les retrouver : `select suivi_transporteur, string_agg(numero, ', ') from colis where suivi_transporteur <> '' group by 1 having count(*) > 1;` — corrigez-les, puis relancez le fichier.
 
 ### Ce que la base garantit
 

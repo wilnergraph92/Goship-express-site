@@ -288,6 +288,19 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-carte-auth__pied a:hover,.gs-champ__lien:hover{color:var(--accent)}
 
 /* Choix de la méthode d'inscription */
+/* Continuer avec Google : fond blanc, logo en couleurs, comme le demandent les règles de Google */
+.gs-social{margin-bottom:26px}
+.gs-social__bouton{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:52px;padding:0 22px;border:1px solid #cfd7e6;border-radius:13px;background:#fff;color:#1f1f1f;font:inherit;font-size:16px;font-weight:700;line-height:1.2;cursor:pointer;transition:background-color .2s ease,border-color .2s ease,box-shadow .2s ease}
+.gs-social__bouton:hover{background:#f7f9fd;border-color:#b9c4d8}
+.gs-social__bouton:focus-visible{outline:3px solid var(--accent2);outline-offset:2px}
+.gs-social__bouton[aria-busy="true"]{opacity:.7;cursor:progress}
+.gs-social__logo{flex:none}
+.gs-social .gs-form__erreur{margin-top:14px}
+.gs-social__ou{display:flex;align-items:center;gap:14px;margin:24px 0 0;color:#5b6782;font-size:14px;font-weight:600}
+.gs-social__ou::before,.gs-social__ou::after{content:"";flex:1;height:1px;background:#dde4ef}
+/* Profil à compléter (compte ouvert avec Google : ni pays, ni ville, ni téléphone) */
+.gs-espace__completer{margin-bottom:22px}
+.gs-espace__completer .gs-bouton{margin-top:12px}
 .gs-methode{margin-bottom:34px;padding:clamp(20px,3vw,30px);border:1px solid #d9e4f5;border-radius:22px;background:#f4f8ff;text-align:center}
 .gs-methode__titre{font-family:'Archivo','Manrope',sans-serif;font-stretch:105%;font-size:clamp(18px,2vw,21px);font-weight:800;line-height:1.25;color:var(--ink)}
 .gs-methode__texte{margin-top:6px;font-size:15.5px;color:#55627e}

@@ -2201,5 +2201,11 @@
   "Le colis sorti, sur sa facture": "El paquete sacado, en su factura",
   "Le colis qui reste, sur sa facture": "El paquete que queda, en su factura",
   "Colis sortis d’un regroupement": "Paquetes sacados de una agrupación",
-  "Compte supprimé par le client": "Cuenta eliminada por el cliente"
+  "Compte supprimé par le client": "Cuenta eliminada por el cliente",
+  "Continuer avec Google": "Continuar con Google",
+  "Complétez votre profil": "Complete su perfil",
+  "Indiquez votre pays, votre ville et votre téléphone : nous en avons besoin pour vous remettre vos colis et vous prévenir de leur arrivée.": "Indique su país, su ciudad y su teléfono: los necesitamos para entregarle sus paquetes y avisarle de su llegada.",
+  "Compléter mon profil": "Completar mi perfil",
+  "Connexion avec Google annulée. Réessayez, ou utilisez votre e-mail et votre mot de passe.": "Inicio de sesión con Google cancelado. Vuelva a intentarlo o use su correo electrónico y su contraseña.",
+  "La connexion avec Google n'a pas abouti. Réessayez dans un instant, ou utilisez votre e-mail et votre mot de passe.": "El inicio de sesión con Google no se completó. Vuelva a intentarlo en un momento o use su correo electrónico y su contraseña."
 }

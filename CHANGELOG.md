@@ -7,6 +7,27 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — « Continuer avec Google » (site et application)
+
+Migration à passer : **un seul fichier**, `outils/supabase-connexion.sql` (le dernier de la
+chaîne, 15ᵉ). Il ajoute deux fonctions fermées à tous et remplace le déclencheur qui crée
+le profil d'un nouveau compte ; il ne change aucune donnée. Contrôle attendu :
+`2 | false | true`. Puis les réglages de Google et de Supabase (README, « Continuer avec
+Google ») : tant qu'ils ne sont pas faits, le bouton reste caché et rien ne change.
+
+- *Se connecter* et *Créer un compte* : « Continuer avec Google », au-dessus du
+  formulaire, seulement si Supabase a activé Google (réglages publics
+  `/auth/v1/settings`). Retour toujours sur *Se connecter* : session ouverte, ou phrase
+  d'erreur (« annulée », « n'a pas abouti »), en quatre langues.
+- Le profil d'un compte Google reprend le nom (`full_name`, `name`, prénom + nom) et la
+  langue du compte Google ; le formulaire passe avant. Code client et e-mails de bienvenue
+  comme avant ; « Supprimer mon compte » retirait déjà le lien Google (`auth.identities`).
+- *Mon compte* : « Complétez votre profil » tant que pays, ville ou téléphone manquent.
+- `api.js` : `fournisseursConnexion` et `connecterAvec`, dans les trois modes (démo et
+  site fermé : aucun bouton).
+- Bancs : `essai-mobile.py` section L (10 cas) ; la sonde et `controle-securite.sql`
+  connaissent la 15ᵉ migration.
+
 ## site-2026.09.28.8 — le favicon se met à jour dans les navigateurs (publié le 28/09/2026)
 
 Aucune migration. Les adresses des icônes du site portent maintenant un numéro
