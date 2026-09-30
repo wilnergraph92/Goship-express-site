@@ -7,6 +7,18 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.30.4 — réseaux sociaux : vraies pages et vrais logos
+
+Aucune migration. Le pied de page de toutes les pages (fr, en, es, ht) montre les logos
+Facebook, Instagram, TikTok et WhatsApp à la place des lettres de la maquette (« f »,
+« IG », « Tok », « wa »). Instagram et TikTok menaient à `#top` : ils mènent maintenant
+aux pages de l'entreprise (facebook.com/goshipexpress, instagram.com/goshipexpressllc,
+tiktok.com/@goshipexpress.net), ouvertes dans un nouvel onglet. Les liens sont nettoyés
+de leurs paramètres de partage. Les données structurées (`sameAs`) citent les trois
+pages. Tout vient de `outils/generateur/build.py` (`FACEBOOK`, `INSTAGRAM`, `TIKTOK`,
+`LOGOS`) : les logos sont des SVG dans la page (Simple Icons, domaine public), à la
+couleur du bouton.
+
 ## site-2026.09.30.3 — image de l'accueil de l'application à jour
 
 Aucune migration. Sur la page d'accueil du site (section « Vos colis dans votre poche »),
