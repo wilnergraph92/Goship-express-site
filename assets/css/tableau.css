@@ -949,6 +949,13 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-tableau td{border-bottom-color:#22304f;color:#dce5f7}
 [data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr:hover{background-color:#132041}
 [data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr.is-choisi{background-color:rgba(244,96,13,.15)}
+/* Les contreparties sombres des lignes marquées de site.css : un client avec des colis
+   en cours (is-actif-client, fond #fcfdff) et une ligne qui vient d'arriver (is-nouveau,
+   flash #ffe8d6). Sans elles, le texte clair du mode sombre restait sur fond blanc. */
+[data-apparence="sombre"] .gs-admin-body .gs-tableau--clients tr.is-actif-client td{background-color:#122043}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau--clients tr.is-actif-client:hover td{background-color:#172a52}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr.is-nouveau{animation-name:gs-ligne-sombre}
+@keyframes gs-ligne-sombre{from{background-color:rgba(244,96,13,.28)}}
 [data-apparence="sombre"] .gs-admin-body .gs-cellule-sous{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-admin-vide{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-dialogue{background-color:#0e1830}

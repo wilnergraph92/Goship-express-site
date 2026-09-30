@@ -7,6 +7,16 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.30.1 — tableau de bord sombre : les clients avec des colis en cours sont lisibles
+
+Aucune migration. En apparence sombre, les lignes de l'onglet Clients qui ont des colis en
+cours (`is-actif-client`) gardaient leur fond clair (#fcfdff) sous le texte clair du mode
+sombre : nom, code, téléphone illisibles (contraste 1,15:1). Elles ont maintenant leur
+contrepartie sombre dans `tableau.css`, comme le flash d'une ligne nouvelle (`is-nouveau`).
+Vérifié dans un navigateur, en mode démo sombre : aucune cellule de tableau sous 3:1 dans
+Vue générale, Colis, Clients, Factures et Équipe (42 avant la correction, toutes dans Clients).
+L'application de bureau charge le site : elle est corrigée en même temps.
+
 ## site-2026.09.29.3 — un compte supprimé depuis l'application peut être effacé dans Supabase
 
 Migration passée le 29/09/2026 par le propriétaire : `outils/supabase-compte.sql` relancé,
