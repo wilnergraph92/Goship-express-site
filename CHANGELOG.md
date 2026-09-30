@@ -7,6 +7,15 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.30.3 — image de l'accueil de l'application à jour
+
+Aucune migration. Sur la page d'accueil du site (section « Vos colis dans votre poche »),
+le téléphone du milieu (`assets/img/app-ecran-accueil.webp`, dessiné par
+`outils/ecrans-app/ecrans.py`) montre l'accueil de l'application tel qu'il est depuis
+goship-express-app#13 : plus de bande bleue « Annoncer un achat », et une ligne
+« Suivi vendeur » (numéro du magasin) sur chaque carte de colis. Les deux autres
+téléphones ne changent pas.
+
 ## site-2026.09.30.2 — tableau de bord sombre : cases à cocher et « En direct » lisibles
 
 Aucune migration. En apparence sombre, les cases à cocher (`.gs-case` : « Fixer le prix à

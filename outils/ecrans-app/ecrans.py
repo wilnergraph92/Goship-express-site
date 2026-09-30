@@ -375,27 +375,25 @@ def ecran_accueil():
     ecrire(d, (LARGEUR - 18 - largeur_texte(d, t, police('gras', 13)), y + 4), t, police('gras', 13), ACCENT)
 
     y += 22 + 11
-    colis = [('GSE-1042-HT', 'Baskets et sac à dos', 'Amazon · 6,4 lb · Aérien', 'Succursale', 'succursale'),
-             ('GSE-1039-HT', 'Téléphone reconditionné', 'eBay · 1,2 lb · Aérien', 'Embarqué', 'embarque')]
-    for numero, quoi, details, libelle, statut in colis:
-        carte(im, (18, y, LARGEUR - 18, y + 111), 20)
+    # Chaque carte montre le numéro de suivi du vendeur (components/colis.jsx) ;
+    # l'accueil n'a plus la bande « Annoncer un achat » : le « + » orange y mène.
+    colis = [('GSE-1042-HT', 'Baskets et sac à dos', 'Amazon · 6,4 lb · Aérien', 'TBA304817529000',
+              'Succursale', 'succursale'),
+             ('GSE-1039-HT', 'Téléphone reconditionné', 'eBay · 1,2 lb · Aérien', '1Z9A2E750312345678',
+              'Embarqué', 'embarque')]
+    for numero, quoi, details, suivi, libelle, statut in colis:
+        carte(im, (18, y, LARGEUR - 18, y + 129), 20)
         d = ImageDraw.Draw(im)
         ecrire(d, (33, y + 16), numero, police('mono', 13), TEXTE, 0.4)
         l = largeur_texte(d, libelle, police('gras', 11.5)) + 22
         pastille(d, LARGEUR - 33 - l, y + 13, libelle, statut)
         ecrire(d, (33, y + 40), quoi, police('gras', 14.5), TEXTE)
         ecrire(d, (33, y + 62), details, police('corps', 12.5), DOUX)
-        frise(d, 33, y + 88, LARGEUR - 66, statut)
-        y += 111 + 11
-
-    # Bande « Annoncer un achat »
-    rect(d, (18, y, LARGEUR - 18, y + 66), 20, NUIT)
-    rect_voile(im, (32, y + 14, 70, y + 52), 13, (244, 96, 13, 51))
-    icone(d, 51, y + 33, 'bell', '#ff8b45', 9.5)
-    ecrire(d, (82, y + 16), 'Annoncer un achat', police('gras', 14), '#ffffff')
-    ecrire(d, (82, y + 37), 'Pré-alerte : votre colis est traité plus vite',
-           police('corps', 12.5), SUR_NUIT)
-    icone(d, LARGEUR - 34, y + 33, 'chevron-right', '#ffffff', 10)
+        t = 'Suivi vendeur : '
+        ecrire(d, (33, y + 81), t, police('corps', 12), DOUX)
+        ecrire(d, (33 + largeur_texte(d, t, police('corps', 12)), y + 81), suivi, police('mono', 12), TEXTE)
+        frise(d, 33, y + 106, LARGEUR - 66, statut)
+        y += 129 + 11
 
     barre_onglets(im, 'index')
     return im
