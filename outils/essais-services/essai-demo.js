@@ -110,8 +110,9 @@ function code(promesse) {
   verifier('statut initial « Reçu », même si la page envoie « Livré »', c.statut, 'recu');
   verifier('tarif de la maison : 5 $/lb', c.tarif_lb_usd, 5);
   verifier('prix calculé (4,2 × 5), pas celui envoyé', c.prix_usd, 21);
-  verifier('facture créée avec lui : prix + 10 $',
-           [r.facture.montant_usd, r.facture.frais_service_usd, r.facture.facture_lignes[0].montant_usd], [31, 10, 21]);
+  // Sans frais de service à l'enregistrement (supabase-frais-service.sql)
+  verifier('facture créée avec lui : son prix, sans frais',
+           [r.facture.montant_usd, r.facture.frais_service_usd, r.facture.facture_lignes[0].montant_usd], [21, 0, 21]);
   verifier('un seul événement d\'historique', (await A.historique(c.id)).length, 1);
 
   console.log('\n2. Requête répétée');
@@ -197,8 +198,8 @@ function code(promesse) {
   // Le tableau de bord facture chaque colis à son enregistrement : on annule
   // ces deux factures-là pour regrouper les colis sur une seule.
   for (var k of [a, b]) await A.annulerFacture((await A.factureDuColis(k)).id, 'Regroupées sur une seule');
-  var fa = (await A.creerFacture({ client_id: marie, montant_usd: 1 }, [a, b], 'fac-1')).facture;
-  verifier('deux colis : prix + 10 $ une fois', [fa.montant_usd, fa.frais_service_usd, fa.facture_lignes.length], [52, 10, 2]);
+  var fa = (await A.creerFacture({ client_id: marie, montant_usd: 1, frais_service: true }, [a, b], 'fac-1')).facture;
+  verifier('deux colis, frais demandés : prix + 10 $ une fois', [fa.montant_usd, fa.frais_service_usd, fa.facture_lignes.length], [52, 10, 2]);
   verifier('même clé : même facture', (await A.creerFacture({ client_id: marie }, [a, b], 'fac-1')).facture.id, fa.id);
   var j = (await A.creerColis(avec({ client_id: jean, description: 'Colis de Jean' }))).colis.id;
   verifier('colis d\'un autre client', await code(A.creerFacture({ client_id: marie }, [j])), 'INVOICE_CLIENT_MISMATCH');
@@ -218,13 +219,13 @@ function code(promesse) {
   var rf = await A.creerColis(avec({ description: 'Forfait', prix_fixe_usd: '35,5', tarif_lb_usd: 8, prix_usd: 1 }));
   var cf = rf.colis;
   verifier('prix fixé : pris tel quel, sans tarif à la livre', [cf.prix_usd, cf.prix_fixe_usd, cf.tarif_lb_usd], [35.5, 35.5, null]);
-  verifier('facture : ce prix + 10 $, pas de « $/lb » sur la ligne',
+  verifier('facture : ce prix (sans frais), pas de « $/lb » sur la ligne',
            [rf.facture.montant_usd, rf.facture.facture_lignes[0].montant_usd, rf.facture.facture_lignes[0].tarif_lb_usd],
-           [45.5, 35.5, null]);
+           [35.5, 35.5, null]);
   verifier('poids changé : le prix fixé ne bouge pas', (await A.modifierColis(cf.id, { poids_lb: 9 })).prix_usd, 35.5);
   m = await A.modifierColis(cf.id, { prix_fixe_usd: 40 });
-  verifier('prix fixé corrigé ; la facture émise garde 45,50',
-           [m.prix_usd, (await A.factureDuColis(cf.id)).montant_usd], [40, 45.5]);
+  verifier('prix fixé corrigé ; la facture émise garde 35,50',
+           [m.prix_usd, (await A.factureDuColis(cf.id)).montant_usd], [40, 35.5]);
   m = await A.modifierColis(cf.id, { prix_fixe_usd: null });
   verifier('revenir au prix calculé (9 × 5)', [m.prix_usd, m.prix_fixe_usd, m.tarif_lb_usd], [45, null, 5]);
   m = await A.modifierColis(cf.id, { prix_fixe_usd: 0 });

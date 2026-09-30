@@ -56,7 +56,9 @@
   var CHAMPS_FACTURE = ['montant_usd', 'note', 'lien_paiement', 'echeance_le'];
   // Une nouvelle facture : le client, et ce que la base ne peut pas deviner.
   // Le montant n'est retenu que pour une facture sans colis.
-  var CHAMPS_NOUVELLE_FACTURE = ['montant_usd', 'montant_paye_usd', 'echeance_le', 'lien_paiement', 'note'];
+  // frais_service : true pour que la facture de colis reçoive les frais de service
+  // (supabase-frais-service.sql) ; sans lui, elle n'en a pas.
+  var CHAMPS_NOUVELLE_FACTURE = ['montant_usd', 'montant_paye_usd', 'echeance_le', 'lien_paiement', 'note', 'frais_service'];
   // Un paiement : ce que la page saisit. Le client, l'auteur et la date
   // d'enregistrement sont ceux de la base.
   var CHAMPS_PAIEMENT = ['montant_usd', 'moyen', 'reference', 'paye_le', 'note'];
@@ -379,6 +381,20 @@
       balance: soldeDe(f),
       etat: etatFacture(f)
     };
+  }
+
+  // Les montants d'une facture si on lui ajoute les frais de service (« Encaisser →
+  // Oui »), pour les montrer AVANT de confirmer : c'est la base qui les ajoutera
+  // (encaisser_facture). Des frais déjà appliqués ne s'ajoutent pas : on rend les
+  // montants tels quels.
+  function totauxAvecFrais(facture) {
+    var f = facture || {};
+    if (arrondi(f.frais_service_usd) > 0) return totauxFacture(f);
+    var paye = payeDe(f);
+    var montant = arrondi((Number(f.montant_usd) || 0) + FRAIS_SERVICE);
+    return totauxFacture({ frais_service_usd: FRAIS_SERVICE, montant_usd: montant, paye_usd: paye,
+                           solde_usd: arrondi(Math.max(montant - paye, 0)),
+                           etat_paiement: montant - paye > 0 ? (paye > 0 ? 'partielle' : 'a_payer') : 'payee' });
   }
 
   // Les paiements d'une facture, dans l'ordre où ils ont été reçus
@@ -1070,10 +1086,50 @@
       },
 
       // Ce que la base facturerait pour ces colis, sans rien créer :
-      // { lignes, sous_total, frais_service, total }
+      // { lignes, sous_total, frais_service, total }. frais_service est celui de la
+      // maison ; total le compte. Sans les frais, la facture vaudrait sous_total.
       calculerFacture: function (colisIds) {
         return sb().then(function (c) { return c.rpc('calculer_facture', { p_colis: colisIds || [] }); })
           .then(resultat);
+      },
+
+      /* ---- Frais de service (outils/supabase-frais-service.sql) ---------- */
+
+      // Réunir des factures et des colis d'un même client en une facture ; frais :
+      // elle reçoit les frais de service (une fois) ou non. Un colis déjà sur une
+      // facture regroupable la fait entrer entière. Réponse : { facture, annulees, deja }.
+      regrouper: function (factureIds, colisIds, frais, cle) {
+        return sb().then(function (c) {
+          return c.rpc('regrouper', { p_factures: factureIds || [], p_colis: colisIds || [], p_frais: !!frais,
+                                      p_cle: cle || null });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Les colis d'un client qu'on peut ajouter à un regroupement (sans facture, ou
+      // sur une facture regroupable), sauf « exclure ». Au plus 50.
+      colisARegrouper: function (clientId, recherche, exclure) {
+        return sb().then(function (c) {
+          return c.rpc('colis_a_regrouper', { p_client: clientId, p_recherche: recherche || '',
+                                              p_exclure: exclure || [] });
+        }).then(resultat);
+      },
+
+      // Ajouter (appliquer = true) ou retirer les frais d'une facture à payer.
+      // Déjà dans l'état demandé : rien ne change. Réponse : { facture, deja }.
+      changerFraisService: function (id, appliquer) {
+        return sb().then(function (c) {
+          return c.rpc('changer_frais_service', { p_facture: id, p_appliquer: !!appliquer });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // « Encaisser » : les frais (oui / non) et le paiement, dans la même
+      // transaction. Des frais déjà appliqués ne s'ajoutent jamais une seconde fois.
+      // Réponse : { paiement, facture, deja, frais_ajoutes }.
+      encaisserFacture: function (id, d, frais, cle) {
+        return sb().then(function (c) {
+          return c.rpc('encaisser_facture', { p_facture: id, p_paiement: choisir(d || {}, CHAMPS_PAIEMENT),
+                                              p_frais: !!frais, p_cle: cle || null });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
       },
 
       // Les chiffres du haut de l'onglet Factures
@@ -1926,16 +1982,130 @@
     return null;
   }
 
-  // facturer_colis : sa facture, ou celle qu'il a déjà
+  // facturer_colis : sa facture, ou celle qu'il a déjà. Sans frais de service
+  // (supabase-frais-service.sql) : ils viennent au regroupement ou à l'encaissement.
   function facturerColisDemo(d, moi, c) {
     if (!c.client_id) throw Erreur('CLIENT_NOT_FOUND', 'Ce colis n’a plus de client : impossible de le facturer.');
     var existante = factureActiveDu(d, c.id);
     if (existante) return { facture: factureComplete(d, existante), deja: true };
-    var prix = prixColis(c);
-    var f = nouvelleFacture(d, moi, {
-      client_id: c.client_id, montant_usd: arrondi(prix + FRAIS_SERVICE), frais_service_usd: FRAIS_SERVICE
-    }, [c]);
+    var f = nouvelleFacture(d, moi, { client_id: c.client_id, montant_usd: prixColis(c), frais_service_usd: 0 }, [c]);
     return { facture: factureComplete(d, f), deja: false };
+  }
+
+  // frais_service_interne : appliquer ou retirer les frais d'une facture, jamais deux fois
+  function fraisServiceDemo(d, moi, f, appliquer) {
+    if (typeof appliquer !== 'boolean') {
+      throw Erreur('INVALID_INPUT', 'Indiquez s’il faut ajouter ou retirer les frais de service.');
+    }
+    if ((appliquer && f.frais_service_usd > 0) || (!appliquer && !(f.frais_service_usd > 0))) {
+      return { facture: factureComplete(d, f), deja: true };
+    }
+    if (f.statut === 'annulee') {
+      throw Erreur('INVOICE_CANCELLED', 'La facture ' + f.numero + ' est annulée : ses frais de service ne changent plus.');
+    }
+    if (f.statut === 'payee') {
+      throw Erreur('INVOICE_ALREADY_PAID', 'La facture ' + f.numero +
+                   ' est déjà entièrement payée : ses frais de service ne changent plus.');
+    }
+    var avant = { numero: f.numero, frais_service_usd: f.frais_service_usd, montant_usd: f.montant_usd };
+    var frais = appliquer ? FRAIS_SERVICE : 0;
+    var nouveau = arrondi(appliquer ? f.montant_usd + FRAIS_SERVICE : f.montant_usd - f.frais_service_usd);
+    var paye = payeDe({ paiements: f.paiements || [] });
+    if (!appliquer && nouveau < paye) {
+      throw Erreur('INVALID_AMOUNT', 'La facture ' + f.numero + ' a déjà reçu ' + montantTexte(paye) +
+                   ' $ : sans les frais, son total serait inférieur à ce qui est payé.');
+    }
+    f.frais_service_usd = frais;
+    f.montant_usd = nouveau;
+    recalculerFactureDemo(d, f);
+    journaliser(d, moi, appliquer ? 'facture.frais_appliques' : 'facture.frais_retires', 'facture', f.id, avant,
+                { frais_service_usd: frais, montant_usd: nouveau });
+    return { facture: factureComplete(d, f), deja: false };
+  }
+
+  // regrouper : des factures et des colis d'un client, avec ou sans frais (mêmes
+  // refus, même ordre que la base)
+  function regrouperDemo(d, moi, factureIds, colisIds, frais, cle) {
+    if (typeof frais !== 'boolean') throw Erreur('INVALID_INPUT', 'Indiquez si la facture reçoit les frais de service.');
+    if (cle) {
+      var existante = (d.factures || []).filter(function (f) { return f.cle_idempotence === cle; })[0];
+      if (existante) {
+        return {
+          facture: factureComplete(d, existante),
+          annulees: (d.factures || []).filter(function (f) { return f.remplacee_par === existante.id; })
+            .map(function (f) { return f.numero; }).sort(),
+          deja: true
+        };
+      }
+    }
+    var uniques = function (t) { return (t || []).filter(function (i, k, a) { return i && a.indexOf(i) === k; }).sort(); };
+    var fids = uniques(factureIds);
+    var choisies = fids.map(function (i) { return (d.factures || []).filter(function (f) { return f.id === i; })[0]; });
+    if (choisies.some(function (f) { return !f; })) throw Erreur('INVOICE_NOT_FOUND', 'Une des factures choisies n’existe plus.');
+    var cids = uniques(colisIds);
+    if (cids.length > 200) throw Erreur('INVALID_INPUT', 'Au plus 200 colis par facture.');
+    var libres = [];
+    cids.forEach(function (i) {
+      var c = trouverColisDemo(d, i);
+      if (!c) return;
+      var fa = factureActiveDu(d, c.id);
+      if (!fa) { libres.push(c); return; }
+      if (fids.indexOf(fa.id) >= 0) return;
+      if (fa.statut !== 'a_payer' || paiementsValides(fa).length) {
+        throw Erreur('INVOICE_ALREADY_EXISTS', 'Le colis ' + c.numero + ' est sur la facture ' + fa.numero +
+                     (fa.statut === 'payee' ? ', déjà payée' : ', qui a déjà reçu un paiement') + ' : il ne peut pas être ajouté.');
+      }
+      fids.push(fa.id);
+      choisies.push(fa);
+    });
+    if (cids.some(function (i) { return !trouverColisDemo(d, i); })) {
+      throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
+    }
+    if (choisies.length + libres.length < 2) {
+      throw Erreur('INVALID_INPUT', 'Choisissez au moins deux factures, ou une facture et un colis à ajouter.');
+    }
+    if (choisies.length > 50) throw Erreur('INVALID_INPUT', 'Au plus 50 factures par regroupement.');
+    choisies.sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    var client = null, colis = [], echeance = null, numeros = [];
+    choisies.forEach(function (f) {
+      if (client === null) client = f.client_id;
+      else if (f.client_id !== client) {
+        throw Erreur('INVOICE_CLIENT_MISMATCH',
+                     'Les factures choisies appartiennent à plusieurs clients : on ne regroupe que celles d’un seul.');
+      }
+      var refus = refusRegroupement(f);
+      if (refus) throw refus;
+      (f.facture_lignes || []).forEach(function (l) { colis.push(trouverColisDemo(d, l.colis_id)); });
+      if (f.echeance_le && (!echeance || f.echeance_le < echeance)) echeance = f.echeance_le;
+      numeros.push(f.numero);
+    });
+    libres.forEach(function (c) {
+      if (client === null) client = c.client_id;
+      else if (c.client_id !== client) {
+        throw Erreur('INVOICE_CLIENT_MISMATCH', 'Le colis ' + c.numero +
+                     ' appartient à un autre client : une facture n’en regroupe qu’un seul.');
+      }
+    });
+    if (!client) throw Erreur('CLIENT_NOT_FOUND', 'Ce colis n’a plus de client : impossible de le facturer.');
+    if (colis.some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
+    colis = colis.concat(libres).filter(function (c, k, t) { return t.indexOf(c) === k; });
+    if (numeros.length) {
+      var motif = 'Regroupement des factures ' + numeros.join(', ');
+      choisies.forEach(function (f) {
+        Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
+        noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+      });
+    }
+    var fs = frais ? FRAIS_SERVICE : 0;
+    var n = nouvelleFacture(d, moi, {
+      client_id: client, montant_usd: arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0) + fs),
+      frais_service_usd: fs, echeance_le: echeance, cle_idempotence: cle || null
+    }, colis.sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); }));
+    choisies.forEach(function (f) { f.remplacee_par = n.id; });
+    journaliser(d, moi, 'facture.regroupement', 'facture', n.id,
+                { factures: numeros, colis_ajoutes: libres.map(function (c) { return c.numero; }).sort() },
+                { numero: n.numero, montant_usd: n.montant_usd, frais_service_usd: n.frais_service_usd });
+    return { facture: factureComplete(d, n), annulees: numeros, deja: false };
   }
 
   function contient(valeurs, texte) {
@@ -3876,7 +4046,8 @@
                 throw Erreur('INVOICE_ALREADY_EXISTS', 'Le colis ' + c.numero + ' est déjà sur la facture ' + autre.numero + '.');
               }
             });
-            frais = FRAIS_SERVICE;
+            // Les frais seulement si on les demande (supabase-frais-service.sql)
+            frais = champs.frais_service === true ? FRAIS_SERVICE : 0;
             montant = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0) + frais);
           } else {
             montant = lireNombre(champs.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
@@ -4033,57 +4204,108 @@
         } catch (e) { return rejeter(e); }
       },
 
+      // L'ancien chemin : le même regroupement, frais une fois
       regrouperFactures: function (ids, cle) {
         var d = lireDonnees();
         try {
           var moi = exiger(d, 'invoices.create');
           exiger(d, 'invoices.cancel');
-          if (cle) {
-            var existante = (d.factures || []).filter(function (f) { return f.cle_idempotence === cle; })[0];
-            if (existante) {
-              return plusTard({
-                facture: factureComplete(d, existante),
-                annulees: (d.factures || []).filter(function (f) { return f.remplacee_par === existante.id; })
-                  .map(function (f) { return f.numero; }).sort(),
-                deja: true
-              });
-            }
-          }
-          var uniques = (ids || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; }).sort();
-          if (uniques.length < 2) throw Erreur('INVALID_INPUT', 'Choisissez au moins deux factures à regrouper.');
-          if (uniques.length > 50) throw Erreur('INVALID_INPUT', 'Au plus 50 factures par regroupement.');
-          var choisies = uniques.map(function (i) { return (d.factures || []).filter(function (f) { return f.id === i; })[0]; });
-          if (choisies.some(function (f) { return !f; })) {
-            throw Erreur('INVOICE_NOT_FOUND', 'Une des factures choisies n’existe plus.');
-          }
-          var client = choisies[0].client_id, colis = [], echeance = null, numeros = [];
-          choisies.forEach(function (f) {
-            if (f.client_id !== client) {
-              throw Erreur('INVOICE_CLIENT_MISMATCH',
-                           'Les factures choisies appartiennent à plusieurs clients : on ne regroupe que celles d’un seul.');
-            }
-            var refus = refusRegroupement(f);
-            if (refus) throw refus;
-            (f.facture_lignes || []).forEach(function (l) { colis.push(trouverColisDemo(d, l.colis_id)); });
-            if (f.echeance_le && (!echeance || f.echeance_le < echeance)) echeance = f.echeance_le;
-            numeros.push(f.numero);
+          if ((ids || []).length < 2) throw Erreur('INVALID_INPUT', 'Choisissez au moins deux factures à regrouper.');
+          var r = regrouperDemo(d, moi, ids, [], true, cle);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      regrouper: function (factureIds, colisIds, frais, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          exiger(d, 'invoices.cancel');
+          var r = regrouperDemo(d, moi, factureIds, colisIds, frais, cle);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // colis_a_regrouper : sans facture active, ou sur une facture regroupable
+      colisARegrouper: function (clientId, recherche, exclure) {
+        var d = lireDonnees();
+        try {
+          exiger(d, 'invoices.create');
+          exiger(d, 'shipments.view');
+          var texte = String(recherche || '').trim().toLowerCase();
+          var hors = exclure || [];
+          var liste = (d.colis || []).filter(function (c) {
+            return c.client_id === clientId && hors.indexOf(c.id) < 0;
+          }).map(function (c) {
+            return { c: c, f: factureActiveDu(d, c.id) };
+          }).filter(function (x) {
+            return !x.f || !refusRegroupement(x.f);
+          }).filter(function (x) {
+            return !texte || contient([x.c.numero, x.c.description, x.c.expediteur, x.c.suivi_transporteur,
+                                       x.c.destination, x.f && x.f.numero], texte);
+          }).sort(function (a, b) {
+            return new Date(b.c.recu_le) - new Date(a.c.recu_le) || (a.c.id < b.c.id ? -1 : 1);
+          }).slice(0, 50);
+          return plusTard(liste.map(function (x) {
+            return {
+              colis_id: x.c.id, numero: x.c.numero, description: x.c.description, expediteur: x.c.expediteur,
+              suivi_transporteur: x.c.suivi_transporteur, destination: x.c.destination, poids_lb: x.c.poids_lb,
+              prix_usd: prixColis(x.c), statut: x.c.statut, recu_le: x.c.recu_le,
+              facture: x.f ? { id: x.f.id, numero: x.f.numero, montant_usd: x.f.montant_usd,
+                               frais_service_usd: x.f.frais_service_usd, nb_colis: (x.f.facture_lignes || []).length } : null
+            };
+          }));
+        } catch (e) { return rejeter(e); }
+      },
+
+      changerFraisService: function (id, appliquer) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.edit');
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          var r = fraisServiceDemo(d, moi, f, !!appliquer);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // encaisser_facture : les frais (oui / non) puis le paiement ; si le paiement
+      // est refusé, les frais ne restent pas ajoutés (rien n'est écrit)
+      encaisserFacture: function (id, v, frais, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'payments.create');
+          var dejaPaye = cle && (d.factures || []).some(function (f) {
+            return (f.paiements || []).some(function (p) { return p.cle_idempotence === cle; });
           });
-          if (colis.some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
-          var motif = 'Regroupement des factures ' + numeros.join(', ');
-          choisies.forEach(function (f) {
-            Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
-            noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
-          });
-          var montant = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0) + FRAIS_SERVICE);
-          var n = nouvelleFacture(d, moi, {
-            client_id: client, montant_usd: montant, frais_service_usd: FRAIS_SERVICE, echeance_le: echeance,
-            cle_idempotence: cle || null
-          }, colis.sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); }));
-          choisies.forEach(function (f) { f.remplacee_par = n.id; });
-          journaliser(d, moi, 'facture.regroupement', 'facture', n.id, { factures: numeros },
-                      { numero: n.numero, montant_usd: n.montant_usd });
+          if (dejaPaye) {
+            return demoAPI.admin.enregistrerPaiement(id, v, cle).then(function (r) {
+              return Object.assign(r, { frais_ajoutes: false });
+            });
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          var ajoutes = false;
+          if (frais) {
+            exiger(d, 'invoices.edit');
+            if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+            ajoutes = !fraisServiceDemo(d, moi, f, true).deja;
+          }
+          v = v || {};
+          var montant = lireNombre(v.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+          if (montant == null || montant <= 0) {
+            throw Erreur('INVALID_AMOUNT', 'Le montant du paiement doit être supérieur à zéro.');
+          }
+          if (v.paye_le && isNaN(new Date(v.paye_le).getTime())) {
+            throw Erreur('INVALID_DATE', 'Date du paiement illisible.');
+          }
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          var p = ajouterPaiementDemo(d, moi, f, Object.assign({}, v, { montant_usd: montant }), 'saisie', cle);
           ecrireDonnees(d, 'factures');
-          return plusTard({ facture: factureComplete(d, n), annulees: numeros, deja: false });
+          return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: false,
+                            frais_ajoutes: ajoutes });
         } catch (e) { return rejeter(e); }
       },
 
@@ -4133,15 +4355,18 @@
           var motif = 'Sortie du regroupement : ' + numeros;
           Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
           noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
-          var nouvelle = function (colis, c) {
+          // Les frais restent sur la facture qui garde le regroupement, s'il en avait ;
+          // celle des colis sortis naît sans (supabase-frais-service.sql)
+          var nouvelle = function (colis, c, avecFrais) {
+            var fs = avecFrais ? FRAIS_SERVICE : 0;
             return nouvelleFacture(d, moi, {
-              client_id: f.client_id, montant_usd: arrondi(colis.reduce(function (s, x) { return s + prixColis(x); }, 0) + FRAIS_SERVICE),
-              frais_service_usd: FRAIS_SERVICE, echeance_le: f.echeance_le, note: f.note,
+              client_id: f.client_id, montant_usd: arrondi(colis.reduce(function (s, x) { return s + prixColis(x); }, 0) + fs),
+              frais_service_usd: fs, echeance_le: f.echeance_le, note: f.note,
               cle_idempotence: c || null
             }, colis);
           };
-          var s = nouvelle(colisDe(sortis), cle);
-          var r = nouvelle(colisDe(reste), cle ? cle + ':reste' : null);
+          var s = nouvelle(colisDe(sortis), cle, false);
+          var r = nouvelle(colisDe(reste), cle ? cle + ':reste' : null, f.frais_service_usd > 0);
           f.remplacee_par = r.id;
           journaliser(d, moi, 'facture.sortie_regroupement', 'facture', f.id,
                       { numero: f.numero, montant_usd: f.montant_usd },
@@ -4250,7 +4475,8 @@
             signaler('paiement_sur_facture_annulee', 'attention', f, montantTexte(paye) +
                      ' $ encaissés sur une facture annulée : à rembourser ou à reporter.');
           }
-          if (f.statut !== 'annulee' && avecColis && !f.frais_service_usd && f.cree_le >= '2026-09-22T04:00:00.000Z') {
+          if (f.statut !== 'annulee' && avecColis && !f.frais_service_usd && f.cree_le >= '2026-09-22T04:00:00.000Z' &&
+              f.cree_le < '2026-09-30T04:00:00.000Z') {
             signaler('frais_absents', 'info', f, 'Facture de colis sans frais de service.');
           }
         });
@@ -4838,7 +5064,7 @@
   api.outils = {
     texte: texte, date: date, nombre: nombre, argent: argent, etapeDe: etapeDe,
     remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier,
-    prixColis: prixColis, totauxFacture: totauxFacture, tarifDe: tarifDe, arrondi: arrondi,
+    prixColis: prixColis, totauxFacture: totauxFacture, totauxAvecFrais: totauxAvecFrais, tarifDe: tarifDe, arrondi: arrondi,
     etatFacture: etatFacture, soldeDe: soldeDe, payeDe: payeDe,
     // Les jours d'une période de rapport (aperçu du formulaire) : la base refait le
     // calcul (rapport_bornes) et c'est le sien qui compte

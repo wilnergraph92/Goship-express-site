@@ -7,6 +7,30 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.30.5 — frais de service au regroupement et à l'encaissement
+
+**Migration : `outils/supabase-frais-service.sql`** (la 17e de la chaîne), à exécuter
+AVANT de publier le site. Contrôle attendu : `4 | false | 0`. Aucune donnée existante
+ne change : une facture déjà émise garde ses frais, qu'elle en ait ou non.
+
+- Enregistrer un colis ne met plus de frais de service sur sa facture (0 $) ; « Nouvelle
+  facture » non plus.
+- Regrouper : case « Appliquer le frais de service à la nouvelle facture » (cochée),
+  ligne à part, une fois ; bouton « + Ajouter un colis » (recherche par numéro, contenu,
+  magasin, suivi du vendeur, destination, facture ; seuls les colis que la base accepte ;
+  jamais deux fois le même). Une facture émise ne reçoit toujours pas de colis :
+  l'ajouter, c'est la regrouper avec lui (annulée, remplacée, renvoi).
+- Encaisser : « Ajouter le frais de service ? Oui / Non » avant de confirmer, montants
+  recalculés à l'écran ; frais déjà appliqués : « déjà inclus », jamais une seconde fois
+  (la base y veille : `encaisser_facture`, frais et paiement dans la même transaction).
+- Fiche d'une facture à payer : « Ajouter / Retirer le frais de service ».
+- Sortir des colis d'un regroupement : les frais restent sur la facture qui garde le
+  regroupement, celle des colis sortis n'en a pas.
+- Rapport d'anomalies : une facture sans frais n'est plus signalée (sauf du 22 au 29/09).
+- Essais : `essai-frais.py` (72), `essai-frais.js` (46), navigateur (30) ; bancs mis à
+  jour pour la nouvelle règle (`essai-demo.js`, `essai-finances.js`,
+  `essai-permissions.js`, `essai-rapports.py`, `essai-metier.sql`).
+
 ## site-2026.09.30.4 — réseaux sociaux : vraies pages et vrais logos
 
 Aucune migration. Le pied de page de toutes les pages (fr, en, es, ht) montre les logos

@@ -75,7 +75,7 @@ jobs:
       - run: pip install pgserver==0.1.4
       - name: Le mode démonstration (api.js), hors navigateur
         run: |
-          for f in demo scanner finances permissions tableau analytics rapports; do
+          for f in demo scanner finances permissions tableau analytics rapports frais; do
             echo "== essai-$f.js"; node "outils/essais-services/essai-$f.js"
           done
       - name: E-mails et factures client (outils/essais-sql)

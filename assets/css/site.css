@@ -755,6 +755,22 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-regroupement__ligne{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
 .gs-regroupement__gestes{display:flex;align-items:center;gap:6px}
 .gs-regroupement__retirees{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:10px 0 0;font-size:14px;color:#5b6782}
+/* Frais de service : colis ajoutés au regroupement, choix Oui / Non à l'encaissement */
+.gs-regroupement__ajout{margin-top:10px}
+.gs-regroupement__carte--ajout{border-style:dashed}
+.gs-frais-regroupement{margin-top:14px}
+.gs-frais-regroupement+.gs-champ__aide{margin:6px 0 0}
+.gs-frais-choix{margin:0 0 14px;padding:14px 16px;border:1px solid #f4c9a8;border-radius:14px;background:#fff7f0}
+.gs-frais-choix legend{float:left;width:100%;margin:0 0 10px;padding:0;font-size:15.5px;font-weight:800;color:var(--ink)}
+.gs-frais-choix__boutons{clear:both;display:flex;gap:10px}
+.gs-frais-choix__option{position:relative;flex:1}
+.gs-frais-choix__option input{position:absolute;opacity:0;pointer-events:none}
+.gs-frais-choix__option span{display:block;padding:11px 14px;border:1.5px solid #d6ddec;border-radius:12px;background:#fff;text-align:center;font-size:15px;font-weight:800;color:var(--ink);cursor:pointer}
+.gs-frais-choix__option:hover span{border-color:#aab6cc}
+.gs-frais-choix__option input:checked+span{border-color:var(--ink);background:var(--ink);color:#fff}
+.gs-frais-choix__option input:focus-visible+span{outline:2px solid var(--accent2);outline-offset:2px}
+.gs-frais-choix .gs-champ__aide{margin:10px 0 0}
+.gs-frais-inclus{margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#ecfdf3;font-size:14px;font-weight:700;color:#166534}
 @media (max-width:520px){
   .gs-regroupement__ligne{grid-template-columns:minmax(0,1fr)}
   .gs-regroupement__gestes{justify-content:flex-end}
