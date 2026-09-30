@@ -83,6 +83,7 @@
     [/^par rapport au (.+)$/, ['vs. $1', 'respecto al $1', 'konpare ak $1']],
     [/^(\d+) j ou plus$/, ['$1 d or more', '$1 d o más', '$1 j oswa plis']],
     [/^Rapide : (.+) à chaque scan$/, ['Fast: {1} on each scan', 'Rápido: {1} en cada escaneo', 'Rapid : {1} nan chak eskan']],
+    [/^Indiquez le poids : le prix se calcule tout seul, à (.+) la livre\.$/, ['Enter the weight: the price is calculated automatically, at $1 per pound.', 'Indique el peso: el precio se calcula solo, a $1 la libra.', 'Mete pwa a : pri a kalkile poukont li, a $1 pa liv.']],
     [/^Prix fixé à la main : (.+) · une facture déjà émise ne change pas\.$/, ['Price set manually: $1 · an invoice already issued does not change.', 'Precio fijado a mano: $1 · una factura ya emitida no cambia.', 'Pri fikse alamen : $1 · yon fakti ki deja soti pa chanje.']],
     [/^Prix fixé à la main : (.+) · frais de service (.+) ajoutés sur la facture\.$/, ['Price set manually: $1 · $2 service fee added to the invoice.', 'Precio fijado a mano: $1 · cargo por servicio de $2 añadido a la factura.', 'Pri fikse alamen : $1 · frè sèvis $2 ajoute sou fakti a.']],
     [/^(.+) : (.+), contre aucun sur la période précédente\.$/, ['{1}: $2, versus none in the previous period.', '{1}: $2, frente a ninguno en el período anterior.', '{1} : $2, kont zewo nan peryòd anvan an.']],
@@ -228,7 +229,9 @@
   }
 
   function attributs(e) {
-    if (ignore(e)) return;
+    // Ce qu'on tape dans un <textarea> reste tel quel, mais son placeholder (« Visible par
+    // le client dans son espace ») est un texte de la page, à traduire comme les autres
+    if (e.tagName === 'TEXTAREA' ? ignore(e.parentElement) : ignore(e)) return;
     var memo = ATTRS.get(e);
     ATTRIBUTS.forEach(function (a) {
       if (!e.hasAttribute(a)) return;

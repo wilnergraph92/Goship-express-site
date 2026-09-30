@@ -465,6 +465,7 @@ window.GoshipTextesTableau = {
   "Indicateur": ["Indicator", "Indicador", "Endikatè"],
   "Indicateurs de qualité": ["Quality indicators", "Indicadores de calidad", "Endikatè kalite"],
   "Indiquez le motif.": ["Enter the reason.", "Indique el motivo.", "Endike rezon an."],
+  "Indiquez le poids du colis, en livres (ex. 4,5).": ["Enter the package weight, in pounds (e.g. 4.5).", "Indique el peso del paquete, en libras (ej. 4,5).", "Mete pwa koli a, an liv (egz. 4,5)."],
   "Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».": ["Enter the package price, in dollars (from 0 to 100,000), or uncheck “Set the price manually”.", "Indique el precio del paquete, en dólares (de 0 a 100 000), o desmarque «Fijar el precio a mano».", "Antre pri koli a, an dola (ant 0 ak 100 000), oswa retire tchèk « Fikse pri a alamen »."],
   "Indiquez l’agence où le client peut retirer son colis.": ["Enter the branch where the customer can pick up the package.", "Indique la agencia donde el cliente puede retirar su paquete.", "Endike ajans kote kliyan an ka vin chèche koli li."],
   "Informations générales": ["General information", "Información general", "Enfòmasyon jeneral"],

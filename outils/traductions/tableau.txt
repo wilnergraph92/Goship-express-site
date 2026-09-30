@@ -465,6 +465,7 @@ Inactifs
 Indicateur
 Indicateurs de qualité
 Indiquez le motif.
+Indiquez le poids du colis, en livres (ex. 4,5).
 Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».
 Indiquez l’agence où le client peut retirer son colis.
 Informations générales

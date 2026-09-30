@@ -18,6 +18,12 @@ changent maintenant aussi le fond. Vérifié en mode démo sombre, texte par tex
 vues, toutes les fenêtres (vides et remplies : fiches colis, client, facture) et les menus
 de la barre du haut n'ont plus aucun texte sous 3:1 (14 styles fautifs avant).
 
+Dans la même fenêtre, en anglais, espagnol ou créole, trois textes restaient en français :
+le placeholder du message au client (le traducteur sautait tout `<textarea>`, placeholder
+compris ; il ne saute plus que ce qu'on y tape), l'aide « Indiquez le poids : le prix se
+calcule tout seul, à … la livre. » (phrase à trous ajoutée) et l'erreur « Indiquez le poids
+du colis, en livres (ex. 4,5). » (ajoutée à `tableau.txt`, trois traductions).
+
 ## site-2026.09.30.1 — tableau de bord sombre : les clients avec des colis en cours sont lisibles
 
 Aucune migration. En apparence sombre, les lignes de l'onglet Clients qui ont des colis en
