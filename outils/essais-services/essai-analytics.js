@@ -163,7 +163,9 @@ function cles(v, chemin) {
   verifier('4 reçus, 2 embarqués, 1 disponible, 1 livré',
            [s.mesures.recus.actuel, s.mesures.expedies.actuel, s.mesures.disponibles.actuel, s.mesures.livres.actuel], [4, 2, 1, 1]);
   verifier('février vide : pas de pourcentage', [s.mesures.recus.precedent, s.mesures.recus.variation_pct], [0, null]);
-  verifier('facturé : 4 factures de 30 $', [s.mesures.factures_emises.actuel, s.mesures.facture.actuel], [4, 120]);
+  // 4 lb à 5 $ : 20 $ chacune — sans frais de service, qui ne viennent qu'au regroupement ou à l'encaissement
+  var MARS_FACTURE = 80;
+  verifier('facturé : 4 factures de 20 $, sans frais', [s.mesures.factures_emises.actuel, s.mesures.facture.actuel], [4, MARS_FACTURE]);
   var o = await A.analytics('operations', MARS);
   verifier('Reçu → Embarqué : 2 colis, 24 h', [o.durees.reception_expedition.nombre, o.durees.reception_expedition.mediane_h], [2, 24]);
   verifier('Embarqué → Disponible 48 h, Disponible → Livré 24 h, total 96 h',
@@ -179,10 +181,10 @@ function cles(v, chemin) {
   retoucher(function (d) { d.factures.forEach(function (f) { if (f.id === fa.id) f.cree_le = sd('2026-03-15 10:00'); }); });
   await A.enregistrerPaiement(fa.id, { montant_usd: 25, moyen: 'especes', paye_le: sd('2026-03-16 10:00') });
   var fi = await A.analytics('finances', MARS);
-  verifier('75 payée 25 : facturé + 75, encaissé 25, reste + 50', [fi.facture.actuel - 120, fi.encaisse.actuel, fi.reste.actuel - 120], [75, 25, 50]);
+  verifier('75 payée 25 : facturé + 75, encaissé 25, reste + 50', [fi.facture.actuel - MARS_FACTURE, fi.encaisse.actuel, fi.reste.actuel - MARS_FACTURE], [75, 25, 50]);
   await A.enregistrerPaiement(fa.id, { montant_usd: 50, moyen: 'moncash', paye_le: sd('2026-03-20 10:00') });
   fi = await A.analytics('finances', MARS);
-  verifier('… puis 50 : encaissé 75, reste + 0', [fi.encaisse.actuel, fi.reste.actuel - 120], [75, 0]);
+  verifier('… puis 50 : encaissé 75, reste + 0', [fi.encaisse.actuel, fi.reste.actuel - MARS_FACTURE], [75, 0]);
   var v = await A.vueGenerale({});
   verifier('créances maintenant = « à encaisser » de la vue générale', fi.creances.total, v.facturation.a_encaisser);
   var se = await A.analytics('serie', Object.assign({ granularite: 'jour' }, MARS));
@@ -197,8 +199,8 @@ function cles(v, chemin) {
   var ancien = await A.creerColis({ client_id: jean.id, description: 'Ancien tarif', poids_lb: 10, tarif_lb_usd: 3, service: 'aerien', pays_destination: 'HT' });
   var avant = (await A.analytics('finances', { periode: '7j' })).facture.actuel;
   await A.modifierColis(ancien.colis.id, { tarif_lb_usd: 4 });
-  verifier('tarif changé après coup : la facture (40 $) et le facturé ne bougent pas',
-           [(await A.factureDuColis(ancien.colis.id)).montant_usd, (await A.analytics('finances', { periode: '7j' })).facture.actuel], [40, avant]);
+  verifier('tarif changé après coup : la facture (30 $, sans frais) et le facturé ne bougent pas',
+           [(await A.factureDuColis(ancien.colis.id)).montant_usd, (await A.analytics('finances', { periode: '7j' })).facture.actuel], [30, avant]);
   verifier('dépenses, dettes, résultat : non suivis', [fi.depenses, fi.dettes, fi.resultat], [{ suivi: false }, { suivi: false }, { suivi: false }]);
 
   console.log('\nE. Cohérence avec la vue générale, et jamais de NaN');
