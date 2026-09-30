@@ -129,7 +129,24 @@ Transport facturé **5 $/lb**, plus **10 $ de frais de service** une seule
 fois par facture. Les deux constantes vivent dans `api.js`, exposées
 gelées via `API.tarifs` (`Object.freeze`) : aucune page ne peut les
 modifier. Le tarif se remplace colis par colis depuis le formulaire
-admin ; les frais, jamais.
+admin ; le montant des frais, jamais.
+
+**Les frais de service ne naissent pas avec le colis** (`outils/supabase-frais-service.sql`,
+depuis le 30/09/2026) : la facture créée à l'enregistrement (`facturer_colis_interne`)
+et celle de « Nouvelle facture » (`creer_facture` sans `frais_service: true`) en ont
+0 $. Ils s'appliquent **au regroupement** (`regrouper(p_factures, p_colis, p_frais, p_cle)`,
+case « Appliquer le frais de service », cochée d'office) **ou à l'encaissement**
+(`encaisser_facture(p_facture, p_paiement, p_frais, p_cle)` : frais puis paiement dans
+la même transaction, fenêtre « Encaisser » qui demande Oui / Non avant de confirmer), ou
+depuis la fiche (`changer_frais_service`, ajouter / retirer, `invoices.edit`). Leur
+état est `factures.frais_service_usd` (0 = pas appliqués, > 0 = appliqués) : aucune
+autre colonne. **Jamais deux fois** : `frais_service_interne` ne fait rien si les frais
+y sont déjà (« déjà inclus » à l'écran) ; `regles_facture` refuse toute autre écriture
+des frais ou du total. « Ajouter un colis » à une facture = la regrouper avec lui
+(`regrouper`, `colis_a_regrouper` pour la recherche) : une facture émise ne reçoit
+toujours ni colis ni ligne. L'aperçu « Oui » de la fenêtre vient de
+`API.outils.totauxAvecFrais`. Copie démo : `fraisServiceDemo`, `regrouperDemo`,
+`colisARegrouper`, `encaisserFacture` ; `essai-frais.py` / `essai-frais.js`.
 
 **Le prix est stocké sur le colis** (`prix_usd`, `tarif_lb_usd`), jamais
 recalculé à l'affichage : changer le tarif ne doit pas modifier une
@@ -153,8 +170,9 @@ pas : `annuler_facture` (motif, refusée si elle a reçu de l'argent).
 Regrouper : `regrouper_factures` (annule les anciennes, `remplacee_par`). Le chemin
 inverse : `sortir_du_regroupement` (`outils/supabase-regroupement.sql`) — les colis
 choisis d'une facture de colis à payer, sans paiement, passent sur leur propre facture,
-les autres sur une seconde que l'ancienne désigne (`remplacee_par`) ; chaque facture
-compte ses frais de service ; le lien de paiement n'est pas recopié (le tableau de bord
+les autres sur une seconde que l'ancienne désigne (`remplacee_par`) ; celle-ci garde
+les frais de service s'il y en avait, celle des colis sortis n'en a pas
+(`supabase-frais-service.sql`) ; le lien de paiement n'est pas recopié (le tableau de bord
 en pose un). Copie démo : `sortirDuRegroupement` dans `api.js`. Côté page, la fenêtre
 de regroupement a « Encaisser » (payée, la facture quitte la liste : `ouvrirPaiement`
 prend une suite) et « Retirer » (la liste seulement, rien en base) ; la fenêtre « Sortir
@@ -170,7 +188,7 @@ formulaire admin n'est qu'un aperçu en lecture seule, sauf « Fixer le prix à
 la main » : `colis.prix_fixe_usd` (0 à 100 000 $, `invoices.edit`, vérifié et
 journalisé par `regles_colis`) remplace alors poids × tarif, `tarif_lb_usd`
 devient null (la ligne de facture n'affiche aucun $/lb) ; null = prix calculé.
-Les frais de service restent ajoutés. Copie démo : `reglesColis`, `tarifLigne`.
+Pas de frais de service à l'enregistrement (voir plus haut). Copie démo : `reglesColis`, `tarifLigne`.
 Une nouvelle facture
 passe par `creer_facture` / `facturer_colis`, qui refusent un colis déjà
 sur une facture active (`INVOICE_ALREADY_EXISTS`).
@@ -406,7 +424,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

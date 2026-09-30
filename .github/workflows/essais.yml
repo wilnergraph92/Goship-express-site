@@ -38,7 +38,7 @@ jobs:
       matrix:
         # notifications : ajouté avec les pages de la Phase 11 (sa copie démo vit dans api.js)
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
-               mobile, production, rapports]
+               mobile, production, rapports, frais]
     steps:
       # Tout l'historique : plusieurs bancs rejouent la migration depuis une
       # version publiée plus ancienne (git show <commit>:outils/…)

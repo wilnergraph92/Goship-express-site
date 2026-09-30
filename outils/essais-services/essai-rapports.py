@@ -91,7 +91,10 @@ def poser_colis(db, reception, statuts, client=MARIE, description='Colis'):
 
 def facture(db, client, montant, quand, colis=None):
     if colis:
-        f = jsonq(db, ADMIN, "select public.creer_facture('%s', array['%s']::uuid[]);" % (client, "','".join(colis)))['facture']
+        # Avec les frais de service, comme un regroupement qui les applique
+        # (supabase-frais-service.sql : sans cette demande, une facture de colis n'en a pas)
+        f = jsonq(db, ADMIN, "select public.creer_facture('%s', array['%s']::uuid[], %s);"
+                  % (client, "','".join(colis), js({'frais_service': True})))['facture']
     else:
         f = jsonq(db, ADMIN, "select public.creer_facture('%s', null, %s);" % (client, js({'montant_usd': montant})))['facture']
     dater(db, 'factures', 'cree_le', f['id'], quand)
