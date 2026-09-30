@@ -888,7 +888,8 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-infos dt{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-deconnexion{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-deconnexion:hover{color:#fca5a5}
-[data-apparence="sombre"] .gs-admin-body .gs-direct{color:#4ade80}
+/* La pastille « En direct » : son fond vert très clair (#ecfbf3) venait de site.css */
+[data-apparence="sombre"] .gs-admin-body .gs-direct{background-color:rgba(34,197,94,.14);color:#4ade80}
 [data-apparence="sombre"] .gs-admin-body .gs-onglets{background-color:#132041}
 [data-apparence="sombre"] .gs-admin-body .gs-onglets button{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-onglets button[aria-selected="true"]{background-color:#0e1830}
@@ -1016,7 +1017,10 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-choix-statut label:hover input:disabled+span{border-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-dialogue__historique h3{color:#dce5f7}
 [data-apparence="sombre"] .gs-admin-body .gs-dialogue__actions-colis{border-top-color:#22304f}
-[data-apparence="sombre"] .gs-admin-body .gs-case{color:#dce5f7}
+/* La case à cocher (Fixer le prix à la main, Prévenir le client, filtres, Son) : le fond
+   clair de site.css (#f4f8ff) restait sous le texte clair. */
+[data-apparence="sombre"] .gs-admin-body .gs-case{border-color:#2a3a5e;background-color:#132041;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-case strong{color:#ffffff}
 [data-apparence="sombre"] .gs-admin-body .gs-envoi{border-color:#22304f;background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-envoi__num{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-envoi__ligne{color:#9aaacb}

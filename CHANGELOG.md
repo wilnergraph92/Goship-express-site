@@ -7,6 +7,17 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.09.30.2 — tableau de bord sombre : cases à cocher et « En direct » lisibles
+
+Aucune migration. En apparence sombre, les cases à cocher (`.gs-case` : « Fixer le prix à
+la main » et « Prévenir le client » dans les fenêtres Colis et Statut, filtre « Action
+requise » de la Vue générale, « Son » du poste de scan) gardaient leur fond clair (#f4f8ff)
+sous le texte clair (contraste 1,1:1), et la pastille « En direct » son fond vert très
+clair (1,6:1). Leurs règles sombres ne changeaient que la couleur du texte : elles
+changent maintenant aussi le fond. Vérifié en mode démo sombre, texte par texte : les dix
+vues, toutes les fenêtres (vides et remplies : fiches colis, client, facture) et les menus
+de la barre du haut n'ont plus aucun texte sous 3:1 (14 styles fautifs avant).
+
 ## site-2026.09.30.1 — tableau de bord sombre : les clients avec des colis en cours sont lisibles
 
 Aucune migration. En apparence sombre, les lignes de l'onglet Clients qui ont des colis en
