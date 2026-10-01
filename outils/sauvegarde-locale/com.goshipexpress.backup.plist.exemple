@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GoShip Express — LaunchAgent de référence pour backup-goship.sh (sauvegarde du code)
+
+  Ce fichier est un MODÈLE à comparer au vôtre
+  (~/Library/LaunchAgents/com.goshipexpress.backup.plist), pas à copier par-dessus
+  sans le lire : l'heure et les chemins doivent être les vôtres. Guide : LISEZ-MOI.md.
+
+  - ProgramArguments : /bin/bash puis le chemin COMPLET du script (launchd ne
+    comprend ni « ~ » ni $HOME).
+  - StartCalendarInterval : chaque jour à 21 h 15 (heure du Mac). Un Mac en veille à
+    cette heure lance la sauvegarde à son réveil ; un Mac éteint la saute.
+  - Les sorties vont dans launchd-backup.log, à côté du journal du script.
+  - Aucun secret ici.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.goshipexpress.backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/ing.wilner/GoShip-Backups/scripts/backup-goship.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>21</integer>
+    <key>Minute</key>
+    <integer>15</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/ing.wilner/GoShip-Backups/launchd-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/ing.wilner/GoShip-Backups/launchd-backup.log</string>
+</dict>
+</plist>

@@ -56,9 +56,9 @@ jobs:
         run: |
           curl -sSL "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
           echo "POSTGREST=$RUNNER_TEMP/postgrest" >> "$GITHUB_ENV"
-      - name: age (sauvegarde chiffrée, banc production)
+      - name: age et rclone (sauvegarde chiffrée, stockage externe, banc production)
         if: matrix.banc == 'production'
-        run: sudo apt-get install -y -qq age
+        run: sudo apt-get install -y -qq age rclone
       - name: essai-${{ matrix.banc }}.py
         run: python3 outils/essais-services/essai-${{ matrix.banc }}.py
 
@@ -85,4 +85,19 @@ jobs:
           pip install qrcode python-barcode
           python3 outils/essais-codes/essai-codes.py
       - name: Scripts shell (syntaxe)
-        run: for f in outils/production/*.sh; do bash -n "$f" && echo "ok $f"; done
+        run: for f in outils/production/*.sh outils/sauvegarde-locale/*.sh; do bash -n "$f" && echo "ok $f"; done
+
+  # Le script de sauvegarde du code tourne sur le Mac du propriétaire (launchd) : il est
+  # éprouvé sur macOS, avec le bash 3.2 de /bin/bash et les outils BSD, comme là-bas
+  sauvegarde-locale:
+    name: Sauvegarde du code (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: age et rclone (Homebrew)
+        run: brew install age rclone
+      - name: essai-sauvegarde-locale.sh sous /bin/bash (bash 3.2)
+        run: |
+          /bin/bash --version | head -1
+          BASH_ESSAI=/bin/bash /bin/bash outils/essais-services/essai-sauvegarde-locale.sh

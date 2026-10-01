@@ -1,0 +1,40 @@
+# =============================================================================
+# Réglages de backup-goship.sh — FACULTATIF
+#
+# Sans ce fichier, le script prend les valeurs ci-dessous (celles de l'installation
+# d'origine). Ne le créez que pour en changer une :
+#   cp goship-backup.conf.exemple ~/GoShip-Backups/config/goship-backup.conf
+#   chmod 600 ~/GoShip-Backups/config/goship-backup.conf
+# Le script refuse un fichier de réglages modifiable par un autre compte que le vôtre.
+#
+# AUCUN SECRET ICI : les accès à Backblaze restent dans la configuration de rclone
+# (rclone config), la clé privée age hors de ce Mac ou dans un coffre.
+# =============================================================================
+
+# Le dossier du projet à sauvegarder (le clone Git du site)
+SOURCE="$HOME/GoShip-Backups/Goship-express-site"
+
+# Où les archives sont écrites sur le Mac, et le journal
+BACKUP_DIR="$HOME/GoShip-Backups"
+LOG="$HOME/GoShip-Backups/backup.log"
+
+# La destination rclone (remote:bucket/dossier). La sauvegarde de la BASE, elle, va
+# dans un autre dossier du bucket (base-supabase/) : les deux ne se mélangent pas.
+REMOTE="goship-a:goship-sauvegardes/goship-express"
+
+# Le fichier des clés PUBLIQUES age (une par ligne, age1…). Jamais de clé privée.
+AGE_RECIPIENTS_FILE="$HOME/GoShip-Backups/config/age-recipients.txt"
+
+# Archives gardées sur le Mac (1 au moins)
+LOCAL_KEEP=7
+
+# Archives gardées sur B2 : 0 = toutes, rien n'est jamais supprimé (réglage d'origine).
+# Sinon 7 au moins ; 3 suppressions au plus par passage.
+REMOTE_KEEP=0
+
+# Notification macOS en cas d'échec (1 = oui, 0 = non)
+NOTIFIER=1
+
+# Dossiers et fichiers jamais mis dans l'archive (séparés par des espaces).
+# node_modules se réinstalle avec « npm install » ; retirez-le d'ici pour tout garder.
+EXCLURE="node_modules .DS_Store"

@@ -17,6 +17,7 @@ python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes
 python3 outils/essais-services/essai-mobile.py       # l'application mobile par l'API réelle : isolation, pré-alertes (Phase 10)
 python3 outils/essais-services/essai-notifications.py # les notifications : règles, file, envois (Phase 11)
 python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
+bash outils/essais-services/essai-sauvegarde-locale.sh # la sauvegarde du code sur le Mac (outils/sauvegarde-locale), sans vraie clé ni vrai bucket
 python3 outils/essais-services/essai-rapports.py     # les rapports : permissions, périodes, chiffres, journal, suppression
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
@@ -302,6 +303,18 @@ EXECUTE sur toute nouvelle fonction) :
   une base neuve, chaîne rejouée, empreintes md5 identiques table par table,
   contrôles verts, seconde restauration refusée, l'espace client et la création
   de colis fonctionnent après restauration.
+
+Section L (27/09/2026), la sauvegarde autonome de bout en bout, sur une base
+saine (avant les anomalies de la section G) : base injoignable (mot de passe
+jamais affiché), `verifier-sauvegarde.sh` avec et sans clé, mauvaise clé, octet
+altéré, `stocker.sh` vers deux destinations par le vrai rclone (dossiers
+locaux) — envoi relu, jamais de remplacement, rétention (7 au moins, 3
+suppressions au plus par passage, fichier étranger épargné), téléchargement,
+copie distante altérée refusée —, garde-fous de `restaurer.sh`
+(`RESTORE_TARGET`, production sans confirmation, base en service), restauration
+chronométrée, `verifier-restauration.sh` (et une base vide ou un verrou coupé
+jamais déclarés PASS), `epreuve-restauration.sh` tel que l'appellent les
+workflows, aucun secret dans les journaux. Il faut `age` et `rclone`.
 
 Depuis la finalisation, il éprouve aussi (sections H à K) : `controler.sh`
 (sortie sans e-mail ni numéro, détail chiffré, mot de passe jamais affiché),
