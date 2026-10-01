@@ -56,6 +56,19 @@ Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backu
   - le manifeste garde la valeur des séquences et le détail des comptes (identités,
     mots de passe, confirmés), comparés après restauration.
 
+## site-2026.10.01 — accueil et tableau de bord au téléphone
+
+Aucune migration. Pages et styles seulement.
+
+- Accueil au téléphone : « Créer mon compte » (vers l'inscription) remplace « Obtenir un
+  devis gratuit », qui reste sur ordinateur ; un visiteur connecté ne le voit pas. Le
+  bandeau « USA · Santo Domingo · Haïti » tient sur une ligne (lettres moins espacées),
+  dans les quatre langues, dès 320 px. Traductions : « Create my account », « Crear mi
+  cuenta », « Kreye kont mwen ».
+- Tableau de bord au téléphone (moins de 640 px) : l'en-tête passe sur deux lignes —
+  menu, titre avec la date et l'heure, compte ; puis recherche, « + », langue, alertes.
+  Les boutons ne recouvrent plus le titre ni l'heure.
+
 ## site-2026.09.30.5 — frais de service au regroupement et à l'encaissement
 
 **Migration : `outils/supabase-frais-service.sql`** (la 17e de la chaîne), à exécuter

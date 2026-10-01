@@ -134,6 +134,17 @@ details[open] .om-plus{transform:rotate(45deg);background:var(--accent) !importa
   .gs-hero-titre{font-size:min(11.8cqi,72px)}
 }
 
+/* Accueil au téléphone : « USA · Santo Domingo · Haïti » sur une seule ligne (lettres
+   moins espacées, taille suivant la largeur), et « Créer mon compte » à la place de
+   « Obtenir un devis gratuit » ; l'ordinateur garde le devis. Un visiteur déjà
+   connecté ne voit pas « Créer mon compte » (data-session, site.js). */
+.gs-hero-compte{display:none}
+@media (max-width:767px){
+  .gs-hero-ruban{white-space:nowrap;max-width:100%;letter-spacing:.08em!important;font-size:min(11px,2.9vw)!important;gap:8px!important;padding-left:14px!important}
+  .gs-hero-actions a[href*="contacts.html"]{display:none!important}
+  .gs-hero-compte:not([hidden]){display:inline-flex}
+}
+
 /* En-tête : ombre plus marquée une fois la page défilée */
 .gs-header{transition:box-shadow .35s ease}
 .gs-header.is-scrolled{box-shadow:0 16px 36px -24px rgba(0,0,0,.85)}

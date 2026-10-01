@@ -882,6 +882,23 @@ def page_specific(body, src, page):
                             'Vos colis partent<br>de Miami.<br><span style="color:var(--accent)">Ils arrivent chez eux.</span></h1>',
                             '<h1 class="gs-hero-titre" style="margin-top:30px;font-weight:800">'
                             'Livraison<br><span style="color:var(--accent)">internationale</span></h1>', page)
+        # Le bandeau « USA · Santo Domingo · Haïti » tient sur une ligne au téléphone
+        # (site.css, .gs-hero-ruban)
+        body = replace_once(body, '<div style="display:inline-flex;align-items:center;gap:14px;padding:9px 9px 9px 18px;',
+                            '<div class="gs-hero-ruban" style="display:inline-flex;align-items:center;gap:14px;padding:9px 9px 9px 18px;', page)
+        # Au téléphone, le premier bouton ouvre un compte plutôt qu'un devis : c'est
+        # l'espace client qui donne l'adresse de Miami. Les deux boutons sont dans la
+        # page, site.css montre l'un ou l'autre selon la largeur (.gs-hero-actions).
+        body = replace_once(body, '<div style="margin-top:38px;display:flex;flex-wrap:wrap;gap:14px">\n',
+                            '<div class="gs-hero-actions" style="margin-top:38px;display:flex;flex-wrap:wrap;gap:14px">\n'
+                            '        <a href="inscription.html" class="gs-hero-compte hv-fill-cta-lift" data-session="non" '
+                            'style="align-items:center;gap:16px;background:var(--accent);color:#fff;font-weight:700;'
+                            'padding:18px 18px 18px 28px;border-radius:14px;box-shadow:0 22px 44px -20px rgba(244,96,13,.95)">\n'
+                            '          Créer mon compte\n'
+                            '          <span style="display:grid;place-items:center;width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:9px">\n'
+                            '            <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>\n'
+                            '          </span>\n'
+                            '        </a>\n', page)
     # L'ouverture de compte mène au formulaire d'inscription
     body = re.sub(r'<a href="Contacts\.dc\.html#contact"( style="[^"]*" style-hover="[^"]*">\s*Ouvrir mon compte gratuitement)',
                   r'<a href="inscription.html"\1', body)

@@ -582,6 +582,16 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
   .gs-td__icone,.gs-td__nouveau,.gs-td__compte{width:40px;height:40px;min-height:40px;border-radius:12px}
   .gs-td__avatar{width:30px;height:30px;border-radius:10px}
   .gs-td__barre .gs-rapide__bouton{display:none}
+  /* Deux lignes au téléphone : le menu, le titre avec l'heure et le compte ; puis la
+     recherche et les boutons. Sur une seule ligne, les boutons prenaient la place du
+     titre (« Vue … ») et l'heure passait sous le « + ». La boîte des outils s'efface
+     (display:contents) pour que le compte et les autres boutons se rangent à part ;
+     :not([hidden]) la laisse cachée avant la connexion. */
+  .gs-td__titre{flex:1 1 calc(100% - 110px)}
+  .gs-td__outils:not([hidden]){display:contents}
+  .gs-td__outils>*{order:5}
+  .gs-td__outils>.gs-td__deroulant:has(>[data-action="menu-compte"]){order:2}
+  .gs-td__barre .gs-rapide{order:4;flex:1 1 80px;min-width:0}
   .gs-kpi{min-height:0;padding:14px}
   .gs-kpi__picto{top:12px;right:12px;width:36px;height:36px;border-radius:11px}
   .gs-kpi__picto svg{width:18px;height:18px}
