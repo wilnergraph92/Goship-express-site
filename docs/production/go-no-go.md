@@ -1,6 +1,39 @@
 # GO / NO-GO
 
-## Décision du 26/09/2026 (finalisation) : **NO-GO**
+## Audit du 01/10/2026 (avant le domaine goshipexpress.net) : **GO pour le site, le tableau de bord et Android en distribution interne**
+
+Preuves relevées le 01/10/2026 sur la production elle-même, sauf mention contraire.
+Rien n'a été modifié en production pendant l'audit (contrôles en lecture seule).
+
+| # | Critère | État | Preuve |
+|---|---|---|---|
+| C1 | Secrets | **vérifié** | `surveiller.sh` : aucune clé secrète dans `config.js` / `api.js` publiés ; `CLAUDE.md`, `README.md`, SQL, `docs/`, `bureau/` en 404. `google-services.json` (dépôt mobile) n'est pas un secret ; la clé FCM v1 est chez Expo seulement |
+| C2 | Tests verts | **vérifié** | site : 21 bancs (CI `essais.yml` verte sur `efc19d5`, `essai-production.py` 144/144) ; navigateur (audit local, mode démo) : 102 pages × bureau et téléphone, 0 erreur JS, 0 fichier manquant, 0 lien cassé, 0 débordement, tableau de bord 8 onglets + fiches + anglais, inscription → connexion → Mon compte ; mobile : 7/7 sur la PR #16 (logique, base, navigateur, Android, iOS non signée, Maestro Android et iOS) ; bureau : `bureau.yml` vert sur `cc3fb34` |
+| C3 | Chaîne complète en production | **vérifié** | `audit-production.yml` 01/10 05:48 : 17 migrations sur 17 ; `controles-production.yml` 01/10 02:28 : les 17 « installée » |
+| C4 | Sécurité de la production | **vérifié** | `controles-production.yml` 01/10 02:28 : 0 alerte (RLS sur 17 tables, 27 politiques, 130 fonctions privilégiées à `search_path` figé, 4 verrous métier, 3 administrateurs, aucun compte de démonstration) ; sonde : 0 fonction ouverte aux visiteurs sans raison |
+| C5 | Intégrité | **vérifié** | même contrôle : 28 contrôles, 0 alerte (3 événements de facturation des 26-27/09, d'avant les notifications, comptés à part) |
+| C6 | Sauvegarde + restauration | **vérifié une fois** | `sauvegarde.yml` 01/10 02:00 : copie chiffrée envoyée sur B2 et relue, restaurée dans une base neuve (1 083 lignes, 17 comptes identiques, 17 migrations rejouées, 6 s). Passage planifié de la nuit pas encore observé (GitHub décale les tâches planifiées de plusieurs heures) |
+| C7 | Préproduction | **non rempli** | `goship-staging` n'existe pas (non bloquant pour le domaine) |
+| C8 | Auth | **vérifié** | sonde : confirmation des e-mails ACTIVE, fournisseurs e-mail et Google. *Site URL* / *Redirect URLs* : à mettre à jour avec le domaine |
+| C9 | Surveillance | **partiel** | `surveillance.yml` verte (01/10 05:48 : site, base, Auth, fonctions, file des notifications) mais lancée toutes les 3 à 6 h au lieu de 30 min (GitHub) ; `HEARTBEAT_URL` et `ALERTE_WEBHOOK` non posés |
+| C10 | Retour arrière | **partiel** | site : `git revert` + republication ; base : restauration prouvée hors production (C6) |
+| C11 | HTTPS | **vérifié** | HTTP → HTTPS (`surveiller.sh`) ; à reprouver sur le domaine |
+| C12 | Mobile | **Android : interne** ; **iPhone : non** | Android : APK preview installé sur un vrai téléphone, notifications reçues (« Colis emballé », « Colis expédié ») avec l'icône ; mises à jour EAS Update prouvées ; pas sur Google Play. iPhone : se construit et passe Maestro sur simulateur, mais aucune installation possible sans compte Apple Developer (ni TestFlight, ni notifications APNs) |
+| C13 | Bureau signé | **non rempli** | installateurs non signés (avertissement Windows / macOS) ; l'adresse du site y est figée : nouveaux installateurs après le domaine |
+
+### Ce qui reste ouvert (aucun ne bloque le domaine)
+
+1. **PR #13** (pages des notifications : centre de notifications du tableau de bord,
+   préférences du client) : 36 commits de retard sur `main`. Le moteur tourne déjà
+   en production ; seules ses pages manquent. À remettre à jour avant décision.
+2. **Surveillance externe** : `HEARTBEAT_URL` (Healthchecks.io) et `ALERTE_WEBHOOK`.
+3. **iPhone** : compte Apple Developer (TestFlight, clé APNs).
+4. **Boutiques** : Google Play Console ; App Store.
+5. **Bureau** : certificats de signature ; nouveaux installateurs avec le domaine.
+6. Dependabot (#14 à #18, actions GitHub en version majeure) et la PR brouillon #2 de
+   l'application (ancienne, en partie remplacée) : à trier.
+
+## Décision du 26/09/2026 (finalisation) : **NO-GO** (historique)
 
 Évaluée après la finalisation de la Phase 12. **Rien n'a été modifié en
 production** : aucune migration, aucune donnée, aucun réglage. Tout ce qui
