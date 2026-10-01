@@ -441,8 +441,8 @@ def poser_alternates(src, page):
 
 
 def adapter_sous_dossier(src, langue):
-    """Chemins relatifs vers assets/, langue du document et locale."""
-    src = re.sub(r'(\s(?:href|src)=")(assets/)', r'\1../\2', src)
+    """Chemins relatifs vers assets/ et favicon.ico, langue du document et locale."""
+    src = re.sub(r'(\s(?:href|src)=")(assets/|favicon\.ico)', r'\1../\2', src)
     src = src.replace('<html lang="fr">', f'<html lang="{langue}">', 1)
     src = src.replace('<meta property="og:locale" content="fr_FR">',
                       f'<meta property="og:locale" content="{LANGUES[langue]["locale"]}">', 1)

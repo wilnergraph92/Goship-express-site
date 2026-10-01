@@ -11,6 +11,8 @@ base **avant** de publier le site.
 
 Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backup.md`.
 
+- 30/09/2026 : la branche rejoint de nouveau la version du site (frais de service,
+  regroupement, Google) ; l'environnement `production` est désormais ouvert à `main`.
 - 28/09/2026 : la branche rejoint la version actuelle du site (12 migrations,
   onglet Rapport), sans les pages des notifications de la PR #13. Destination
   recommandée : `goship-a:goship-sauvegardes/base-supabase`, à côté du dossier
@@ -47,6 +49,221 @@ Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backu
   - le journal annonce le vrai nombre de fonctions ;
   - le manifeste garde la valeur des séquences et le détail des comptes (identités,
     mots de passe, confirmés), comparés après restauration.
+
+## site-2026.09.30.5 — frais de service au regroupement et à l'encaissement
+
+**Migration : `outils/supabase-frais-service.sql`** (la 17e de la chaîne), à exécuter
+AVANT de publier le site. Contrôle attendu : `4 | false | 0`. Aucune donnée existante
+ne change : une facture déjà émise garde ses frais, qu'elle en ait ou non.
+
+- Enregistrer un colis ne met plus de frais de service sur sa facture (0 $) ; « Nouvelle
+  facture » non plus.
+- Regrouper : case « Appliquer le frais de service à la nouvelle facture » (cochée),
+  ligne à part, une fois ; bouton « + Ajouter un colis » (recherche par numéro, contenu,
+  magasin, suivi du vendeur, destination, facture ; seuls les colis que la base accepte ;
+  jamais deux fois le même). Une facture émise ne reçoit toujours pas de colis :
+  l'ajouter, c'est la regrouper avec lui (annulée, remplacée, renvoi).
+- Encaisser : « Ajouter le frais de service ? Oui / Non » avant de confirmer, montants
+  recalculés à l'écran ; frais déjà appliqués : « déjà inclus », jamais une seconde fois
+  (la base y veille : `encaisser_facture`, frais et paiement dans la même transaction).
+- Fiche d'une facture à payer : « Ajouter / Retirer le frais de service ».
+- Sortir des colis d'un regroupement : les frais restent sur la facture qui garde le
+  regroupement, celle des colis sortis n'en a pas.
+- Rapport d'anomalies : une facture sans frais n'est plus signalée (sauf du 22 au 29/09).
+- Essais : `essai-frais.py` (72), `essai-frais.js` (46), navigateur (30) ; bancs mis à
+  jour pour la nouvelle règle (`essai-demo.js`, `essai-finances.js`,
+  `essai-permissions.js`, `essai-rapports.py`, `essai-metier.sql`).
+
+## site-2026.09.30.4 — réseaux sociaux : vraies pages et vrais logos
+
+Aucune migration. Le pied de page de toutes les pages (fr, en, es, ht) montre les logos
+Facebook, Instagram, TikTok et WhatsApp à la place des lettres de la maquette (« f »,
+« IG », « Tok », « wa »). Instagram et TikTok menaient à `#top` : ils mènent maintenant
+aux pages de l'entreprise (facebook.com/goshipexpress, instagram.com/goshipexpressllc,
+tiktok.com/@goshipexpress.net), ouvertes dans un nouvel onglet. Les liens sont nettoyés
+de leurs paramètres de partage. Les données structurées (`sameAs`) citent les trois
+pages. Tout vient de `outils/generateur/build.py` (`FACEBOOK`, `INSTAGRAM`, `TIKTOK`,
+`LOGOS`) : les logos sont des SVG dans la page (Simple Icons, domaine public), à la
+couleur du bouton.
+
+## site-2026.09.30.3 — image de l'accueil de l'application à jour
+
+Aucune migration. Sur la page d'accueil du site (section « Vos colis dans votre poche »),
+le téléphone du milieu (`assets/img/app-ecran-accueil.webp`, dessiné par
+`outils/ecrans-app/ecrans.py`) montre l'accueil de l'application tel qu'il est depuis
+goship-express-app#13 : plus de bande bleue « Annoncer un achat », et une ligne
+« Suivi vendeur » (numéro du magasin) sur chaque carte de colis. Les deux autres
+téléphones ne changent pas.
+
+## site-2026.09.30.2 — tableau de bord sombre : cases à cocher et « En direct » lisibles
+
+Aucune migration. En apparence sombre, les cases à cocher (`.gs-case` : « Fixer le prix à
+la main » et « Prévenir le client » dans les fenêtres Colis et Statut, filtre « Action
+requise » de la Vue générale, « Son » du poste de scan) gardaient leur fond clair (#f4f8ff)
+sous le texte clair (contraste 1,1:1), et la pastille « En direct » son fond vert très
+clair (1,6:1). Leurs règles sombres ne changeaient que la couleur du texte : elles
+changent maintenant aussi le fond. Vérifié en mode démo sombre, texte par texte : les dix
+vues, toutes les fenêtres (vides et remplies : fiches colis, client, facture) et les menus
+de la barre du haut n'ont plus aucun texte sous 3:1 (14 styles fautifs avant).
+
+Dans la même fenêtre, en anglais, espagnol ou créole, trois textes restaient en français :
+le placeholder du message au client (le traducteur sautait tout `<textarea>`, placeholder
+compris ; il ne saute plus que ce qu'on y tape), l'aide « Indiquez le poids : le prix se
+calcule tout seul, à … la livre. » (phrase à trous ajoutée) et l'erreur « Indiquez le poids
+du colis, en livres (ex. 4,5). » (ajoutée à `tableau.txt`, trois traductions).
+
+## site-2026.09.30.1 — tableau de bord sombre : les clients avec des colis en cours sont lisibles
+
+Aucune migration. En apparence sombre, les lignes de l'onglet Clients qui ont des colis en
+cours (`is-actif-client`) gardaient leur fond clair (#fcfdff) sous le texte clair du mode
+sombre : nom, code, téléphone illisibles (contraste 1,15:1). Elles ont maintenant leur
+contrepartie sombre dans `tableau.css`, comme le flash d'une ligne nouvelle (`is-nouveau`).
+Vérifié dans un navigateur, en mode démo sombre : aucune cellule de tableau sous 3:1 dans
+Vue générale, Colis, Clients, Factures et Équipe (42 avant la correction, toutes dans Clients).
+L'application de bureau charge le site : elle est corrigée en même temps.
+
+## site-2026.09.29.3 — un compte supprimé depuis l'application peut être effacé dans Supabase
+
+Migration passée le 29/09/2026 par le propriétaire : `outils/supabase-compte.sql` relancé,
+puis les fichiers qui le suivent dans la chaîne. Contrôles : `1 | false | 1 | 0`,
+`1 | false`, `2 | false | true`, `2 | false | 1`.
+
+- « Supprimer mon compte » bloquait le compte de connexion avec une date infinie
+  (`banned_until = 'infinity'`), que Supabase ne sait pas lire : le compte
+  `supprime-…@goship.invalid` ne s'ouvrait plus dans Authentication > Users, et sa
+  suppression échouait (« Failed to delete user: Database error loading user »). Le blocage
+  dure désormais cent ans, une date lisible. Le client supprimé ne peut toujours pas se
+  reconnecter.
+- La migration répare les comptes déjà supprimés par l'ancienne version (même blocage, date
+  lisible) ; relancée, elle ne trouve plus rien à faire.
+- `essai-mobile.py` : 125 vérifications (la réparation d'un compte à date infinie comprise).
+
+## 29/09/2026 — « Continuer avec Google » vérifié de bout en bout
+
+Aucun changement de code. Le propriétaire a fait l'aller-retour réel avec Google sur le site
+(compte créé, nom repris de Google, formulaire du profil ouvert) et dans l'application
+Android construite depuis `main` (3294441, profil `preview`). Dans l'application, le retour
+tombait d'abord sur le site : l'adresse `goshipexpress://…` n'était pas encore acceptée dans
+Supabase > URL Configuration. Le guide (README, « Continuer avec Google ») donne désormais
+les trois adresses de l'application.
+
+## site-2026.09.29.2 — un profil complet avant la première pré-alerte (publié le 29/09/2026)
+
+Migration passée le 29/09/2026 par le propriétaire (contrôle `2 | false | 1`) : **un seul fichier**, `outils/supabase-profil-complet.sql` (le dernier de
+la chaîne, 16ᵉ). Il ajoute une fonction et un déclencheur fermés à tous ; il ne change aucune
+donnée. Contrôle attendu : `2 | false | 1`.
+
+- La base refuse une nouvelle pré-alerte (`PROFILE_INCOMPLETE`) tant que le profil du client
+  n'a pas son nom, son téléphone, son pays et sa ville — par `creer_prealerte` comme par
+  l'écriture directe des anciennes versions de l'application. Les pré-alertes déjà
+  enregistrées ne sont pas touchées.
+- *Mon compte* ouvre de lui-même le formulaire du profil quand il est incomplet (compte
+  ouvert avec Google, le plus souvent), sous le bandeau « Complétez votre profil ».
+- Bancs : `essai-mobile.py` section M (10 cas) ; la sonde et `controle-securite.sql`
+  connaissent la 16ᵉ migration ; les clients d'essai ont un téléphone.
+
+## site-2026.09.29.1 — « Continuer avec Google » (publié le 29/09/2026)
+
+Migration passée le 29/09/2026 par le propriétaire (contrôle `2 | false | true`) : **un seul fichier**, `outils/supabase-connexion.sql` (le dernier de la
+chaîne, 15ᵉ). Il ajoute deux fonctions fermées à tous et remplace le déclencheur qui crée
+le profil d'un nouveau compte ; il ne change aucune donnée. Contrôle attendu :
+`2 | false | true`. Puis les réglages de Google et de Supabase (README, « Continuer avec
+Google ») : tant qu'ils ne sont pas faits, le bouton reste caché et rien ne change.
+
+- *Se connecter* et *Créer un compte* : « Continuer avec Google », au-dessus du
+  formulaire, seulement si Supabase a activé Google (réglages publics
+  `/auth/v1/settings`). Retour toujours sur *Se connecter* : session ouverte, ou phrase
+  d'erreur (« annulée », « n'a pas abouti »), en quatre langues.
+- Le profil d'un compte Google reprend le nom (`full_name`, `name`, prénom + nom) et la
+  langue du compte Google ; le formulaire passe avant. Code client et e-mails de bienvenue
+  comme avant ; « Supprimer mon compte » retirait déjà le lien Google (`auth.identities`).
+- *Mon compte* : « Complétez votre profil » tant que pays, ville ou téléphone manquent.
+- `api.js` : `fournisseursConnexion` et `connecterAvec`, dans les trois modes (démo et
+  site fermé : aucun bouton).
+- Bancs : `essai-mobile.py` section L (10 cas) ; la sonde et `controle-securite.sql`
+  connaissent la 15ᵉ migration.
+
+## site-2026.09.28.8 — le favicon se met à jour dans les navigateurs (publié le 28/09/2026)
+
+Aucune migration. Les adresses des icônes du site portent maintenant un numéro
+(`?v=2026-09-28`, `ICONES_VERSION` dans `outils/generateur/build.py`) : un navigateur
+qui gardait l'ancien favicon sous la même adresse recharge le nouveau. Les pages
+traduites (`en/`, `es/`, `ht/`) demandaient `favicon.ico` dans leur propre dossier, où
+il n'existe pas : `traduire.py` le fait maintenant pointer vers celui de la racine.
+
+## site-2026.09.28.7 — regroupement des factures : encaisser, retirer, sortir des colis (publié le 28/09/2026)
+
+Migration : **un seul fichier**, `outils/supabase-regroupement.sql` (le dernier de la
+chaîne, 14ᵉ), passée par le propriétaire avant la publication (contrôle : `1 | false`).
+Il ajoute une fonction ; il ne change aucune donnée. Sans lui, « Sortir du
+regroupement » répondrait « La base n'est pas à jour » ; le reste du tableau de bord
+marcherait comme avant.
+
+- Fenêtre « Regrouper des factures » : chaque facture a « Encaisser » (la fenêtre du
+  paiement s'ouvre ; payée, même en partie, elle quitte la liste) et « Retirer » (elle
+  quitte la liste sans que la facture change ; « Tout remettre » la ramène).
+- Une facture de colis à payer, sans paiement, d'au moins deux colis : « Sortir des
+  colis de cette facture » (fenêtre de la facture, et fiche : « Sortir des colis »).
+  Les colis cochés passent sur leur propre facture, les autres sur une seconde ; la
+  facture regroupée est annulée et renvoie vers la seconde (`remplacee_par`). Chaque
+  facture compte ses frais de service (sortir des colis en ajoute une fois) ; l'aperçu
+  le montre avant de valider. « Sortir et encaisser » ouvre ensuite le paiement de la
+  facture des colis sortis. Refusé : tous les colis, un colis étranger, une facture
+  payée, annulée ou qui a reçu un paiement, une facture sans colis.
+- `sortir_du_regroupement` (base) et sa copie démo (`api.js`), clé d'idempotence,
+  journalisé (`facture.sortie_regroupement`). Le lien de paiement n'est pas recopié
+  (il portait le montant regroupé) : le tableau de bord en pose un sur chaque facture.
+- Bancs : `essai-finances.py` section R (21 cas), `essai-finances.js` section Q
+  (16 cas) ; `sonder.sh` et `controle-securite.sql` connaissent la 14ᵉ migration.
+
+## site-2026.09.28.6 — « Supprimer mon compte » dans l'application mobile (publié le 28/09/2026)
+
+Migration exécutée par le propriétaire le 28/09/2026 (contrôle `1 | false | 1`, sonde
+anonyme : 13 migrations sur 13) : **un seul
+fichier**, `outils/supabase-compte.sql` (le dernier de la chaîne). Il ajoute une
+colonne vide (`clients.supprime_le`) et une fonction ; il ne change aucune donnée.
+Sans lui, l'application répond « La suppression du compte n'est pas encore
+disponible » et renvoie vers WhatsApp.
+
+- `supprimer_mon_compte` : le client connecté supprime son compte lui-même. Profil
+  vidé (nom, e-mail, téléphone, adresse), connexion bloquée pour toujours, sessions
+  fermées, téléphones et pré-alertes en attente effacés, adresse e-mail libérée.
+  Colis, factures et paiements restent, sans ses coordonnées (la ligne du compte n'est
+  jamais effacée : factures et paiements la suivent en cascade). Refusé à un compte
+  de l'équipe, tant qu'un colis n'est pas livré ou qu'une facture reste à payer.
+  Journalisé (`client.suppression_demandee`).
+- Bancs : `essai-mobile.py` section K (18 cas) ; la doublure d'`auth` a les colonnes
+  et tables de GoTrue que la fonction touche ; `sonder.sh` et `controle-securite.sql`
+  connaissent la 13ᵉ migration.
+
+## site-2026.09.28.5 — nouvelles icônes (application de bureau, site) (publié le 28/09/2026)
+
+Aucune migration, aucune donnée modifiée. Toutes tirées du même dessin (le colis et
+sa flèche, fourni par le propriétaire).
+
+- Application de bureau (`bureau/build/icone.png`) : tuile blanche arrondie à la
+  manière de macOS, avec son ombre ; Windows en tire son `.ico` à la construction.
+- Site : icône d'écran d'accueil de l'iPhone (`apple-touch-icon.png`, 180 px) et
+  favicons (`favicon-32.png`, `favicon-64.png`, `favicon.ico` 16/32/48).
+
+## site-2026.09.28.4 — formulaire du colis : prix fixé à la main ; fenêtres protégées (publié le 28/09/2026)
+
+Publié à la demande du propriétaire **avant** la migration. Tant qu'elle n'est pas
+passée, la base ignore le prix saisi à la main et facture poids × tarif ; les fenêtres
+protégées marchent déjà. Migration : `supabase-services.sql`, puis toute la chaîne
+qui le suit dans l'ordre jusqu'à `supabase-rapports.sql` (outils/migrations.txt). Elle
+ajoute une colonne (`colis.prix_fixe_usd`, vide par défaut : tous les colis existants
+gardent leur prix calculé) et ne change aucune donnée. Sans elle, l'ancienne base
+ignorerait le prix saisi et facturerait poids × tarif.
+
+- « Enregistrement du colis » : case « Fixer le prix à la main » (qui peut modifier les
+  factures : administrateur, gérant). Le prix saisi (0 à 100 000 $) remplace poids ×
+  tarif ; les frais de service restent ajoutés sur la facture. La base le vérifie
+  (`regles_colis`) et le journalise ; décocher la case revient au prix calculé. La
+  ligne de facture n'affiche alors aucun tarif au livre ; la fiche dit « Prix fixé à la main ».
+- Toutes les fenêtres du tableau de bord : un clic à côté ne les ferme plus. Échap, ×
+  ou « Annuler » sur une fenêtre où l'on a commencé à saisir demandent « Fermer sans
+  enregistrer ? » ; sans saisie, elles se ferment comme avant.
 
 ## site-2026.09.28.3 — tableau de bord : onglet « Rapport » (publié le 28/09/2026)
 

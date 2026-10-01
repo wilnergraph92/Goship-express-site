@@ -129,7 +129,24 @@ Transport facturé **5 $/lb**, plus **10 $ de frais de service** une seule
 fois par facture. Les deux constantes vivent dans `api.js`, exposées
 gelées via `API.tarifs` (`Object.freeze`) : aucune page ne peut les
 modifier. Le tarif se remplace colis par colis depuis le formulaire
-admin ; les frais, jamais.
+admin ; le montant des frais, jamais.
+
+**Les frais de service ne naissent pas avec le colis** (`outils/supabase-frais-service.sql`,
+depuis le 30/09/2026) : la facture créée à l'enregistrement (`facturer_colis_interne`)
+et celle de « Nouvelle facture » (`creer_facture` sans `frais_service: true`) en ont
+0 $. Ils s'appliquent **au regroupement** (`regrouper(p_factures, p_colis, p_frais, p_cle)`,
+case « Appliquer le frais de service », cochée d'office) **ou à l'encaissement**
+(`encaisser_facture(p_facture, p_paiement, p_frais, p_cle)` : frais puis paiement dans
+la même transaction, fenêtre « Encaisser » qui demande Oui / Non avant de confirmer), ou
+depuis la fiche (`changer_frais_service`, ajouter / retirer, `invoices.edit`). Leur
+état est `factures.frais_service_usd` (0 = pas appliqués, > 0 = appliqués) : aucune
+autre colonne. **Jamais deux fois** : `frais_service_interne` ne fait rien si les frais
+y sont déjà (« déjà inclus » à l'écran) ; `regles_facture` refuse toute autre écriture
+des frais ou du total. « Ajouter un colis » à une facture = la regrouper avec lui
+(`regrouper`, `colis_a_regrouper` pour la recherche) : une facture émise ne reçoit
+toujours ni colis ni ligne. L'aperçu « Oui » de la fenêtre vient de
+`API.outils.totauxAvecFrais`. Copie démo : `fraisServiceDemo`, `regrouperDemo`,
+`colisARegrouper`, `encaisserFacture` ; `essai-frais.py` / `essai-frais.js`.
 
 **Le prix est stocké sur le colis** (`prix_usd`, `tarif_lb_usd`), jamais
 recalculé à l'affichage : changer le tarif ne doit pas modifier une
@@ -150,7 +167,16 @@ d'idempotence). Un paiement ne se modifie ni ne se supprime : il s'annule
 `statut`, `moyen` et `payee_le` suivent les paiements (déclencheur
 `garde_facture` : aucune page ne les écrit). Une facture ne se supprime
 pas : `annuler_facture` (motif, refusée si elle a reçu de l'argent).
-Regrouper : `regrouper_factures` (annule les anciennes, `remplacee_par`).
+Regrouper : `regrouper_factures` (annule les anciennes, `remplacee_par`). Le chemin
+inverse : `sortir_du_regroupement` (`outils/supabase-regroupement.sql`) — les colis
+choisis d'une facture de colis à payer, sans paiement, passent sur leur propre facture,
+les autres sur une seconde que l'ancienne désigne (`remplacee_par`) ; celle-ci garde
+les frais de service s'il y en avait, celle des colis sortis n'en a pas
+(`supabase-frais-service.sql`) ; le lien de paiement n'est pas recopié (le tableau de bord
+en pose un). Copie démo : `sortirDuRegroupement` dans `api.js`. Côté page, la fenêtre
+de regroupement a « Encaisser » (payée, la facture quitte la liste : `ouvrirPaiement`
+prend une suite) et « Retirer » (la liste seulement, rien en base) ; la fenêtre « Sortir
+des colis » (`ouvrirSortie`) montre l'aperçu par deux `calculer_facture`.
 Les trois statuts stockés ne changent pas ; « partielle » et « en_retard »
 sont des états déduits. Même copie démo que le reste (`ajouterPaiementDemo`,
 `recalculerFactureDemo`…), comparée par `essai-finances.py` /
@@ -158,7 +184,12 @@ sont des états déduits. Même copie démo que le reste (`ajouterPaiementDemo`,
 
 Le prix d'un colis se calcule dans la base (`prix_transport`, appelé par
 `regles_colis`) : celui qu'envoie une page est ignoré. Le champ prix du
-formulaire admin n'est qu'un aperçu en lecture seule. Une nouvelle facture
+formulaire admin n'est qu'un aperçu en lecture seule, sauf « Fixer le prix à
+la main » : `colis.prix_fixe_usd` (0 à 100 000 $, `invoices.edit`, vérifié et
+journalisé par `regles_colis`) remplace alors poids × tarif, `tarif_lb_usd`
+devient null (la ligne de facture n'affiche aucun $/lb) ; null = prix calculé.
+Pas de frais de service à l'enregistrement (voir plus haut). Copie démo : `reglesColis`, `tarifLigne`.
+Une nouvelle facture
 passe par `creer_facture` / `facturer_colis`, qui refusent un colis déjà
 sur une facture active (`INVOICE_ALREADY_EXISTS`).
 
@@ -232,6 +263,13 @@ actions ne sont que dans la fiche (`ouvrirFicheColis`, `actionsClient`,
 `actionsFacture`, selon `peut()`) ; un bouton d'impression porte `data-imprimer` et
 laisse la fiche ouverte. Le poste de scan demande la fiche
 par l'événement `goship:fiche-colis`. Rien ne s'y calcule.
+
+**Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
+dialogues) : un clic à côté ne fait rien. Une saisie de l'utilisateur (événement
+`isTrusted` dans un formulaire) pose `data-saisie` ; Échap, × ou « Annuler » ouvrent
+alors `data-dialogue="abandon"` (« Fermer sans enregistrer ? »), et une fermeture
+imprévue du navigateur rouvre la fenêtre. `d.close()` appelé par le code (après un
+enregistrement) ferme sans question. Une nouvelle fenêtre n'a rien à faire de plus.
 
 **La langue du tableau de bord** (`tableau-langue.js`, sélecteur
 `[data-langue-tableau]` dans la barre, préférence `gse-tableau-langue`) : le
@@ -322,13 +360,50 @@ copie démo (`REGLES_NOTIFICATIONS`, `TEXTES_NOTIFICATIONS` dans `api.js`) :
 `essai-notifications.py` compare les deux. Ne jamais marquer un envoi
 « envoye » ou « livre » sans réponse du fournisseur.
 
+### Supprimer mon compte (`outils/supabase-compte.sql`)
+
+`supprimer_mon_compte('SUPPRIMER')`, appelée par l'application mobile pour le compte
+connecté et lui seul. **On n'efface jamais la ligne du compte** : `clients.id` suit
+`auth.users` en cascade, et factures, paiements, pré-alertes suivent `clients` de la même
+façon. La fonction vide le profil (nom, e-mail, téléphone, adresse → « Compte
+supprimé », `clients.supprime_le`), garde le code client, efface les téléphones et les
+pré-alertes en attente, bloque le compte de connexion (e-mail remplacé, mot de passe
+retiré, `banned_until`, sessions fermées : l'adresse redevient libre) et journalise
+`client.suppression_demandee`. Refusée à un compte de l'équipe (`clients.view`), tant
+qu'un colis n'est pas livré ou qu'une facture a un solde. `essai-mobile.py` (section K)
+l'éprouve ; la doublure d'`auth` (`essai-services.py`, `DOUBLURES`) a les colonnes et
+tables de GoTrue qu'elle touche.
+
+### Continuer avec Google (`outils/supabase-connexion.sql`)
+
+La connexion passe par Supabase Auth (`signInWithOAuth`), rien d'autre : aucune clé Google
+dans le dépôt, le fournisseur s'active dans Supabase > Authentication > Providers. Le site
+ne montre le bouton (`[data-social]`, connexion et inscription) que si les réglages
+publics de Supabase (`/auth/v1/settings`, `external.google`) le disent actif :
+`API.fournisseursConnexion()` ; `API.connecterAvec()` part chez le fournisseur et revient
+toujours sur `connexion.html` (session dans l'adresse, ou `error=` dit par la page). Un
+fournisseur de plus : `FOURNISSEURS` dans `api.js` et son bouton. Le profil d'un compte
+Google naît par le même déclencheur (`creer_profil_client`), qui lit le nom et la langue
+envoyés par Google (`nom_depuis_metadonnees`, `langue_depuis_metadonnees`, fermées à tous) ;
+pays, ville et téléphone manquent : « Mon compte » affiche « Complétez votre profil »
+(`[data-completer]`) et ouvre de lui-même le formulaire du profil ; l'application ouvre
+l'écran « Mes informations ». E-mails de bienvenue et « Supprimer mon compte » (qui efface
+`auth.identities`) n'ont pas changé. `essai-mobile.py` (section L) l'éprouve.
+
+**Pas de pré-alerte sans profil complet** (`outils/supabase-profil-complet.sql`) : le
+déclencheur `exiger_profil_prealerte` (avant insertion dans `prealertes`, donc aussi pour
+l'écriture directe des anciennes versions de l'application) refuse avec
+`PROFILE_INCOMPLETE` tant que `profil_complet(client)` est faux : nom, téléphone, pays et
+ville non vides — les mêmes champs que le bandeau du site et la carte de l'application.
+Les pré-alertes déjà enregistrées ne sont pas touchées. `essai-mobile.py` (section M).
+
 ### L'application mobile (dépôt `goship-express-app`)
 
 L'espace client sur téléphone (Expo), cloné dans `application-mobile/` (ignoré ici).
 Même règle que le bureau : aucune logique métier, elle lit `mon_resume`,
 `mes_factures`, `suivre_colis`, `mes_permissions`, les tables `colis`,
-`colis_historique`, `prealertes`, et écrit par `creer_prealerte` et
-`enregistrer_appareil`. `outils/supabase-mobile.sql` ne fait qu'ajouter
+`colis_historique`, `prealertes`, et écrit par `creer_prealerte`,
+`enregistrer_appareil` et `supprimer_mon_compte`. `outils/supabase-mobile.sql` ne fait qu'ajouter
 `creer_prealerte` (clé d'envoi, doublon, validation) et un index ; l'insert direct
 dans `prealertes` reste ouvert pour les versions déjà installées — **ne le ferme pas**
 sans une période de transition. Une fonction dont l'application dépend ne se renomme
@@ -349,7 +424,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

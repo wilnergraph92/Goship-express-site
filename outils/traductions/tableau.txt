@@ -8,6 +8,7 @@
 (obligatoire, gardé au journal)
 + Colis
 0 à 30 jours
+1 facture retirée de la liste.
 12 derniers mois
 14 jours
 3 derniers mois
@@ -51,7 +52,13 @@ Afficher plus de factures
 Agence
 Agence où le client retire son colis
 Agence où retirer le colis
+Ajouter des colis
 Ajouter des exemples
+Ajouter la sélection
+Ajouter le frais de service
+Ajouter le frais de service ?
+Ajouter un colis
+Ajout…
 Alertes
 Aller au contenu
 Analytics
@@ -83,6 +90,7 @@ Aperçu de l’e-mail
 Apparence
 Application
 Appliquer
+Appliquer le frais de service à la nouvelle facture
 Argent
 Arrivé au centre de distribution
 Au
@@ -102,6 +110,7 @@ Aucun colis reçu ni livré sur cette période.
 Aucun colis reçu pendant cette période.
 Aucun colis reçu sur la période.
 Aucun colis sur ces deux périodes.
+Aucun colis à ajouter.
 Aucun paiement reçu pendant cette période.
 Aucun paiement reçu pour l'instant.
 Aucun paiement reçu pour l’instant.
@@ -130,6 +139,7 @@ Aucune ville de destination sur la période.
 Aucune ville indiquée.
 Aucune étape achevée pendant cette période.
 Aujourd'hui
+Aujourd'hui, une facture
 Aujourd’hui
 Autre
 Autre moyen
@@ -144,8 +154,9 @@ Aérienne
 Base de données en ligne (Supabase)
 COLIS DÉJÀ LIVRÉ
 Calculé par le système : poids × tarif.
-Calculé à partir des colis cochés, frais de service compris.
+Calculé à partir des colis cochés, sans frais de service : ils s'ajoutent à l'encaissement.
 Ce changement de statut n’est pas permis.
+Ce client n’a pas d’autre facture de colis à payer sans paiement : ajoutez un colis pour le regrouper avec cette facture.
 Ce colis est déjà sur une facture.
 Ce colis n’existe plus : rechargez la liste.
 Ce colis n’existe plus.
@@ -184,6 +195,7 @@ Chiffres et contrôle de la facturation
 Chiffres, analytics et rapports
 Choisir un pays
 Choisir…
+Choisissez au moins deux factures, ou une facture et un colis.
 Choisissez au moins une donnée à inclure.
 Choisissez le nouveau statut.
 Choisissez une date de début et une date de fin.
@@ -203,14 +215,17 @@ Clients correspondants
 Clients inscrits
 Clients inscrits (fin de période)
 Clients les plus actifs
+Cochez le colis qui sort de la facture.
 Cochez les blocs à afficher et rangez-les avec les flèches. Gardé sur cet appareil seulement.
 Code
 Code client
 Code client, nom, téléphone, e-mail, ville…
 Code-barres
 Colis
+Colis ajouté, sans facture
 Colis au statut « Action requise » : le client ou l’équipe doit agir. Les plus anciens d’abord ; la note dit pourquoi.
 Colis disponible
+Colis disponibles
 Colis dont la réception à Miami (date saisie à l’arrivée) tombe dans la période. Source : colis.
 Colis du client
 Colis en cours
@@ -224,6 +239,7 @@ Colis par statut
 Colis par statut, maintenant
 Colis passés en action requise
 Colis passés à ce statut pendant la période, chacun une fois, sans les étapes annulées par une correction. Source : les événements (colis_historique).
+Colis qui sortent
 Colis reçu
 Colis reçus
 Colis reçus et livrés
@@ -233,12 +249,14 @@ Colis sans facture
 Colis sans progression, maintenant
 Colis scanné
 Colis scannés
+Colis sortis d’un regroupement
 Colis supprimé.
 Colis « sans mouvement »
 Colis à facturer
 Colis à traiter
 Colis, facture, suivi, code-barres, nom, téléphone…
 Compte
+Compte supprimé par le client
 Comptes et colis sont enregistrés uniquement dans ce navigateur. Une fois Supabase configuré (voir le fichier README.md), ce tableau de bord utilise la vraie base de données.
 Comptées en jours de Santo Domingo
 Confirmer
@@ -254,6 +272,7 @@ Consulter, puis choisir l’opération
 Consultez, générez et imprimez les rapports de GoShip Express.
 Contenu
 Contenu du colis
+Continuer la saisie
 Contrôle de la facturation
 Contrôler
 Coordonnées
@@ -374,6 +393,7 @@ Enregistrer le paiement
 Enregistrer les modifications
 Enregistrer un autre colis
 Enregistrer un colis
+Ensemble, après la sortie
 Erreur
 Espèces
 Essai de notification
@@ -407,6 +427,8 @@ Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé,
 Facturé sur la période
 Fermer
 Fermer le rapport
+Fermer sans enregistrer
+Fermer sans enregistrer ?
 Fiche complète
 Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
 Filtrer les clients
@@ -420,6 +442,7 @@ Filtres indisponibles : la base attend la mise à jour de outils/supabase-analyt
 Fin
 Finance
 Finances
+Fixer le prix à la main
 Fois
 Forte
 Frais de service
@@ -442,6 +465,7 @@ Historique
 Historique interne
 Identifiant
 Identifiant GSE, nom ou e-mail
+Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.
 Impayé
 Impayées
 Imprimer
@@ -453,7 +477,10 @@ Inactifs
 Indicateur
 Indicateurs de qualité
 Indiquez le motif.
+Indiquez le poids du colis, en livres (ex. 4,5).
+Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».
 Indiquez l’agence où le client peut retirer son colis.
+Indiquez s’il faut ajouter le frais de service.
 Informations générales
 Informations personnelles
 Inscrit le
@@ -469,21 +496,29 @@ Jours avec des scans
 L'heure en haut de l'écran, à la seconde près.
 La date de début doit être antérieure à la date de fin.
 La date de fin est avant la date de début.
+La facture reste sans frais de service.
 La personne crée d'abord son compte sur le site (« Créer un compte »), puis vous lui donnez son rôle ici. Chaque changement est noté au journal : qui, quand, ancien et nouveau rôle. Vous ne pouvez pas changer votre propre rôle.
 Laissez vide : lien PayPal créé automatiquement
 Laissé vide, un lien PayPal est créé avec le montant : le client paie par carte Visa ou Mastercard. Vous pouvez aussi coller un lien Azul.
 Langue
 Langue du tableau de bord
 Le colis a changé de statut entre-temps : rechargez la liste.
+Le colis qui reste, sur sa facture
+Le colis sorti, sur sa facture
 Le compte
+Le frais de service sera ajouté à la facture en même temps que le paiement.
 Le jour
 Le plus de colis en cours
+Le prix du colis doit être compris entre 0 et 100 000 $.
 Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
 Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
 Les chiffres se lisent dans la base à chaque ouverture du rapport.
+Les colis cochés passent sur leur propre facture ; les autres restent ensemble sur une nouvelle facture. Celle-ci est annulée et renvoie vers la nouvelle. Le frais de service reste sur la facture qui garde le regroupement ; celle des colis sortis n'en a pas (il pourra s'ajouter à l'encaissement).
 Les dépenses ne sont pas suivies : aucune marge n'est calculée.
+Les factures cochées, et les colis ajoutés, sont réunis sur une seule nouvelle facture ; les anciennes sont annulées et renvoient vers elle. Chaque colis garde son prix ; le frais de service, si vous l'appliquez, n'y compte qu'une fois, sur une ligne à part. Seules les factures de colis sans aucun paiement se regroupent.
 Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, poste de scan et colis à traiter restent entiers.
 Les icônes seulement, pour laisser plus de place aux listes (ordinateur).
+Les informations saisies dans cette fenêtre seront perdues.
 Lien de paiement
 Lien de paiement (facultatif)
 Lien de paiement prêt
@@ -543,6 +578,8 @@ Modifier un rapport
 Modifier une facture
 Modifié le
 Moins de 24 h
+Moins de deux factures dans la liste : ajoutez-en une, ou un colis.
+Moins de deux factures dans la liste : rien à regrouper.
 Mois
 Mois du
 Mois précédent
@@ -554,6 +591,7 @@ Montant du transport
 Montant dû
 Montant facturé (hors annulées)
 Montant impayé
+Montant initial
 Montant payé
 Montant reçu (US $)
 Montant total (US $)
@@ -572,7 +610,9 @@ Nom (A → Z)
 Nom du rapport
 Nom du rapport…
 Nombre
+Nombre de colis
 Nombre de jours sans mouvement
+Non
 Non disponible
 Non renseigné
 Non échues
@@ -588,6 +628,7 @@ Nouveaux
 Nouveaux clients
 Nouvelle facture
 Nouvelle valeur
+Numéro, contenu, magasin, suivi du vendeur, destination…
 N°
 N° colis
 N° de colis
@@ -604,6 +645,7 @@ Opérations aujourd’hui
 Opérations par jour
 Orientation de la page imprimée
 Origine
+Oui
 Ouverture…
 Ouvrir
 Ouvrir la fiche
@@ -674,7 +716,10 @@ Pourcentage
 Prix
 Prix arrêté à l’enregistrement du colis.
 Prix du colis (US $)
+Prix du colis illisible.
 Prix du transport
+Prix fixé à la main
+Prix invalide : un montant en dollars, de 0 à 100 000.
 Prix moyen
 Prix moyen d’un colis
 Précédente
@@ -726,7 +771,10 @@ Restait dû à la fin de la période
 Reste dû
 Reste sur les factures de la période
 Reste à payer
+Retirer
+Retirer le frais de service
 Retour
+Retrait…
 Reçu
 Reçu le
 Reçu à l'entrepôt
@@ -740,6 +788,7 @@ Rien de facturé ni d’encaissé sur cette période.
 Rien d’anormal
 Rien n’a été enregistré. Vérifiez la connexion, puis réessayez.
 Rien sur cette période.
+Rien à changer : la facture est déjà ainsi.
 Rien à exporter : chargez d’abord une rubrique.
 Rien à imprimer : chargez d’abord une rubrique.
 Rien à payer
@@ -765,6 +814,9 @@ Rétablir la disposition
 Rôle
 Saisi
 Saisi par
+Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.
+Sans effet : le prix du colis est fixé à la main
+Sans facture
 Sans mouvement
 Sans mouvement depuis
 Sans échéance
@@ -782,6 +834,7 @@ Ses colis
 Ses factures
 Session expirée
 Seuls les colis de ce client apparaissent : une facture ne peut pas mélanger deux clients.
+Seuls les colis de ce client qui peuvent rejoindre la facture apparaissent : sans facture, ou sur une facture à payer sans aucun paiement — celle-ci entre alors avec eux. Un colis déjà dans la fenêtre n'y figure pas.
 Situation
 Solde
 Solde (maintenant)
@@ -789,6 +842,13 @@ Solde actuel
 Solde le plus élevé
 Sombre
 Son
+Sortie…
+Sortir des colis
+Sortir des colis de cette facture
+Sortir des colis de la facture
+Sortir du regroupement
+Sortir et encaisser
+Sous-total des colis
 Statistiques
 Statistiques financières
 Statut
@@ -841,6 +901,7 @@ Tous les colis
 Tous les réglages
 Tous les réglages…
 Tous les services
+Tout remettre
 Tout sélectionner
 Toutes
 Toutes les destinations
@@ -862,12 +923,14 @@ Téléphone
 USA
 Un acompte suffit : la facture reste à payer pour le reste.
 Un paiement enregistré ne se modifie plus. En cas d'erreur, annulez-le avec son motif, puis saisissez le bon : les deux restent visibles.
+Un prix fixé à la main est réservé à qui peut modifier les factures.
 Un rôle ne se change que depuis l'onglet « Équipe », par un administrateur. La base vérifie chaque permission à chaque action : un menu masqué ici n'est qu'un confort.
 Un scanner USB ou Bluetooth (mode clavier) n'a rien à installer : scannez un code pour le vérifier.
 Une erreur est survenue. Réessayez.
 Une notification du système quand une alerte apparaît (action requise, facture en retard…) et que la fenêtre n'est pas au premier plan.
 Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.
 Une période de trois ans au plus.
+Une seule fois pour toute la facture, sur une ligne à part. Sans lui, il pourra s'ajouter à l'encaissement.
 Utilisateur
 Valeurs extrêmes
 Valide
@@ -903,6 +966,7 @@ anglais
 annulée
 annulées
 au
+au lieu du calcul poids × tarif (forfait, accord particulier)
 aucun colis
 aucune facture sur la période
 aucune opération encore
@@ -1003,6 +1067,8 @@ sur ces factures
 sur la période
 transféré à la succursale
 transférés à la succursale
+« Encaisser » enregistre le paiement d'une facture : payée, elle quitte la liste. « Retirer » l'enlève de la liste sans rien changer à la facture.
+« Sortir et encaisser » ouvre ensuite le paiement de la facture des colis sortis.
 · mot de passe
 À encaisser
 À la création

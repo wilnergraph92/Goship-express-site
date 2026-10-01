@@ -7,7 +7,7 @@ bureau ou le mobile ne peuvent que demander ; la base décide.
 
 ## Migrations
 
-La chaîne officielle : `outils/migrations.txt` (douze fichiers). Règles :
+La chaîne officielle : `outils/migrations.txt` (dix-sept fichiers). Règles :
 
 - **dans l'ordre** ; relancer un fichier impose de relancer ceux qui le suivent ;
 - **rejouables sans risque** : `if not exists`, `create or replace`, valeurs par
@@ -32,6 +32,11 @@ on revient en arrière par une nouvelle migration ou une restauration
 | Migration | Production |
 |---|---|
 | `supabase.sql` à `supabase-rapports.sql` (1 à 12) | présentes (fonction témoin de chacune) ; chaîne entière relancée par le propriétaire le 28/09/2026, contrôle de `supabase-rapports.sql` : `5 \| 0 \| true \| true` |
+| `supabase-compte.sql` (13, « Supprimer mon compte » de l'application) | exécuté par le propriétaire le 28/09/2026 ; contrôle : `1 \| false \| 1`. relancé le 29/09/2026 avec 14 à 16 (réparation : blocage lisible par Supabase) ; contrôle : `1 \| false \| 1 \| 0` |
+| `supabase-regroupement.sql` (14, sortir des colis d'une facture regroupée) | exécuté par le propriétaire le 28/09/2026 ; contrôle : `1 \| false` |
+| `supabase-connexion.sql` (15, profil d'un compte ouvert avec Google) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| true` |
+| `supabase-profil-complet.sql` (16, pas de pré-alerte sans profil complet) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| 1` |
+| `supabase-frais-service.sql` (17, frais de service au regroupement et à l'encaissement) | **à exécuter** par le propriétaire ; contrôle attendu : `4 \| false \| 0` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de

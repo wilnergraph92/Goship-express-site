@@ -153,7 +153,7 @@ def main():
     verifier('les six anciens fichiers refusent de s\'exécuter', refus, [True] * len(ANCIENS))
     for email, (uid, _mdp, nom) in M.COMPTES.items():
         db.sql("""insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
-                  values ('%s', '%s', now(), '{"nom_complet":"%s","pays":"HT","ville":"Pétion-Ville"}'::jsonb);"""
+                  values ('%s', '%s', now(), '{"nom_complet":"%s","pays":"HT","ville":"Pétion-Ville","telephone":"+509 3000 0000"}'::jsonb);"""
                % (uid, email, nom))
     db.sql("select public.definir_admin('equipe@goship.test');")
     jsonq(db, M.ADMIN, "select public.changer_role('employe@goship.test', 'employe');")

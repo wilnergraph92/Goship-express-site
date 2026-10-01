@@ -17,7 +17,8 @@
 --   comptes (client, second client, employé, gérant, administrateur) → rôles par
 --   changer_role → colis créé par l'employé (prix calculé par la base) → étapes
 --   par executer_operation → verrou du statut → poste de scan → facture par le
---   gérant (5 $/lb + 10 $) → paiement idempotent, trop-payé refusé, annulation
+--   gérant (5 $/lb, sans frais ; frais de service
+--   ajoutés une fois, jamais deux — supabase-frais-service.sql) → paiement idempotent, trop-payé refusé, annulation
 --   motivée → refus des permissions → espace client (mon_resume, mes_factures,
 --   isolation) → suivi public → notifications créées par la base → sante().
 -- Chaque vérification réussie s'affiche « OK … » ; un échec lève « ÉCHEC … ».
@@ -152,8 +153,16 @@ do $$ declare r jsonb; f uuid; p jsonb; p2 jsonb; begin
   r := public.facturer_colis(current_setting('essai.colis')::uuid);
   f := coalesce(r -> 'facture' ->> 'id', r ->> 'id')::uuid;
   perform set_config('essai.facture', f::text, true);
-  if (select montant_usd from public.factures where id = f) <> 30 then
-    raise exception 'ÉCHEC : facture de % $, attendu 30 $ (20 $ de transport + 10 $ de frais)', (select montant_usd from public.factures where id = f);
+  if (select montant_usd from public.factures where id = f) <> 20 then
+    raise exception 'ÉCHEC : facture de % $, attendu 20 $ (20 $ de transport, sans frais à l''enregistrement)', (select montant_usd from public.factures where id = f);
+  end if;
+  -- Les frais de service s'ajoutent une fois (fiche de la facture, ou « Encaisser → Oui ») ;
+  -- demandés une seconde fois, rien ne change
+  perform public.changer_frais_service(f, true);
+  perform public.changer_frais_service(f, true);
+  if (select montant_usd || '/' || frais_service_usd from public.factures where id = f) <> '30.00/10.00' then
+    raise exception 'ÉCHEC : après les frais, % au lieu de 30.00/10.00',
+      (select montant_usd || '/' || frais_service_usd from public.factures where id = f);
   end if;
   -- Facturer deux fois le même colis rend la même facture (requête répétée) ;
   -- une seconde facture qui le reprendrait est refusée (INVOICE_ALREADY_EXISTS)
@@ -190,7 +199,7 @@ do $$ declare r jsonb; f uuid; p jsonb; p2 jsonb; begin
   if (select statut from public.factures where id = f) <> 'payee' then
     raise exception 'ÉCHEC : facture payée en entier mais statut %', (select statut from public.factures where id = f);
   end if;
-  raise notice 'OK facturation : 30 $, refacturation rendue telle quelle, seconde facture refusée, paiement idempotent, trop-payé refusé, annulation motivée, payée';
+  raise notice 'OK facturation : 20 $ sans frais, frais ajoutés une fois (30 $), refacturation rendue telle quelle, seconde facture refusée, paiement idempotent, trop-payé refusé, annulation motivée, payée';
 end $$;
 reset role;
 

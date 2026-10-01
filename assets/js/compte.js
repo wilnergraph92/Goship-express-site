@@ -237,6 +237,57 @@
     return;
   }
 
+  /* ---- Continuer avec Google (connexion et inscription) -------------------- */
+  // Le bouton n'apparaît que si Supabase a activé le fournisseur. Google renvoie
+  // toujours sur connexion.html : avec la session dans l'adresse, la page mène à
+  // « Mon compte » comme après un mot de passe ; avec une erreur, elle la dit ici.
+  var social = $('[data-social]');
+  if (social) {
+    var erreurSociale = $('[data-social-erreur]', social);
+    var retourSocial = function () {
+      var m = /[?&]retour=([a-z0-9-]+\.html)/.exec(location.search);
+      return 'connexion.html' + (m ? '?retour=' + m[1] : '');
+    };
+    var direErreurSociale = function (cle) {
+      erreurSociale.textContent = t(cle) || t('erreur-inconnu');
+      erreurSociale.hidden = false;
+      social.hidden = false;
+    };
+
+    // Retour du fournisseur avec une erreur (?error=… ou #error=…) : on la dit, et
+    // on l'efface de l'adresse (on garde seulement ?retour=).
+    var parametres = (location.search.slice(1) + '&' + location.hash.slice(1)).split('&');
+    var erreurRetour = null;
+    parametres.forEach(function (p) {
+      var cle = p.split('=')[0];
+      if (cle === 'error' && !erreurRetour) erreurRetour = decodeURIComponent(p.split('=')[1] || '');
+    });
+    if (erreurRetour) {
+      direErreurSociale(erreurRetour === 'access_denied' ? 'erreur-social-annule' : 'erreur-social-echec');
+      try { history.replaceState(null, '', location.pathname + retourSocial().replace('connexion.html', '')); } catch (e) {}
+    }
+
+    API.fournisseursConnexion().then(function (actifs) {
+      $$('[data-fournisseur]', social).forEach(function (b) {
+        b.hidden = actifs.indexOf(b.getAttribute('data-fournisseur')) < 0;
+      });
+      if (actifs.length) social.hidden = false;
+    });
+
+    $$('[data-action="connexion-sociale"]', social).forEach(function (bouton) {
+      bouton.addEventListener('click', function () {
+        erreurSociale.hidden = true;
+        bouton.disabled = true;
+        bouton.setAttribute('aria-busy', 'true');
+        API.connecterAvec(bouton.getAttribute('data-fournisseur'), retourSocial()).catch(function (err) {
+          bouton.disabled = false;
+          bouton.removeAttribute('aria-busy');
+          direErreurSociale('erreur-' + err.code);
+        });
+      });
+    });
+  }
+
   /* ---- Inscription ---------------------------------------------------------- */
   var formInscription = $('form[data-form="inscription"]');
   if (formInscription) {
@@ -435,6 +486,9 @@
         if (dd) dd.textContent = infos[k] || '—';
       });
       $$('[data-lien-wa="wa-aide"]').forEach(function (a) { a.href = waUrl(t('wa-aide', { code: profil.code || '' })); });
+      // Compte ouvert avec Google : ni pays, ni ville, ni téléphone. On les demande.
+      var incomplet = !profil.nom_complet || !profil.pays || !profil.ville || !profil.telephone;
+      $('[data-completer]').hidden = !incomplet || API.regles.rolesEquipe.indexOf(profil.role) >= 0;
       if (API.regles.rolesEquipe.indexOf(profil.role) >= 0 && !$('[data-avis-admin]')) {
         var avis = document.createElement('p');
         avis.className = 'gs-alerte gs-alerte--info';
@@ -776,6 +830,11 @@
       }
     };
     boutonModifier.addEventListener('click', function () { editer(true); });
+    var completerProfil = function () {
+      editer(true);
+      try { formProfil.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { formProfil.scrollIntoView(); }
+    };
+    $('[data-action="completer-profil"]').addEventListener('click', completerProfil);
     $('[data-action="annuler-profil"]').addEventListener('click', function () { editer(false); });
     formProfil.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -817,6 +876,10 @@
       if (!p) { location.replace('connexion.html?retour=mon-compte.html'); return; }
       profil = p;
       afficherProfil();
+      // Profil incomplet (compte ouvert avec Google, le plus souvent) : le formulaire
+      // s'ouvre de lui-même, sans attendre qu'on remarque le bandeau. Sans téléphone ni
+      // ville, l'équipe ne peut pas remettre un colis, et la base refuse les pré-alertes.
+      if (!$('[data-completer]').hidden) completerProfil();
       if (/[?&]bienvenue=1/.test(location.search)) {
         var bienvenue = $('[data-bienvenue]');
         bienvenue.hidden = false;

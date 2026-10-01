@@ -19,3 +19,8 @@ supabase-mobile.sql
 supabase-notifications.sql
 supabase-production.sql
 supabase-rapports.sql
+supabase-compte.sql
+supabase-regroupement.sql
+supabase-connexion.sql
+supabase-profil-complet.sql
+supabase-frais-service.sql

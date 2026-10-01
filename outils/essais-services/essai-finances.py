@@ -39,6 +39,8 @@ AVANT = os.environ.get('GOSHIP_AVANT', '97f53f0')
 FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
             'supabase-scanner.sql')
 NOUVEAUX = [os.path.join(RACINE, 'outils', f) for f in FICHIERS + ('supabase-finances.sql',)]
+# Ne dépend que des finances : installé à part, pour sa section (R)
+REGROUPEMENT = os.path.join(RACINE, 'outils', 'supabase-regroupement.sql')
 
 
 def fichier_git(nom):
@@ -197,6 +199,11 @@ def main():
     for f in NOUVEAUX[3:]:
         db.fichier(f)
     verifier('tarifs remis : 5 $/lb', un(db, "select public.tarifs() ->> 'par_livre';"), '5')
+    p = creer(db, ADMIN, dict(base, description='Forfait', poids_lb=10, prix_fixe_usd=18))
+    verifier('prix fixé à la main (18 $) : la ligne le garde, sans tarif à la livre ; facture 28 $',
+             (un(db, "select coalesce(tarif_lb_usd::text, 'aucun') || ' ' || montant_usd from facture_lignes "
+                     "where facture_id = '%s';" % p['facture']['id']), p['facture']['montant_usd']),
+             ('aucun 18.00', 28))
 
     print('\nD. Regroupement : 20 + 15 + 30 + 10 = 75 $')
     c3 = [creer(db, ADMIN, dict(base, description='Groupe %d' % p, poids_lb=p), facturer=False)['colis']['id']
@@ -545,7 +552,79 @@ def main():
     duree = time.time() - debut
     verifier('… le rapport d\'anomalies en moins de deux (%.2f s)' % duree, duree < 2, True)
 
-    print('\nR. Les deux côtés d\'accord')
+    print('\nR. Sortir des colis d\'une facture regroupée (supabase-regroupement.sql)')
+    for _ in range(2):
+        db.fichier(REGROUPEMENT)
+    controle = un(db, open(REGROUPEMENT, encoding='utf-8').read().split('Contrôle ---')[1].split('\n', 1)[1])
+    verifier('installée deux fois : fonction présente, fermée aux visiteurs', controle, '1|f')
+    rs = [creer(db, ADMIN, dict(base, description='Sortie %d' % p, poids_lb=p)) for p in (4, 3, 6)]
+    cs = [r['colis']['id'] for r in rs]
+    grp = jsonq(db, ADMIN, "select public.regrouper_factures(array['%s']::uuid[]);"
+                % "','".join(r['facture']['id'] for r in rs))['facture']
+    jsonq(db, ADMIN, "select public.definir_lien_paiement('%s', 'https://paiement.exemple/g');" % grp['id'])
+    db.sql("select set_config('goship.finances', 'on', false); "
+           "update factures set echeance_le = '2026-10-15', note = 'Regroupé au comptoir' where id = '%s';" % grp['id'])
+    verifier('regroupées : 20 + 15 + 30 + 10 = 75 $', grp['montant_usd'], 75)
+    sortir = "select public.sortir_du_regroupement('%s', array[%s]::uuid[], %s);"
+    nb_factures = "select count(*) from factures;"
+    avant_n = un(db, nb_factures)
+    so = jsonq(db, ADMIN, sortir % (grp['id'], q(cs[0]), q('sortie-1')))
+    verifier('le colis sorti : sa facture, 20 + 10 = 30 $, une ligne, à payer',
+             (so['facture']['montant_usd'], so['facture']['frais_service_usd'], len(so['facture']['facture_lignes']),
+              so['facture']['facture_lignes'][0]['colis_id'], so['facture']['etat_paiement']),
+             (30, 10, 1, cs[0], 'a_payer'))
+    verifier('les autres : 15 + 30 + 10 = 55 $, deux lignes',
+             (so['reste']['montant_usd'], sorted(l['colis_id'] for l in so['reste']['facture_lignes'])),
+             (55, sorted(cs[1:])))
+    verifier('échéance et note reprises ; pas le lien de paiement, qui portait le montant regroupé',
+             [(x['echeance_le'], x['note'], x['lien_paiement']) for x in (so['facture'], so['reste'])],
+             [('2026-10-15', 'Regroupé au comptoir', '')] * 2)
+    verifier('la facture regroupée : annulée, motif, remplacée par celle qui garde le regroupement',
+             un(db, "select statut || ' ' || (motif_annulation = 'Sortie du regroupement : ' || "
+                    "(select numero from colis where id = '%s')) || ' ' || (remplacee_par = '%s') "
+                    "from factures where id = '%s';" % (cs[0], so['reste']['id'], grp['id'])),
+             'annulee true true')
+    verifier('deux factures de plus, pas une de moins', int(un(db, nb_factures)) - int(avant_n), 2)
+    so2 = jsonq(db, ADMIN, sortir % (grp['id'], q(cs[0]), q('sortie-1')))
+    verifier('même demande renvoyée : mêmes factures, rien de refait',
+             (so2['deja'], so2['facture']['id'], so2['reste']['id'], so2['annulee'], int(un(db, nb_factures)) - int(avant_n)),
+             (True, so['facture']['id'], so['reste']['id'], grp['numero'], 2))
+    verifier('chaque colis n\'est que sur une facture active',
+             un(db, "select max(n) from (select count(*) n from facture_lignes l join factures f on f.id = l.facture_id "
+                    "where f.statut <> 'annulee' and l.colis_id in ('%s') group by l.colis_id) t;" % "','".join(cs)),
+             '1')
+    reste = so['reste']['id']
+    verifier('tous les colis choisis : refusé (il en faut un qui reste)',
+             erreur(db, ADMIN, sortir % (reste, "'%s','%s'" % tuple(cs[1:]), 'null')), 'INVALID_INPUT')
+    verifier('un colis qui n\'est pas sur la facture : refusé', erreur(db, ADMIN, sortir % (reste, q(cs[0]), 'null')),
+             'INVALID_INPUT')
+    verifier('aucun colis : refusé', erreur(db, ADMIN, sortir % (reste, '', 'null')), 'INVALID_INPUT')
+    verifier('la facture annulée : refusé', erreur(db, ADMIN, sortir % (grp['id'], q(cs[1]), 'null')),
+             'INVOICE_NOT_GROUPABLE')
+    sans_colis = jsonq(db, ADMIN, "select public.creer_facture('%s', null, %s);"
+                       % (JEAN, js({'montant_usd': 12})))['facture']['id']
+    verifier('une facture sans colis : refusé', erreur(db, ADMIN, sortir % (sans_colis, q(cs[1]), 'null')),
+             'INVOICE_NOT_GROUPABLE')
+    verifier('un client ne sort rien', erreur(db, MARIE, sortir % (reste, q(cs[1]), 'null')), 'PERMISSION_DENIED')
+    enc = paiement(db, ADMIN, so['facture']['id'], payer(30, 'moncash', 'MC-SORTIE'))
+    verifier('encaisser le colis sorti : sa facture payée, le reste toujours à payer',
+             (enc['facture']['etat_paiement'], etat(db, reste)), ('payee', '55.00 0.00 55.00 a_payer a_payer'))
+    verifier('une facture payée : refusé', erreur(db, ADMIN, sortir % (so['facture']['id'], q(cs[0]), 'null')),
+             'INVOICE_NOT_GROUPABLE')
+    paiement(db, ADMIN, reste, payer(5))
+    verifier('une facture qui a reçu un paiement : refusé', erreur(db, ADMIN, sortir % (reste, q(cs[1]), 'null')),
+             'INVOICE_HAS_PAYMENTS')
+    verifier('refus : rien n\'a bougé', etat(db, reste), '55.00 5.00 50.00 partielle a_payer')
+    verifier('journal : la sortie, son colis et les deux nouvelles factures',
+             un(db, "select (apres ->> 'colis') = (select numero from colis where id = '%s') and "
+                    "apres ->> 'facture' = '%s' and apres ->> 'reste' = '%s' from journal_audit "
+                    "where action = 'facture.sortie_regroupement';"
+                    % (cs[0], so['facture']['numero'], so['reste']['numero'])), 't')
+    rap = jsonq(db, ADMIN, "select public.rapport_anomalies_facturation();")
+    verifier('le rapport d\'anomalies ne voit aucun colis facturé deux fois',
+             [a_['numero'] for a_ in rap if a_['type'] == 'colis_facture_deux_fois'], [])
+
+    print('\nS. Les deux côtés d\'accord')
     api = open(os.path.join(RACINE, 'assets', 'js', 'api.js'), encoding='utf-8').read()
     moyens_js = api.split('var MOYENS_PAIEMENT = [')[1].split(']')[0]
     verifier('mêmes moyens de paiement dans la base et dans api.js',

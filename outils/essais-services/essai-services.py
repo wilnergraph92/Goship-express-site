@@ -47,8 +47,17 @@ create table auth.users (
   id uuid primary key,
   email text,
   email_confirmed_at timestamptz,
-  raw_user_meta_data jsonb default '{}'::jsonb
+  raw_user_meta_data jsonb default '{}'::jsonb,
+  -- Les colonnes et tables de GoTrue que touche supprimer_mon_compte (supabase-compte.sql)
+  encrypted_password text,
+  phone text,
+  banned_until timestamptz
 );
+create table auth.identities (id text primary key default gen_random_uuid()::text, user_id uuid, provider text,
+                              identity_data jsonb default '{}'::jsonb);
+create table auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid);
+create table auth.refresh_tokens (id bigint generated always as identity primary key, user_id varchar(255),
+                                  token varchar(255));
 
 -- Chez Supabase, auth.uid() est lu dans le jeton envoyé par le navigateur
 create function auth.uid() returns uuid language sql stable as $$
@@ -83,6 +92,7 @@ create publication supabase_realtime;
 
 ADMIN = 'aaaaaaaa-0000-0000-0000-00000000000a'
 ADMIN2 = 'aaaaaaaa-0000-0000-0000-00000000000b'
+EMPLOYE = 'eeeeeeee-0000-0000-0000-00000000000e'
 MARIE = '11111111-1111-1111-1111-111111111111'
 JEAN = '22222222-2222-2222-2222-222222222222'
 
@@ -555,6 +565,61 @@ def main():
     verifier('scan répété trois fois : un seul événement par colis',
              un(db, "select string_agg(n::text, ',') from (select count(*) n from colis_historique "
                     "where colis_id in ('%s') group by colis_id) s;" % "','".join(z)), '2,2,2')
+
+    print('\n16 bis. Prix fixé à la main (prix_fixe_usd)')
+    def modifier(compte, ident, champs):
+        return jsonq(db, compte, "select public.modifier_colis('%s', %s);" % (ident, colis(champs)))
+
+    rf = creer(db, ADMIN, dict(base, description='Forfait', prix_fixe_usd='35,5', tarif_lb_usd=8, prix_usd=1))
+    cf = rf['colis']
+    verifier('prix fixé : pris tel quel (« 35,5 »), à la place de poids × tarif ; aucun tarif à la livre',
+             (cf['prix_usd'], cf['prix_fixe_usd'], cf['tarif_lb_usd']), (35.5, 35.5, None))
+    lf = rf['facture']['facture_lignes'][0]
+    # (le tarif recopié sur la ligne, vide ici, est vérifié par essai-finances.py)
+    verifier('la facture : ce prix + 10 $ de frais',
+             (rf['facture']['montant_usd'], lf['montant_usd']), (45.5, 35.5))
+    verifier('le journal de création garde le prix fixé',
+             un(db, "select apres ->> 'prix_fixe_usd' from journal_audit where action = 'colis.creation' "
+                    "and entite_id = '%s';" % cf['id']), '35.50')
+    verifier('poids changé : le prix fixé ne bouge pas', modifier(ADMIN, cf['id'], {'poids_lb': 9})['prix_usd'], 35.5)
+    m = modifier(ADMIN, cf['id'], {'prix_fixe_usd': 40})
+    verifier('prix fixé corrigé : nouveau prix du colis ; la facture émise, elle, garde 45,50',
+             (m['prix_usd'], un(db, "select f.montant_usd from factures f join facture_lignes l on l.facture_id = f.id "
+                                    "where l.colis_id = '%s';" % cf['id'])), (40.0, '45.50'))
+    m = modifier(ADMIN, cf['id'], {'prix_fixe_usd': None})
+    verifier('revenir au prix calculé : poids × tarif de la maison (9 × 5)',
+             (m['prix_usd'], m['prix_fixe_usd'], m['tarif_lb_usd']), (45.0, None, 5.0))
+    m = modifier(ADMIN, cf['id'], {'prix_fixe_usd': 0})
+    verifier('prix fixé à 0 (envoi offert) : accepté', (m['prix_usd'], m['tarif_lb_usd']), (0.0, None))
+    for titre, valeur in (('négatif', -1), ('au-delà de 100 000 $', 100001), ('illisible', 'trente')):
+        verifier('prix fixé %s : refusé' % titre,
+                 db.erreur(ADMIN, "select public.creer_colis(%s);" % colis(dict(base, prix_fixe_usd=valeur))),
+                 'INVALID_PRICE')
+    verifier('prix envoyé dans prix_usd (sans prix fixé) : toujours ignoré',
+             creer(db, ADMIN, dict(base, description='Sans forfait', prix_usd=999), facturer=False)['colis']['prix_usd'], 21)
+
+    db.sql("""insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+              values ('%s', 'employe@goship.test', now(), '{"nom_complet":"Emma Employée"}'::jsonb);""" % EMPLOYE)
+    jsonq(db, ADMIN, "select public.changer_role('%s', 'employe');" % EMPLOYE)
+    verifier('une employée ne fixe pas un prix à la création',
+             db.erreur(EMPLOYE, "select public.creer_colis(%s);" % colis(dict(base, prix_fixe_usd=12))), 'PERMISSION_DENIED')
+    ce = creer(db, EMPLOYE, dict(base, description='Colis de l\'entrepôt', prix_fixe_usd=None), facturer=False)['colis']
+    verifier('… elle enregistre un colis au prix calculé', (ce['prix_usd'], ce['prix_fixe_usd']), (21, None))
+    fixe = creer(db, ADMIN, dict(base, description='Forfait 2', prix_fixe_usd=50), facturer=False)['colis']['id']
+    me = modifier(EMPLOYE, fixe, {'description': 'Forfait 2 (étiqueté)', 'prix_fixe_usd': 50, 'poids_lb': 7})
+    verifier('elle corrige un colis à prix fixé sans y toucher : prix inchangé', (me['prix_usd'], me['description']),
+             (50.0, 'Forfait 2 (étiqueté)'))
+    verifier('… mais ne change pas son prix fixé',
+             db.erreur(EMPLOYE, "select public.modifier_colis('%s', %s);" % (fixe, colis({'prix_fixe_usd': 60}))),
+             'PERMISSION_DENIED')
+    verifier('… ni ne le ramène au prix calculé',
+             db.erreur(EMPLOYE, "select public.modifier_colis('%s', %s);" % (fixe, colis({'prix_fixe_usd': None}))),
+             'PERMISSION_DENIED')
+    verifier('… ni ne fixe le prix d\'un colis calculé',
+             db.erreur(EMPLOYE, "select public.modifier_colis('%s', %s);" % (ce['id'], colis({'prix_fixe_usd': 5}))),
+             'PERMISSION_DENIED')
+    verifier('le colis refusé est intact', un(db, "select prix_usd || '|' || prix_fixe_usd from colis where id = '%s';" % fixe),
+             '50.00|50.00')
 
     print('\n17. Volume')
     db.sql("""insert into colis (client_id, description, poids_lb)

@@ -7,10 +7,10 @@
 <title>Tableau de bord — Goship Express</title>
 <meta name="description" content="Tableau de bord Goship Express : enregistrement des colis et mise à jour de leur statut.">
 <meta name="theme-color" content="#061a3f">
-<link rel="icon" href="favicon.ico" sizes="32x32">
-<link rel="icon" href="assets/img/favicon-32.png" type="image/png" sizes="32x32">
-<link rel="icon" href="assets/img/favicon-64.png" type="image/png" sizes="64x64">
-<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="icon" href="favicon.ico?v=2026-09-28" sizes="32x32">
+<link rel="icon" href="assets/img/favicon-32.png?v=2026-09-28" type="image/png" sizes="32x32">
+<link rel="icon" href="assets/img/favicon-64.png?v=2026-09-28" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png?v=2026-09-28">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="[[fonts]]">
@@ -938,6 +938,10 @@
           <input id="col-prix" name="prix_usd" inputmode="decimal" maxlength="10" autocomplete="off" placeholder="0,00" readonly tabindex="-1" data-prix-colis>
           <p class="gs-champ__aide" data-calcul-prix aria-live="polite">Calculé par le système : poids × tarif.</p>
         </div>
+        <label class="gs-case gs-champ--large" data-permission="invoices.edit">
+          <input type="checkbox" name="prix_manuel" data-prix-manuel>
+          <span><strong>Fixer le prix à la main</strong> au lieu du calcul poids × tarif (forfait, accord particulier)</span>
+        </label>
         <div class="gs-champ">
           <label for="col-service">Service</label>
           <select id="col-service" name="service">
@@ -1014,7 +1018,7 @@
         <div class="gs-champ">
           <label for="fac-montant">Montant total (US $)</label>
           <input id="fac-montant" name="montant_usd" type="number" min="0" step="0.01" required placeholder="45.00">
-          <p class="gs-champ__aide" data-aide-montant>Calculé à partir des colis cochés, frais de service compris.</p>
+          <p class="gs-champ__aide" data-aide-montant>Calculé à partir des colis cochés, sans frais de service : ils s'ajoutent à l'encaissement.</p>
         </div>
         <div class="gs-champ">
           <label for="fac-echeance">À payer avant le</label>
@@ -1041,6 +1045,9 @@
       </section>
       <div class="gs-dialogue__actions-colis" data-bloc-actions-facture hidden>
         <button type="button" class="gs-lien-bouton" data-action="regrouper-facture" data-permission="invoices.create invoices.cancel">[[ico:clipboard]]Regrouper avec d'autres factures de ce client</button>
+        <button type="button" class="gs-lien-bouton" data-action="sortir-regroupement" data-permission="invoices.create invoices.cancel">[[ico:arrow-up-right]]Sortir des colis de cette facture</button>
+        <button type="button" class="gs-lien-bouton" data-action="ajouter-frais" data-permission="invoices.edit" hidden>[[ico:plus]]Ajouter le frais de service</button>
+        <button type="button" class="gs-lien-bouton" data-action="retirer-frais" data-permission="invoices.edit" hidden>[[ico:x]]Retirer le frais de service</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="annuler-facture" data-permission="invoices.cancel">[[ico:x]]Annuler cette facture</button>
       </div>
       <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
@@ -1062,8 +1069,19 @@
       <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer">[[ico:x]]</button>
     </div>
     <div class="gs-dialogue__corps">
+      <fieldset class="gs-frais-choix" data-paiement-frais>
+        <legend>Ajouter le frais de service ?</legend>
+        <div class="gs-frais-choix__boutons">
+          <label class="gs-frais-choix__option"><input type="radio" name="frais_service" value="oui"><span>Oui</span></label>
+          <label class="gs-frais-choix__option"><input type="radio" name="frais_service" value="non"><span>Non</span></label>
+        </div>
+        <p class="gs-champ__aide" data-paiement-frais-aide></p>
+      </fieldset>
+      <p class="gs-frais-inclus" data-paiement-frais-inclus hidden></p>
       <div class="gs-recap">
-        <div class="gs-recap__ligne"><span>Total de la facture</span><strong data-paiement-recap="total"></strong></div>
+        <div class="gs-recap__ligne"><span>Montant initial</span><strong data-paiement-recap="initial"></strong></div>
+        <div class="gs-recap__ligne"><span>Frais de service</span><strong data-paiement-recap="frais"></strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Total de la facture</span><strong data-paiement-recap="total"></strong></div>
         <div class="gs-recap__ligne"><span>Déjà payé</span><strong data-paiement-recap="paye"></strong></div>
         <div class="gs-recap__ligne gs-recap__ligne--balance"><span>Reste à payer</span><strong data-paiement-recap="solde"></strong></div>
       </div>
@@ -1144,14 +1162,22 @@
       <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer">[[ico:x]]</button>
     </div>
     <div class="gs-dialogue__corps">
-      <p class="gs-dialogue__aide">Les factures cochées sont annulées et remplacées par une seule, qui reprend tous leurs colis au prix déjà arrêté — les frais de service n'y comptent qu'une fois. Seules les factures de colis sans aucun paiement se regroupent.</p>
+      <p class="gs-dialogue__aide">Les factures cochées, et les colis ajoutés, sont réunis sur une seule nouvelle facture ; les anciennes sont annulées et renvoient vers elle. Chaque colis garde son prix ; le frais de service, si vous l'appliquez, n'y compte qu'une fois, sur une ligne à part. Seules les factures de colis sans aucun paiement se regroupent.</p>
+      <p class="gs-dialogue__aide">« Encaisser » enregistre le paiement d'une facture : payée, elle quitte la liste. « Retirer » l'enlève de la liste sans rien changer à la facture.</p>
       <fieldset class="gs-choix-colis">
         <legend>Factures à regrouper</legend>
         <div class="gs-regroupement" data-liste-regroupement></div>
       </fieldset>
+      <div class="gs-regroupement__ajout">
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="ajouter-colis-regroupement">[[ico:plus]]Ajouter un colis</button>
+      </div>
+      <p class="gs-regroupement__retirees" data-regroupement-retirees hidden><span data-regroupement-retirees-texte></span> <button type="button" class="gs-lien-bouton" data-action="remettre-regroupement">Tout remettre</button></p>
+      <label class="gs-case gs-frais-regroupement"><input type="checkbox" name="frais_service" data-regroupement-frais checked><span>Appliquer le frais de service à la nouvelle facture</span></label>
+      <p class="gs-champ__aide">Une seule fois pour toute la facture, sur une ligne à part. Sans lui, il pourra s'ajouter à l'encaissement.</p>
       <div class="gs-recap" data-recap-regroupement hidden>
         <div class="gs-recap__ligne"><span data-regroupement-avant></span><strong data-regroupement="avant"></strong></div>
-        <div class="gs-recap__ligne"><span>Colis</span><strong data-regroupement="colis"></strong></div>
+        <div class="gs-recap__ligne"><span>Nombre de colis</span><strong data-regroupement="nombre"></strong></div>
+        <div class="gs-recap__ligne"><span>Sous-total des colis</span><strong data-regroupement="colis"></strong></div>
         <div class="gs-recap__ligne"><span>Frais de service (une fois)</span><strong data-regroupement="frais"></strong></div>
         <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Nouvelle facture</span><strong data-regroupement="total"></strong></div>
       </div>
@@ -1160,6 +1186,66 @@
     <div class="gs-dialogue__pied">
       <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
       <button type="submit" class="gs-bouton gs-bouton--plein" data-regroupement-valider>Regrouper</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="ajout-colis" data-sans-confirmation aria-labelledby="dlg-ajout-colis-titre">
+  <form class="gs-form" data-form="ajout-colis" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-ajout-colis-titre">Ajouter des colis</h2>
+        <p class="gs-dialogue__sous-titre" data-ajout-colis-client></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer">[[ico:x]]</button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Seuls les colis de ce client qui peuvent rejoindre la facture apparaissent : sans facture, ou sur une facture à payer sans aucun paiement — celle-ci entre alors avec eux. Un colis déjà dans la fenêtre n'y figure pas.</p>
+      <div class="gs-champ">
+        <label for="ajout-colis-recherche">Rechercher un colis</label>
+        <input id="ajout-colis-recherche" name="recherche" type="search" autocomplete="off" spellcheck="false" placeholder="Numéro, contenu, magasin, suivi du vendeur, destination…">
+      </div>
+      <fieldset class="gs-choix-colis">
+        <legend>Colis disponibles</legend>
+        <div class="gs-regroupement" data-liste-ajout-colis></div>
+      </fieldset>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-ajout-colis-valider disabled>Ajouter la sélection</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="gs-dialogue" data-dialogue="sortie" aria-labelledby="dlg-sortie-titre">
+  <form class="gs-form" data-form="sortie" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-sortie-titre">Sortir des colis de la facture</h2>
+        <p class="gs-dialogue__sous-titre" data-sortie-facture></p>
+      </div>
+      <button type="button" class="gs-dialogue__fermer" data-action="fermer" aria-label="Fermer">[[ico:x]]</button>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Les colis cochés passent sur leur propre facture ; les autres restent ensemble sur une nouvelle facture. Celle-ci est annulée et renvoie vers la nouvelle. Le frais de service reste sur la facture qui garde le regroupement ; celle des colis sortis n'en a pas (il pourra s'ajouter à l'encaissement).</p>
+      <p class="gs-dialogue__aide">« Sortir et encaisser » ouvre ensuite le paiement de la facture des colis sortis.</p>
+      <fieldset class="gs-choix-colis">
+        <legend>Colis qui sortent</legend>
+        <div class="gs-regroupement" data-liste-sortie></div>
+      </fieldset>
+      <div class="gs-recap" data-recap-sortie hidden>
+        <div class="gs-recap__ligne"><span>Aujourd'hui, une facture</span><strong data-sortie="avant"></strong></div>
+        <div class="gs-recap__ligne"><span data-sortie-libelle-sortis></span><strong data-sortie="sortis"></strong></div>
+        <div class="gs-recap__ligne"><span data-sortie-libelle-reste></span><strong data-sortie="reste"></strong></div>
+        <div class="gs-recap__ligne gs-recap__ligne--fort"><span>Ensemble, après la sortie</span><strong data-sortie="apres"></strong></div>
+      </div>
+      <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="button" class="gs-bouton gs-bouton--contour" data-sortie-encaisser data-permission="payments.create">Sortir et encaisser</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-sortie-valider>Sortir du regroupement</button>
     </div>
   </form>
 </dialog>
@@ -1381,6 +1467,24 @@
       <button type="submit" class="gs-bouton gs-bouton--danger" data-supprimer-rapport-valider>Supprimer</button>
     </div>
   </form>
+</dialog>
+
+<!-- Fermer une fenêtre où l'on a déjà saisi quelque chose : on le confirme d'abord -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="abandon" aria-labelledby="dlg-abandon-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-abandon-titre">Fermer sans enregistrer ?</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Les informations saisies dans cette fenêtre seront perdues.</p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--danger" data-abandon-confirmer>Fermer sans enregistrer</button>
+      <button type="button" class="gs-bouton gs-bouton--plein" data-abandon-continuer autofocus>Continuer la saisie</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog class="gs-dialogue gs-fiche" data-dialogue="fiche" aria-labelledby="dlg-fiche-titre">

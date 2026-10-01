@@ -952,6 +952,11 @@
         window.open('https://wa.me/' + numero + '?text=' + encodeURIComponent(texte), '_blank', 'noopener');
       }));
     }
+    if (t.etat !== 'annulee' && sortable(facture)) {
+      var sortirBouton = petitBouton('Sortir des colis', null, function () { ouvrirSortie(facture); });
+      sortirBouton.setAttribute('aria-label', 'Sortir des colis de la facture ' + facture.numero);
+      r.push(sortirBouton);
+    }
     if (t.etat !== 'annulee' && t.paye === 0 && peut('invoices.cancel')) {
       var annuler = petitBouton('Annuler', 'gs-bouton--danger', function () { demanderAnnulationFacture(facture); });
       annuler.setAttribute('aria-label', 'Annuler la facture ' + facture.numero);
@@ -1101,8 +1106,9 @@
     var cases = casesColisFacture();
     var choisis = colisCoches();
     var totalColis = O.arrondi(choisis.reduce(function (s, c) { return s + O.prixColis(c); }, 0));
-    var frais = choisis.length ? API.tarifs.fraisService : 0;
-    var grand = O.arrondi(totalColis + frais);
+    // Sans frais de service : ils s'ajoutent au regroupement ou à l'encaissement
+    var frais = 0;
+    var grand = totalColis;
 
     var tout = $('[data-tout-colis-facture]', formFacture);
     if (tout) {
@@ -1124,7 +1130,7 @@
       formFacture.montant_usd.value = grand.toFixed(2);
       formFacture.montant_usd.readOnly = true;
       $('[data-aide-montant]', formFacture).textContent =
-        choisis.length + (choisis.length > 1 ? ' colis' : ' colis') + ' + ' + argent(frais) + ' de frais de service.';
+        choisis.length + (choisis.length > 1 ? ' colis' : ' colis') + ', sans frais de service : ils s’ajoutent à l’encaissement.';
     } else if (!factureEditee) {
       formFacture.montant_usd.readOnly = false;
       $('[data-aide-montant]', formFacture).textContent = 'Cochez des colis, ou saisissez un montant libre.';
@@ -1235,10 +1241,19 @@
         $$('input, textarea', formFacture).forEach(function (n) { n.disabled = true; });
       } else {
         var regrouper = regroupable(facture) && peut('invoices.create') && peut('invoices.cancel');
+        var sortir = sortable(facture);
         var annulable = t.paye === 0 && peut('invoices.cancel');
+        // Le frais de service d'une facture à payer : l'ajouter s'il n'y est pas, le
+        // retirer s'il y est (jamais sous ce qui est payé : la base refuse)
+        var fraisModifiable = t.balance > 0 && peut('invoices.edit');
+        var ajouterFrais = fraisModifiable && t.frais === 0;
+        var retirerFrais = fraisModifiable && t.frais > 0;
         $('[data-action="regrouper-facture"]', formFacture).hidden = !regrouper;
+        $('[data-action="sortir-regroupement"]', formFacture).hidden = !sortir;
         $('[data-action="annuler-facture"]', formFacture).hidden = !annulable;
-        blocActionsFacture.hidden = !regrouper && !annulable;
+        $('[data-action="ajouter-frais"]', formFacture).hidden = !ajouterFrais;
+        $('[data-action="retirer-frais"]', formFacture).hidden = !retirerFrais;
+        blocActionsFacture.hidden = !regrouper && !sortir && !annulable && !ajouterFrais && !retirerFrais;
         // Sans invoices.edit, la facture se consulte sans se modifier
         if (!peut('invoices.edit')) {
           enregistrer.hidden = true;
@@ -1320,35 +1335,81 @@
   var formPaiement = $('form[data-form="paiement"]', dlgPaiement);
   var facturePayee = null;
   var clePaiement = null;
+  var suitePaiement = null;   // ce que la fenêtre qui a demandé l'encaissement fait ensuite
 
   function dateDuJour() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  function ouvrirPaiement(facture) {
-    facturePayee = facture;
-    clePaiement = nouvelleCle();
-    formPaiement.reset();
-    erreurFormulaire(formPaiement, '');
-    var t = O.totauxFacture(facture);
-    $('[data-paiement-facture]', dlgPaiement).textContent =
-      'Facture ' + facture.numero + ' · ' + ((facture.clients || {}).nom_complet || '');
+  // Le frais de service à l'encaissement (supabase-frais-service.sql) : pas encore
+  // sur la facture, on demande Oui / Non avant tout ; déjà dessus, on le dit, et il
+  // ne s'ajoute jamais une seconde fois (la base y veille aussi).
+  var blocFraisPaiement = $('[data-paiement-frais]', dlgPaiement);
+  var fraisInclusPaiement = $('[data-paiement-frais-inclus]', dlgPaiement);
+  var choixFraisPaiement = $$('input[name="frais_service"]', formPaiement);
+
+  function fraisDemande() {
+    if (blocFraisPaiement.hidden) return 'non';
+    var c = choixFraisPaiement.filter(function (i) { return i.checked; })[0];
+    return c ? c.value : '';
+  }
+
+  // Les montants de la fenêtre : ceux de la facture, ou, avec « Oui », ceux qu'elle
+  // aura une fois le frais ajouté — montrés avant de confirmer
+  function totauxPaiement() {
+    return fraisDemande() === 'oui' ? O.totauxAvecFrais(facturePayee) : O.totauxFacture(facturePayee);
+  }
+
+  function majPaiement() {
+    var t = totauxPaiement();
+    $('[data-paiement-recap="initial"]', dlgPaiement).textContent = argent(t.colis);
+    $('[data-paiement-recap="frais"]', dlgPaiement).textContent = argent(t.frais);
     $('[data-paiement-recap="total"]', dlgPaiement).textContent = argent(t.grandTotal);
     $('[data-paiement-recap="paye"]', dlgPaiement).textContent = argent(t.paye);
     $('[data-paiement-recap="solde"]', dlgPaiement).textContent = argent(t.balance);
     formPaiement.montant_usd.value = t.balance.toFixed(2);
     formPaiement.montant_usd.max = t.balance.toFixed(2);
+    var choix = fraisDemande();
+    $('[data-paiement-frais-aide]', dlgPaiement).textContent = choix === 'oui'
+      ? 'Le frais de service sera ajouté à la facture en même temps que le paiement.'
+      : choix === 'non' ? 'La facture reste sans frais de service.'
+        : 'Le frais de service (' + argent(API.tarifs.fraisService) + ') n’est pas sur cette facture. ' +
+          'Choisissez Oui ou Non : les montants se mettent à jour avant la confirmation.';
+  }
+
+  choixFraisPaiement.forEach(function (i) {
+    i.addEventListener('change', function () { erreurFormulaire(formPaiement, ''); majPaiement(); });
+  });
+
+  function ouvrirPaiement(facture, suite) {
+    facturePayee = facture;
+    suitePaiement = suite || null;
+    clePaiement = nouvelleCle();
+    formPaiement.reset();
+    erreurFormulaire(formPaiement, '');
+    $('[data-paiement-facture]', dlgPaiement).textContent =
+      'Facture ' + facture.numero + ' · ' + ((facture.clients || {}).nom_complet || '');
+    var dejaInclus = O.totauxFacture(facture).frais > 0;
+    // Ajouter le frais change la facture : il faut aussi invoices.edit
+    blocFraisPaiement.hidden = dejaInclus || !peut('invoices.edit');
+    fraisInclusPaiement.hidden = !dejaInclus;
+    fraisInclusPaiement.textContent = dejaInclus
+      ? 'Frais de service déjà inclus (' + argent(O.totauxFacture(facture).frais) + ') : il ne s’ajoute pas une seconde fois.'
+      : '';
+    majPaiement();
     formPaiement.paye_le.value = dateDuJour();
     formPaiement.paye_le.max = dateDuJour();
     dlgPaiement.showModal();
-    formPaiement.moyen.focus();
+    (blocFraisPaiement.hidden ? formPaiement.moyen : choixFraisPaiement[0]).focus();
   }
 
   formPaiement.addEventListener('submit', function (e) {
     e.preventDefault();
     erreurFormulaire(formPaiement, '');
-    var t = O.totauxFacture(facturePayee);
+    var frais = fraisDemande();
+    if (!frais) { erreurFormulaire(formPaiement, 'Indiquez s’il faut ajouter le frais de service.'); return; }
+    var t = totauxPaiement();
     var montant = Number(String(formPaiement.montant_usd.value).replace(',', '.'));
     if (!(montant > 0)) { erreurFormulaire(formPaiement, 'Indiquez le montant reçu.'); return; }
     if (montant > t.balance) {
@@ -1361,16 +1422,20 @@
     var payeLe = !jour || jour === dateDuJour() ? new Date().toISOString() : new Date(jour + 'T12:00:00').toISOString();
     var bouton = $('button[type="submit"]', formPaiement);
     var fin = attente(bouton, 'Enregistrement…');
-    API.admin.enregistrerPaiement(facturePayee.id, {
+    API.admin.encaisserFacture(facturePayee.id, {
       montant_usd: montant, moyen: formPaiement.moyen.value, reference: formPaiement.reference.value.trim(),
       paye_le: payeLe, note: formPaiement.note.value.trim()
-    }, clePaiement).then(function (r) {
+    }, frais === 'oui', clePaiement).then(function (r) {
       clePaiement = null;
       dlgPaiement.close();
       var f = r.facture;
+      var suite = suitePaiement;
+      suitePaiement = null;
+      if (suite) suite(f);
       var tf = O.totauxFacture(f);
       return majLienPaiement(f).then(function () {
-        return apresFinances(f, (r.deja ? 'Paiement déjà enregistré. ' : 'Paiement de ' + argent(r.paiement.montant_usd) +
+        return apresFinances(f, (r.frais_ajoutes ? 'Frais de service de ' + argent(tf.frais) + ' ajoutés. ' : '') +
+          (r.deja ? 'Paiement déjà enregistré. ' : 'Paiement de ' + argent(r.paiement.montant_usd) +
           ' enregistré. ') + (tf.balance > 0 ? 'Reste ' + argent(tf.balance) + ' à payer.' : 'Facture ' + f.numero + ' soldée.'));
       });
     }).catch(function (err) {
@@ -1381,6 +1446,26 @@
   $('[data-action="encaisser-facture"]', formFacture).addEventListener('click', function () {
     if (factureEditee) ouvrirPaiement(factureEditee);
   });
+
+  // Ajouter ou retirer le frais de service depuis la fiche : la base recalcule le
+  // total, le payé et le solde (changer_frais_service)
+  function changerFrais(appliquer, bouton) {
+    if (!factureEditee) return;
+    erreurFormulaire(formFacture, '');
+    var fin = attente(bouton, appliquer ? 'Ajout…' : 'Retrait…');
+    API.admin.changerFraisService(factureEditee.id, appliquer).then(function (r) {
+      var f = r.facture;
+      return majLienPaiement(f).then(function () {
+        var tf = O.totauxFacture(f);
+        return apresFinances(f, r.deja ? 'Rien à changer : la facture est déjà ainsi.'
+          : (appliquer ? 'Frais de service ajoutés' : 'Frais de service retirés') + ' : total ' + argent(tf.grandTotal) + '.');
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formFacture, messageErreur(err));
+    }).then(fin);
+  }
+  $('[data-action="ajouter-frais"]', formFacture).addEventListener('click', function (e) { changerFrais(true, e.currentTarget); });
+  $('[data-action="retirer-frais"]', formFacture).addEventListener('click', function (e) { changerFrais(false, e.currentTarget); });
 
   // Un lien PayPal fabriqué ici porte un montant. Après un acompte, il doit
   // demander ce qui reste, pas le total : sinon le client paierait deux fois.
@@ -1467,89 +1552,188 @@
   var formRegroupement = $('form[data-form="regroupement"]', dlgRegroupement);
   var listeRegroupement = $('[data-liste-regroupement]', dlgRegroupement);
   var facturesRegroupables = {};
+  var candidatesRegroupement = [];   // dans l'ordre de la base
+  var retireesRegroupement = {};     // enlevées de la liste par « Retirer »
+  var cocheesRegroupement = {};
   var cleRegroupement = null;
   var apercuRegroupement = 0;
+  var clientRegroupement = null;
+  // Les colis ajoutés par « + Ajouter un colis » qui ne sont pas déjà là par leur
+  // facture : sans facture, ou sur une facture hors de la liste (elle entrera avec eux)
+  var colisAjoutes = [];
+  var caseFraisRegroupement = $('[data-regroupement-frais]', dlgRegroupement);
 
   function ouvrirRegroupement(facture) {
     cleRegroupement = nouvelleCle();
     facturesRegroupables = {};
+    candidatesRegroupement = [];
+    retireesRegroupement = {};
+    cocheesRegroupement = {};
+    cocheesRegroupement[facture.id] = true;
+    colisAjoutes = [];
+    clientRegroupement = { id: facture.client_id, nom_complet: (facture.clients || {}).nom_complet || '' };
+    caseFraisRegroupement.checked = true;
     erreurFormulaire(formRegroupement, '');
     $('[data-regroupement-client]', dlgRegroupement).textContent = (facture.clients || {}).nom_complet || '';
     listeRegroupement.textContent = 'Chargement…';
+    $('[data-regroupement-retirees]', dlgRegroupement).hidden = true;
     $('[data-recap-regroupement]', dlgRegroupement).hidden = true;
     dlgRegroupement.showModal();
     API.admin.factures({ client_id: facture.client_id, etat: 'a_payer', parPage: 200 }).then(function (r) {
-      listeRegroupement.textContent = '';
-      var candidates = (r.lignes || []).filter(regroupable);
-      candidates.forEach(function (f) {
-        facturesRegroupables[f.id] = f;
-        var label = el('label', 'gs-regroupement__choix');
-        var input = document.createElement('input');
-        input.type = 'checkbox';
-        input.value = f.id;
-        input.checked = f.id === facture.id;
-        input.addEventListener('change', majApercuRegroupement);
-        var carte = el('div', 'gs-regroupement__carte');
-        carte.appendChild(el('strong', '', f.numero));
-        carte.appendChild(el('b', '', argent(f.montant_usd)));
-        carte.appendChild(el('small', '', (f.facture_lignes || []).map(function (l) {
-          return (l.colis && l.colis.numero) || l.libelle;
-        }).join(', ') + ' · ' + O.date(f.cree_le)));
-        label.appendChild(input);
-        label.appendChild(carte);
-        listeRegroupement.appendChild(label);
-      });
-      if (candidates.length < 2) {
-        listeRegroupement.appendChild(el('p', 'gs-champ__aide',
-          'Ce client n’a pas d’autre facture de colis à payer sans paiement : rien à regrouper.'));
-      }
-      majApercuRegroupement();
+      candidatesRegroupement = (r.lignes || []).filter(regroupable);
+      candidatesRegroupement.forEach(function (f) { facturesRegroupables[f.id] = f; });
+      afficherRegroupement();
     }).catch(function (err) {
       listeRegroupement.textContent = '';
       erreurFormulaire(formRegroupement, messageErreur(err));
     });
   }
 
-  function facturesCochees() {
-    return $$('input[type="checkbox"]', listeRegroupement).filter(function (i) { return i.checked; })
-      .map(function (i) { return facturesRegroupables[i.value]; }).filter(Boolean);
+  // Chaque facture : sa carte à cocher, et deux gestes à côté (pas dans le
+  // <label> : un bouton n'a rien à faire dans l'étiquette d'une case)
+  function afficherRegroupement() {
+    listeRegroupement.textContent = '';
+    var visibles = candidatesRegroupement.filter(function (f) { return !retireesRegroupement[f.id]; });
+    visibles.forEach(function (f) {
+      var ligne = el('div', 'gs-regroupement__ligne');
+      var label = el('label', 'gs-regroupement__choix');
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = f.id;
+      input.checked = !!cocheesRegroupement[f.id];
+      input.addEventListener('change', function () {
+        cocheesRegroupement[f.id] = input.checked;
+        majApercuRegroupement();
+      });
+      var carte = el('div', 'gs-regroupement__carte');
+      carte.appendChild(el('strong', '', f.numero));
+      carte.appendChild(el('b', '', argent(f.montant_usd)));
+      carte.appendChild(el('small', '', (f.facture_lignes || []).map(function (l) {
+        return (l.colis && l.colis.numero) || l.libelle;
+      }).join(', ') + ' · ' + O.date(f.cree_le)));
+      label.appendChild(input);
+      label.appendChild(carte);
+      ligne.appendChild(label);
+      var gestes = el('div', 'gs-regroupement__gestes');
+      if (peut('payments.create')) {
+        var encaisser = petitBouton('Encaisser', 'gs-bouton--plein', function () {
+          // Payée (même en partie), elle ne se regroupe plus : elle quitte la liste
+          ouvrirPaiement(f, function (payee) {
+            candidatesRegroupement = candidatesRegroupement.filter(function (x) { return x.id !== payee.id; });
+            delete facturesRegroupables[payee.id];
+            delete cocheesRegroupement[payee.id];
+            if (dlgRegroupement.open) afficherRegroupement();
+          });
+        });
+        encaisser.setAttribute('aria-label', 'Encaisser la facture ' + f.numero);
+        gestes.appendChild(encaisser);
+      }
+      var retirer = petitBouton('Retirer', null, function () {
+        retireesRegroupement[f.id] = true;
+        delete cocheesRegroupement[f.id];
+        afficherRegroupement();
+      });
+      retirer.setAttribute('aria-label', 'Retirer la facture ' + f.numero + ' de la liste');
+      gestes.appendChild(retirer);
+      ligne.appendChild(gestes);
+      listeRegroupement.appendChild(ligne);
+    });
+    // Les colis ajoutés, chacun avec « Retirer »
+    colisAjoutes.forEach(function (x) {
+      var ligne = el('div', 'gs-regroupement__ligne');
+      var carte = el('div', 'gs-regroupement__carte gs-regroupement__carte--ajout');
+      carte.appendChild(el('strong', '', x.numero));
+      carte.appendChild(el('b', '', argent(x.prix_usd)));
+      if (x.description) carte.appendChild(el('small', '', x.description));
+      carte.appendChild(el('small', '', x.facture ? 'Sa facture ' + x.facture.numero + ' entre avec lui' : 'Colis ajouté, sans facture'));
+      ligne.appendChild(carte);
+      var gestes = el('div', 'gs-regroupement__gestes');
+      var retirer = petitBouton('Retirer', null, function () {
+        colisAjoutes = colisAjoutes.filter(function (y) { return y.colis_id !== x.colis_id; });
+        afficherRegroupement();
+      });
+      retirer.setAttribute('aria-label', 'Retirer le colis ' + x.numero);
+      gestes.appendChild(retirer);
+      ligne.appendChild(gestes);
+      listeRegroupement.appendChild(ligne);
+    });
+    if (visibles.length + colisAjoutes.length < 2) {
+      listeRegroupement.appendChild(el('p', 'gs-champ__aide', candidatesRegroupement.length < 2 && !colisAjoutes.length
+        ? 'Ce client n’a pas d’autre facture de colis à payer sans paiement : ajoutez un colis pour le regrouper avec cette facture.'
+        : 'Moins de deux factures dans la liste : ajoutez-en une, ou un colis.'));
+    }
+    var nbRetirees = candidatesRegroupement.filter(function (f) { return retireesRegroupement[f.id]; }).length;
+    $('[data-regroupement-retirees]', dlgRegroupement).hidden = !nbRetirees;
+    $('[data-regroupement-retirees-texte]', dlgRegroupement).textContent = nbRetirees === 1
+      ? '1 facture retirée de la liste.' : nbRetirees + ' factures retirées de la liste.';
+    majApercuRegroupement();
   }
 
-  // L'aperçu vient de la base (calculer_facture) : c'est elle qui facturera
+  $('[data-action="remettre-regroupement"]', dlgRegroupement).addEventListener('click', function () {
+    retireesRegroupement = {};
+    afficherRegroupement();
+  });
+
+  function facturesCochees() {
+    return candidatesRegroupement.filter(function (f) {
+      return cocheesRegroupement[f.id] && !retireesRegroupement[f.id];
+    });
+  }
+
+  // Tous les colis de la future facture : ceux des factures cochées et ceux ajoutés
+  function colisDuRegroupement() {
+    var colis = [];
+    facturesCochees().forEach(function (f) { (f.facture_lignes || []).forEach(function (l) { colis.push(l.colis_id); }); });
+    colisAjoutes.forEach(function (x) { if (colis.indexOf(x.colis_id) < 0) colis.push(x.colis_id); });
+    return colis;
+  }
+
+  // L'aperçu vient de la base (calculer_facture) : c'est elle qui facturera. Sans
+  // le frais de service, la facture vaut son sous-total.
   function majApercuRegroupement() {
     var cochees = facturesCochees();
     var recap = $('[data-recap-regroupement]', dlgRegroupement);
-    $('[data-regroupement-valider]', dlgRegroupement).disabled = cochees.length < 2;
-    if (cochees.length < 2) { recap.hidden = true; return; }
+    var assez = cochees.length + colisAjoutes.length >= 2;
+    $('[data-regroupement-valider]', dlgRegroupement).disabled = !assez;
     var numero = ++apercuRegroupement;
-    var colis = [];
-    cochees.forEach(function (f) { (f.facture_lignes || []).forEach(function (l) { colis.push(l.colis_id); }); });
-    API.admin.calculerFacture(colis).then(function (c) {
+    if (!assez) { recap.hidden = true; return; }
+    var avecFrais = caseFraisRegroupement.checked;
+    API.admin.calculerFacture(colisDuRegroupement()).then(function (c) {
       if (numero !== apercuRegroupement) return;   // une coche plus récente a déjà répondu
       var avant = O.arrondi(cochees.reduce(function (s, f) { return s + Number(f.montant_usd); }, 0));
-      $('[data-regroupement-avant]', dlgRegroupement).textContent = 'Aujourd’hui, ' + cochees.length + ' factures';
+      $('[data-regroupement-avant]', dlgRegroupement).textContent = cochees.length === 1
+        ? 'Aujourd\'hui, une facture' : 'Aujourd’hui, ' + cochees.length + ' factures';
       $('[data-regroupement="avant"]', dlgRegroupement).textContent = argent(avant);
+      $('[data-regroupement="nombre"]', dlgRegroupement).textContent = String((c.lignes || []).length);
       $('[data-regroupement="colis"]', dlgRegroupement).textContent = argent(c.sous_total);
-      $('[data-regroupement="frais"]', dlgRegroupement).textContent = argent(c.frais_service);
-      $('[data-regroupement="total"]', dlgRegroupement).textContent = argent(c.total);
+      $('[data-regroupement="frais"]', dlgRegroupement).textContent = argent(avecFrais ? c.frais_service : 0);
+      $('[data-regroupement="total"]', dlgRegroupement).textContent = argent(avecFrais ? c.total : c.sous_total);
       recap.hidden = false;
     }).catch(function () { recap.hidden = true; });
   }
+
+  caseFraisRegroupement.addEventListener('change', majApercuRegroupement);
 
   formRegroupement.addEventListener('submit', function (e) {
     e.preventDefault();
     erreurFormulaire(formRegroupement, '');
     var cochees = facturesCochees();
-    if (cochees.length < 2) { erreurFormulaire(formRegroupement, 'Cochez au moins deux factures.'); return; }
+    if (cochees.length + colisAjoutes.length < 2) {
+      erreurFormulaire(formRegroupement, 'Choisissez au moins deux factures, ou une facture et un colis.');
+      return;
+    }
     var bouton = $('[data-regroupement-valider]', dlgRegroupement);
     var fin = attente(bouton, 'Regroupement…');
-    API.admin.regrouperFactures(cochees.map(function (f) { return f.id; }), cleRegroupement).then(function (r) {
+    API.admin.regrouper(cochees.map(function (f) { return f.id; }), colisAjoutes.map(function (x) { return x.colis_id; }),
+                        caseFraisRegroupement.checked, cleRegroupement).then(function (r) {
       cleRegroupement = null;
       dlgRegroupement.close();
       if (dlgFacture.open) dlgFacture.close();
       return ajouterLienPaiement(r.facture).then(function () {
+        var n = (r.facture.facture_lignes || []).length;
         toast('Nouvelle facture ' + r.facture.numero + ' (' + argent(r.facture.montant_usd) + ') : ' +
-              r.annulees.length + ' factures regroupées.');
+              n + (n > 1 ? ' colis' : ' colis') + ', ' + r.annulees.length +
+              (r.annulees.length > 1 ? ' factures regroupées.' : ' facture regroupée.'));
         return chargerFactures();
       });
     }).catch(function (err) {
@@ -1559,6 +1743,217 @@
 
   $('[data-action="regrouper-facture"]', formFacture).addEventListener('click', function () {
     if (factureEditee) ouvrirRegroupement(factureEditee);
+  });
+
+  /* ---- « + Ajouter un colis » au regroupement ------------------------------- */
+  // Les colis du client qui peuvent rejoindre la facture, selon la base
+  // (colis_a_regrouper) : sans facture, ou sur une facture regroupable. Ceux déjà
+  // dans la fenêtre (par une facture cochée, ou ajoutés) n'y sont pas.
+  var dlgAjoutColis = $('[data-dialogue="ajout-colis"]');
+  var formAjoutColis = $('form[data-form="ajout-colis"]', dlgAjoutColis);
+  var listeAjoutColis = $('[data-liste-ajout-colis]', dlgAjoutColis);
+  var trouvesAjout = {};
+  var rechercheAjout = 0;
+  var minuteurAjout = null;
+
+  function colisDejaLa() {
+    return colisDuRegroupement();
+  }
+
+  function chercherColisAjout() {
+    var numero = ++rechercheAjout;
+    listeAjoutColis.textContent = 'Recherche…';
+    API.admin.colisARegrouper(clientRegroupement.id, formAjoutColis.recherche.value.trim(), colisDejaLa()).then(function (liste) {
+      if (numero !== rechercheAjout) return;   // une frappe plus récente a déjà répondu
+      listeAjoutColis.textContent = '';
+      trouvesAjout = {};
+      liste.forEach(function (x) {
+        trouvesAjout[x.colis_id] = x;
+        var label = el('label', 'gs-regroupement__choix');
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = x.colis_id;
+        input.addEventListener('change', majBoutonAjout);
+        var carte = el('div', 'gs-regroupement__carte');
+        carte.appendChild(el('strong', '', x.numero));
+        carte.appendChild(el('b', '', argent(x.prix_usd)));
+        var facture = x.facture
+          ? 'Sur la facture ' + x.facture.numero + (x.facture.nb_colis > 1 ? ' (' + x.facture.nb_colis + ' colis, qui entrent ensemble)' : '')
+          : 'Sans facture';
+        var detail = [x.description, x.suivi_transporteur].filter(Boolean).join(' · ');
+        if (detail) carte.appendChild(el('small', '', detail));
+        carte.appendChild(el('small', '', facture));
+        label.appendChild(input);
+        label.appendChild(carte);
+        listeAjoutColis.appendChild(label);
+      });
+      if (!liste.length) listeAjoutColis.appendChild(el('p', 'gs-champ__aide', 'Aucun colis à ajouter.'));
+      majBoutonAjout();
+    }).catch(function (err) {
+      listeAjoutColis.textContent = '';
+      erreurFormulaire(formAjoutColis, messageErreur(err));
+    });
+  }
+
+  function majBoutonAjout() {
+    $('[data-ajout-colis-valider]', dlgAjoutColis).disabled =
+      !$$('input[type="checkbox"]', listeAjoutColis).some(function (i) { return i.checked; });
+  }
+
+  $('[data-action="ajouter-colis-regroupement"]', dlgRegroupement).addEventListener('click', function () {
+    if (!clientRegroupement) return;
+    formAjoutColis.reset();
+    erreurFormulaire(formAjoutColis, '');
+    $('[data-ajout-colis-client]', dlgAjoutColis).textContent = clientRegroupement.nom_complet;
+    dlgAjoutColis.showModal();
+    chercherColisAjout();
+    formAjoutColis.recherche.focus();
+  });
+
+  formAjoutColis.recherche.addEventListener('input', function () {
+    clearTimeout(minuteurAjout);
+    minuteurAjout = setTimeout(chercherColisAjout, 250);
+  });
+
+  // Un colis dont la facture est dans la liste : on la coche (elle revient si elle
+  // avait été retirée). Les autres rejoignent les colis ajoutés. Jamais deux fois.
+  formAjoutColis.addEventListener('submit', function (e) {
+    e.preventDefault();
+    $$('input[type="checkbox"]', listeAjoutColis).filter(function (i) { return i.checked; }).forEach(function (i) {
+      var x = trouvesAjout[i.value];
+      if (!x) return;
+      if (x.facture && facturesRegroupables[x.facture.id]) {
+        cocheesRegroupement[x.facture.id] = true;
+        delete retireesRegroupement[x.facture.id];
+      } else if (!colisAjoutes.some(function (y) { return y.colis_id === x.colis_id; })) {
+        colisAjoutes.push(x);
+      }
+    });
+    dlgAjoutColis.close();
+    afficherRegroupement();
+  });
+
+  /* ---- Sortir des colis d'une facture regroupée ------------------------------ */
+  // Le chemin inverse du regroupement (outils/supabase-regroupement.sql) : les
+  // colis cochés passent sur leur propre facture, les autres restent ensemble
+  // sur une nouvelle. La base décide de tout ; ici, on choisit et on montre.
+  var dlgSortie = $('[data-dialogue="sortie"]');
+  var formSortie = $('form[data-form="sortie"]', dlgSortie);
+  var listeSortie = $('[data-liste-sortie]', dlgSortie);
+  var factureSortie = null;
+  var cleSortie = null;
+  var apercuSortie = 0;
+
+  // Une facture de colis, à payer, sans paiement, d'au moins deux colis
+  function sortable(f) {
+    return regroupable(f) && (f.facture_lignes || []).length >= 2 &&
+           peut('invoices.create') && peut('invoices.cancel');
+  }
+
+  function ouvrirSortie(facture) {
+    factureSortie = facture;
+    cleSortie = nouvelleCle();
+    erreurFormulaire(formSortie, '');
+    $('[data-sortie-facture]', dlgSortie).textContent =
+      'Facture ' + facture.numero + ' · ' + ((facture.clients || {}).nom_complet || '');
+    listeSortie.textContent = '';
+    (facture.facture_lignes || []).forEach(function (l) {
+      var label = el('label', 'gs-regroupement__choix');
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = l.colis_id;
+      input.addEventListener('change', majApercuSortie);
+      var carte = el('div', 'gs-regroupement__carte');
+      carte.appendChild(el('strong', '', (l.colis && l.colis.numero) || l.libelle || 'Colis'));
+      carte.appendChild(el('b', '', argent(l.montant_usd)));
+      carte.appendChild(el('small', '', [l.libelle, l.poids_lb != null ? String(l.poids_lb).replace('.', ',') + ' lb' : '']
+        .filter(Boolean).join(' · ')));
+      label.appendChild(input);
+      label.appendChild(carte);
+      listeSortie.appendChild(label);
+    });
+    $('[data-sortie-encaisser]', dlgSortie).hidden = !peut('payments.create');
+    majApercuSortie();
+    dlgSortie.showModal();
+  }
+
+  function colisSortis() {
+    return $$('input[type="checkbox"]', listeSortie).filter(function (i) { return i.checked; })
+      .map(function (i) { return i.value; });
+  }
+
+  // Deux aperçus de la base (calculer_facture) : la facture des colis sortis,
+  // celle des autres.
+  function majApercuSortie() {
+    var sortis = colisSortis();
+    var tous = (factureSortie.facture_lignes || []).map(function (l) { return l.colis_id; });
+    var reste = tous.filter(function (i) { return sortis.indexOf(i) < 0; });
+    var possible = sortis.length > 0 && reste.length > 0;
+    $('[data-sortie-valider]', dlgSortie).disabled = !possible;
+    $('[data-sortie-encaisser]', dlgSortie).disabled = !possible;
+    var recap = $('[data-recap-sortie]', dlgSortie);
+    var numero = ++apercuSortie;
+    if (!possible) {
+      recap.hidden = true;
+      if (sortis.length && !reste.length) {
+        erreurFormulaire(formSortie, 'Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.');
+      } else {
+        erreurFormulaire(formSortie, '');
+      }
+      return;
+    }
+    erreurFormulaire(formSortie, '');
+    Promise.all([API.admin.calculerFacture(sortis), API.admin.calculerFacture(reste)]).then(function (c) {
+      if (numero !== apercuSortie) return;
+      $('[data-sortie="avant"]', dlgSortie).textContent = argent(O.totauxFacture(factureSortie).grandTotal);
+      $('[data-sortie-libelle-sortis]', dlgSortie).textContent = sortis.length === 1
+        ? 'Le colis sorti, sur sa facture' : 'Les ' + sortis.length + ' colis sortis, sur leur facture';
+      $('[data-sortie-libelle-reste]', dlgSortie).textContent = reste.length === 1
+        ? 'Le colis qui reste, sur sa facture' : 'Les ' + reste.length + ' colis qui restent, ensemble';
+      // La facture des colis sortis naît sans frais ; celle qui reste les garde s'il y en avait
+      var avecFrais = O.totauxFacture(factureSortie).frais > 0;
+      var montantSortis = c[0].sous_total, montantReste = avecFrais ? c[1].total : c[1].sous_total;
+      $('[data-sortie="sortis"]', dlgSortie).textContent = argent(montantSortis);
+      $('[data-sortie="reste"]', dlgSortie).textContent = argent(montantReste);
+      $('[data-sortie="apres"]', dlgSortie).textContent = argent(O.arrondi(montantSortis + montantReste));
+      recap.hidden = false;
+    }).catch(function () { recap.hidden = true; });
+  }
+
+  function sortirDuRegroupement(encaisser) {
+    erreurFormulaire(formSortie, '');
+    var sortis = colisSortis();
+    if (!sortis.length) { erreurFormulaire(formSortie, 'Cochez le colis qui sort de la facture.'); return; }
+    var bouton = encaisser ? $('[data-sortie-encaisser]', dlgSortie) : $('[data-sortie-valider]', dlgSortie);
+    var fin = attente(bouton, 'Sortie…');
+    var client = factureSortie.clients;
+    API.admin.sortirDuRegroupement(factureSortie.id, sortis, cleSortie).then(function (r) {
+      cleSortie = null;
+      dlgSortie.close();
+      if (dlgFacture.open) dlgFacture.close();
+      // Le lien de l'ancienne portait son montant : chacune reçoit le sien
+      return Promise.all([ajouterLienPaiement(r.facture), ajouterLienPaiement(r.reste)]).then(function () {
+        toast('Colis sortis : facture ' + r.facture.numero + ' (' + argent(r.facture.montant_usd) + '). ' +
+              'Les autres : facture ' + r.reste.numero + ' (' + argent(r.reste.montant_usd) + ').');
+        if (encaisser) {
+          if (!r.facture.clients) r.facture.clients = client;
+          ouvrirPaiement(r.facture);
+        }
+        return chargerFactures();
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formSortie, messageErreur(err));
+    }).then(fin);
+  }
+
+  formSortie.addEventListener('submit', function (e) {
+    e.preventDefault();
+    sortirDuRegroupement(false);
+  });
+  $('[data-sortie-encaisser]', dlgSortie).addEventListener('click', function () { sortirDuRegroupement(true); });
+
+  $('[data-action="sortir-regroupement"]', formFacture).addEventListener('click', function () {
+    if (factureEditee) ouvrirSortie(factureEditee);
   });
 
   /* ---- Contrôle de la facturation ------------------------------------------- */
@@ -1745,10 +2140,74 @@
     });
   });
 
-  /* ---- Fenêtres (enregistrer un colis, mettre à jour un statut) -------------- */
+  /* ---- Fenêtres : elles ne se ferment que sur demande -------------------------
+     Un clic à côté d'une fenêtre ne la ferme plus : un clic manqué, une
+     sélection de texte qui déborde du champ faisaient perdre toute la saisie.
+     Seuls ses boutons (×, Annuler, Fermer) et la touche Échap la ferment ; et
+     si l'on y a déjà saisi quelque chose, « Fermer sans enregistrer ? » le fait
+     confirmer. Une fermeture décidée par la page (après un enregistrement, une
+     session expirée) passe par d.close() et ne demande rien.
+     -------------------------------------------------------------------------- */
+  var dlgAbandon = $('[data-dialogue="abandon"]');
+  var fenetreAbandonnee = null;
+
+  function saisieEnCours(d) { return d.hasAttribute('data-saisie'); }
+
+  function demanderFermeture(d) {
+    if (!saisieEnCours(d)) { d.close(); return; }
+    fenetreAbandonnee = d;
+    dlgAbandon.showModal();
+  }
+
+  $('[data-abandon-confirmer]', dlgAbandon).addEventListener('click', function () {
+    var d = fenetreAbandonnee;
+    fenetreAbandonnee = null;
+    dlgAbandon.close();
+    if (d && d.open) d.close();
+  });
+  $('[data-abandon-continuer]', dlgAbandon).addEventListener('click', function () { dlgAbandon.close(); });
+  // Échap sur la question : on reste dans la fenêtre, rien n'est perdu
+  dlgAbandon.addEventListener('close', function () { fenetreAbandonnee = null; });
+
   $$('.gs-dialogue').forEach(function (d) {
-    d.addEventListener('click', function (e) { if (e.target === d) d.close(); });
-    $$('[data-action="fermer"]', d).forEach(function (b) { b.addEventListener('click', function () { d.close(); }); });
+    if (d === dlgAbandon) return;
+    // d.close() : une fermeture voulue par la page, jamais contestée
+    var fermerVraiment = d.close.bind(d);
+    var voulue = false;
+    d.close = function (valeur) {
+      if (!d.open) return;
+      voulue = true;
+      d.removeAttribute('data-saisie');
+      fermerVraiment(valeur);
+    };
+    // Seule une vraie saisie compte (isTrusted) : les valeurs que la page
+    // remplit elle-même en ouvrant la fenêtre ne sont pas « à perdre »
+    // Une fenêtre de simple recherche (data-sans-confirmation) n'a rien à perdre
+    function saisie(e) {
+      if (d.hasAttribute('data-sans-confirmation')) return;
+      if (e.isTrusted && e.target.closest && e.target.closest('form')) d.setAttribute('data-saisie', '');
+    }
+    d.addEventListener('input', saisie);
+    d.addEventListener('change', saisie);
+    // Échap : même règle que le bouton de fermeture
+    d.addEventListener('cancel', function (e) {
+      e.preventDefault();
+      demanderFermeture(d);
+    });
+    // Certains navigateurs ferment quand même au second Échap : on rouvre la
+    // fenêtre telle quelle (ses champs sont intacts) et on pose la question
+    d.addEventListener('close', function () {
+      if (!voulue && saisieEnCours(d)) {
+        d.showModal();
+        demanderFermeture(d);
+        return;
+      }
+      voulue = false;
+      d.removeAttribute('data-saisie');
+    });
+    $$('[data-action="fermer"]', d).forEach(function (b) {
+      b.addEventListener('click', function () { demanderFermeture(d); });
+    });
   });
 
   // Enregistrer ou modifier un colis
@@ -1901,6 +2360,26 @@
   // modifier les factures (la base refuse de toute façon un autre tarif).
   var champPrix = $('[data-prix-colis]', formColis);
   var aidePrix = $('[data-calcul-prix]', formColis);
+  // « Fixer le prix à la main » : le prix saisi remplace poids × tarif
+  // (prix_fixe_usd). Comme un tarif particulier, c'est un geste de facturation :
+  // la case n'apparaît qu'à qui peut modifier les factures, et la base refuse
+  // de toute façon un prix fixé par un autre compte.
+  var casePrixManuel = $('[data-prix-manuel]', formColis);
+  var PRIX_MAX = 100000;
+
+  function prixManuel() { return casePrixManuel.checked; }
+
+  // Le prix se saisit seulement en mode manuel ; le tarif, alors, ne sert plus
+  function appliquerModePrix() {
+    var factureur = peut('invoices.edit');
+    var manuel = prixManuel();
+    champPrix.readOnly = !(manuel && factureur);
+    champPrix.tabIndex = champPrix.readOnly ? -1 : 0;
+    champTarif.readOnly = manuel || !factureur;
+    champTarif.title = manuel ? 'Sans effet : le prix du colis est fixé à la main'
+      : (!factureur ? 'Tarif de la maison : un tarif particulier est réservé à qui peut modifier les factures' : '');
+    recalculerPrix();
+  }
 
   function nombreSaisi(valeur) {
     var n = Number(String(valeur == null ? '' : valeur).replace(',', '.').trim());
@@ -1918,6 +2397,20 @@
   }
 
   function recalculerPrix() {
+    if (prixManuel()) {
+      var saisi = champPrix.value.trim();
+      var montant = nombreSaisi(saisi);
+      if (!saisi) {
+        aidePrix.textContent = 'Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.';
+      } else if (!(montant >= 0 && montant <= PRIX_MAX)) {
+        aidePrix.textContent = 'Prix invalide : un montant en dollars, de 0 à 100 000.';
+      } else {
+        aidePrix.textContent = 'Prix fixé à la main : ' + argent(montant) +
+          (colisEdite ? ' · une facture déjà émise ne change pas.'
+                      : ' · sans frais de service : ils s’ajoutent au regroupement ou à l’encaissement.');
+      }
+      return;
+    }
     var poids = nombreSaisi(formColis.elements.poids_lb.value);
     var tarif = tarifSaisi();
     if (!(tarif >= 0)) {
@@ -1927,8 +2420,9 @@
     }
     // Un colis déjà enregistré garde le prix arrêté tant que ni son poids ni
     // son tarif ne changent : il a pu être facturé.
+    // (Un colis qui avait un prix fixé, lui, repasse au calcul : on montre le calcul.)
     if (colisEdite && colisEdite.prix_usd != null && poids === Number(colisEdite.poids_lb) &&
-        tarif === O.tarifDe(colisEdite)) {
+        tarif === O.tarifDe(colisEdite) && (colisEdite.prix_fixe_usd == null || colisEdite.prix_fixe_usd === '')) {
       ecrireMontant(champPrix, Number(colisEdite.prix_usd));
       aidePrix.textContent = 'Prix arrêté à l’enregistrement du colis.';
       return;
@@ -1942,11 +2436,23 @@
     ecrireMontant(champPrix, prix);
     aidePrix.textContent = O.nombre(poids) + ' lb × ' + argent(tarif) + ' = ' + argent(prix) +
       (colisEdite ? ' · recalculé à l’enregistrement ; une facture déjà émise ne change pas.'
-                  : ' · frais de service ' + argent(API.tarifs.fraisService) + ' ajoutés sur la facture.');
+                  : ' · sans frais de service : ils s’ajoutent au regroupement ou à l’encaissement.');
   }
 
   formColis.elements.poids_lb.addEventListener('input', recalculerPrix);
   champTarif.addEventListener('input', recalculerPrix);
+  champPrix.addEventListener('input', recalculerPrix);
+  casePrixManuel.addEventListener('change', function () {
+    // En passant au prix manuel, on part du prix calculé ; en revenant, le
+    // calcul reprend la main
+    if (prixManuel() && !champPrix.value.trim()) {
+      var poids = nombreSaisi(formColis.elements.poids_lb.value);
+      var tarif = tarifSaisi();
+      if (poids > 0 && tarif >= 0) ecrireMontant(champPrix, API.regles.prixTransport(poids, tarif));
+    }
+    appliquerModePrix();
+    if (prixManuel() && !champPrix.readOnly) { champPrix.focus(); champPrix.select(); }
+  });
 
   var delaiCode = null;
   champCode.addEventListener('input', function () {
@@ -2028,15 +2534,21 @@
       // Un colis déjà enregistré garde son prix tel quel : il a pu être
       // facturé, et sa facture ne doit pas bouger derrière son dos.
       champTarif.value = colisEdite.tarif_lb_usd != null ? String(colisEdite.tarif_lb_usd).replace('.', ',') : '';
-      recalculerPrix();
+      // Un prix fixé à la main se montre tel quel ; sans le droit de facturer,
+      // il reste affiché mais ne se change pas
+      casePrixManuel.checked = colisEdite.prix_fixe_usd != null && colisEdite.prix_fixe_usd !== '';
+      if (casePrixManuel.checked) {
+        ecrireMontant(champPrix, Number(colisEdite.prix_fixe_usd));
+        if (!champTarif.value) champTarif.value = String(API.tarifs.parLivre);
+      }
     } else {
       f.code.value = options.code || etat.colis.clientCode || '';
       f.lieu.value = 'Miami (Medley), FL';
       champTarif.value = String(API.tarifs.parLivre);
-      recalculerPrix();
+      casePrixManuel.checked = false;
+      champPrix.value = '';
     }
-    champTarif.readOnly = !peut('invoices.edit');
-    champTarif.title = champTarif.readOnly ? 'Tarif de la maison : un tarif particulier est réservé à qui peut modifier les factures' : '';
+    appliquerModePrix();
     dlgColis.showModal();
     if (f.code.value) chercherClient(!colisEdite);
     (f.code.value ? f.description : f.code).focus();
@@ -2072,6 +2584,12 @@
       f.date_reception.focus();
       return;
     }
+    var prixSaisi = prixManuel() ? champPrix.value.trim() : '';
+    if (prixManuel() && !(prixSaisi && nombreSaisi(prixSaisi) >= 0 && nombreSaisi(prixSaisi) <= PRIX_MAX)) {
+      erreurFormulaire(formColis, 'Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».');
+      champPrix.focus();
+      return;
+    }
     attente(bouton, 'Enregistrement…');
     (clientChoisi ? Promise.resolve(clientChoisi) : chercherClient(false)).then(function (client) {
       if (!client) {
@@ -2092,7 +2610,10 @@
         destination: f.destination.value.trim(),
         // Tel que saisi : la base lit « 5,5 » comme 5.5, et refuse ce qui
         // n'est pas un tarif (INVALID_RATE). Vide : le tarif de la maison.
-        tarif_lb_usd: champTarif.value.trim() || null
+        tarif_lb_usd: champTarif.value.trim() || null,
+        // Prix fixé à la main, ou null pour le prix calculé (poids × tarif).
+        // Sans changement, la base ne demande aucun droit particulier.
+        prix_fixe_usd: prixSaisi || null
       };
       // Ni prix ni statut : la base calcule l'un et fait naître le colis
       // « Reçu ». Le lieu et le message sont ceux de ce premier événement.
@@ -5369,7 +5890,8 @@
     champFiche('Destination', [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', '));
     if (colis.prix_usd != null && colis.prix_usd !== '') {
       champFiche('Prix du transport', [argent(colis.prix_usd),
-        colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '']);
+        colis.prix_fixe_usd != null && colis.prix_fixe_usd !== '' ? 'Prix fixé à la main'
+          : (colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '')]);
     }
     champFiche('Message pour le client', colis.note, true);
 
@@ -5786,6 +6308,8 @@
     'facture.creation': 'Création d’une facture', 'facture.modification': 'Modification d’une facture',
     'facture.paiement': 'Paiement d’une facture', 'facture.annulation': 'Annulation d’une facture',
     'facture.regroupement': 'Regroupement de factures', 'facture.suppression': 'Suppression d’une facture',
+    'facture.sortie_regroupement': 'Colis sortis d’un regroupement',
+    'client.suppression_demandee': 'Compte supprimé par le client',
     'paiement.enregistrement': 'Paiement encaissé', 'paiement.annulation': 'Annulation d’un paiement',
     'paiement.reprise': 'Paiement repris', 'rapport.creation': 'Création d’un rapport',
     'rapport.modification': 'Modification d’un rapport', 'rapport.suppression': 'Suppression d’un rapport',

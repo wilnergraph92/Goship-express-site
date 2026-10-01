@@ -665,6 +665,9 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-disposition[open]{display:flex;flex-direction:column}
 .gs-disposition .gs-dialogue__corps{display:block;flex:1;min-height:0}
 .gs-disposition .gs-dialogue__pied{flex:none}
+/* « Fermer sans enregistrer ? » : une question courte, par-dessus la fenêtre */
+.gs-dialogue--confirmation{width:min(580px,calc(100vw - 24px))}
+.gs-dialogue--confirmation .gs-dialogue__pied{flex-wrap:wrap}
 .gs-disposition__liste{display:grid;gap:8px;margin:12px 0 0;padding:0;list-style:none;counter-reset:bloc}
 .gs-disposition__ligne{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
 .gs-disposition__nom{display:flex;flex:1;align-items:center;gap:12px;min-width:0;font-size:15px;font-weight:700;color:var(--ink);cursor:pointer}
@@ -885,7 +888,8 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-infos dt{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-deconnexion{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-deconnexion:hover{color:#fca5a5}
-[data-apparence="sombre"] .gs-admin-body .gs-direct{color:#4ade80}
+/* La pastille « En direct » : son fond vert très clair (#ecfbf3) venait de site.css */
+[data-apparence="sombre"] .gs-admin-body .gs-direct{background-color:rgba(34,197,94,.14);color:#4ade80}
 [data-apparence="sombre"] .gs-admin-body .gs-onglets{background-color:#132041}
 [data-apparence="sombre"] .gs-admin-body .gs-onglets button{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-onglets button[aria-selected="true"]{background-color:#0e1830}
@@ -946,6 +950,13 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-tableau td{border-bottom-color:#22304f;color:#dce5f7}
 [data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr:hover{background-color:#132041}
 [data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr.is-choisi{background-color:rgba(244,96,13,.15)}
+/* Les contreparties sombres des lignes marquées de site.css : un client avec des colis
+   en cours (is-actif-client, fond #fcfdff) et une ligne qui vient d'arriver (is-nouveau,
+   flash #ffe8d6). Sans elles, le texte clair du mode sombre restait sur fond blanc. */
+[data-apparence="sombre"] .gs-admin-body .gs-tableau--clients tr.is-actif-client td{background-color:#122043}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau--clients tr.is-actif-client:hover td{background-color:#172a52}
+[data-apparence="sombre"] .gs-admin-body .gs-tableau tbody tr.is-nouveau{animation-name:gs-ligne-sombre}
+@keyframes gs-ligne-sombre{from{background-color:rgba(244,96,13,.28)}}
 [data-apparence="sombre"] .gs-admin-body .gs-cellule-sous{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-admin-vide{border-color:#22304f;background-color:#0e1830;color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-dialogue{background-color:#0e1830}
@@ -980,8 +991,15 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-bouton--danger:hover{color:#fecaca}
 [data-apparence="sombre"] .gs-admin-body .gs-regroupement__carte{border-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-regroupement__carte small{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-regroupement__retirees{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-regroupement__choix:hover .gs-regroupement__carte{border-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-choix-colis input:checked+.gs-regroupement__carte{background-color:#132041}
+[data-apparence="sombre"] .gs-admin-body .gs-frais-choix{border-color:#5a3a22;background-color:#231a16}
+[data-apparence="sombre"] .gs-admin-body .gs-frais-choix legend{color:#ffffff}
+[data-apparence="sombre"] .gs-admin-body .gs-frais-choix__option span{border-color:#2a3a5e;background-color:#132041;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-frais-choix__option:hover span{border-color:#3d5282}
+[data-apparence="sombre"] .gs-admin-body .gs-frais-choix__option input:checked+span{border-color:#dce5f7;background-color:#dce5f7;color:#0b1733}
+[data-apparence="sombre"] .gs-admin-body .gs-frais-inclus{background-color:rgba(34,197,94,.14);color:#4ade80}
 [data-apparence="sombre"] .gs-admin-body .gs-finances__case{border-color:#22304f;background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-finances__libelle{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-finances__sous{color:#9aaacb}
@@ -1005,7 +1023,10 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-choix-statut label:hover input:disabled+span{border-color:#22304f}
 [data-apparence="sombre"] .gs-admin-body .gs-dialogue__historique h3{color:#dce5f7}
 [data-apparence="sombre"] .gs-admin-body .gs-dialogue__actions-colis{border-top-color:#22304f}
-[data-apparence="sombre"] .gs-admin-body .gs-case{color:#dce5f7}
+/* La case à cocher (Fixer le prix à la main, Prévenir le client, filtres, Son) : le fond
+   clair de site.css (#f4f8ff) restait sous le texte clair. */
+[data-apparence="sombre"] .gs-admin-body .gs-case{border-color:#2a3a5e;background-color:#132041;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-case strong{color:#ffffff}
 [data-apparence="sombre"] .gs-admin-body .gs-envoi{border-color:#22304f;background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-envoi__num{color:#9aaacb}
 [data-apparence="sombre"] .gs-admin-body .gs-envoi__ligne{color:#9aaacb}

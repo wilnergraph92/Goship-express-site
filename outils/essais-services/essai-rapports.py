@@ -91,7 +91,10 @@ def poser_colis(db, reception, statuts, client=MARIE, description='Colis'):
 
 def facture(db, client, montant, quand, colis=None):
     if colis:
-        f = jsonq(db, ADMIN, "select public.creer_facture('%s', array['%s']::uuid[]);" % (client, "','".join(colis)))['facture']
+        # Avec les frais de service, comme un regroupement qui les applique
+        # (supabase-frais-service.sql : sans cette demande, une facture de colis n'en a pas)
+        f = jsonq(db, ADMIN, "select public.creer_facture('%s', array['%s']::uuid[], %s);"
+                  % (client, "','".join(colis), js({'frais_service': True})))['facture']
     else:
         f = jsonq(db, ADMIN, "select public.creer_facture('%s', null, %s);" % (client, js({'montant_usd': montant})))['facture']
     dater(db, 'factures', 'cree_le', f['id'], quand)
@@ -108,8 +111,9 @@ def main():
     print('A. Installation : la chaîne complète, rejouable, et la garde des permissions (depuis %s)' % AVANT)
     db = S.Base()
     db.sql(S.DOUBLURES)
-    # La version publiée (sans les permissions des rapports) : ce fichier refuse de s'installer
-    for f in CHAINE[:-1]:
+    # La version publiée (sans les permissions des rapports) : ce fichier refuse de s'installer.
+    # Seulement les fichiers d'avant lui : ceux qui le suivent n'existaient pas encore.
+    for f in CHAINE[:CHAINE.index('supabase-rapports.sql')]:
         db.fichier(fichier_git(f))
     A.comptes(db)
     S.creer(db, ADMIN, {'client_id': MARIE, 'description': 'Avant les rapports', 'poids_lb': 3, 'service': 'aerien',

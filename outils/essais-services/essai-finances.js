@@ -60,8 +60,12 @@ function resume(f) { return [f.montant_usd, f.paye_usd, f.solde_usd, f.etat_paie
   var base = { client_id: marie, description: 'Chaussures', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
                destination: 'Pétion-Ville' };
   function avec(x) { return Object.assign({}, base, x); }
-  async function colis(x, facturer) {
+  // Un colis et sa facture, frais de service ajoutés comme à l'encaissement
+  // (supabase-frais-service.sql : sans eux, elle naît sans frais) : les montants de
+  // ces cas restent ceux de essai-finances.py
+  async function colis(x) {
     var r = await A.creerColis(avec(x));
+    r.facture = (await A.changerFraisService(r.facture.id, true)).facture;
     return r;
   }
   async function lire(id) { return (await A.factures({ parPage: 500 })).lignes.filter(function (f) { return f.id === id; })[0]; }
@@ -90,6 +94,7 @@ function resume(f) { return [f.montant_usd, f.paye_usd, f.solde_usd, f.etat_paie
   verifier('un client n\'encaisse rien', await code(A.enregistrerPaiement(f31.id, { montant_usd: 1, moyen: 'especes' })),
            'non-autorise');
   verifier('ne regroupe rien', await code(A.regrouperFactures([f31.id, f31.id])), 'non-autorise');
+  verifier('ne sort rien d\'un regroupement', await code(A.sortirDuRegroupement(f31.id, [], null)), 'non-autorise');
   verifier('ne lit pas le rapport', await code(A.anomaliesFacturation()), 'non-autorise');
   await API.deconnecter();
   await API.connecter('admin@goship.demo', 'demo1234');
@@ -213,7 +218,7 @@ function resume(f) { return [f.montant_usd, f.paye_usd, f.solde_usd, f.etat_paie
            'INVOICE_CANCELLED');
   verifier('elle ne se modifie plus', await code(A.modifierFacture(w, { note: 'x' })), 'INVOICE_LOCKED');
   var nf = (await A.facturerColis(af.facture_lignes[0].colis_id)).facture;
-  verifier('son colis se refacture, sous un autre numéro', [nf.numero !== af.numero, nf.montant_usd], [true, 20]);
+  verifier('son colis se refacture, sous un autre numéro, sans frais', [nf.numero !== af.numero, nf.montant_usd], [true, 10]);
   verifier('plus de suppression', typeof A.supprimerFacture, 'undefined');
 
   console.log('\nM. Résumé et retard');
@@ -240,6 +245,49 @@ function resume(f) { return [f.montant_usd, f.paye_usd, f.solde_usd, f.etat_paie
   var rap = await A.anomaliesFacturation();
   verifier('rien de grave dans des données propres',
            rap.filter(function (x) { return x.gravite !== 'info'; }).map(function (x) { return x.type; }), []);
+
+  console.log('\nQ. Sortir des colis d\'une facture regroupée (supabase-regroupement.sql)');
+  var rs = [];
+  for (var pd of [4, 3, 6]) rs.push(await colis({ description: 'Sortie ' + pd, poids_lb: pd }));
+  var cs = rs.map(function (r) { return r.colis.id; });
+  var grp = (await A.regrouperFactures(rs.map(function (r) { return r.facture.id; }))).facture;
+  verifier('regroupées : 75 $', grp.montant_usd, 75);
+  var nbAvant = (await A.factures({ parPage: 1000 })).total;
+  var so = await A.sortirDuRegroupement(grp.id, [cs[0]], 'sortie-1');
+  // Les frais restent sur la facture qui garde le regroupement (supabase-frais-service.sql)
+  verifier('le colis sorti : 20 $, sans frais, une ligne, à payer',
+           [so.facture.montant_usd, so.facture.frais_service_usd, so.facture.facture_lignes.length,
+            so.facture.facture_lignes[0].colis_id, so.facture.etat_paiement], [20, 0, 1, cs[0], 'a_payer']);
+  verifier('les autres : 15 + 30 + 10 = 55 $, deux lignes',
+           [so.reste.montant_usd, so.reste.facture_lignes.map(function (l) { return l.colis_id; }).sort()],
+           [55, cs.slice(1).sort()]);
+  var ancienne = await lire(grp.id);
+  verifier('la regroupée : annulée, motif, remplacée par le reste',
+           [ancienne.statut, ancienne.motif_annulation === 'Sortie du regroupement : ' + rs[0].colis.numero,
+            ancienne.remplacee_par === so.reste.id], ['annulee', true, true]);
+  verifier('deux factures de plus', (await A.factures({ parPage: 1000 })).total - nbAvant, 2);
+  var so2 = await A.sortirDuRegroupement(grp.id, [cs[0]], 'sortie-1');
+  verifier('même demande : mêmes factures, rien de refait',
+           [so2.deja, so2.facture.id, so2.reste.id, so2.annulee, (await A.factures({ parPage: 1000 })).total - nbAvant],
+           [true, so.facture.id, so.reste.id, grp.numero, 2]);
+  var reste = so.reste.id;
+  verifier('tous les colis : refusé', await code(A.sortirDuRegroupement(reste, cs.slice(1))), 'INVALID_INPUT');
+  verifier('colis étranger : refusé', await code(A.sortirDuRegroupement(reste, [cs[0]])), 'INVALID_INPUT');
+  verifier('aucun colis : refusé', await code(A.sortirDuRegroupement(reste, [])), 'INVALID_INPUT');
+  verifier('annulée : refusé', await code(A.sortirDuRegroupement(grp.id, [cs[1]])), 'INVOICE_NOT_GROUPABLE');
+  var sansColis = (await A.creerFacture({ client_id: jean, montant_usd: 12 }, [])).facture.id;
+  verifier('sans colis : refusé', await code(A.sortirDuRegroupement(sansColis, [cs[1]])), 'INVOICE_NOT_GROUPABLE');
+  var enc = await A.enregistrerPaiement(so.facture.id, { montant_usd: 20, moyen: 'moncash', reference: 'MC-SORTIE' });
+  verifier('encaisser le colis sorti : payée, le reste à payer',
+           [enc.facture.etat_paiement, resume(await lire(reste))], ['payee', [55, 0, 55, 'a_payer', 'a_payer']]);
+  verifier('payée : refusé', await code(A.sortirDuRegroupement(so.facture.id, [cs[0]])), 'INVOICE_NOT_GROUPABLE');
+  await A.enregistrerPaiement(reste, { montant_usd: 5, moyen: 'especes' });
+  verifier('déjà un paiement : refusé', await code(A.sortirDuRegroupement(reste, [cs[1]])), 'INVOICE_HAS_PAYMENTS');
+  verifier('refus : rien n\'a bougé', resume(await lire(reste)), [55, 5, 50, 'partielle', 'a_payer']);
+  var journal = (await A.journal({ parPage: 1000 })).lignes.filter(function (l) { return l.action === 'facture.sortie_regroupement'; });
+  verifier('journal : la sortie, son colis et les deux factures',
+           journal.length === 1 && journal[0].apres.colis === rs[0].colis.numero &&
+           journal[0].apres.facture === so.facture.numero && journal[0].apres.reste === so.reste.numero, true);
 
   console.log('\nR. Les deux côtés d\'accord');
   verifier('mêmes moyens de paiement que la base', API.regles.moyensPaiement,

@@ -83,6 +83,20 @@
     [/^par rapport au (.+)$/, ['vs. $1', 'respecto al $1', 'konpare ak $1']],
     [/^(\d+) j ou plus$/, ['$1 d or more', '$1 d o más', '$1 j oswa plis']],
     [/^Rapide : (.+) à chaque scan$/, ['Fast: {1} on each scan', 'Rápido: {1} en cada escaneo', 'Rapid : {1} nan chak eskan']],
+    [/^Indiquez le poids : le prix se calcule tout seul, à (.+) la livre\.$/, ['Enter the weight: the price is calculated automatically, at $1 per pound.', 'Indique el peso: el precio se calcula solo, a $1 la libra.', 'Mete pwa a : pri a kalkile poukont li, a $1 pa liv.']],
+    [/^Prix fixé à la main : (.+) · une facture déjà émise ne change pas\.$/, ['Price set manually: $1 · an invoice already issued does not change.', 'Precio fijado a mano: $1 · una factura ya emitida no cambia.', 'Pri fikse alamen : $1 · yon fakti ki deja soti pa chanje.']],
+    [/^Prix fixé à la main : (.+) · sans frais de service : ils s’ajoutent au regroupement ou à l’encaissement\.$/, ['Price set manually: $1 · no service fee: it is added when merging or at payment.', 'Precio fijado a mano: $1 · sin cargo por servicio: se añade al agrupar o al cobrar.', 'Pri fikse alamen : $1 · san frè sèvis : yo ajoute l lè w ap mete fakti ansanm oswa lè w ap resevwa lajan an.']],
+    [/^(.+) lb × (.+) = (.+) · sans frais de service : ils s’ajoutent au regroupement ou à l’encaissement\.$/, ['$1 lb × $2 = $3 · no service fee: it is added when merging or at payment.', '$1 lb × $2 = $3 · sin cargo por servicio: se añade al agrupar o al cobrar.', '$1 lb × $2 = $3 · san frè sèvis : yo ajoute l lè w ap mete fakti ansanm oswa lè w ap resevwa lajan an.']],
+    [/^(\d+) colis, sans frais de service : ils s’ajoutent à l’encaissement\.$/, ['$1 packages, no service fee: it is added at payment.', '$1 paquetes, sin cargo por servicio: se añade al cobrar.', '$1 koli, san frè sèvis : yo ajoute l lè w ap resevwa lajan an.']],
+    // Le frais de service à l'encaissement et au regroupement (supabase-frais-service.sql)
+    [/^Le frais de service \((.+)\) n’est pas sur cette facture\. Choisissez Oui ou Non : les montants se mettent à jour avant la confirmation\.$/, ['The service fee ($1) is not on this invoice. Choose Yes or No: the amounts update before you confirm.', 'El cargo por servicio ($1) no está en esta factura. Elija Sí o No: los montos se actualizan antes de confirmar.', 'Frè sèvis la ($1) pa sou fakti sa a. Chwazi Wi oswa Non : montan yo mete ajou anvan w konfime.']],
+    [/^Frais de service déjà inclus \((.+)\) : il ne s’ajoute pas une seconde fois\.$/, ['Service fee already included ($1): it is not added a second time.', 'Cargo por servicio ya incluido ($1): no se añade una segunda vez.', 'Frè sèvis la deja ladan ($1) : li pa ajoute yon dezyèm fwa.']],
+    [/^Frais de service ajoutés : total (.+)\.$/, ['Service fee added: total $1.', 'Cargo por servicio añadido: total $1.', 'Frè sèvis ajoute : total $1.']],
+    [/^Frais de service retirés : total (.+)\.$/, ['Service fee removed: total $1.', 'Cargo por servicio quitado: total $1.', 'Frè sèvis retire : total $1.']],
+    [/^Sa facture (\S+) entre avec lui$/, ['Its invoice $1 comes in with it', 'Su factura $1 entra con él', 'Fakti $1 li a antre avè l']],
+    [/^Sur la facture (\S+)$/, ['On invoice $1', 'En la factura $1', 'Sou fakti $1']],
+    [/^Sur la facture (\S+) \((\d+) colis, qui entrent ensemble\)$/, ['On invoice $1 ($2 packages, which come in together)', 'En la factura $1 ($2 paquetes, que entran juntos)', 'Sou fakti $1 ($2 koli, ki antre ansanm)']],
+    [/^Aujourd’hui, (\d+) factures$/, ['Today, $1 invoices', 'Hoy, $1 facturas', 'Jodi a, $1 fakti']],
     [/^(.+) : (.+), contre aucun sur la période précédente\.$/, ['{1}: $2, versus none in the previous period.', '{1}: $2, frente a ninguno en el período anterior.', '{1} : $2, kont zewo nan peryòd anvan an.']],
     [/^(.+) : stable \((.+)\)\.$/, ['{1}: stable ($2).', '{1}: estable ($2).', '{1} : estab ($2).']],
     [/^(.+) \((\d+) lignes?\)$/, ['{1} ($2 rows)', '{1} ($2 filas)', '{1} ($2 liy)']],
@@ -92,6 +106,11 @@
     [/^Facture (\d{4}-\d{2}-\d+)$/, ['Invoice $1', 'Factura $1', 'Fakti $1']],
     [/^Miami → ([^·]+)$/, ['Miami → {1}', 'Miami → {1}', 'Miami → {1}']],
     [/^(.+), (Haïti|République dominicaine|États-Unis)$/, ['$1, {2}', '$1, {2}', '$1, {2}']],
+    // Le regroupement des factures, et la sortie de colis d'une facture regroupée
+    [/^(\d+) factures retirées de la liste\.$/, ['$1 invoices removed from the list.', '$1 facturas quitadas de la lista.', '$1 fakti retire nan lis la.']],
+    [/^Les (\d+) colis sortis, sur leur facture$/, ['The $1 packages taken out, on their invoice', 'Los $1 paquetes sacados, en su factura', '$1 koli ki soti yo, sou fakti pa yo']],
+    [/^Les (\d+) colis qui restent, ensemble$/, ['The $1 remaining packages, together', 'Los $1 paquetes que quedan, juntos', '$1 koli ki rete yo, ansanm']],
+    [/^Colis sortis : facture (\S+) \((.+)\)\. Les autres : facture (\S+) \((.+)\)\.$/, ['Packages taken out: invoice $1 ($2). The others: invoice $3 ($4).', 'Paquetes sacados: factura $1 ($2). Los demás: factura $3 ($4).', 'Koli ki soti yo : fakti $1 ($2). Lòt yo : fakti $3 ($4).']],
     // Les rapports (onglet « Rapport »)
     [/^(Voir le rapport|Détails du rapport|Imprimer le rapport|PDF du rapport|Modifier le rapport|Supprimer le rapport) (.+)$/, ['{1} $2', '{1} $2', '{1} $2']],
     [/^(\d+)–(\d+) sur (\d+)$/, ['$1–$2 of $3', '$1–$2 de $3', '$1–$2 sou $3']],
@@ -221,7 +240,9 @@
   }
 
   function attributs(e) {
-    if (ignore(e)) return;
+    // Ce qu'on tape dans un <textarea> reste tel quel, mais son placeholder (« Visible par
+    // le client dans son espace ») est un texte de la page, à traduire comme les autres
+    if (e.tagName === 'TEXTAREA' ? ignore(e.parentElement) : ignore(e)) return;
     var memo = ATTRS.get(e);
     ATTRIBUTS.forEach(function (a) {
       if (!e.hasAttribute(a)) return;

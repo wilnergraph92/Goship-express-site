@@ -131,7 +131,7 @@ function comme(role) {
   console.log('\nD. Le colis de l\'employé et son lien de paiement');
   await comme('employe');
   var fe = (await A.creerColis(Object.assign({}, base, { description: 'Employé' }))).facture;
-  verifier('sa facture naît avec le colis', fe.montant_usd, 30);
+  verifier('sa facture naît avec le colis, sans frais de service', fe.montant_usd, 20);
   verifier('il pose le premier lien', await code(A.poserLienPaiement(fe.id, 'https://paypal.test/a')), 'aucune');
   verifier('… puis n\'y retouche plus', await code(A.poserLienPaiement(fe.id, 'https://paypal.test/b')), REFUS);
   verifier('un lien javascript: est refusé', await code(A.poserLienPaiement(fe.id, 'javascript:alert(1)')), 'INVALID_INPUT');
