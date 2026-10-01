@@ -197,6 +197,19 @@ def main():
                            ('Verrous métier', 'verrou_statut')]))
     db.sql("""drop table public.essai_sans_rls; drop function public.essai_sans_chemin();
               drop function public.essai_ouverte(); alter table public.colis enable trigger verrou_statut;""")
+    # Comme rls_auto_enable() de Supabase : une fonction d'event trigger privilégiée,
+    # exécutable par tous, mais que PostgreSQL refuse d'appeler hors déclencheur
+    db.sql("""create function public.essai_declencheur() returns event_trigger language plpgsql
+                security definer set search_path = '' as 'begin end';""")
+    lignes3 = lignes_controle(db, S.BASE, 'controle-securite.sql')
+    verifier('une fonction de déclencheur ouverte n\'est pas une alerte, seulement une information',
+             ([o for c, v, o, _d in lignes3 if v == 'ALERTE' and 'essai_declencheur' in o],
+              [v for c, v, o, _d in lignes3 if c == 'Ouvert aux visiteurs' and 'essai_declencheur' in o]),
+             ([], ['INFO']))
+    r = subprocess.run([str(S.PSQL), '-U', db.su, '-h', db.socket, '-d', S.BASE, '-X', '-q',
+                        '-c', 'set role anon; select public.essai_declencheur();'], capture_output=True, text=True)
+    verifier('et un visiteur ne peut vraiment pas l\'appeler', 'can only be called' in r.stderr, True)
+    db.sql('drop function public.essai_declencheur();')
     r = subprocess.run([str(S.PSQL), '-U', db.su, '-h', db.socket, '-d', S.BASE, '-X', '-q', '-o', '/dev/null',
                         '-v', 'ON_ERROR_STOP=1'],
                        input='begin transaction read only;\n%s\nrollback;\nbegin transaction read only;\n%s\nrollback;\n'
@@ -383,13 +396,23 @@ def main():
               insert into public.notification_envois (notification_id, canal, cible, statut, prochain_essai_le)
                 select id, 'push', 'essai-integrite', 'attente', now() - interval '1 hour'
                   from public.notifications where canal = 'app' limit 1;
-              delete from public.clients where id = '%s';""" % (M.MARIE, M.JEAN, M.MARIE, M.MARIE, M.JEAN))
+              delete from public.clients where id = '%s';
+              -- Deux événements de facturation sans traite_le : l'un d'avant les
+              -- notifications (comme les trois de la production, 26-27/09), l'autre
+              -- resté coincé après leur installation
+              update public.notification_moteur set actives_depuis = now() - interval '1 day';
+              insert into public.evenements_facturation (type, cree_le)
+                values ('FACTURE_ANNULEE', now() - interval '2 days'), ('FACTURE_CREEE', now() - interval '20 minutes');"""
+           % (M.MARIE, M.JEAN, M.MARIE, M.MARIE, M.JEAN))
     lignes = lignes_controle(db, S.BASE, 'controle-integrite.sql')
     alertes = sorted(c for c, v, _n, _e in lignes if v == 'ALERTE')
     verifier('chaque anomalie introduite est vue', alertes, sorted([
         'Colis sans client', 'Factures sans client', 'Notifications sans client',
         'Envois en attente depuis plus de 15 min', 'Colis sur deux factures actives',
-        'Paiements d\'un autre client que la facture', 'Payé ≠ somme des paiements']))
+        'Paiements d\'un autre client que la facture', 'Payé ≠ somme des paiements',
+        'Événements de facturation non traités (15 min)']))
+    verifier('l\'événement d\'avant les notifications est compté à part, en information',
+             [(v, n) for c, v, n, _e in lignes if c.startswith('Événements de facturation d\'avant')], [('INFO', '1')])
     exemples = {c: e for c, v, _n, e in lignes if v == 'ALERTE'}
     verifier('les exemples ne montrent que des numéros, jamais un nom ou une adresse',
              any(re.search(r'[a-z]+@|Marie|Jean|Pétion', e) for e in exemples.values()), False)

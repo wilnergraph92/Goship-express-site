@@ -134,8 +134,19 @@ controles(ordre, controle, gravite, nombre, exemples) as (
               where statut = 'echec' and maj_le > now() - interval '24 hours' group by 1) x)
     from public.notification_envois where statut = 'echec' and maj_le > now() - interval '24 hours'
   union all
+  -- traite_le est posé par le déclencheur notifier_evenement_facturation, dans la
+  -- transaction qui crée l'événement. Ceux d'avant l'installation des notifications
+  -- (actives_depuis) n'ont jamais eu de déclencheur et restent vides pour toujours :
+  -- les compter en alerte ferait sonner le contrôle chaque semaine pour rien.
   select 5, 'Événements de facturation non traités (15 min)', 'ALERTE', count(*), null
-    from public.evenements_facturation where traite_le is null and cree_le < now() - interval '15 minutes'
+    from public.evenements_facturation
+   where traite_le is null and cree_le < now() - interval '15 minutes'
+     and cree_le >= coalesce((select actives_depuis from public.notification_moteur limit 1), '-infinity')
+  union all
+  select 5, 'Événements de facturation d''avant les notifications (jamais traités, voulu)', 'INFO', count(*), null
+    from public.evenements_facturation
+   where traite_le is null
+     and cree_le < coalesce((select actives_depuis from public.notification_moteur limit 1), '-infinity')
 )
 select controle,
        case when nombre = 0 then 'OK' else gravite end as verdict,

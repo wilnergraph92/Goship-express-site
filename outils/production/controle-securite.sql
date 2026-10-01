@@ -29,7 +29,11 @@ tables as (
 fonctions as (
   select p.oid, p.proname, p.prosecdef, pg_get_function_identity_arguments(p.oid) as args,
          exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%') as search_path_fixe,
-         has_function_privilege('anon', p.oid, 'execute') as anon
+         has_function_privilege('anon', p.oid, 'execute') as anon,
+         -- Une fonction de déclencheur (trigger, event_trigger) ne s'appelle pas :
+         -- PostgreSQL refuse (« trigger functions can only be called as triggers »),
+         -- par l'API comme en SQL. Ex. rls_auto_enable(), posée par Supabase.
+         p.prorettype in ('trigger'::regtype, 'event_trigger'::regtype) as declencheur
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prokind = 'f'
 ),
@@ -121,7 +125,11 @@ lignes(ordre, controle, verdict, objet, detail) as (
   -- 6. Ce qu'un visiteur sans compte peut appeler
   select 6, 'Ouvert aux visiteurs', 'ALERTE', proname || '(' || args || ')',
          'fonction privilégiée appelable sans compte (attendues : suivre_colis, sante)'
-    from fonctions where prosecdef and anon and proname not in (select nom from ouvertes_attendues)
+    from fonctions where prosecdef and anon and not declencheur and proname not in (select nom from ouvertes_attendues)
+  union all
+  select 6, 'Ouvert aux visiteurs', 'INFO', string_agg(proname || '()', ', ' order by proname),
+         'fonctions de déclencheur privilégiées : droit d''exécution sans effet, PostgreSQL refuse de les appeler'
+    from fonctions where prosecdef and anon and declencheur having count(*) > 0
   union all
   select 6, 'Ouvert aux visiteurs', 'INFO', string_agg(proname, ', ' order by proname),
          'fonctions privilégiées ouvertes sans compte (attendu)'

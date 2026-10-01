@@ -11,6 +11,12 @@ base **avant** de publier le site.
 
 Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backup.md`.
 
+- 01/10/2026 : première vraie sauvegarde réussie (B2, épreuve : 1 083 lignes, 17 comptes,
+  6 s). Les contrôles ne crient plus pour deux faux positifs relevés en production :
+  `rls_auto_enable()` (event trigger posé par Supabase, inappelable) passe en INFO, et
+  les 3 événements de facturation des 26-27/09, antérieurs aux notifications
+  (`actives_depuis`), sont comptés à part ; un événement coincé après reste une ALERTE.
+
 - 30/09/2026 : la branche rejoint de nouveau la version du site (frais de service,
   regroupement, Google) ; l'environnement `production` est désormais ouvert à `main`.
 - 28/09/2026 : la branche rejoint la version actuelle du site (12 migrations,
