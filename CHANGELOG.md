@@ -19,6 +19,10 @@ couvrant ce que l'application traite.
   Messaging, Apple, PayPal), suppression du compte dans l'application ou par
   `fermer-un-compte.html`. Posée par `build.py` (`confidentialite_application()`), sans
   toucher la maquette. **Texte à relire par GoShip Express.**
+- `fermer-un-compte.html` (et `en/`, `es/`, `ht/`) gagne la carte « Depuis l'application GoShip Express » :
+  marche à suivre (Compte > Supprimer mon compte), données supprimées et conservées. C'est
+  l'adresse que Google Play demande pour la suppression du compte. Posée par `build.py`
+  (`fermer_depuis_application()`).
 
 ## site-2026.10.05 — le tableau de bord a sa politique de sécurité
 

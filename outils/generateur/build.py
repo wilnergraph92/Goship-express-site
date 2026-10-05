@@ -328,6 +328,47 @@ def confidentialite_application():
 
 
 
+# La carte « Envoyer la demande » de la page « Fermer un compte » : la suppression depuis l'application se pose juste avant
+FERMER_REPERE = ('      <div style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);border:1px solid #e7edf9;'
+                 'border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+                 '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+                 'Envoyer la demande</h3>')
+
+
+def fermer_depuis_application():
+    """La carte « Depuis l'application GoShip Express » de la page « Fermer un compte ».
+    Google Play exige, pour l'adresse de suppression du compte, une page qui nomme
+    l'application, montre la marche à suivre et dit ce qui est supprimé et ce qui est gardé."""
+    def puce(titre, texte):
+        return ('        <div style="display:flex;gap:14px;align-items:flex-start">\n'
+                '          <span style="flex:none;width:9px;height:9px;margin-top:9px;border-radius:50%;'
+                'background:var(--accent);display:block"></span>\n'
+                '          <p style="font-size:16px;line-height:1.7;color:#4a5878"><strong style="color:var(--ink);'
+                f'font-weight:700">{titre}</strong> {texte}</p>\n'
+                '        </div>\n')
+    para = '        <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">{}</p>\n'
+    return (
+        '      <div id="application" style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);'
+        'border:1px solid #e7edf9;border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+        '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+        "Depuis l'application GoShip Express</h3>\n"
+        + para.format("Dans l'application GoShip Express (Android et iPhone), ouvrez l'onglet "
+                      "<strong style=\"color:var(--ink);font-weight:700\">Compte</strong>, touchez "
+                      "<strong style=\"color:var(--ink);font-weight:700\">Supprimer mon compte</strong>, puis confirmez. "
+                      "La suppression est immédiate et définitive.")
+        + '        <div style="margin-top:22px;padding:clamp(20px,2.4vw,26px);background:#f4f6fa;border-radius:14px;'
+          'display:grid;gap:14px">\n'
+        + puce('Supprimés :', "votre nom, votre adresse e-mail, votre téléphone, votre adresse de livraison, les "
+               "identifiants de notification de vos téléphones et vos pré-alertes en attente. La connexion au compte "
+               "est bloquée pour toujours et les sessions ouvertes sont fermées.")
+        + puce('Conservés, sans vos coordonnées :', "les factures, les paiements et l'historique des colis, pour nos "
+               "obligations comptables et douanières, pendant la durée exigée par la réglementation.")
+        + '      </div>\n'
+        + para.format("Un compte qui a encore des colis en route ou à retirer ne peut pas être supprimé tant qu'ils ne "
+                      "vous ont pas été remis. Vous n'avez pas l'application ? Utilisez la demande ci-dessous.")
+        + '      </div>\n')
+
+
 def replace_once(s, old, new, page, count=1):
     n = s.count(old)
     if n != count:
@@ -1071,6 +1112,10 @@ def page_specific(body, src, page):
     # appareil photo, prestataires, suppression du compte depuis l'application et le site.
     if src == 'Confidentialite.dc.html':
         body = replace_once(body, CONF_REPERE, confidentialite_application() + CONF_REPERE, page)
+
+    # Fermer un compte : la suppression depuis l'application (adresse demandée par Google Play)
+    if src == 'Fermer-un-compte.dc.html':
+        body = replace_once(body, FERMER_REPERE, fermer_depuis_application() + FERMER_REPERE, page)
 
     # Formulaire de devis
     if src == 'Contacts.dc.html':
