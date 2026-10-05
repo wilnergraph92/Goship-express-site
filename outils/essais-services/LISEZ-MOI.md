@@ -253,6 +253,11 @@ jeton d'un client — comme quelqu'un qui contournerait l'application :
 - **Liste** : pages de 20, filtres et recherche faits par la base, index utilisé ;
   10 000 colis chez un client : une page en quelques millisecondes.
 - **Étapes** : une opération interne ou une étape corrigée n'est pas montrée.
+- **Accueil et Historicité** (section N) : l'accueil demande ses deux colis par les
+  statuts « en cours » et n'en montre jamais un livré, même mis à jour à l'instant ;
+  l'historique (Compte > Historicité) demande les colis livrés avec la seule étape
+  « livré » de chacun (filtre sur la table liée) pour la date de livraison ; une
+  livraison corrigée sort de l'historique et revient à l'accueil ; isolation entre clients.
 - **Pré-alertes** (`creer_prealerte`) : sept refus avec leur code, doublon, colis
   déjà arrivé, même envoi répété, cinq requêtes simultanées → une pré-alerte,
   ancien chemin toujours ouvert, limite de 60. Pas de pré-alerte sans nom,

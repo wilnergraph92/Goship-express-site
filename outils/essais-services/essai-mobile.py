@@ -823,6 +823,79 @@ def essais(db, d):
     c, v, _ = appel('POST', '/rpc/profil_complet', MARIE, {'p_client': nina})
     verifier('… ni aux clients connectés (elle dirait si un autre compte est complet)', c in (401, 403), True)
 
+    print("N. L'accueil sans colis livré, et l'historique des colis livrés (Compte > Historicité, lib/api.js)")
+    # Les requêtes exactes de l'application : l'accueil demande ses deux colis par les statuts « en
+    # cours » ; l'historique demande les colis livrés, avec la seule étape « livré » de chacun
+    # (filtre sur la table liée) pour la date de livraison.
+    ACTIFS = 'recu,emballe,embarque,distribution,succursale,disponible,incident'
+    HISTORIQUE = CHAMPS_LISTE + ',colis_historique(statut,cree_le)'
+
+    def accueil(qui, client):
+        return appel('GET', '/colis?select=%s&client_id=eq.%s&statut=in.(%s)&order=maj_le.desc,id.desc&offset=0&limit=2'
+                     % (CHAMPS_LISTE, client, ACTIFS), qui)
+
+    def livres(qui, client):
+        return appel('GET', '/colis?select=%s&client_id=eq.%s&statut=in.(livre)&colis_historique.statut=eq.livre'
+                            '&order=maj_le.desc,id.desc' % (HISTORIQUE, client), qui,
+                     entetes={'Range': '0-19', 'Prefer': 'count=exact'})
+
+    # Le colis livré de Marie est le plus récemment mis à jour : sans filtre, il ouvrirait l'accueil
+    db.sql("update colis set maj_le = now() where id = '%s';" % colis_marie[0]['id'])
+    c, v, _ = accueil(MARIE, MARIE)
+    verifier("accueil : deux colis, aucun livré, même quand le colis livré est le plus récent",
+             (c, len(v), [x['statut'] for x in v if x['statut'] == 'livre'], colis_marie[0]['numero'] in [x['numero'] for x in v]),
+             (200, 2, [], False))
+    c, v, h = livres(MARIE, MARIE)
+    verifier("historique : le seul colis livré de Marie, 1 au total",
+             (c in (200, 206), [x['numero'] for x in v], h.get('Content-Range')), (True, [colis_marie[0]['numero']], '0-0/1'))
+    verifier("… avec l'étape « livré » seulement (pas les six étapes du parcours)",
+             [[e['statut'] for e in x['colis_historique']] for x in v], [['livre']])
+    date_livraison = un(db, "select to_char(cree_le at time zone 'utc', 'YYYY-MM-DD HH24:MI:SS') from colis_historique "
+                            "where colis_id = '%s' and statut = 'livre';" % colis_marie[0]['id'])
+    verifier("… et c'est la date de la livraison, pas celle de la dernière mise à jour du colis",
+             v[0]['colis_historique'][0]['cree_le'][:19].replace('T', ' '), date_livraison)
+
+    # Jean : ses deux colis livrés ; l'un est livré par erreur, corrigé, puis livré pour de bon
+    j0, j1 = colis_jean[0], colis_jean[1]
+    parcours = (('COLIS_EMBALLE', None), ('COLIS_EXPEDIE', None), ('COLIS_ARRIVE', 'Port-au-Prince'),
+                ('COLIS_DISPONIBLE', 'Agence de Pétion-Ville'), ('COLIS_LIVRE', None))
+    for colis_a_livrer in (j0, j1):
+        for type_, lieu in parcours:
+            op(db, ADMIN, colis_a_livrer['id'], type_, lieu=lieu)
+    c, v, h = livres(JEAN, JEAN)
+    verifier("historique de Jean : ses deux colis livrés, 2 au total",
+             (sorted(x['numero'] for x in v), h.get('Content-Range')), (sorted([j0['numero'], j1['numero']]), '0-1/2'))
+    op(db, ADMIN, j0['id'], 'CORRECTION', motif='Livré par erreur')
+    c, v, h = livres(JEAN, JEAN)
+    verifier("livraison corrigée : le colis sort de l'historique (son étape « livré » n'est plus montrée)",
+             ([x['numero'] for x in v], h.get('Content-Range')), ([j1['numero']], '0-0/1'))
+    c, v, _ = accueil(JEAN, JEAN)
+    verifier("… et il revient à l'accueil, son statut étant de nouveau « en cours »",
+             (j0['numero'] in [x['numero'] for x in v], [x['statut'] for x in v if x['numero'] == j0['numero']]), (True, ['disponible']))
+    op(db, ADMIN, j0['id'], 'COLIS_LIVRE')
+    c, v, h = livres(JEAN, JEAN)
+    redevenu = [x for x in v if x['numero'] == j0['numero']]
+    verifier("livré pour de bon : de retour dans l'historique, une seule étape « livré » lisible (la corrigée reste cachée)",
+             (len(v), [len(x['colis_historique']) for x in redevenu],
+              un(db, "select count(*) from colis_historique where colis_id = '%s' and statut = 'livre';" % j0['id'])), (2, [1], '2'))
+    c, v, _ = accueil(JEAN, JEAN)
+    verifier("accueil de Jean : plus aucun colis en cours parmi ses deux (que des livrés)", (c, v), (200, []))
+
+    # Isolation : par l'API directe, avec le jeton de Marie
+    c, v, _ = livres(MARIE, JEAN)
+    verifier("Marie demande l'historique de Jean : rien", (c, v), (200, []))
+    c, v, _ = appel('GET', '/colis?select=%s&statut=in.(livre)&colis_historique.statut=eq.livre' % HISTORIQUE, MARIE)
+    verifier("Marie demande tous les colis livrés, sans client : les siens seulement",
+             (c, sorted(x['numero'] for x in v)), (200, [colis_marie[0]['numero']]))
+    c, v, _ = appel('GET', '/colis_historique?select=id&colis_id=eq.%s&statut=eq.livre' % j1['id'], MARIE)
+    verifier("Marie lit l'étape « livré » d'un colis de Jean : rien", (c, v), (200, []))
+    c, v, _ = livres(None, JEAN)
+    verifier("visiteur : refusé ou vide", c in (401, 403) or v == [], True)
+    # Un colis d'un client qui n'a que des colis livrés : « mon_resume » le dit (l'accueil en tire son message)
+    c, r = rpc('mon_resume', JEAN)
+    verifier("mon_resume de Jean : 0 en cours, 2 livrés (l'accueil dit « Aucun colis en cours », pas « Aucun colis »)",
+             (r['colis']['en_cours'], r['colis']['livres']), (0, 2))
+
     print('J. Volume')
     db.sql("insert into colis (client_id, numero, description, poids_lb, service, pays_destination, destination, statut, prix_usd, tarif_lb_usd) "
            "select '%s', 'GSE-9' || lpad(g::text, 7, '0') || '-HT', 'Volume ' || g, 1, 'aerien', 'HT', 'X', 'recu', 5, 5 "
