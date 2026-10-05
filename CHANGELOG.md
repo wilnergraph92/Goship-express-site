@@ -7,6 +7,17 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — l'application : l'accueil sans colis livré, et « Historicité »
+
+Aucune page du site, aucune migration, aucune donnée. Le changement est dans l'application
+mobile (dépôt `goship-express-app`) ; ici, seul le banc `essai-mobile.py` gagne une section N
+qui rejoue les nouvelles requêtes de l'application contre le vrai PostgREST.
+
+- 05/10/2026 : l'accueil de l'application ne montre plus aucun colis livré (un colis livré
+  n'en est plus le « dernier mouvement ») ; **Compte > Historicité** liste tous les colis
+  livrés du client avec leur date de livraison. Audit complet du même jour :
+  `docs/audit-2026-10-05.md`.
+
 ## Non publié — sauvegarde autonome de la base (Supabase Free)
 
 Aucune page ne change, aucune donnée ni migration. Guide : `outils/README-backup.md`.
