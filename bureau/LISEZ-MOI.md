@@ -164,7 +164,8 @@ facture en A4 (595 × 842 points).
   fichiers. L'application revérifie l'expéditeur de chaque message.
 - **Content-Security-Policy** : celle de `_headers`, posée par l'application
   sur la page (GitHub Pages ne l'envoie pas) : pas de script injecté, pas de
-  script d'un autre domaine.
+  script d'un autre domaine. `admin.html` porte aussi la même règle dans sa
+  balise `<meta>` (pour le navigateur) : un refus est donc rapporté deux fois.
 - **Permissions** : notifications, presse-papiers et plein écran pour le site ;
   caméra, micro, position, USB, HID, port série refusés.
 - **Pages locales** servies par `goship-app://` (pas `file://`) ; le document à

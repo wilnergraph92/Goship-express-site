@@ -316,8 +316,12 @@ function taillePdf(octets) {
         setTimeout(function () { fin({ refus: refus, injecte: window.__injecte, data: window.__data }); }, 800);
       });
     });
-    ok('Content-Security-Policy : script injecté, data: et domaine inconnu refusés (' + csp.refus.length + ' refus : ' + csp.refus.join(' · ') + ')',
-       csp.refus.length === 3 && csp.refus.every(function (r) { return /^script-src/.test(r); }) && !csp.injecte && !csp.data);
+    // Deux politiques s'appliquent : l'en-tête posé par l'application et la ligne que
+    // admin.html porte lui-même. Chacune rapporte son refus : on compte les scripts
+    // refusés, pas les rapports.
+    var refuses = csp.refus.filter(function (r, i, t) { return t.indexOf(r) === i; });
+    ok('Content-Security-Policy : script injecté, data: et domaine inconnu refusés (' + refuses.length + ' refusés : ' + refuses.join(' · ') + ')',
+       refuses.length === 3 && csp.refus.every(function (r) { return /^script-src/.test(r); }) && !csp.injecte && !csp.data);
     var droits = await page.evaluate(async function () {
       var r = {};
       r.notifications = (await navigator.permissions.query({ name: 'notifications' })).state;
