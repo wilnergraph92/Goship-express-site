@@ -7,6 +7,19 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.10.05.2 — la politique de confidentialité décrit l'application
+
+Aucune migration, aucune donnée. Préparation de la fiche Google Play, qui exige une politique
+couvrant ce que l'application traite.
+
+- `confidentialite.html` (et `en/`, `es/`, `ht/`) gagne la section « Application mobile
+  GoShip Express » (ancre `#application`) : données du compte et des colis, identifiant de
+  notification (effacé à la déconnexion), appareil photo (scan seulement, aucune image
+  gardée), ce qui reste sur le téléphone, prestataires (Supabase, Expo et Firebase Cloud
+  Messaging, Apple, PayPal), suppression du compte dans l'application ou par
+  `fermer-un-compte.html`. Posée par `build.py` (`confidentialite_application()`), sans
+  toucher la maquette. **Texte à relire par GoShip Express.**
+
 ## site-2026.10.05 — le tableau de bord a sa politique de sécurité
 
 Aucune migration, aucune donnée.

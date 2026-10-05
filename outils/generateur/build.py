@@ -272,6 +272,62 @@ def fail(msg):
     sys.exit('ERREUR : ' + msg)
 
 
+# Le bloc « Mises à jour de la politique… » : la section de l'application se pose juste avant
+CONF_REPERE = ('      <div style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);border:1px solid #e7edf9;'
+               'border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+               '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+               'Mises à jour de la politique de confidentialité</h3>')
+
+
+def confidentialite_application():
+    """La section « Application mobile » de la politique de confidentialité, dans le
+    style des autres blocs de la page (carte blanche, puces orange)."""
+    def puce(titre, texte):
+        return ('        <div style="display:flex;gap:14px;align-items:flex-start">\n'
+                '          <span style="flex:none;width:9px;height:9px;margin-top:9px;border-radius:50%;'
+                'background:var(--accent);display:block"></span>\n'
+                '          <p style="font-size:16px;line-height:1.7;color:#4a5878"><strong style="color:var(--ink);'
+                f'font-weight:700">{titre}</strong> {texte}</p>\n'
+                '        </div>\n')
+    para = '        <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">{}</p>\n'
+    return (
+        '      <div id="application" style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);'
+        'border:1px solid #e7edf9;border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+        '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+        'Application mobile GoShip Express</h3>\n'
+        + para.format("L'application GoShip Express, pour Android et iPhone, donne accès à votre espace client. "
+                      "Elle traite les mêmes informations que votre compte en ligne, et rien de plus :")
+        + '        <div style="margin-top:22px;padding:clamp(20px,2.4vw,26px);background:#f4f6fa;border-radius:14px;'
+          'display:grid;gap:14px">\n'
+        + puce('Compte et profil :', "nom, adresse e-mail, téléphone, pays, ville, adresse de livraison et code client. "
+               "Si vous vous connectez avec Google, nous recevons de Google votre nom et votre adresse e-mail, rien d'autre.")
+        + puce('Colis, pré-alertes et factures :', "description, poids, magasin, numéros de suivi, étapes du parcours, "
+               "valeur déclarée, montants et paiements.")
+        + puce('Notifications :', "pour vous prévenir de l'avancée de vos colis, l'application enregistre un identifiant "
+               "de notification de votre téléphone, avec sa plateforme et sa langue. Il est effacé quand vous vous "
+               "déconnectez.")
+        + puce('Appareil photo :', "il sert uniquement à lire le code-barres d'un colis. Aucune photo ni vidéo n'est "
+               "enregistrée ni envoyée.")
+        + puce('Sur le téléphone :', "seules votre session, rangée dans le coffre-fort chiffré du téléphone, et la "
+               "langue choisie sont gardées.")
+        + puce('Ce que l\'application ne fait pas :', "aucune publicité, aucun pistage, aucune mesure d'audience, aucune "
+               "localisation, aucun accès à vos contacts ni à vos photos.")
+        + '      </div>\n'
+        + para.format("Ces informations sont hébergées par Supabase (base de données et connexion) et circulent "
+                      "chiffrées (HTTPS). Les notifications passent par le service d'Expo puis par Firebase Cloud "
+                      "Messaging (Google) sur Android, ou par le service de notifications d'Apple sur iPhone : ils ne "
+                      "reçoivent que l'identifiant de notification et le texte du message. Un paiement en ligne se fait "
+                      "sur le site de PayPal, selon sa propre politique.")
+        + para.format("Supprimer votre compte : dans l'application, ouvrez <strong style=\"color:var(--ink);"
+                      "font-weight:700\">Compte &gt; Supprimer mon compte</strong> ; sans l'application, utilisez la page "
+                      "<a href=\"fermer-un-compte.html\" style=\"font-weight:700\">Fermer un compte</a>. Votre nom, votre "
+                      "adresse e-mail, votre téléphone et votre adresse sont effacés, la connexion est bloquée et les "
+                      "identifiants de notification sont supprimés. Les factures et l'historique des colis sont conservés "
+                      "sans vos coordonnées, pour nos obligations comptables.")
+        + '      </div>\n')
+
+
+
 def replace_once(s, old, new, page, count=1):
     n = s.count(old)
     if n != count:
@@ -1009,6 +1065,12 @@ def page_specific(body, src, page):
         body = replace_once(body, 'onSubmit="{{ onTrack }}"', 'data-form="track"', page)
         body = replace_once(body, ' value="{{ trackValue }}" onChange="{{ onTrackInput }}"',
                             ' name="ref" required aria-label="Référence de votre colis" autocomplete="off" spellcheck="false"', page)
+
+    # Politique de confidentialité : ce que traite l'application mobile. Les boutiques
+    # (Google Play, App Store) exigent qu'elle le dise : identifiant de notification,
+    # appareil photo, prestataires, suppression du compte depuis l'application et le site.
+    if src == 'Confidentialite.dc.html':
+        body = replace_once(body, CONF_REPERE, confidentialite_application() + CONF_REPERE, page)
 
     # Formulaire de devis
     if src == 'Contacts.dc.html':
