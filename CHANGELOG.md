@@ -7,6 +7,18 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## site-2026.10.05 — le tableau de bord a sa politique de sécurité
+
+Aucune migration, aucune donnée.
+
+- `admin.html` porte la même `Content-Security-Policy` que les 101 autres pages (posée par
+  `build_admin()` avec `csp()`) : un script, une image ou une connexion venus d'un autre
+  domaine sont refusés par le navigateur. Parcouru en mode démo : 8 onglets, fiches, 5
+  impressions (étiquette, facture, rapport, PDF), aperçu d'e-mail, **0 violation** ; un
+  script injecté est bien refusé. Constat C1 de `docs/audit-2026-10-05.md`.
+- Application (dépôt `goship-express-app`) : la première case de l'accueil dit « en cours »
+  au lieu de « en route » (constat C3), publiée par mise à jour sans construction.
+
 ## Non publié — l'application : l'accueil sans colis livré, et « Historicité »
 
 Aucune page du site, aucune migration, aucune donnée. Le changement est dans l'application

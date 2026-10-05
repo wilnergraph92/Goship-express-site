@@ -1310,6 +1310,13 @@ def build_admin():
     """Tableau de bord (réservé à l'équipe, en français uniquement)."""
     doc = open(os.path.join(PAGES, 'admin.html'), encoding='utf-8').read()
     doc = poser_icones(doc.replace('[[fonts]]', TEXT_FONTS))
+    # La même politique de sécurité que les autres pages : la page aux droits les
+    # plus élevés ne doit pas être la seule à accepter un script venu d'ailleurs.
+    doc = doc.replace('<meta charset="utf-8">\n',
+                      '<meta charset="utf-8">\n'
+                      f'<meta http-equiv="Content-Security-Policy" content="{csp()}">\n', 1)
+    if 'Content-Security-Policy' not in doc:
+        fail('admin.html : politique de sécurité non posée')
     if '[[' in doc:
         fail('admin.html : repère non remplacé')
     with open(os.path.join(OUT, 'admin.html'), 'w', encoding='utf-8') as f:
