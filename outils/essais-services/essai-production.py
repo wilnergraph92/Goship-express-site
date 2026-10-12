@@ -179,6 +179,25 @@ def main():
              ['sante, suivre_colis'])
     migr = [v for c, v, o, _d in lignes if c == 'Migrations']
     verifier('les %d migrations sont reconnues' % len(CHAINE), migr, ['OK'] * len(CHAINE))
+    # Les colonnes ajoutées par la chaîne : la liste du contrôle suit les fichiers, et une
+    # colonne qui manque sonne (le 12/10/2026, colis.prix_fixe_usd manquait en production
+    # sans que la fonction témoin de supabase-services.sql le dise)
+    chaine_colonnes = []
+    for f in CHAINE:
+        for t, c in re.findall(r"alter table (?:if exists )?public\.([a-z_]+) add column if not exists ([a-z_]+)",
+                               open(os.path.join(OUTILS, f), encoding='utf-8').read(), re.I):
+            if (t, c) not in chaine_colonnes:
+                chaine_colonnes.append((t, c))
+    controle_colonnes = re.findall(r"\('([a-z_]+)', '([a-z_]+)', 'supabase[a-z-]*\.sql'\)",
+                                   open(os.path.join(PRODUCTION, 'controle-securite.sql'), encoding='utf-8').read())
+    verifier('controle-securite.sql : la liste des colonnes suit la chaîne (%d)' % len(chaine_colonnes),
+             sorted(controle_colonnes), sorted(chaine_colonnes))
+    verifier('toutes les colonnes présentes : une ligne OK',
+             [(v, d) for c, v, o, d in lignes if c == 'Colonnes'], [('OK', 'toutes présentes')])
+    db.sql("alter table public.colis rename column prix_fixe_usd to prix_fixe_essai;")
+    manque = [(v, o) for c, v, o, _d in lignes_controle(db, S.BASE, 'controle-securite.sql') if c == 'Colonnes']
+    db.sql("alter table public.colis rename column prix_fixe_essai to prix_fixe_usd;")
+    verifier('une colonne qui manque : ALERTE, et la colonne nommée', manque, [('ALERTE', 'colis.prix_fixe_usd')])
     verrous = [(o, v) for c, v, o, _d in lignes if c == 'Verrous métier']
     verifier('les quatre verrous métier sont actifs', sorted(verrous),
              [('evenement_immuable', 'OK'), ('garde_facture', 'OK'), ('verrou_role', 'OK'), ('verrou_statut', 'OK')])

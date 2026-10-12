@@ -47,6 +47,52 @@ verrous_attendus(nom, role) as (values
   ('evenement_immuable', 'l''historique d''un colis ne se réécrit pas'),
   ('verrou_role', 'le rôle ne change que par changer_role'),
   ('garde_facture', 'payé, statut et moyen d''une facture suivent les paiements')),
+-- Les colonnes que la chaîne ajoute à des tables existantes (add column if not
+-- exists). La fonction témoin d'une migration ne dit pas qu'un fichier est à sa
+-- dernière version : le 12/10/2026, colis.prix_fixe_usd manquait en production alors
+-- que supabase-services.sql y était « présent ». essai-production.py vérifie que
+-- cette liste suit la chaîne.
+colonnes_attendues(table_name, column_name, fichier) as (values
+  ('colis', 'expediteur', 'supabase.sql'),
+  ('colis', 'recu_le', 'supabase.sql'),
+  ('colis_historique', 'type_evenement', 'supabase.sql'),
+  ('colis_historique', 'statut_precedent', 'supabase.sql'),
+  ('colis_historique', 'auteur_id', 'supabase.sql'),
+  ('colis_historique', 'auteur_role', 'supabase.sql'),
+  ('colis_historique', 'metadonnees', 'supabase.sql'),
+  ('colis_historique', 'cle_idempotence', 'supabase.sql'),
+  ('colis_historique', 'visibilite', 'supabase.sql'),
+  ('colis_historique', 'corrige_id', 'supabase.sql'),
+  ('factures', 'lien_paiement', 'supabase.sql'),
+  ('factures', 'moyen', 'supabase.sql'),
+  ('notifications', 'client_id', 'supabase.sql'),
+  ('colis', 'prix_usd', 'supabase-facturation.sql'),
+  ('colis', 'tarif_lb_usd', 'supabase-facturation.sql'),
+  ('factures', 'frais_service_usd', 'supabase-facturation.sql'),
+  ('factures', 'montant_paye_usd', 'supabase-facturation.sql'),
+  ('facture_lignes', 'quantite', 'supabase-facturation.sql'),
+  ('facture_lignes', 'poids_lb', 'supabase-facturation.sql'),
+  ('colis', 'prix_fixe_usd', 'supabase-services.sql'),
+  ('factures', 'cle_idempotence', 'supabase-services.sql'),
+  ('factures', 'annulee_le', 'supabase-finances.sql'),
+  ('factures', 'annulee_par', 'supabase-finances.sql'),
+  ('factures', 'motif_annulation', 'supabase-finances.sql'),
+  ('factures', 'remplacee_par', 'supabase-finances.sql'),
+  ('facture_lignes', 'tarif_lb_usd', 'supabase-finances.sql'),
+  ('prealertes', 'cle_envoi', 'supabase-mobile.sql'),
+  ('notifications', 'type', 'supabase-notifications.sql'),
+  ('notifications', 'categorie', 'supabase-notifications.sql'),
+  ('notifications', 'priorite', 'supabase-notifications.sql'),
+  ('notifications', 'cle', 'supabase-notifications.sql'),
+  ('notifications', 'historique_id', 'supabase-notifications.sql'),
+  ('notifications', 'facture_id', 'supabase-notifications.sql'),
+  ('notifications', 'paiement_id', 'supabase-notifications.sql'),
+  ('notifications', 'donnees', 'supabase-notifications.sql'),
+  ('notifications', 'lu_le', 'supabase-notifications.sql'),
+  ('clients', 'supprime_le', 'supabase-compte.sql'),
+  ('colis', 'adresse_livraison', 'supabase-corrections.sql'),
+  ('factures', 'rectifiee_le', 'supabase-corrections.sql'),
+  ('journal_audit', 'motif', 'supabase-corrections.sql')),
 -- Une migration de la chaîne officielle = un objet qu'elle seule installe
 migrations(ordre, fichier, present) as (values
   (1,  'supabase.sql',                 to_regprocedure('public.permissions_du_role(text)') is not null),
@@ -200,6 +246,19 @@ lignes(ordre, controle, verdict, objet, detail) as (
   select 12, 'Migrations', case when present then 'OK' else 'ALERTE' end, lpad(ordre::text, 2, '0') || ' ' || fichier,
          case when present then 'installée' else 'ABSENTE : exécutez ce fichier, puis tous ceux qui le suivent' end
     from migrations
+  union all
+  -- 12 bis. Les colonnes ajoutées par la chaîne : une manquante = un fichier passé dans
+  -- une version trop ancienne ; le relancer (la chaîne est rejouable) la crée
+  select 12, 'Colonnes', 'ALERTE', a.table_name || '.' || a.column_name,
+         'ABSENTE : relancez ' || a.fichier || ', puis tous ceux qui le suivent'
+    from colonnes_attendues a
+   where not exists (select 1 from information_schema.columns c where c.table_schema = 'public'
+                       and c.table_name = a.table_name and c.column_name = a.column_name)
+  union all
+  select 12, 'Colonnes', 'OK', count(*)::text || ' colonnes', 'toutes présentes'
+    from colonnes_attendues a
+  having bool_and(exists (select 1 from information_schema.columns c where c.table_schema = 'public'
+                            and c.table_name = a.table_name and c.column_name = a.column_name))
   union all
   -- 13. Les réglages et clés du coffre-fort (noms seulement, jamais les valeurs)
   select 13, 'Coffre-fort (noms)', 'INFO', string_agg(name, ', ' order by name),
