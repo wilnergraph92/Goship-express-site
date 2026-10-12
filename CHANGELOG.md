@@ -7,6 +7,28 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — quatre corrections du tableau de bord (12/10/2026)
+
+**Migration à passer avant de publier le site** : `outils/supabase-corrections.sql` (18e de la
+chaîne ; contrôle attendu `3 | 2 | false | 2`). Elle ajoute trois colonnes vides
+(`colis.adresse_livraison`, `factures.rectifiee_le`, `journal_audit.motif`) et ne modifie aucune
+donnée existante. Banc : `outils/essais-services/essai-corrections.py` (84 vérifications).
+
+- **Prix fixé à la main** : le colis s'enregistre sans poids (jusqu'ici, le formulaire et la
+  base exigeaient un poids même quand le prix ne se calcule pas). Au prix calculé, le poids
+  reste obligatoire ; un poids saisi est toujours > 0 ; aucun poids à 0 n'est inventé.
+- **Messages au client** : le tableau de bord n'appelle plus les anciennes fonctions d'envoi
+  (fermées par `supabase-notifications.sql`, d'où « permission refusée » même pour un
+  administrateur). La base envoie elle-même ; la fenêtre après l'enregistrement et la fiche
+  du colis montrent l'état réel de chaque envoi et la raison d'un envoi non parti.
+- **Historique des modifications** : motif gardé au journal, journal qui ne se modifie ni ne
+  s'efface, échéance et note de facture journalisées ; corriger le montant d'une facture
+  exige un motif et la date « rectifiée » ; section « Historique des modifications » dans
+  Rapports, pour les administrateurs seulement (recherche par numéro, période, auteur, objet).
+- **Étiquettes** : pays et ville de livraison obligatoires (la ville choisie dans la liste du
+  pays pour HT et DO), adresse de livraison distincte du profil du client, date
+  d'enregistrement imprimée ; l'adresse personnelle du client n'est plus lue par l'étiquette.
+
 ## site-2026.10.05.2 — la politique de confidentialité décrit l'application
 
 Aucune migration, aucune donnée. Préparation de la fiche Google Play, qui exige une politique

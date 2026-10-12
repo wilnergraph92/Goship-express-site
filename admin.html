@@ -794,6 +794,55 @@
         <p class="gs-admin-vide" data-vide="rapports" hidden></p>
         <div class="gs-pagination" data-pagination="rapports" hidden></div>
       </section>
+
+      <!-- Historique des modifications des colis et des factures (journal_audit) :
+           administrateurs seulement (audit_logs.view). La base refuse aussi
+           historique_modifications à tout autre compte. -->
+      <section class="gs-rapports__liste gs-modifs" data-permission="audit_logs.view" aria-labelledby="modifs-titre">
+        <div class="gs-admin-outils">
+          <h3 class="gs-rapports__liste-titre" id="modifs-titre">Historique des modifications</h3>
+        </div>
+        <p class="gs-rapports__intro">Chaque modification d'un colis ou d'une facture : qui, quand, l'ancienne et la nouvelle valeur, et le motif. Réservé aux administrateurs ; jamais montré au client.</p>
+        <form class="gs-apercu__barre gs-rapports__filtres" data-modifs-filtres novalidate>
+          <label class="gs-apercu__choix"><span>N° de colis ou de facture</span><input type="search" class="gs-admin-date" name="recherche" placeholder="GSE-1204-HT, FAC-2026-0042…" autocomplete="off" spellcheck="false"></label>
+          <label class="gs-apercu__choix"><span>Du</span><input type="date" class="gs-admin-date" name="debut"></label>
+          <label class="gs-apercu__choix"><span>Au</span><input type="date" class="gs-admin-date" name="fin"></label>
+          <label class="gs-apercu__choix">
+            <span>Objet</span>
+            <select class="gs-admin-filtre" name="entite">
+              <option value="">Colis et factures</option>
+              <option value="colis">Colis</option>
+              <option value="facture">Factures</option>
+            </select>
+          </label>
+          <label class="gs-apercu__choix">
+            <span>Administrateur</span>
+            <select class="gs-admin-filtre" name="auteur" data-modifs-auteurs>
+              <option value="">Tous</option>
+            </select>
+          </label>
+          <button type="submit" class="gs-bouton gs-bouton--petit gs-bouton--sombre"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Afficher</button>
+        </form>
+        <p class="gs-apercu__message" data-modifs-message role="alert" hidden></p>
+        <div class="gs-tableau-cadre">
+          <table class="gs-tableau gs-tableau--modifs">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Objet</th>
+                <th scope="col">Action</th>
+                <th scope="col">Par</th>
+                <th scope="col">Avant</th>
+                <th scope="col">Après</th>
+                <th scope="col">Motif</th>
+              </tr>
+            </thead>
+            <tbody data-lignes="modifs"></tbody>
+          </table>
+        </div>
+        <p class="gs-admin-vide" data-vide="modifs" hidden></p>
+        <div class="gs-pagination" data-pagination="modifs" hidden></div>
+      </section>
     </div>
 
     <div class="gs-admin-vue" data-vue="factures" role="tabpanel" hidden>
@@ -926,8 +975,9 @@
           <input id="col-suivi" name="suivi_transporteur" maxlength="60" placeholder="Ex. TBA304918577000" autocomplete="off" spellcheck="false">
         </div>
         <div class="gs-champ">
-          <label for="col-poids">Poids (lb) <span class="gs-facultatif">(facultatif)</span></label>
+          <label for="col-poids">Poids (lb)</label>
           <input id="col-poids" name="poids_lb" inputmode="decimal" maxlength="8" autocomplete="off" placeholder="Ex. 4,5">
+          <p class="gs-champ__aide" data-aide-poids>Obligatoire : le prix se calcule poids × tarif.</p>
         </div>
         <div class="gs-champ">
           <label for="col-tarif">Tarif (US $ / lb)</label>
@@ -961,7 +1011,17 @@
         </div>
         <div class="gs-champ">
           <label for="col-dest">Ville de livraison</label>
-          <input id="col-dest" name="destination" maxlength="80" placeholder="Ex. Port-au-Prince">
+          <input id="col-dest" name="destination" maxlength="80" required list="villes-livraison" autocomplete="off" placeholder="Ex. Port-au-Prince" data-ville-livraison>
+          <p class="gs-champ__aide" data-aide-ville aria-live="polite">Une ville du pays de destination.</p>
+        </div>
+        <div class="gs-champ gs-champ--large">
+          <label for="col-adresse">Adresse de livraison <span class="gs-facultatif">(facultatif)</span></label>
+          <input id="col-adresse" name="adresse_livraison" maxlength="160" autocomplete="off" placeholder="Rue, quartier, repère : seulement si le colis est livré à une adresse">
+          <p class="gs-champ__aide">Imprimée sur l'étiquette. L'adresse personnelle du client n'y figure jamais.</p>
+        </div>
+        <div class="gs-champ gs-champ--large" data-bloc-motif-colis hidden>
+          <label for="col-motif">Motif de la modification <span class="gs-facultatif">(facultatif, gardé au journal)</span></label>
+          <input id="col-motif" name="motif" maxlength="300" autocomplete="off" placeholder="Ex. poids corrigé à la pesée">
         </div>
       </div>
       <div class="gs-form__grille" data-bloc-etape>
@@ -975,7 +1035,7 @@
         </div>
         <label class="gs-case gs-champ--large">
           <input type="checkbox" name="prevenir" checked>
-          <span><strong>Prévenir le client</strong> par e-mail et WhatsApp que son colis est reçu</span>
+          <span><strong>Voir les messages au client</strong> : la base le prévient elle-même (espace client, téléphone, e-mail, WhatsApp selon les règles)</span>
         </label>
       </div>
       <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
@@ -1035,6 +1095,11 @@
         <label for="fac-note">Note pour le client (facultatif)</label>
         <textarea id="fac-note" name="note" rows="2" maxlength="300"></textarea>
       </div>
+      <div class="gs-champ" data-bloc-motif-facture hidden>
+        <label for="fac-motif">Motif de la modification <span class="gs-facultatif">(obligatoire pour corriger le montant, gardé au journal)</span></label>
+        <input id="fac-motif" name="motif" maxlength="300" autocomplete="off" placeholder="Ex. remise accordée au client">
+      </div>
+      <p class="gs-champ__aide" data-facture-rectifiee hidden></p>
       <p class="gs-facture-annulee" data-facture-annulee hidden></p>
       <section class="gs-paiements" data-bloc-paiements hidden aria-labelledby="fac-paiements-titre">
         <div class="gs-paiements__tete">
@@ -1308,18 +1373,18 @@
       </div>
       <label class="gs-case" data-bloc-prevenir hidden>
         <input type="checkbox" name="prevenir" checked>
-        <span><strong>Prévenir le client</strong> par e-mail et WhatsApp que son colis est disponible</span>
+        <span><strong>Voir les messages au client</strong> : la base le prévient elle-même que son colis est disponible</span>
       </label>
       <div class="gs-dialogue__historique" data-bloc-historique>
         <h3>Historique</h3>
         <ol class="gs-chrono" data-historique></ol>
       </div>
       <div class="gs-dialogue__historique" data-bloc-notifications hidden>
-        <h3>Messages envoyés au client</h3>
+        <h3>Messages au client</h3>
         <ul class="gs-notifs" data-notifications></ul>
       </div>
       <div class="gs-dialogue__actions-colis" data-bloc-actions>
-        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" data-permission="shipments.change_status" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg>Prévenir le client</button>
+        <button type="button" class="gs-lien-bouton" data-action="prevenir-client" data-permission="shipments.view" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg>Messages au client</button>
         <button type="button" class="gs-lien-bouton" data-action="etiquette-colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7" cy="7" r="1.2"/></svg>Imprimer l'étiquette d'expédition</button>
         <button type="button" class="gs-lien-bouton" data-action="modifier-colis" data-permission="shipments.edit"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Modifier les informations du colis</button>
         <button type="button" class="gs-lien-bouton gs-lien-bouton--danger" data-action="supprimer-colis" data-permission="shipments.delete"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Supprimer ce colis</button>
@@ -1529,6 +1594,8 @@
     </div>
   </div>
 </dialog>
+
+<datalist id="villes-livraison"></datalist>
 
 <datalist id="expediteurs-frequents">
   <option value="Amazon"></option>

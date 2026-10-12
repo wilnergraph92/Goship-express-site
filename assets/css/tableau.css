@@ -840,6 +840,11 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
   .gs-rapports__tete .gs-bouton{width:100%;justify-content:center}
 }
 
+/* L'historique des modifications (Rapports) : l'avant et l'après d'une ligne du
+   journal, un champ par ligne */
+.gs-tableau--modifs td{vertical-align:top}
+.gs-modifs__ligne{display:block}
+
 /* ---- L'apparence sombre (réglage « Apparence ») -----------------------------------------
    Posée par apparence.js et admin.js sur <html data-apparence="sombre">, pour le tableau
    de bord seulement. D'abord la contrepartie sombre de chaque couleur claire des cartes,

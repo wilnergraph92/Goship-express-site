@@ -44,9 +44,12 @@
   // Ce que la page peut proposer pour un colis. Ni le prix calculé, ni le statut,
   // ni le numéro : la base les décide (outils/supabase-services.sql, regles_colis).
   // prix_fixe_usd est un prix saisi à la main, qui remplace poids × tarif ; la
-  // base le réserve à qui peut modifier les factures.
+  // base le réserve à qui peut modifier les factures. adresse_livraison est
+  // l'adresse où va le colis, saisie par l'équipe : jamais celle du profil du
+  // client (outils/supabase-corrections.sql).
   var CHAMPS_MODIFIABLES = ['client_id', 'suivi_transporteur', 'expediteur', 'description', 'poids_lb', 'service',
-                            'pays_destination', 'destination', 'recu_le', 'tarif_lb_usd', 'prix_fixe_usd'];
+                            'pays_destination', 'destination', 'adresse_livraison', 'recu_le', 'tarif_lb_usd',
+                            'prix_fixe_usd'];
   // À la création s'ajoutent le lieu et le message de l'événement initial.
   var CHAMPS_CREATION = CHAMPS_MODIFIABLES.concat(['lieu', 'note']);
   // Ce qu'une page peut encore changer sur une facture émise. Le payé, le
@@ -851,9 +854,11 @@
       // majLe : la date de dernière modification que la page avait sous les
       // yeux ; si quelqu'un a modifié le colis entre-temps, la base refuse
       // (CONCURRENT_MODIFICATION) au lieu d'écraser son travail.
+      // champs.motif (facultatif) accompagne la ligne du journal des modifications.
       modifierColis: function (id, champs, majLe) {
         return sb().then(function (c) {
-          return c.rpc('modifier_colis', { p_id: id, p_champs: choisir(champs, CHAMPS_MODIFIABLES), p_maj_le: majLe || null });
+          return c.rpc('modifier_colis', { p_id: id, p_champs: choisir(champs, CHAMPS_MODIFIABLES.concat(['motif'])),
+                                           p_maj_le: majLe || null });
         }).then(resultat);
       },
 
@@ -953,6 +958,27 @@
         return sb().then(function (c) { return c.rpc('notifications_colis', { p_colis: id }); }).then(resultat);
       },
 
+      // Ce que la base a fait des messages d'un colis (outils/supabase-notifications.sql) :
+      // une ligne par envoi — canal, statut (attente, envoye, livre, echec, annule) et,
+      // s'il n'est pas parti, pourquoi (NON_CONFIGURE, SANS_DESTINATAIRE…). Aucune page
+      // n'envoie elle-même : la base crée les envois avec l'étape du colis.
+      envoisColis: function (id) {
+        return sb().then(function (c) { return c.rpc('envois_colis', { p_colis: id }); }).then(resultat);
+      },
+
+      // L'historique des modifications des colis et des factures (audit_logs.view) :
+      // o : { debut, fin (ISO, fin exclue), recherche, auteur, entite, page, parPage }.
+      // Réponse : { total, lignes, auteurs }.
+      historiqueModifications: function (o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('historique_modifications', {
+            p_debut: o.debut || null, p_fin: o.fin || null, p_recherche: o.recherche || '',
+            p_auteur: o.auteur || null, p_entite: o.entite || '', p_page: o.page || 0, p_par_page: o.parPage || 50
+          });
+        }).then(resultat);
+      },
+
       /* ---- Factures ---------------------------------------------------- */
 
       // Les factures, avec leur payé, leur solde et leur état calculés par la
@@ -1022,11 +1048,15 @@
       },
 
       // Échéance, note, lien de paiement ; le total d'une facture sans colis.
-      // Le reste suit les paiements : la base refuse qu'on l'écrive ici.
-      modifierFacture: function (id, champs) {
+      // Le reste suit les paiements : la base refuse qu'on l'écrive ici. Le motif
+      // est obligatoire pour corriger un montant, et gardé au journal
+      // (modifier_facture, outils/supabase-corrections.sql). Réponse : la facture
+      // complète, telle que la base l'a enregistrée.
+      modifierFacture: function (id, champs, motif) {
         return sb().then(function (c) {
-          return c.from('factures').update(choisir(champs, CHAMPS_FACTURE)).eq('id', id).select().single();
-        }).then(resultat);
+          return c.rpc('modifier_facture', { p_facture: id, p_champs: choisir(champs, CHAMPS_FACTURE),
+                                             p_motif: motif || null });
+        }).then(resultat).then(function (f) { return trierPaiements(f); });
       },
 
       /* ---- Paiements (outils/supabase-finances.sql) -------------------- */
@@ -1682,16 +1712,37 @@
     return d.colis.filter(function (x) { return x.id === id; })[0] || null;
   }
 
-  // Le journal d'audit : ce qui a changé, et par qui
-  function journaliser(d, moi, action, entite, id, avant, apres) {
+  // Les règles de départ des notifications d'un colis (notification_regles,
+  // supabase-notifications.sql) : l'étape, le type et ses canaux extérieurs.
+  var REGLES_ENVOI_DEMO = {
+    COLIS_RECU: { type: 'shipment_received', canaux: ['push', 'email', 'whatsapp'] },
+    COLIS_EMBALLE: { type: 'shipment_packed', canaux: ['push'] },
+    COLIS_EXPEDIE: { type: 'shipment_shipped', canaux: ['push'] },
+    COLIS_ARRIVE: { type: 'shipment_arrived', canaux: ['push'] },
+    COLIS_TRANSFERE: { type: 'shipment_transferred', canaux: ['push'] },
+    COLIS_DISPONIBLE: { type: 'shipment_available', canaux: ['push', 'email', 'whatsapp'] },
+    COLIS_LIVRE: { type: 'shipment_delivered', canaux: ['push'] },
+    ACTION_REQUISE: { type: 'action_required', canaux: ['push', 'email'] },
+    ACTION_RESOLUE: { type: 'action_resolved', canaux: ['push'] }
+  };
+
+  // Le journal d'audit : ce qui a changé, par qui, et pourquoi (le motif, quand la
+  // fonction de service en a reçu un — supabase-corrections.sql)
+  function journaliser(d, moi, action, entite, id, avant, apres, motif) {
     d.journal = d.journal || [];
     d.journal.push({ id: d.journal.length + 1, auteur_id: moi ? moi.id : null, action: action, entite: entite,
-                     entite_id: String(id), avant: avant || null, apres: apres || null, cree_le: maintenant() });
+                     entite_id: String(id), avant: avant || null, apres: apres || null,
+                     motif: String(motif || '').trim().slice(0, 300), cree_le: maintenant() });
   }
 
+  // Un champ absent d'un ancien colis de démonstration (adresse_livraison, prix_fixe_usd…)
+  // vaut le champ vide qui le remplace : ce n'est pas une modification. La base, elle,
+  // a la colonne sur toutes ses lignes.
+  function vide(v) { return v === undefined || v === null || v === ''; }
   function difference(avant, apres, champs) {
     var a = {}, b = {}, n = 0;
     champs.forEach(function (k) {
+      if (vide(avant[k]) && vide(apres[k])) return;
       if (JSON.stringify(avant[k]) !== JSON.stringify(apres[k])) { a[k] = avant[k]; b[k] = apres[k]; n++; }
     });
     return n ? { avant: a, apres: b } : null;
@@ -1700,7 +1751,7 @@
   // Les 10 premiers : ceux que la base journalise à la création (journaliser_colis)
   var RESUME_COLIS = ['numero', 'client_id', 'statut', 'poids_lb', 'tarif_lb_usd', 'prix_usd', 'prix_fixe_usd',
                       'service', 'pays_destination', 'suivi_transporteur', 'description', 'expediteur',
-                      'destination', 'recu_le', 'lieu', 'note'];
+                      'destination', 'adresse_livraison', 'recu_le', 'lieu', 'note'];
   var RESUME_CREATION = 10;
 
   // regles_colis : c est le colis tel qu'il sera écrit, avant la version
@@ -1712,6 +1763,7 @@
     c.description = String(c.description || '').trim().slice(0, 300);
     c.expediteur = String(c.expediteur || '').trim().slice(0, 80);
     c.destination = String(c.destination || '').trim().slice(0, 80);
+    c.adresse_livraison = String(c.adresse_livraison || '').trim().slice(0, 160);
     c.lieu = String(c.lieu || '').trim().slice(0, 80);
     c.note = String(c.note || '').trim().slice(0, 300);
     c.suivi_transporteur = String(c.suivi_transporteur || '').trim().toUpperCase().slice(0, 60);
@@ -1723,10 +1775,10 @@
       }
     }
     if (change('description') && !c.description) throw Erreur('INVALID_DESCRIPTION', 'Décrivez le contenu du colis.');
-    if (change('poids_lb')) {
-      if (c.poids_lb == null || !(c.poids_lb > 0)) {
-        throw Erreur('INVALID_WEIGHT', 'Le poids doit être supérieur à zéro, en livres.');
-      }
+    // Un poids saisi est toujours > 0 ; absent, il n'est permis qu'au prix fixé à la
+    // main (voir le calcul du prix, plus bas) — supabase-corrections.sql.
+    if (c.poids_lb != null && change('poids_lb')) {
+      if (!(c.poids_lb > 0)) throw Erreur('INVALID_WEIGHT', 'Le poids doit être supérieur à zéro, en livres.');
       if (c.poids_lb > 10000) throw Erreur('INVALID_WEIGHT', 'Poids supérieur à 10 000 lb : vérifiez la saisie.');
     }
     if (change('service') && ['aerien', 'maritime', 'terrestre'].indexOf(c.service) < 0) {
@@ -1734,6 +1786,10 @@
     }
     if (change('pays_destination') && ['HT', 'DO', 'US'].indexOf(c.pays_destination) < 0) {
       throw Erreur('INVALID_DESTINATION', 'Destination inconnue : HT, DO ou US.');
+    }
+    // La ville de livraison, dès que la destination se décide ou change
+    if ((change('destination') || change('pays_destination')) && !c.destination) {
+      throw Erreur('CITY_REQUIRED', 'Indiquez la ville de livraison du colis.');
     }
     if (change('recu_le') && new Date(c.recu_le).getTime() > Date.now() + 36e5) {
       throw Erreur('INVALID_DATE', 'La date de réception ne peut pas être dans le futur.');
@@ -1780,9 +1836,18 @@
            (!nouveau && !etaitFixe && c.tarif_lb_usd !== avant.tarif_lb_usd))) {
         throw Erreur('non-autorise', 'Un tarif particulier est réservé à qui peut modifier les factures.');
       }
-      // Le prix se recalcule aussi quand on quitte un prix fixé
+      // Le prix se recalcule aussi quand on quitte un prix fixé. Jamais sans poids :
+      // un ancien colis qui n'en a jamais eu garde son prix tel quel.
       if (nouveau || change('poids_lb') || change('tarif_lb_usd') || avant.prix_usd == null || etaitFixe) {
-        c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
+        if (c.poids_lb == null) {
+          if (nouveau || avant.poids_lb != null || change('tarif_lb_usd') || etaitFixe) {
+            throw Erreur('INVALID_WEIGHT',
+                         'Indiquez le poids, en livres : le prix se calcule poids × tarif. Sans poids, fixez le prix à la main.');
+          }
+          c.prix_usd = avant.prix_usd;
+        } else {
+          c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
+        }
       } else {
         c.prix_usd = avant.prix_usd;
       }
@@ -3750,7 +3815,7 @@
           reglesColis(d, nouveau, c);
           var diff = difference(c, nouveau, RESUME_COLIS);
           Object.assign(c, nouveau, { maj_le: maintenant() });
-          if (diff) journaliser(d, moi, 'colis.modification', 'colis', c.id, diff.avant, diff.apres);
+          if (diff) journaliser(d, moi, 'colis.modification', 'colis', c.id, diff.avant, diff.apres, champs.motif);
           ecrireDonnees(d);
           return plusTard(detailsColis(d, c));
         } catch (e) { return rejeter(e); }
@@ -3922,6 +3987,67 @@
         return plusTard('non-configure');
       },
 
+      // envois_colis (supabase-notifications.sql) : une notification par étape publique
+      // du colis, et ses envois selon les règles de départ. En démonstration, aucun
+      // fournisseur n'est configuré et aucun téléphone enregistré : rien ne part, et
+      // chaque envoi dit pourquoi, comme le ferait la base.
+      envoisColis: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var lignes = [];
+        historiqueDe(d, id).filter(function (h) {
+          return h.visibilite === 'publique' && !h.corrige_id && REGLES_ENVOI_DEMO[h.type_evenement];
+        }).reverse().forEach(function (h) {
+          var regle = REGLES_ENVOI_DEMO[h.type_evenement];
+          regle.canaux.forEach(function (canal) {
+            lignes.push({ notification_id: h.id, type: regle.type, cree_le: h.cree_le, canal: canal, statut: 'annule',
+                          code_erreur: canal === 'push' ? 'SANS_APPAREIL' : 'NON_CONFIGURE', tentative: 0 });
+          });
+        });
+        return plusTard(lignes);
+      },
+
+      // historique_modifications (supabase-corrections.sql) : même forme, mêmes filtres
+      historiqueModifications: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'audit_logs.view'); } catch (e) { return echec(e.code); }
+        var entite = o.entite || '';
+        if (['', 'colis', 'facture'].indexOf(entite) < 0) return rejeter(Erreur('INVALID_INPUT', 'Objet inconnu : colis ou facture.'));
+        var ref = String(o.recherche || '').trim().toUpperCase();
+        var debut = o.debut ? new Date(o.debut).getTime() : null, fin = o.fin ? new Date(o.fin).getTime() : null;
+        var parPage = Math.min(Math.max(Number(o.parPage) || 50, 1), 200), page = Math.max(Number(o.page) || 0, 0);
+        function compte(id) { return d.comptes.filter(function (x) { return x.id === id; })[0] || null; }
+        function reference(j) {
+          var objet = j.entite === 'colis' ? d.colis.filter(function (x) { return x.id === j.entite_id; })[0]
+            : (d.factures || []).filter(function (x) { return x.id === j.entite_id; })[0];
+          return (objet && objet.numero) || (j.avant && j.avant.numero) || (j.apres && j.apres.numero) || '';
+        }
+        var tous = (d.journal || []).filter(function (j) { return j.entite === 'colis' || j.entite === 'facture'; });
+        var lignes = tous.filter(function (j) {
+          var t = new Date(j.cree_le).getTime();
+          return (!entite || j.entite === entite) && (debut == null || t >= debut) && (fin == null || t < fin) &&
+                 (!o.auteur || j.auteur_id === o.auteur);
+        }).map(function (j) {
+          var c = compte(j.auteur_id);
+          return { id: j.id, cree_le: j.cree_le, action: j.action, entite: j.entite, entite_id: j.entite_id,
+                   reference: reference(j), auteur_id: j.auteur_id,
+                   auteur: c ? (c.nom_complet || c.email || '') : (j.auteur_id ? '' : 'Système'),
+                   role_auteur: c ? c.role : null, avant: j.avant, apres: j.apres, motif: j.motif || '' };
+        }).filter(function (j) { return !ref || j.reference.toUpperCase().indexOf(ref) >= 0; })
+          .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; });
+        var auteurs = [];
+        tous.forEach(function (j) {
+          if (j.auteur_id && !auteurs.some(function (a) { return a.id === j.auteur_id; })) {
+            var c = compte(j.auteur_id);
+            auteurs.push({ id: j.auteur_id, nom: c ? (c.nom_complet || c.email || '') : '', role: c ? c.role : null });
+          }
+        });
+        auteurs.sort(function (a, b) { return String(a.nom).localeCompare(String(b.nom)); });
+        return plusTard({ total: lignes.length, lignes: lignes.slice(page * parPage, page * parPage + parPage),
+                          auteurs: auteurs });
+      },
+
       // L'équipe et ses rôles (equipe() de la base)
       equipe: function () {
         var d = lireDonnees();
@@ -4091,32 +4217,52 @@
         return plusTard(trouvees[0] ? factureComplete(d, trouvees[0]) : null);
       },
 
-      // garde_facture et regles_facture : seuls l'échéance, la note, le lien
-      // et le total d'une facture sans colis se changent ; une facture annulée
-      // ne se change plus.
-      modifierFacture: function (id, champs) {
+      // modifier_facture (supabase-corrections.sql), sur garde_facture et
+      // regles_facture : seuls l'échéance, la note, le lien et le total d'une facture
+      // sans colis se changent ; une facture annulée ne se change plus. Corriger un
+      // montant demande un motif, et date la facture « rectifiée ».
+      modifierFacture: function (id, champs, motif) {
         var d = lireDonnees();
         try {
           var moi = exiger(d, 'invoices.edit');
           var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
-          if (!f) return echec('inconnu');
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          champs = champs || {};
+          motif = String(motif || '').trim().slice(0, 300);
           var n = Object.assign({}, f, choisir(champs, CHAMPS_FACTURE));
-          if (n.montant_usd != null) n.montant_usd = arrondi(n.montant_usd);
-          var change = CHAMPS_FACTURE.some(function (k) { return JSON.stringify(n[k]) !== JSON.stringify(f[k]); });
-          if (f.statut === 'annulee' && change) throw Erreur('INVOICE_LOCKED', 'Une facture annulée ne se modifie plus.');
+          if ('montant_usd' in champs) n.montant_usd = lireNombre(champs.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+          if (n.montant_usd == null || !(n.montant_usd >= 0) || n.montant_usd > 1000000) {
+            throw Erreur('INVALID_AMOUNT', 'Le montant doit être compris entre 0 et 1 000 000 $.');
+          }
+          n.montant_usd = arrondi(n.montant_usd);
+          // Ce qui ne se corrige pas du tout, avant de demander un motif
+          if (f.statut === 'annulee') throw Erreur('INVOICE_LOCKED', 'Une facture annulée ne se modifie plus.');
           if (n.montant_usd !== f.montant_usd) {
+            if ((f.facture_lignes || []).some(function (l) { return l.colis_id; })) {
+              throw Erreur('INVOICE_LOCKED', 'Le total d’une facture de colis est celui de ses colis et de ses frais : il ne se modifie pas.');
+            }
             if (n.montant_usd < f.montant_paye_usd) {
               throw Erreur('INVALID_AMOUNT', 'Le nouveau total est inférieur à ce qui est déjà payé (' +
                            montantTexte(f.montant_paye_usd) + ' $).');
             }
-            if ((f.facture_lignes || []).some(function (l) { return l.colis_id; })) {
-              throw Erreur('INVOICE_LOCKED', 'Le total d’une facture de colis est celui de ses colis et de ses frais : il ne se modifie pas.');
+            if (motif.length < 5) {
+              throw Erreur('REASON_REQUIRED',
+                           'Indiquez le motif de la correction du montant (5 caractères au moins) : il est gardé au journal.');
             }
           }
-          var diff = difference(f, n, ['montant_usd', 'note', 'lien_paiement', 'echeance_le']);
+          n.lien_paiement = String(n.lien_paiement == null ? '' : n.lien_paiement).trim();
+          if (n.lien_paiement !== (f.lien_paiement || '') && n.lien_paiement &&
+              (!/^https:\/\/\S+$/i.test(n.lien_paiement) || n.lien_paiement.length > 500)) {
+            throw Erreur('INVALID_INPUT', 'Le lien de paiement doit être une adresse https://.');
+          }
+          if ('note' in champs) n.note = String(champs.note || '').trim().slice(0, 500);
+          // Le journal d'une facture garde l'échéance et la note, pas le lien de paiement
+          // (journaliser_facture)
+          var diff = difference(f, n, ['montant_usd', 'note', 'echeance_le']);
+          var corrige = n.montant_usd !== f.montant_usd;
           Object.assign(f, choisir(n, CHAMPS_FACTURE));
-          if (diff && 'montant_usd' in diff.apres) recalculerFactureDemo(d, f);
-          if (diff) journaliser(d, moi, 'facture.modification', 'facture', f.id, diff.avant, diff.apres);
+          if (corrige) { f.rectifiee_le = maintenant(); recalculerFactureDemo(d, f); }
+          if (diff) journaliser(d, moi, 'facture.modification', 'facture', f.id, diff.avant, diff.apres, motif);
           ecrireDonnees(d, 'factures');
           return plusTard(factureComplete(d, f));
         } catch (e) { return rejeter(e); }

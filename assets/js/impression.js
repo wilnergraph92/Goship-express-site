@@ -66,7 +66,7 @@
 
   var TEXTES = {
     fr: {
-      titre: 'Facture', etablie: 'Établie le', echeance: 'À payer avant le', payeeLe: 'Payée le',
+      titre: 'Facture', etablie: 'Établie le', rectifiee: 'Rectifiée le', echeance: 'À payer avant le', payeeLe: 'Payée le',
       statuts: { a_payer: 'À payer', partielle: 'Payée en partie', en_retard: 'En retard', payee: 'Payée', annulee: 'Annulée' },
       factureA: 'Facturé à', codeClient: 'Code client {code}',
       colonnes: { quantite: 'Quantité', poids: 'Poids / lbs', description: 'Description', colis: 'Colis', montant: 'Total' },
@@ -90,7 +90,7 @@
       pays: { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' }
     },
     en: {
-      titre: 'Invoice', etablie: 'Issued on', echeance: 'Due by', payeeLe: 'Paid on',
+      titre: 'Invoice', etablie: 'Issued on', rectifiee: 'Corrected on', echeance: 'Due by', payeeLe: 'Paid on',
       statuts: { a_payer: 'Unpaid', partielle: 'Partly paid', en_retard: 'Overdue', payee: 'Paid', annulee: 'Cancelled' },
       factureA: 'Billed to', codeClient: 'Customer code {code}',
       colonnes: { quantite: 'Qty', poids: 'Weight / lbs', description: 'Description', colis: 'Package', montant: 'Total' },
@@ -114,7 +114,7 @@
       pays: { HT: 'Haiti', DO: 'Dominican Republic', US: 'United States' }
     },
     es: {
-      titre: 'Factura', etablie: 'Emitida el', echeance: 'A pagar antes del', payeeLe: 'Pagada el',
+      titre: 'Factura', etablie: 'Emitida el', rectifiee: 'Rectificada el', echeance: 'A pagar antes del', payeeLe: 'Pagada el',
       statuts: { a_payer: 'Por pagar', partielle: 'Pagada en parte', en_retard: 'Vencida', payee: 'Pagada', annulee: 'Anulada' },
       factureA: 'Facturado a', codeClient: 'Código de cliente {code}',
       colonnes: { quantite: 'Cant.', poids: 'Peso / lbs', description: 'Descripción', colis: 'Paquete', montant: 'Total' },
@@ -138,7 +138,7 @@
       pays: { HT: 'Haití', DO: 'República Dominicana', US: 'Estados Unidos' }
     },
     ht: {
-      titre: 'Fakti', etablie: 'Fèt le', echeance: 'Pou peye anvan', payeeLe: 'Peye le',
+      titre: 'Fakti', etablie: 'Fèt le', rectifiee: 'Korije le', echeance: 'Pou peye anvan', payeeLe: 'Peye le',
       statuts: { a_payer: 'Pou peye', partielle: 'Peye an pati', en_retard: 'An reta', payee: 'Peye', annulee: 'Anile' },
       factureA: 'Faktire pou', codeClient: 'Kòd kliyan {code}',
       colonnes: { quantite: 'Kantite', poids: 'Pwa / lbs', description: 'Deskripsyon', colis: 'Koli', montant: 'Total' },
@@ -317,8 +317,39 @@
      4 × 6 pouces : le format des imprimantes d'étiquettes, et celui qu'on
      découpe dans une feuille ordinaire.
      ====================================================================== */
+  // Ce que l'étiquette a le droit de lire, et rien d'autre. Le colis qu'on lui
+  // donne vient de la vue colis_details, qui porte aussi l'adresse personnelle du
+  // client (adresse, ville, région, pays de son compte) : elle ne doit jamais
+  // finir sur un carton. On ne la cache pas, on ne la lit pas — seuls les champs
+  // de cette liste passent. La destination est celle du colis (pays, ville,
+  // adresse de livraison), saisie à l'enregistrement.
+  var CHAMPS_ETIQUETTE = ['numero', 'service', 'nom_client', 'code_client', 'telephone_client',
+                          'pays_destination', 'destination', 'adresse_livraison', 'description',
+                          'poids_lb', 'expediteur', 'suivi_transporteur', 'cree_le'];
+
+  function donneesEtiquette(colis) {
+    var c = {};
+    CHAMPS_ETIQUETTE.forEach(function (k) { if (colis && colis[k] !== undefined) c[k] = colis[k]; });
+    return c;
+  }
+
+  // La date d'enregistrement du colis (cree_le, posée par la base et jamais
+  // modifiée depuis), au calendrier de Santo Domingo comme le reste du tableau de
+  // bord : imprimée trois jours plus tard, l'étiquette dit toujours le bon jour.
+  function dateEnregistrement(valeur) {
+    if (!valeur) return '';
+    var d = new Date(valeur);
+    if (isNaN(d.getTime())) return '';
+    try {
+      return new Intl.DateTimeFormat('fr-FR', { timeZone: 'America/Santo_Domingo', day: '2-digit',
+                                                month: '2-digit', year: 'numeric' }).format(d);
+    } catch (e) {
+      return date(valeur, 'fr');
+    }
+  }
+
   function etiquette(colis) {
-    var c = colis || {};
+    var c = donneesEtiquette(colis);
     var numero = c.numero || '';
     var fr = TEXTES.fr;
     var page = el('article', 'et');
@@ -332,12 +363,15 @@
     bloc(marque, 'span', 'et__sous', 'Miami → Haïti · Rép. dominicaine');
     bloc(tete, 'span', 'et__service', (SERVICES[c.service] || c.service || '').toUpperCase());
 
-    // Le numéro et son code-barres
+    // Le numéro et son code-barres, puis la date d'enregistrement
     var bande = bloc(page, 'div', 'et__bande');
     dessinerCode(bande, 'barre', numero, 'Code-barres du colis ' + numero);
     bloc(bande, 'strong', 'et__numero', numero);
+    var enregistre = dateEnregistrement(c.cree_le);
+    if (enregistre) bloc(bande, 'span', 'et__date', 'Enregistré le ' + enregistre);
 
-    // Destinataire, avec le QR de suivi
+    // Destinataire, avec le QR de suivi : son nom, son code, son téléphone pour
+    // le joindre à la livraison. Pas son adresse personnelle.
     var dest = bloc(page, 'section', 'et__dest');
     var qui = bloc(dest, 'div', 'et__qui');
     bloc(qui, 'span', 'et__libelle', 'Destinataire');
@@ -348,9 +382,10 @@
       personne.appendChild(document.createTextNode('  '));
       bloc(personne, 'span', 'et__code', c.code_client);
     }
-    if (c.adresse_client) bloc(qui, 'p', 'et__adresse et__coupe', c.adresse_client);
-    ligneTexte(qui, 'et__adresse et__ligne', [c.ville_client, c.region_client]);
-    ligneTexte(qui, 'et__adresse et__ligne', [fr.pays[c.pays_client] || c.pays_client]);
+    if (c.adresse_livraison) {
+      bloc(qui, 'span', 'et__libelle', 'Livrer à');
+      bloc(qui, 'p', 'et__adresse et__coupe', c.adresse_livraison);
+    }
     if (c.telephone_client) bloc(qui, 'p', 'et__tel', c.telephone_client);
 
     var cote = bloc(dest, 'div', 'et__qr');
@@ -358,13 +393,17 @@
       bloc(cote, 'span', 'et__qr-texte', 'Scannez-moi');
     }
 
-    // La destination en très gros : c'est ce qu'on lit en triant les sacs.
-    // La ville est celle que le client a choisie en s'inscrivant, car c'est
-    // là qu'il vient chercher ses colis ; celle saisie sur le colis ne sert
-    // que si le compte n'en porte aucune.
+    // La destination en très gros : c'est ce qu'on lit en triant les sacs. Le
+    // pays et la ville sont ceux du colis — deux champs distincts, obligatoires
+    // depuis le 12/10/2026. Un ancien colis enregistré sans ville le dit au lieu
+    // d'en recevoir une au hasard.
     var vers = bloc(page, 'section', 'et__vers');
     bloc(vers, 'strong', 'et__pays', c.pays_destination || '');
-    bloc(vers, 'span', 'et__ville', (c.ville_client || c.destination || '').toUpperCase());
+    var lieu = bloc(vers, 'div', 'et__lieu');
+    bloc(lieu, 'span', 'et__ville' + (c.destination ? '' : ' et__ville--manque'),
+         c.destination ? c.destination.toUpperCase() : 'VILLE À COMPLÉTER');
+    var nomPays = fr.pays[c.pays_destination];
+    if (nomPays) bloc(lieu, 'span', 'et__pays-nom', nomPays);
 
     // Le contenu du colis, à la place de l'adresse de l'expéditeur : celle-ci
     // était toujours la même — la nôtre — et n'apprenait rien à personne,
@@ -375,8 +414,7 @@
     ligneTexte(contenu, 'et__meta', [
       c.poids_lb !== null && c.poids_lb !== undefined && c.poids_lb !== ''
         ? String(c.poids_lb).replace('.', ',') + ' lb' : '',
-      c.expediteur ? 'Acheté chez ' + c.expediteur : '',
-      c.recu_le ? 'Reçu le ' + date(c.recu_le, 'fr') : ''
+      c.expediteur ? 'Acheté chez ' + c.expediteur : ''
     ]);
     if (c.suivi_transporteur) {
       bloc(contenu, 'p', 'et__meta', 'Suivi vendeur : ' + c.suivi_transporteur);
@@ -430,6 +468,9 @@
     // le reprend tel quel, comme à l'écran.
     var ouverte = totaux.etat === 'a_payer' || totaux.etat === 'partielle' || totaux.etat === 'en_retard';
     ligneDate(T.etablie, date(fa.cree_le, langue));
+    // Un montant corrigé après l'émission (factures.rectifiee_le, supabase-corrections.sql) :
+    // le papier le dit, au lieu de se présenter comme le document d'origine
+    ligneDate(T.rectifiee, date(fa.rectifiee_le, langue));
     ligneDate(T.echeance, ouverte ? date(fa.echeance_le, langue) : '');
     ligneDate(T.payeeLe, totaux.etat === 'payee' ? date(fa.payee_le, langue) : '');
     var etat = bloc(droite, 'span', 'fa__etat fa__etat--' + totaux.etat, T.statuts[totaux.etat] || totaux.etat);

@@ -1201,6 +1201,14 @@
     blocActionsFacture.hidden = true;
     var annulee = $('[data-facture-annulee]', formFacture);
     annulee.hidden = true;
+    // Une facture émise : le motif de la modification (obligatoire pour corriger un
+    // montant), et la date de sa dernière correction si elle en a eu une
+    $('[data-bloc-motif-facture]', formFacture).hidden = !facture;
+    var rectifiee = $('[data-facture-rectifiee]', formFacture);
+    rectifiee.hidden = !(facture && facture.rectifiee_le);
+    rectifiee.textContent = facture && facture.rectifiee_le
+      ? 'Montant rectifié le ' + O.date(facture.rectifiee_le, true) + ' : l’ancien montant est gardé dans l’historique des modifications.'
+      : '';
     var enregistrer = $('button[type="submit"]', formFacture);
     enregistrer.hidden = false;
     $$('input, textarea', formFacture).forEach(function (n) { n.disabled = false; });
@@ -1289,6 +1297,15 @@
       return;
     }
 
+    // Corriger le montant d'une facture émise est une rectification : la base exige
+    // un motif (modifier_facture) ; on le demande avant de partir.
+    var motif = factureEditee ? formFacture.motif.value.trim() : '';
+    if (factureEditee && O.arrondi(montant) !== O.arrondi(Number(factureEditee.montant_usd)) && motif.length < 5) {
+      erreurFormulaire(formFacture, 'Vous corrigez le montant de la facture : indiquez-en le motif (5 caractères au moins), il sera gardé au journal.');
+      formFacture.motif.focus();
+      return;
+    }
+
     var champs = {
       client_id: clientFacture.id,
       montant_usd: montant,
@@ -1304,7 +1321,7 @@
     var bouton = $('button[type="submit"]', formFacture);
     var fin = attente(bouton, 'Enregistrement…');
     var action = factureEditee
-      ? API.admin.modifierFacture(factureEditee.id, champs)
+      ? API.admin.modifierFacture(factureEditee.id, champs, motif)
       : API.admin.creerFacture(champs, choisis.map(function (c) { return c.id; }), cleFacture)
           .then(function (r) {
             cleFacture = null;
@@ -2369,10 +2386,24 @@
 
   function prixManuel() { return casePrixManuel.checked; }
 
+  // Le poids n'est obligatoire qu'au prix calculé : un prix fixé à la main ne se
+  // calcule pas (supabase-corrections.sql, regles_colis). Un poids saisi reste
+  // toujours > 0 ; on n'en invente jamais un.
+  var aidePoids = $('[data-aide-poids]', formColis);
+  function poidsExige() {
+    if (prixManuel()) return false;
+    // Un ancien colis enregistré sans poids, au prix calculé, reste modifiable
+    // sans en inventer un (la base dira s'il en faut un pour recalculer le prix)
+    return !(colisEdite && (colisEdite.poids_lb == null || colisEdite.poids_lb === '') &&
+             (colisEdite.prix_fixe_usd == null || colisEdite.prix_fixe_usd === ''));
+  }
+
   // Le prix se saisit seulement en mode manuel ; le tarif, alors, ne sert plus
   function appliquerModePrix() {
     var factureur = peut('invoices.edit');
     var manuel = prixManuel();
+    aidePoids.textContent = manuel ? 'Facultatif : le prix est fixé à la main. S’il est connu, indiquez-le quand même.'
+      : 'Obligatoire : le prix se calcule poids × tarif.';
     champPrix.readOnly = !(manuel && factureur);
     champPrix.tabIndex = champPrix.readOnly ? -1 : 0;
     champTarif.readOnly = manuel || !factureur;
@@ -2454,6 +2485,90 @@
     if (prixManuel() && !champPrix.readOnly) { champPrix.focus(); champPrix.select(); }
   });
 
+  /* ---- Ville de livraison : une ville du pays choisi --------------------------
+     Le pays et la ville sont deux champs distincts, et tous deux obligatoires
+     (la base refuse une ville vide : CITY_REQUIRED). Pour Haïti et la République
+     dominicaine, la ville doit être l'une de celles de lieux.js (la même liste que
+     l'espace client) : une saisie qui n'en désigne qu'une est complétée à son nom
+     officiel (« santiago » → « Santiago de los Caballeros »), une saisie ambiguë
+     (« Santo Domingo ») demande de préciser. Pour les États-Unis, lieux.js n'a que
+     les États : la ville se saisit librement. Changer de pays revalide la ville.
+     -------------------------------------------------------------------------- */
+  var REFERENCE_LIEUX = window.GoshipLieux || { REGIONS: {} };
+  var champVille = $('[data-ville-livraison]', formColis);
+  var aideVille = $('[data-aide-ville]', formColis);
+  var listeVilles = $('#villes-livraison');
+  var NOMS_PAYS_LIVRAISON = { HT: 'Haïti', DO: 'la République dominicaine', US: 'les États-Unis' };
+
+  function villesDu(pays) {
+    var regions = REFERENCE_LIEUX.REGIONS[pays];
+    if (!regions) return null;
+    var villes = [];
+    Object.keys(regions).forEach(function (r) { villes = villes.concat(regions[r]); });
+    return villes;
+  }
+  // « Cap-Haïtien », « cap haitien » et « CAP HAÏTIEN » se valent
+  function cleVilleLivraison(texte) {
+    var t = String(texte || '');
+    if (t.normalize) t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return t.toLowerCase().replace(/[\s'’.-]+/g, ' ').trim();
+  }
+  // { ville } : le nom officiel ; { choix } : plusieurs villes possibles ; { aucune } ;
+  // null : pas de liste pour ce pays (saisie libre)
+  function reconnaitreVille(pays, saisie) {
+    var villes = villesDu(pays);
+    if (!villes) return null;
+    var cle = cleVilleLivraison(saisie);
+    if (!cle) return { aucune: true };
+    var exactes = villes.filter(function (v) { return cleVilleLivraison(v) === cle; });
+    if (exactes.length) return { ville: exactes[0] };
+    var debuts = villes.filter(function (v) { return cleVilleLivraison(v).indexOf(cle + ' ') === 0; });
+    if (debuts.length === 1) return { ville: debuts[0] };
+    if (debuts.length > 1) return { choix: debuts };
+    return { aucune: true };
+  }
+  function remplirVilles() {
+    listeVilles.textContent = '';
+    (villesDu(formColis.elements.pays_destination.value) || []).slice().sort(function (a, b) { return a.localeCompare(b); })
+      .forEach(function (v) { listeVilles.appendChild(el('option', '', '')).value = v; });
+    var pays = formColis.elements.pays_destination.value;
+    aideVille.textContent = villesDu(pays) ? 'Une ville de ' + NOMS_PAYS_LIVRAISON[pays] + ' : commencez à la taper.'
+      : 'La ville de livraison, en toutes lettres.';
+  }
+  // Un ancien colis garde la ville qu'il avait, tant que sa destination ne change pas
+  function villeInchangee() {
+    return !!colisEdite && champVille.value.trim() === (colisEdite.destination || '') &&
+      formColis.elements.pays_destination.value === colisEdite.pays_destination;
+  }
+  // La ville saisie, vérifiée : '' et un message si elle ne va pas
+  function villeValide() {
+    var saisie = champVille.value.trim();
+    var pays = formColis.elements.pays_destination.value;
+    if (!saisie) return { message: 'Indiquez la ville de livraison du colis.' };
+    if (villeInchangee()) return { ville: saisie };
+    var r = reconnaitreVille(pays, saisie);
+    if (!r) return { ville: saisie };
+    if (r.ville) return { ville: r.ville };
+    if (r.choix) return { message: 'Précisez la ville : ' + r.choix.slice(0, 5).join(', ') + (r.choix.length > 5 ? '…' : '') + '.' };
+    return { message: '« ' + saisie + ' » n’est pas une ville de ' + NOMS_PAYS_LIVRAISON[pays] +
+                      ' connue : choisissez-la dans la liste proposée.' };
+  }
+  champVille.addEventListener('blur', function () {
+    if (villeInchangee()) return;
+    var r = reconnaitreVille(formColis.elements.pays_destination.value, champVille.value);
+    if (r && r.ville) champVille.value = r.ville;
+  });
+  formColis.elements.pays_destination.addEventListener('change', function () {
+    remplirVilles();
+    // Une ville d'un autre pays ne passe pas : on l'efface plutôt que de la garder
+    var r = reconnaitreVille(formColis.elements.pays_destination.value, champVille.value);
+    if (champVille.value.trim() && r && r.aucune) {
+      champVille.value = '';
+      aideVille.textContent = 'Le pays a changé : choisissez une ville de ' +
+        NOMS_PAYS_LIVRAISON[formColis.elements.pays_destination.value] + '.';
+    }
+  });
+
   var delaiCode = null;
   champCode.addEventListener('input', function () {
     clearTimeout(delaiCode);
@@ -2531,6 +2646,7 @@
       f.service.value = colisEdite.service;
       f.pays_destination.value = colisEdite.pays_destination;
       f.destination.value = colisEdite.destination || '';
+      f.adresse_livraison.value = colisEdite.adresse_livraison || '';
       // Un colis déjà enregistré garde son prix tel quel : il a pu être
       // facturé, et sa facture ne doit pas bouger derrière son dos.
       champTarif.value = colisEdite.tarif_lb_usd != null ? String(colisEdite.tarif_lb_usd).replace('.', ',') : '';
@@ -2548,6 +2664,8 @@
       casePrixManuel.checked = false;
       champPrix.value = '';
     }
+    $('[data-bloc-motif-colis]', formColis).hidden = !colisEdite;
+    remplirVilles();
     appliquerModePrix();
     dlgColis.showModal();
     if (f.code.value) chercherClient(!colisEdite);
@@ -2563,8 +2681,14 @@
     // Ces contrôles ne font que prévenir plus tôt : la base refait les mêmes,
     // et c'est elle qui décide.
     var poids = String(f.poids_lb.value || '').replace(',', '.').trim();
-    if (!poids || isNaN(Number(poids)) || Number(poids) <= 0) {
-      erreurFormulaire(formColis, 'Indiquez le poids du colis, en livres (ex. 4,5).');
+    if (poids && (isNaN(Number(poids)) || Number(poids) <= 0)) {
+      erreurFormulaire(formColis, 'Le poids est un nombre de livres supérieur à zéro (ex. 4,5).');
+      f.poids_lb.focus();
+      return;
+    }
+    if (!poids && poidsExige()) {
+      erreurFormulaire(formColis, 'Indiquez le poids du colis, en livres (ex. 4,5) : le prix se calcule poids × tarif. ' +
+                                  'Sans poids, cochez « Fixer le prix à la main ».');
       f.poids_lb.focus();
       return;
     }
@@ -2584,6 +2708,13 @@
       f.date_reception.focus();
       return;
     }
+    var ville = villeValide();
+    if (ville.message) {
+      erreurFormulaire(formColis, ville.message);
+      champVille.focus();
+      return;
+    }
+    champVille.value = ville.ville;
     var prixSaisi = prixManuel() ? champPrix.value.trim() : '';
     if (prixManuel() && !(prixSaisi && nombreSaisi(prixSaisi) >= 0 && nombreSaisi(prixSaisi) <= PRIX_MAX)) {
       erreurFormulaire(formColis, 'Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».');
@@ -2604,10 +2735,12 @@
         expediteur: f.expediteur.value.trim(),
         recu_le: reception.toISOString(),
         suivi_transporteur: f.suivi_transporteur.value.trim(),
-        poids_lb: Math.round(Number(poids) * 100) / 100,
+        // Vide : aucun poids (permis au prix fixé à la main). Jamais 0 à la place.
+        poids_lb: poids ? Math.round(Number(poids) * 100) / 100 : null,
         service: f.service.value,
         pays_destination: f.pays_destination.value,
-        destination: f.destination.value.trim(),
+        destination: ville.ville,
+        adresse_livraison: f.adresse_livraison.value.trim(),
         // Tel que saisi : la base lit « 5,5 » comme 5.5, et refuse ce qui
         // n'est pas un tarif (INVALID_RATE). Vide : le tarif de la maison.
         tarif_lb_usd: champTarif.value.trim() || null,
@@ -2621,7 +2754,11 @@
       if (creation) {
         donnees.lieu = f.lieu.value.trim();
         donnees.note = f.note.value.trim();
+      } else {
+        // Le motif accompagne la ligne du journal des modifications
+        donnees.motif = f.motif.value.trim();
       }
+      var prixAvant = colisEdite ? Number(colisEdite.prix_usd) : null;
       var prevenir = creation && f.prevenir.checked;
       var action = creation ? API.admin.creerColis(donnees, cleColis)
                             : API.admin.modifierColis(colisEdite.id, donnees, colisEdite.maj_le);
@@ -2632,7 +2769,14 @@
         etat.vus[colis.id] = null;
         chargerStatistiques();
         chargerColis(true);
-        if (!creation) { toast('Colis ' + colis.numero + ' modifié.'); return colis; }
+        if (!creation) {
+          // Une facture déjà émise ne change pas derrière le dos du client : on le dit
+          var prixChange = prixAvant != null && colis.prix_usd != null && Number(colis.prix_usd) !== prixAvant;
+          toast('Colis ' + colis.numero + ' modifié.' + (prixChange
+            ? ' Nouveau prix : ' + argent(colis.prix_usd) + '. Une facture déjà émise garde son montant : ' +
+              'annulez-la et refacturez pour l’ajuster.' : ''));
+          return colis;
+        }
         cleColis = null;
         if (r.deja) {
           // Second envoi de la même demande : la base a rendu le colis déjà
@@ -2863,15 +3007,39 @@
     }).catch(function (err) { erreurFormulaire(formStatut, messageErreur(err)); });
   });
 
-  /* ---- Notifications aux clients (e-mail et WhatsApp) ----------------------------
-     À l'enregistrement d'un colis (« reçu à Miami ») et quand il passe à
-     « Disponible en agence ». L'e-mail part automatiquement ; WhatsApp aussi si
-     l'API WhatsApp est configurée, sinon en un clic depuis votre WhatsApp. */
+  /* ---- Messages au client ----------------------------------------------------------
+     La base prévient le client elle-même, à chaque étape, selon ses règles
+     (outils/supabase-notifications.sql) : l'e-mail et le WhatsApp « Colis reçu »
+     naissent dans la même transaction que le colis. Ce tableau de bord n'envoie
+     donc plus rien — les anciennes fonctions d'envoi lui sont fermées, et les
+     appeler donnait « permission refusée », même à un administrateur. Il montre
+     ce qui est parti, ce qui attend, ou pourquoi rien n'est parti, et garde
+     l'envoi WhatsApp « à la main » depuis votre propre WhatsApp quand l'API n'est
+     pas configurée : c'est vous qui envoyez, pas la base. Rien ici ne touche au
+     colis : un message qui échoue ne fait jamais enregistrer un colis deux fois. */
   var EVENEMENTS = ['recu', 'disponible'];
   var N = window.GoshipNotifications;
   var dlgNotif = $('[data-dialogue="notification"]');
-  var dlgApercu = $('[data-dialogue="apercu"]');
   var EVENEMENT_LIBELLE = { recu: 'Colis reçu', disponible: 'Colis disponible' };
+  var TYPE_EVENEMENT = { recu: 'shipment_received', disponible: 'shipment_available' };
+  var CANAUX = { push: 'Téléphone', email: 'E-mail', whatsapp: 'WhatsApp', sms: 'SMS' };
+  var ETATS_ENVOI = { attente: 'en file d’envoi', envoi: 'remis au fournisseur', envoye: 'envoyé', livre: 'livré',
+                      echec: 'échec', annule: 'non envoyé' };
+  // Pourquoi un envoi n'est pas parti : une configuration qui manque, une coordonnée
+  // absente, un fournisseur qui refuse — jamais une question de droits de l'équipe.
+  var RAISONS = {
+    NON_CONFIGURE: 'canal non configuré', PREFERENCE: 'coupé par le client', SANS_APPAREIL: 'aucun téléphone enregistré',
+    SANS_DESTINATAIRE: 'pas d’adresse ou de numéro', SANS_MODELE: 'pas de modèle WhatsApp pour ce message',
+    APPAREIL_INCONNU: 'téléphone oublié', DeviceNotRegistered: 'application désinstallée',
+    RESEAU: 'fournisseur injoignable', ERREUR_INTERNE: 'erreur interne'
+  };
+  // Les libellés des règles (notification_regles, supabase-notifications.sql)
+  var TYPES_NOTIF = {
+    shipment_received: 'Colis reçu à l’entrepôt', shipment_packed: 'Colis emballé', shipment_shipped: 'Colis expédié',
+    shipment_arrived: 'Arrivé au centre de distribution', shipment_transferred: 'Transféré à la succursale',
+    shipment_available: 'Colis disponible', shipment_delivered: 'Colis livré', action_required: 'Action requise',
+    action_resolved: 'Action résolue'
+  };
 
   function clientDe(ligne) {
     return {
@@ -2880,19 +3048,16 @@
     };
   }
 
-  function apercu(message) {
-    $('[data-apercu-sujet]', dlgApercu).textContent = message.email.sujet;
-    // Aperçu sans script ; les liens s'ouvrent dans un nouvel onglet
-    $('[data-apercu]', dlgApercu).srcdoc = message.email.html.replace('<head>', '<head><base target="_blank">');
-    dlgApercu.showModal();
+  // « E-mail : non envoyé (canal non configuré) », « Téléphone : envoyé »…
+  function etatEnvoi(e) {
+    var texte = ETATS_ENVOI[e.statut] || e.statut;
+    var raison = e.code_erreur ? (RAISONS[e.code_erreur] || e.code_erreur) : '';
+    if (e.statut === 'attente' && e.tentative > 0) texte = 'nouvel essai prévu';
+    return (CANAUX[e.canal] || e.canal) + ' : ' + texte + (raison ? ' (' + raison + ')' : '');
   }
-
-  function etatEmail(resultat, client) {
-    if (resultat === 'envoye') return { ok: true, texte: 'E-mail envoyé à ' + (client.email || 'l’adresse du client') };
-    if (resultat === 'demo') return { ok: null, texte: 'Démonstration : e-mail préparé mais non envoyé (voir l’aperçu)' };
-    if (resultat === 'non-configure') return { ok: false, texte: 'E-mail non configuré : voir le README, partie « Notifications »' };
-    if (resultat === 'sans-destinataire') return { ok: false, texte: 'Pas d’adresse e-mail pour ce client' };
-    return { ok: false, texte: 'Échec de l’envoi de l’e-mail : ' + resultat };
+  function classeEnvoi(e) {
+    return e.statut === 'envoye' || e.statut === 'livre' ? 'gs-envoi__ligne--ok'
+      : e.statut === 'echec' ? 'gs-envoi__ligne--alerte' : '';
   }
 
   function notifier(entrees, evenement, options) {
@@ -2901,77 +3066,71 @@
     liste.textContent = '';
     var premier = entrees[0];
     $('[data-notif-titre]', dlgNotif).textContent = options.apresEnregistrement ? 'Colis enregistré'
-      : (entrees.length > 1 ? entrees.length + ' clients prévenus' : 'Client prévenu');
+      : (entrees.length > 1 ? entrees.length + ' clients prévenus' : 'Messages au client');
     $('[data-notif-sous-titre]', dlgNotif).textContent = entrees.length === 1
       ? premier.colis.numero + ' · ' + (premier.client.nom_complet || '') + (premier.client.code ? ' (' + premier.client.code + ')' : '')
-      : EVENEMENT_LIBELLE[evenement] + ' : un e-mail et un message WhatsApp par client.';
+      : (EVENEMENT_LIBELLE[evenement] || '') + ' : chaque client est prévenu par la base.';
     $('[data-action="autre-colis"]', dlgNotif).hidden = !options.apresEnregistrement;
     var aide = $('[data-notif-aide]', dlgNotif);
     aide.hidden = true;
 
-    var sansApiWhatsApp = false;
-    var envois = entrees.map(function (entree) {
+    var aLaMain = false;
+    var chargements = entrees.map(function (entree) {
       var colis = entree.colis, client = entree.client || {};
-      var message = N.preparer(evenement, colis, client);
       var li = el('li', 'gs-envoi');
       var tete = el('div', 'gs-envoi__tete');
       tete.appendChild(el('strong', '', client.nom_complet || client.code || 'Client'));
       tete.appendChild(el('span', 'gs-envoi__num', colis.numero));
       li.appendChild(tete);
-      var ligneEmail = el('p', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Envoi de l’e-mail…');
-      var ligneWa = el('div', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Message WhatsApp…');
-      li.appendChild(ligneEmail);
-      li.appendChild(ligneWa);
-      var actions = el('div', 'gs-envoi__actions');
-      var voir = el('button', 'gs-lien-bouton', 'Aperçu de l’e-mail');
-      voir.type = 'button';
-      voir.addEventListener('click', function () { apercu(message); });
-      actions.appendChild(voir);
-      li.appendChild(actions);
+      var lignes = el('div', '');
+      lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Lecture des envois…'));
+      li.appendChild(lignes);
       liste.appendChild(li);
 
-      var email = API.admin.envoyerEmail(colis.id, evenement, message.email).then(function (r) {
-        var e = etatEmail(r, client);
-        ligneEmail.textContent = (e.ok ? '✓ ' : '') + e.texte;
-        ligneEmail.className = 'gs-envoi__ligne ' + (e.ok ? 'gs-envoi__ligne--ok' : e.ok === false ? 'gs-envoi__ligne--alerte' : '');
-      }, function (err) {
-        ligneEmail.textContent = 'Échec de l’envoi de l’e-mail : ' + messageErreur(err);
-        ligneEmail.className = 'gs-envoi__ligne gs-envoi__ligne--alerte';
-      });
-
-      var whatsapp = API.admin.envoyerWhatsApp(colis.id, evenement, message.modele).then(function (r) {
-        return r;
-      }, function () { return 'erreur'; }).then(function (r) {
-        ligneWa.textContent = '';
-        if (r === 'envoye') {
-          ligneWa.textContent = '✓ Message WhatsApp envoyé automatiquement';
-          ligneWa.className = 'gs-envoi__ligne gs-envoi__ligne--ok';
+      return API.admin.envoisColis(colis.id).then(function (envois) {
+        // La notification de l'événement demandé, sinon la plus récente du colis
+        var voulu = TYPE_EVENEMENT[evenement];
+        var cible = envois.filter(function (e) { return e.type === voulu; })[0] || envois[0];
+        var siens = cible ? envois.filter(function (e) { return e.notification_id === cible.notification_id; }) : [];
+        lignes.textContent = '';
+        if (!cible) {
+          lignes.appendChild(el('p', 'gs-envoi__ligne', 'Aucune notification pour ce colis (règle coupée, ou colis sans client).'));
           return;
         }
-        sansApiWhatsApp = true;
-        ligneWa.className = 'gs-envoi__ligne';
-        if (!message.lienWhatsApp) {
-          ligneWa.textContent = 'Pas de numéro de téléphone pour ce client';
-          ligneWa.className = 'gs-envoi__ligne gs-envoi__ligne--alerte';
-          return;
+        lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--ok',
+                              '✓ ' + (TYPES_NOTIF[cible.type] || cible.type) + ' : visible dans l’espace du client (site et application)'));
+        siens.forEach(function (e) { lignes.appendChild(el('p', 'gs-envoi__ligne ' + classeEnvoi(e), etatEnvoi(e))); });
+        // WhatsApp sans API : l'équipe peut l'envoyer elle-même, message déjà rédigé
+        var wa = siens.filter(function (e) { return e.canal === 'whatsapp'; })[0];
+        if (N && EVENEMENTS.indexOf(evenement) >= 0 && wa && wa.statut === 'annule' &&
+            (wa.code_erreur === 'NON_CONFIGURE' || wa.code_erreur === 'SANS_MODELE')) {
+          var message = N.preparer(evenement, colis, client);
+          if (message.lienWhatsApp) {
+            aLaMain = true;
+            var lien = el('a', 'gs-bouton gs-bouton--petit gs-bouton--wa', 'Envoyer depuis mon WhatsApp');
+            lien.href = message.lienWhatsApp;
+            lien.target = '_blank';
+            lien.rel = 'noopener';
+            lien.addEventListener('click', function () {
+              lien.textContent = '✓ WhatsApp ouvert';
+              lien.classList.add('is-fait');
+            });
+            var actions = el('div', 'gs-envoi__actions');
+            actions.appendChild(lien);
+            lignes.appendChild(actions);
+          }
         }
-        var lien = el('a', 'gs-bouton gs-bouton--petit gs-bouton--wa', 'Envoyer sur WhatsApp');
-        lien.href = message.lienWhatsApp;
-        lien.target = '_blank';
-        lien.rel = 'noopener';
-        lien.addEventListener('click', function () {
-          lien.textContent = '✓ WhatsApp ouvert';
-          lien.classList.add('is-fait');
-        });
-        ligneWa.appendChild(lien);
-        ligneWa.appendChild(el('span', 'gs-envoi__detail', client.telephone || ''));
+      }).catch(function (err) {
+        // Le colis, lui, est enregistré : seule la lecture des envois a échoué
+        lignes.textContent = '';
+        lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--alerte',
+                              'État des messages illisible (le colis est bien enregistré) : ' + messageErreur(err)));
       });
-      return Promise.all([email, whatsapp]);
     });
 
-    Promise.all(envois).then(function () {
-      if (sansApiWhatsApp) {
-        aide.textContent = 'WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour un envoi automatique, configurez l’API WhatsApp (README, partie « Notifications »).';
+    Promise.all(chargements).then(function () {
+      if (aLaMain) {
+        aide.textContent = 'WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour que la base l’envoie elle-même, configurez l’API WhatsApp (docs/notifications.md).';
         aide.hidden = false;
       }
     });
@@ -2983,20 +3142,25 @@
     ouvrirColis();
   });
 
-  // Messages déjà envoyés pour un colis (fenêtre « Mettre à jour »)
+  // Messages au client pour un colis (fenêtre « Mettre à jour ») : une ligne par
+  // notification, avec l'état de chaque envoi
   function afficherNotificationsEnvoyees(id) {
     var bloc = $('[data-bloc-notifications]', dlgStatut);
     var liste = $('[data-notifications]', dlgStatut);
     liste.textContent = '';
-    API.admin.notifications(id).then(function (lignes) {
-      if (!cibleStatut.colis || cibleStatut.colis.id !== id || !lignes || !lignes.length) return;
-      lignes.forEach(function (n) {
-        var reussite = n.code_http ? n.code_http < 300 : null;
-        var resultat = API.mode === 'demo' ? 'démonstration, non envoyé'
-          : reussite === true ? 'envoyé' : reussite === false ? 'échec (' + (n.erreur || 'code ' + n.code_http) + ')' : 'envoyé';
-        var li = el('li', reussite === false ? 'is-echec' : '');
-        li.appendChild(el('strong', '', (n.canal === 'email' ? 'E-mail' : 'WhatsApp') + ' · ' + (EVENEMENT_LIBELLE[n.evenement] || n.evenement)));
-        li.appendChild(el('span', '', O.date(n.envoye_le, true) + ' · ' + (n.destinataire || '') + ' · ' + resultat));
+    API.admin.envoisColis(id).then(function (envois) {
+      if (!cibleStatut.colis || cibleStatut.colis.id !== id || !envois || !envois.length) return;
+      var parNotif = [];
+      envois.forEach(function (e) {
+        var g = parNotif.filter(function (x) { return x.id === e.notification_id; })[0];
+        if (!g) parNotif.push(g = { id: e.notification_id, type: e.type, cree_le: e.cree_le, envois: [] });
+        g.envois.push(e);
+      });
+      parNotif.forEach(function (g) {
+        var echec = g.envois.some(function (e) { return e.statut === 'echec'; });
+        var li = el('li', echec ? 'is-echec' : '');
+        li.appendChild(el('strong', '', (TYPES_NOTIF[g.type] || g.type) + ' · ' + O.date(g.cree_le, true)));
+        li.appendChild(el('span', '', ['Espace client'].concat(g.envois.map(etatEnvoi)).join(' · ')));
         liste.appendChild(li);
       });
       bloc.hidden = false;
@@ -5853,6 +6017,8 @@
     champFiche('N° de colis', colis.numero);
     champFiche('Date de réception', O.date(recu));
     champFiche('Heure de réception', heure(recu));
+    // La date à laquelle le colis a été saisi dans le système (celle de l'étiquette)
+    champFiche('Enregistré le', colis.cree_le ? O.date(colis.cree_le, true) : '');
     champFiche('Statut', STATUTS[colis.statut] || colis.statut);
     champFiche('Lieu actuel', colis.lieu || '—');
     champFiche('Mis à jour', O.date(colis.maj_le, true));
@@ -5887,7 +6053,8 @@
     champFiche('Contenu', colis.description);
     champFiche('Poids', poids != null ? [O.nombre(poids) + ' lb', O.nombre(Math.round(poids * 0.45359237 * 10) / 10) + ' kg'] : '—');
     champFiche('Mode de transport', SERVICES[colis.service] || colis.service);
-    champFiche('Destination', [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', '));
+    champFiche('Destination', [colis.destination || 'Ville à compléter', PAYS[colis.pays_destination]].filter(Boolean).join(', '));
+    champFiche('Adresse de livraison', colis.adresse_livraison, true);
     if (colis.prix_usd != null && colis.prix_usd !== '') {
       champFiche('Prix du transport', [argent(colis.prix_usd),
         colis.prix_fixe_usd != null && colis.prix_fixe_usd !== '' ? 'Prix fixé à la main'
@@ -6062,6 +6229,7 @@
     sectionFiche('Informations générales');
     champFiche('N° de facture', facture.numero);
     champFiche('Créée le', O.date(facture.cree_le, true));
+    champFiche('Montant rectifié le', facture.rectifiee_le ? O.date(facture.rectifiee_le, true) : '');
     champFiche('À payer avant le', facture.echeance_le ? O.date(facture.echeance_le) : '');
     champFiche('Payée le', facture.payee_le ? O.date(facture.payee_le, true) : '');
     champFiche('Moyen', facture.moyen ? (MOYENS[facture.moyen] || facture.moyen) : '');
@@ -6309,6 +6477,7 @@
     'facture.paiement': 'Paiement d’une facture', 'facture.annulation': 'Annulation d’une facture',
     'facture.regroupement': 'Regroupement de factures', 'facture.suppression': 'Suppression d’une facture',
     'facture.sortie_regroupement': 'Colis sortis d’un regroupement',
+    'facture.frais_appliques': 'Frais de service ajoutés', 'facture.frais_retires': 'Frais de service retirés',
     'client.suppression_demandee': 'Compte supprimé par le client',
     'paiement.enregistrement': 'Paiement encaissé', 'paiement.annulation': 'Annulation d’un paiement',
     'paiement.reprise': 'Paiement repris', 'rapport.creation': 'Création d’un rapport',
@@ -6325,7 +6494,8 @@
     sections: 'Données', role_createur: 'Rôle', cree_le: 'Créé le', reference: 'Référence', paye_le: 'Payé le',
     origine: 'Origine', payee_le: 'Payée le', service: 'Mode', pays_destination: 'Pays', suivi_transporteur: 'Suivi vendeur',
     description: 'Description', expediteur: 'Expéditeur', destination: 'Destination', recu_le: 'Reçu le', lieu: 'Lieu',
-    note: 'Note', email: 'E-mail', motif: 'Motif', facture: 'Facture'
+    note: 'Note', email: 'E-mail', motif: 'Motif', facture: 'Facture', adresse_livraison: 'Adresse de livraison',
+    prix_fixe_usd: 'Prix fixé à la main', echeance_le: 'À payer avant le'
   };
   // Les identifiants internes ne disent rien à un lecteur : le numéro, le code ou le nom suffisent
   var CACHES_JOURNAL = /(^|_)id$|^cree_par$|^cle_idempotence$/;
@@ -6429,7 +6599,95 @@
       montrerDatesFiltres();
     }
     chargerRapports();
+    if (peut('audit_logs.view')) chargerModifs();
   }
+
+  /* L'historique des modifications (audit_logs.view) ----------------------------------
+     Les colis et les factures : qui a changé quoi, quand, l'avant, l'après et le motif
+     (historique_modifications, outils/supabase-corrections.sql). La section n'apparaît
+     qu'aux administrateurs, et la base refuse la lecture à tout autre compte. Le
+     client, lui, ne voit jamais ce journal : son espace lit les colis et les factures
+     tels qu'ils sont maintenant. */
+  var formModifs = $('[data-modifs-filtres]');
+  var corpsModifs = $('[data-lignes="modifs"]');
+  var etatModifs = { page: 0, parPage: 25, auteurs: false };
+
+  // Un jour du calendrier de Santo Domingo (UTC−4, sans heure d'été) en instant :
+  // « 2026-10-12 » → minuit là-bas ; la fin est exclue, d'où le lendemain
+  function instantSD(jour, lendemain) {
+    if (!jour) return null;
+    var d = new Date(jour + 'T00:00:00-04:00');
+    if (isNaN(d.getTime())) return null;
+    if (lendemain) d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString();
+  }
+
+  function chargerModifs() {
+    var f = formModifs.elements;
+    var message = $('[data-modifs-message]');
+    message.hidden = true;
+    return API.admin.historiqueModifications({
+      recherche: f.recherche.value.trim(), debut: instantSD(f.debut.value), fin: instantSD(f.fin.value, true),
+      entite: f.entite.value, auteur: f.auteur.value || null, page: etatModifs.page, parPage: etatModifs.parPage
+    }).then(afficherModifs).catch(function (err) {
+      corpsModifs.textContent = '';
+      message.textContent = messageErreur(err);
+      message.hidden = false;
+    });
+  }
+
+  function celluleModif(tr, libelle, contenu) {
+    var td = el('td', 'gs-modifs__cellule');
+    td.setAttribute('data-libelle', libelle);
+    (Array.isArray(contenu) ? contenu : [contenu]).forEach(function (ligne) {
+      if (ligne && ligne.nodeType) td.appendChild(ligne);
+      else if (ligne) td.appendChild(el('span', 'gs-modifs__ligne', ligne));
+    });
+    tr.appendChild(td);
+    return td;
+  }
+
+  function afficherModifs(r) {
+    var choix = formModifs.elements.auteur;
+    if (!etatModifs.auteurs) {
+      etatModifs.auteurs = true;
+      (r.auteurs || []).forEach(function (a) {
+        choix.add(new Option((a.nom || 'Compte supprimé') + (a.role ? ' · ' + (ROLES[a.role] || a.role) : ''), a.id));
+      });
+    }
+    corpsModifs.textContent = '';
+    (r.lignes || []).forEach(function (j) {
+      var tr = el('tr');
+      celluleModif(tr, 'Date', dateRapport(j.cree_le, true));
+      // Le numéro mène à toutes les modifications de ce colis ou de cette facture
+      var objet = el('button', 'gs-lien-bouton', (ENTITES_JOURNAL[j.entite] || j.entite) + ' ' + (j.reference || ''));
+      objet.type = 'button';
+      objet.title = 'Toutes les modifications de cet objet';
+      objet.addEventListener('click', function () {
+        formModifs.elements.recherche.value = j.reference || '';
+        formModifs.elements.entite.value = j.entite;
+        etatModifs.page = 0;
+        chargerModifs();
+      });
+      celluleModif(tr, 'Objet', objet).setAttribute('data-fiche-ignorer', '');
+      celluleModif(tr, 'Action', ACTIONS_JOURNAL[j.action] || j.action);
+      celluleModif(tr, 'Par', [j.auteur || '—', j.role_auteur ? ROLES[j.role_auteur] || j.role_auteur : '']);
+      celluleModif(tr, 'Avant', valeursJournal(j.avant));
+      celluleModif(tr, 'Après', valeursJournal(j.apres));
+      celluleModif(tr, 'Motif', j.motif || '—');
+      corpsModifs.appendChild(tr);
+    });
+    var vide = $('[data-vide="modifs"]');
+    vide.textContent = 'Aucune modification pour ces critères.';
+    vide.hidden = (r.lignes || []).length > 0;
+    paginer('modifs', etatModifs, r.total, chargerModifs);
+  }
+
+  formModifs.addEventListener('submit', function (e) {
+    e.preventDefault();
+    etatModifs.page = 0;
+    chargerModifs();
+  });
 
   /* La liste des rapports enregistrés ------------------------------------------------- */
   var rechercheRapports = $('[data-recherche="rapports"]');
@@ -6612,7 +6870,7 @@
     if (k === 'filtres' && typeof x === 'object') {
       return [STATUTS_RAPPORT[x.statut_colis], ETATS_RAPPORT[x.etat_facture]].filter(Boolean).join(', ') || 'Tous';
     }
-    if (k === 'debut' || k === 'fin') return jourLisible(x);
+    if (k === 'debut' || k === 'fin' || k === 'echeance_le') return jourLisible(x);
     if (/_le$/.test(k)) return dateRapport(x, true);
     if (Array.isArray(x)) return x.join(', ');
     if (typeof x === 'object') return JSON.stringify(x);

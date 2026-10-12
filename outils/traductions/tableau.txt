@@ -4,7 +4,9 @@
 # assets/js/tableau-textes.js, que lit assets/js/tableau-langue.js.
 # Un texte ajouté au tableau de bord : sa ligne ici et ses trois traductions.
 (facultatif)
+(facultatif, gardé au journal)
 (interne, obligatoire)
+(obligatoire pour corriger le montant, gardé au journal)
 (obligatoire, gardé au journal)
 + Colis
 0 à 30 jours
@@ -21,6 +23,8 @@
 7 derniers jours
 7 jours
 72 h à 7 jours
+: la base le prévient elle-même (espace client, téléphone, e-mail, WhatsApp selon les règles)
+: la base le prévient elle-même que son colis est disponible
 A4 automatique
 A4 paysage
 A4 portrait
@@ -44,6 +48,7 @@ Activé
 Actualiser
 Administrateur
 Adresse
+Adresse de livraison
 Affichage
 Affichage et réglages
 Affichage par défaut rétabli.
@@ -91,6 +96,7 @@ Apparence
 Application
 Appliquer
 Appliquer le frais de service à la nouvelle facture
+Après
 Argent
 Arrivé au centre de distribution
 Au
@@ -130,7 +136,9 @@ Aucune facture échue
 Aucune facture émise sur la période.
 Aucune facture.
 Aucune incohérence trouvée.
+Aucune modification pour ces critères.
 Aucune note.
+Aucune notification pour ce colis (règle coupée, ou colis sans client).
 Aucune opération pendant cette période.
 Aucune opération permise pour ce colis à ce statut.
 Aucune opération sur la période.
@@ -145,6 +153,7 @@ Autre
 Autre moyen
 Autres villes
 Autres villes des colis
+Avant
 Avant le
 Avec des colis en cours
 Avec un solde à payer
@@ -182,6 +191,7 @@ Changer le rôle
 Changer le statut
 Changer un statut
 Chaque membre de l'équipe a un rôle, et chaque rôle une liste de permissions. La base de données les vérifie à chaque action : un bouton masqué ici n'est qu'un confort, jamais la protection.
+Chaque modification d'un colis ou d'une facture : qui, quand, l'ancienne et la nouvelle valeur, et le motif. Réservé aux administrateurs ; jamais montré au client.
 Chaque scan affiche le colis et les opérations permises.
 Chargement des alertes…
 Chargement des chiffres…
@@ -230,6 +240,7 @@ Colis dont la réception à Miami (date saisie à l’arrivée) tombe dans la p�
 Colis du client
 Colis en cours
 Colis enregistré
+Colis et factures
 Colis facturés
 Colis livré : plus aucune opération. Une erreur se corrige depuis sa fiche, onglet Colis.
 Colis livrés
@@ -393,7 +404,9 @@ Enregistrer le paiement
 Enregistrer les modifications
 Enregistrer un autre colis
 Enregistrer un colis
+Enregistré le
 Ensemble, après la sortie
+Envoyer depuis mon WhatsApp
 Erreur
 Espèces
 Essai de notification
@@ -405,6 +418,8 @@ Ex. Port-au-Prince
 Ex. Retrait possible à partir de demain 10 h
 Ex. TBA304918577000
 Ex. Vêtements, chaussures…
+Ex. poids corrigé à la pesée
+Ex. remise accordée au client
 Exemples ajoutés : 3 clients et 7 colis.
 Expéditeur
 Expéditeur (magasin)
@@ -425,6 +440,7 @@ Facturé
 Facturé et encaissé
 Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé, l’autre ce qui est entré.
 Facturé sur la période
+Facultatif : le prix est fixé à la main. S’il est connu, indiquez-le quand même.
 Fermer
 Fermer le rapport
 Fermer sans enregistrer
@@ -447,7 +463,10 @@ Fois
 Forte
 Frais de service
 Frais de service (une fois)
+Frais de service ajoutés
+Frais de service retirés
 GSE-1001-HT, QR de l'étiquette ou suivi du vendeur
+GSE-1204-HT, FAC-2026-0042…
 Gardés sur cet appareil seulement : chaque membre de l'équipe règle le sien.
 Gestion
 Goship Express — voir le site
@@ -462,6 +481,7 @@ Hebdomadaire
 Heure
 Heure de réception
 Historique
+Historique des modifications
 Historique interne
 Identifiant
 Identifiant GSE, nom ou e-mail
@@ -473,10 +493,13 @@ Imprimer / PDF
 Imprimer l'étiquette d'expédition
 Imprimer le rapport
 Imprimer les étiquettes
+Imprimée sur l'étiquette. L'adresse personnelle du client n'y figure jamais.
 Inactifs
 Indicateur
 Indicateurs de qualité
+Indiquez la ville de livraison du colis.
 Indiquez le motif.
+Indiquez le poids du colis, en livres (ex. 4,5) : le prix se calcule poids × tarif. Sans poids, cochez « Fixer le prix à la main ».
 Indiquez le poids du colis, en livres (ex. 4,5).
 Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».
 Indiquez l’agence où le client peut retirer son colis.
@@ -498,6 +521,7 @@ La date de début doit être antérieure à la date de fin.
 La date de fin est avant la date de début.
 La facture reste sans frais de service.
 La personne crée d'abord son compte sur le site (« Créer un compte »), puis vous lui donnez son rôle ici. Chaque changement est noté au journal : qui, quand, ancien et nouveau rôle. Vous ne pouvez pas changer votre propre rôle.
+La ville de livraison, en toutes lettres.
 Laissez vide : lien PayPal créé automatiquement
 Laissé vide, un lien PayPal est créé avec le montant : le client paie par carte Visa ou Mastercard. Vous pouvez aussi coller un lien Azul.
 Langue
@@ -509,8 +533,10 @@ Le compte
 Le frais de service sera ajouté à la facture en même temps que le paiement.
 Le jour
 Le plus de colis en cours
+Le poids est un nombre de livres supérieur à zéro (ex. 4,5).
 Le prix du colis doit être compris entre 0 et 100 000 $.
 Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
+Lecture des envois…
 Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
 Les chiffres se lisent dans la base à chaque ouverture du rapport.
 Les colis cochés passent sur leur propre facture ; les autres restent ensemble sur une nouvelle facture. Celle-ci est annulée et renvoie vers la nouvelle. Le frais de service reste sur la facture qui garde le regroupement ; celle des colis sortis n'en a pas (il pourra s'ajouter à l'encaissement).
@@ -549,6 +575,7 @@ Mensuel
 Menu du tableau de bord
 Menu latéral réduit
 Message pour le client
+Messages au client
 Messages envoyés au client
 Mettez à jour l'application GoShip Express.
 Mettre à jour
@@ -593,6 +620,7 @@ Montant facturé (hors annulées)
 Montant impayé
 Montant initial
 Montant payé
+Montant rectifié le
 Montant reçu (US $)
 Montant total (US $)
 Montants
@@ -600,6 +628,7 @@ Monter
 Mot de passe
 Motif
 Motif de la correction
+Motif de la modification
 Moyen
 Moyenne
 Médiane
@@ -632,11 +661,14 @@ Numéro, contenu, magasin, suivi du vendeur, destination…
 N°
 N° colis
 N° de colis
+N° de colis ou de facture
 N° de colis, code client, nom, suivi vendeur…
 N° de facture
 N° de reçu, de transaction…
 N° de suivi du vendeur
 N° facture
+Objet
+Obligatoire : le prix se calcule poids × tarif.
 Opération
 Opérations
 Opérations au poste de scan
@@ -666,6 +698,7 @@ Paiements
 Paiements annulés
 Paiements valides
 Paiements valides reçus pendant la période, quelle que soit la facture. Source : paiements.
+Par
 Par compte
 Par employé
 Par jour
@@ -798,6 +831,7 @@ Routes et destinations
 Routes et villes
 Rubriques Analytics
 Rubriques des réglages
+Rue, quartier, repère : seulement si le colis est livré à une adresse
 Règle de notification
 Règlement des factures
 Réduire le menu
@@ -906,6 +940,7 @@ Tout sélectionner
 Toutes
 Toutes les destinations
 Toutes les factures
+Toutes les modifications de cet objet
 Transfert d'argent (Western Union, Ria…)
 Transfert d’argent
 Transféré à la succursale
@@ -931,11 +966,13 @@ Une notification du système quand une alerte apparaît (action requise, facture
 Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.
 Une période de trois ans au plus.
 Une seule fois pour toute la facture, sur une ligne à part. Sans lui, il pourra s'ajouter à l'encaissement.
+Une ville du pays de destination.
 Utilisateur
 Valeurs extrêmes
 Valide
 Ville
 Ville de livraison
+Ville à compléter
 Villes de destination
 Villes des colis
 Villes les plus fréquentes
@@ -952,14 +989,17 @@ Voir le tableau
 Voir les clients
 Voir les colis
 Voir les factures
+Voir les messages au client
 Voir les paiements
 Voir l’équipe
 Voir tous les colis
 Volume
 Volume par période
+Vous corrigez le montant de la facture : indiquez-en le motif (5 caractères au moins), il sera gardé au journal.
 Vous n’avez pas la permission d’utiliser le poste de scan.
 Vue d'ensemble logistique
 Vue générale
+WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour que la base l’envoie elle-même, configurez l’API WhatsApp (docs/notifications.md).
 action requise
 actions requises
 anglais

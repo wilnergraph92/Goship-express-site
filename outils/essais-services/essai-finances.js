@@ -201,7 +201,9 @@ function resume(f) { return [f.montant_usd, f.paye_usd, f.solde_usd, f.etat_paie
   verifier('total d\'une facture de colis : refusé', await code(A.modifierFacture(w, { montant_usd: 99 })), 'INVOICE_LOCKED');
   await A.enregistrerPaiement(libre, { montant_usd: 8, moyen: 'especes' });
   verifier('facture libre : jamais sous le payé', await code(A.modifierFacture(libre, { montant_usd: 5 })), 'INVALID_AMOUNT');
-  verifier('ramenée au payé : payée', resume(await A.modifierFacture(libre, { montant_usd: 8 })),
+  // Corriger un montant demande un motif, gardé au journal (supabase-corrections.sql)
+  verifier('montant corrigé sans motif : refusé', await code(A.modifierFacture(libre, { montant_usd: 8 })), 'REASON_REQUIRED');
+  verifier('ramenée au payé : payée', resume(await A.modifierFacture(libre, { montant_usd: 8 }, 'Remise au comptoir')),
            [8, 8, 0, 'payee', 'payee']);
   var cp = (await A.creerFacture({ client_id: jean, montant_usd: 50, montant_paye_usd: 20 }, [])).facture;
   verifier('payée en partie à la création : un paiement « à la création »',

@@ -140,7 +140,7 @@ function cles(v, chemin) {
   console.log('\nC. Un jeu contrôlé en mars 2026');
   var ids = [];
   for (var k = 0; k < 4; k++) {
-    var c = (await A.creerColis({ client_id: marie.id, description: 'Mars ' + k, poids_lb: 4, service: 'aerien', pays_destination: 'HT' })).colis;
+    var c = (await A.creerColis({ client_id: marie.id, description: 'Mars ' + k, poids_lb: 4, service: 'aerien', pays_destination: 'HT', destination: 'Jacmel' })).colis;
     ids.push(c.id);
   }
   for (var e of ['embarque', 'distribution', 'succursale', 'disponible', 'livre']) {
@@ -196,7 +196,7 @@ function cles(v, chemin) {
            se.cases.reduce(function (t, c) { return t + c.encaisse; }, 0)], [4, 75]);
   var sem = await A.analytics('serie', Object.assign({ granularite: 'semaine' }, MARS));
   verifier('par semaine : case du lundi 23 février, commencée le 1er mars', [sem.cases[0].jour, sem.cases[0].debut], ['2026-02-23', '2026-03-01']);
-  var ancien = await A.creerColis({ client_id: jean.id, description: 'Ancien tarif', poids_lb: 10, tarif_lb_usd: 3, service: 'aerien', pays_destination: 'HT' });
+  var ancien = await A.creerColis({ client_id: jean.id, description: 'Ancien tarif', poids_lb: 10, tarif_lb_usd: 3, service: 'aerien', pays_destination: 'HT', destination: 'Jacmel' });
   var avant = (await A.analytics('finances', { periode: '7j' })).facture.actuel;
   await A.modifierColis(ancien.colis.id, { tarif_lb_usd: 4 });
   verifier('tarif changé après coup : la facture (30 $, sans frais) et le facturé ne bougent pas',
