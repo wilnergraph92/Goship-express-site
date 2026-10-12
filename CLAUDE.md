@@ -188,10 +188,20 @@ formulaire admin n'est qu'un aperçu en lecture seule, sauf « Fixer le prix à
 la main » : `colis.prix_fixe_usd` (0 à 100 000 $, `invoices.edit`, vérifié et
 journalisé par `regles_colis`) remplace alors poids × tarif, `tarif_lb_usd`
 devient null (la ligne de facture n'affiche aucun $/lb) ; null = prix calculé.
+**Le poids n'est obligatoire qu'au prix calculé** (`supabase-corrections.sql`) : au prix
+fixé à la main il est facultatif ; un poids saisi est toujours > 0 et ≤ 10 000 lb, et on
+n'enregistre jamais 0 à la place d'un poids absent. Quitter le prix fixé, changer le tarif
+ou effacer le poids demandent un poids ; un ancien colis sans poids garde son prix.
 Pas de frais de service à l'enregistrement (voir plus haut). Copie démo : `reglesColis`, `tarifLigne`.
 Une nouvelle facture
 passe par `creer_facture` / `facturer_colis`, qui refusent un colis déjà
 sur une facture active (`INVOICE_ALREADY_EXISTS`).
+
+**Modifier une facture émise** passe par `modifier_facture(p_facture, p_champs, p_motif)`
+(`supabase-corrections.sql`, `invoices.edit`) : échéance, note, lien, et le total d'une
+facture libre. Corriger un montant exige un motif (5 caractères au moins) et date la facture
+(`factures.rectifiee_le`, posée par le déclencheur `rectifier_facture`, imprimée « rectifiée »).
+Les paiements ne sont jamais touchés ; le total ne descend jamais sous le payé.
 
 Les factures antérieures au 22/09/2026 portent `frais_service_usd = 0`,
 volontairement : leur total ne devait pas changer rétroactivement.
@@ -343,6 +353,26 @@ reste sans build. `deploy.yml` exclut `bureau/` de GitHub Pages.
   root) et `essai-paquet.js` ; le site d'essai (`serveur-essai.js`) sert un
   `config.js` vide. Voir `bureau/LISEZ-MOI.md`.
 
+### Colis : destination, étiquette, journal (`outils/supabase-corrections.sql`)
+
+**Le pays et la ville de livraison sont deux champs distincts et obligatoires**
+(`pays_destination`, `destination`) : `regles_colis` refuse une ville vide à la création et
+quand la destination change (`CITY_REQUIRED`) ; un ancien colis sans ville reste modifiable.
+Pour HT et DO, `admin.js` impose une ville de `lieux.js` (`reconnaitreVille`). L'adresse de
+livraison (`colis.adresse_livraison`, facultative) est celle du colis, **jamais** l'adresse du
+profil du client. **L'étiquette ne lit que `CHAMPS_ETIQUETTE`** (`impression.js`) : ni
+`adresse_client`, ni `ville_client`, ni `pays_client` ; elle imprime la date d'enregistrement
+(`cree_le`, calendrier de Santo Domingo), jamais la date d'impression.
+
+**Le journal d'audit** (`journal_audit`) garde le motif (`motif`, posé par une fonction de
+service avec `set_config('goship.motif', …, true)`, repris par `auditer`) et **ne se modifie ni
+ne s'efface** (déclencheurs `journal_immuable`, même depuis le SQL Editor ; un banc d'essai qui
+doit dater des lignes lève ce déclencheur le temps d'un update, voir `essai-rapports.py`).
+`modifier_colis` lit `p_champs.motif`. Lecture : `historique_modifications(...)`, sous
+`audit_logs.view` (administrateur seulement), affichée dans l'onglet Rapports (« Historique des
+modifications ») ; le client n'y a jamais accès. Copie démo : `journaliser(…, motif)`,
+`historiqueModifications`. Bancs : `essai-corrections.py`.
+
 ### Les notifications (`outils/supabase-notifications.sql`, `docs/notifications.md`)
 
 Événement → règle → notification → envois → statut, tout dans la base. Les
@@ -352,7 +382,9 @@ créent, dans la même transaction, la notification (table `notifications`, cana
 travailleur `traiter_notifications()` (pg_cron, chaque minute) les envoie par
 pg_net et lit les réponses (3 essais au plus, erreurs définitives jamais
 réessayées). **Aucune page n'envoie de message** : ni e-mail, ni WhatsApp, ni
-push depuis admin.js, compte.js ou l'application — elles lisent
+push depuis admin.js, compte.js ou l'application (`envoyer_email_client` et
+`envoyer_whatsapp_client` sont fermées aux comptes connectés : les appeler donne une erreur de
+permission, même à un administrateur) — elles lisent
 `mes_notifications`, `centre_notifications`, `envois_colis`, `regles_notifications`.
 Un nouveau type de notification = une ligne dans `notification_regles` + ses
 textes dans `notification_textes()` (quatre langues) + la même chose dans la
@@ -424,7 +456,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

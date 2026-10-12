@@ -67,7 +67,8 @@ migrations(ordre, fichier, present) as (values
   (14, 'supabase-regroupement.sql',    exists (select 1 from pg_proc where proname = 'sortir_du_regroupement')),
   (15, 'supabase-connexion.sql',       exists (select 1 from pg_proc where proname = 'nom_depuis_metadonnees')),
   (16, 'supabase-profil-complet.sql',  exists (select 1 from pg_proc where proname = 'profil_complet')),
-  (17, 'supabase-frais-service.sql',   exists (select 1 from pg_proc where proname = 'encaisser_facture'))),
+  (17, 'supabase-frais-service.sql',   exists (select 1 from pg_proc where proname = 'encaisser_facture')),
+  (18, 'supabase-corrections.sql',     exists (select 1 from pg_proc where proname = 'historique_modifications'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,

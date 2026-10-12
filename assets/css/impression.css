@@ -64,6 +64,9 @@ svg{display:block}
 .et__bande{margin-top:3mm;text-align:center}
 .et__bande svg{width:100%;height:16mm}
 .et__numero{display:block;margin-top:.8mm;font-size:17pt;font-weight:800;letter-spacing:.06em}
+/* La date d'enregistrement du colis, sous son numéro : celle de la base, pas celle
+   de l'impression. En gras, au-dessus du plancher de 8 pt. */
+.et__date{display:block;margin-top:.5mm;font-size:10pt;font-weight:800;letter-spacing:.03em}
 
 /* « flex:1 » : c'est ce bloc qui absorbe le blanc restant. L'étiquette a une
    hauteur fixe, et depuis que l'expéditeur n'y figure plus il en reste ; mieux
@@ -85,6 +88,8 @@ svg{display:block}
 .et__ligne{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .et__code{white-space:nowrap}
 .et__tel{margin-top:.6mm;font-size:10pt;font-weight:700}
+.et__qui .et__libelle + .et__adresse{margin-top:.3mm}
+.et__qui .et__personne + .et__libelle{margin-top:1.4mm}
 .et__qr{flex:none;width:24mm;text-align:center}
 .et__qr svg{width:24mm;height:24mm}
 .et__qr-texte{display:block;margin-top:.8mm;font-size:7.5pt}
@@ -98,10 +103,15 @@ svg{display:block}
   font-size:24pt;font-weight:900;line-height:1}
 /* Sur deux lignes au besoin : « Petite Rivière de l'Artibonite » ne tient pas
    sur une seule, et c'est justement le mot qu'on ne doit jamais rogner. */
-.et__ville{flex:1;min-width:0;align-self:center;padding:1mm 3mm;
-  font-size:13pt;font-weight:800;letter-spacing:.03em;line-height:1.15;
+/* La ville du colis, et le nom du pays dessous (le code seul, « DO », ne dit pas
+   tout à qui ne trie pas tous les jours). */
+.et__lieu{flex:1;min-width:0;align-self:center;padding:1mm 3mm}
+.et__ville{font-size:13pt;font-weight:800;letter-spacing:.03em;line-height:1.15;
   display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
   overflow:hidden}
+.et__ville--manque{font-size:11pt}
+.et__pays-nom{display:block;margin-top:.4mm;font-size:8pt;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Le contenu du colis, là où figurait l'expéditeur. Il suit la destination
    au lieu d'être renvoyé en bas du papier : le blanc qui reste vaut mieux au

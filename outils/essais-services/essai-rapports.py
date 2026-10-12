@@ -78,15 +78,24 @@ def poser_colis(db, reception, statuts, client=MARIE, description='Colis'):
                             'pays_destination': 'HT', 'destination': 'Jacmel'}, facturer=False)['colis']
     for st in statuts:
         S.statut(db, ADMIN, [c['id']], st, 'Pétion-Ville' if st == 'disponible' else 'Miami')
-    db.sql("alter table colis disable trigger user; alter table colis_historique disable trigger user;"
-           "update colis set recu_le = %s where id = '%s';"
-           "update colis_historique h set cree_le = %s + (x.n - 1) * interval '1 minute' "
-           "  from (select id, row_number() over (order by id) as n from colis_historique where colis_id = '%s') x "
-           "  where h.id = x.id;"
-           "update journal_audit set cree_le = %s where entite = 'colis' and entite_id = '%s';"
-           "alter table colis enable trigger user; alter table colis_historique enable trigger user;"
+    db.sql(("alter table colis disable trigger user; alter table colis_historique disable trigger user;"
+            "update colis set recu_le = %s where id = '%s';"
+            "update colis_historique h set cree_le = %s + (x.n - 1) * interval '1 minute' "
+            "  from (select id, row_number() over (order by id) as n from colis_historique where colis_id = '%s') x "
+            "  where h.id = x.id;"
+            + dater_journal("cree_le = %s where entite = 'colis' and entite_id = '%s'") +
+            "alter table colis enable trigger user; alter table colis_historique enable trigger user;")
            % (sd(reception), c['id'], sd(reception), c['id'], sd(reception), c['id']))
     return c
+
+
+def dater_journal(ensemble):
+    """Le journal ne se modifie plus (supabase-corrections.sql, journal_immuable) : pour poser
+    les dates de mars, le jeu de données lève ce verrou le temps d'un seul update, comme
+    il lève ceux des colis. Une page, elle, n'a jamais ce droit."""
+    return ("alter table journal_audit disable trigger journal_immuable;"
+            "update journal_audit set " + ensemble + ";"
+            "alter table journal_audit enable trigger journal_immuable;")
 
 
 def facture(db, client, montant, quand, colis=None):
@@ -98,7 +107,7 @@ def facture(db, client, montant, quand, colis=None):
     else:
         f = jsonq(db, ADMIN, "select public.creer_facture('%s', null, %s);" % (client, js({'montant_usd': montant})))['facture']
     dater(db, 'factures', 'cree_le', f['id'], quand)
-    db.sql("update journal_audit set cree_le = %s where entite = 'facture' and entite_id = '%s';" % (sd(quand), f['id']))
+    db.sql(dater_journal("cree_le = %s where entite = 'facture' and entite_id = '%s'") % (sd(quand), f['id']))
     return f
 
 
@@ -243,7 +252,7 @@ def main():
     poser_colis(db, '2026-02-28 23:59', [], description='Février')                  # hors période
     parti = poser_colis(db, '2026-03-09 10:00', [], description='À supprimer')
     db.comme(ADMIN, "delete from colis where id = '%s';" % parti['id'])
-    db.sql("update journal_audit set cree_le = %s where action = 'colis.suppression' and entite_id = '%s';"
+    db.sql(dater_journal("cree_le = %s where action = 'colis.suppression' and entite_id = '%s'")
            % (sd('2026-03-10 10:00'), parti['id']))
     m = donnees(db, MARS)
     c = m['statistiques']['colis']
@@ -314,8 +323,8 @@ def main():
               values ('%s', 'dora@exemple.com', now(), '{"nom_complet":"Dora Partie","pays":"HT"}'::jsonb);""" % DORA)
     f8 = facture(db, DORA, 60, '2026-03-21 09:00')
     db.sql("delete from auth.users where id = '%s';" % DORA)
-    db.sql("update journal_audit set cree_le = %s where action in ('facture.suppression', 'client.suppression') "
-           "and entite_id in ('%s', '%s');" % (sd('2026-03-25 10:00'), f8['id'], DORA))
+    db.sql(dater_journal("cree_le = %s where action in ('facture.suppression', 'client.suppression') "
+                         "and entite_id in ('%s', '%s')") % (sd('2026-03-25 10:00'), f8['id'], DORA))
     m = donnees(db, MARS)
     fa = m['statistiques']['factures']
     verifier('7 factures émises en mars (la supprimée à part)', fa['total'], 7)

@@ -19,6 +19,7 @@ python3 outils/essais-services/essai-notifications.py # les notifications : règ
 python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
 bash outils/essais-services/essai-sauvegarde-locale.sh # la sauvegarde du code sur le Mac (outils/sauvegarde-locale), sans vraie clé ni vrai bucket
 python3 outils/essais-services/essai-rapports.py     # les rapports : permissions, périodes, chiffres, journal, suppression
+python3 outils/essais-services/essai-corrections.py  # prix fixé sans poids, envois du colis, journal des modifications, ville et adresse de livraison
 node outils/essais-services/essai-demo.js            # le mode démonstration seul
 node outils/essais-services/essai-scanner.js         # le lecteur de codes et le poste en démonstration
 node outils/essais-services/essai-finances.js        # les finances en démonstration
@@ -26,6 +27,7 @@ node outils/essais-services/essai-permissions.js     # les rôles en démonstrat
 node outils/essais-services/essai-tableau.js         # le tableau de bord en démonstration
 node outils/essais-services/essai-analytics.js       # les Analytics en démonstration
 node outils/essais-services/essai-rapports.js        # les rapports en démonstration
+node outils/essais-services/essai-corrections.js     # les corrections du 12/10/2026 en démonstration
 ```
 
 **À relancer après toute modification de `supabase.sql`,

@@ -37,6 +37,7 @@ on revient en arrière par une nouvelle migration ou une restauration
 | `supabase-connexion.sql` (15, profil d'un compte ouvert avec Google) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| true` |
 | `supabase-profil-complet.sql` (16, pas de pré-alerte sans profil complet) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| 1` |
 | `supabase-frais-service.sql` (17, frais de service au regroupement et à l'encaissement) | **à exécuter** par le propriétaire ; contrôle attendu : `4 \| false \| 0` |
+| `supabase-corrections.sql` (18, prix fixé sans poids, ville obligatoire, adresse de livraison, journal des modifications) | **à exécuter** par le propriétaire, après le 17 et **avant** de publier le site qui l'utilise ; contrôle attendu : `3 \| 2 \| false \| 2` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de
