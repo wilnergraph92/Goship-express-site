@@ -26,3 +26,4 @@ supabase-profil-complet.sql
 supabase-frais-service.sql
 supabase-corrections.sql
 supabase-naissance.sql
+supabase-fidelite.sql
