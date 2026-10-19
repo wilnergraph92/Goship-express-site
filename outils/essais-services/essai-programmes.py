@@ -892,7 +892,258 @@ def main():
     pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % campagne_err)
     pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % delai['id'])
 
-    # D'autres sections suivent (parrainage, permissions)
+    print("\nE. GOship Refer : le bon parrain, jamais soi-même, des avantages après la première opération")
+    parrain = 'e1ffffff-0000-0000-0000-000000000001'
+    nouveau(parrain, 'parrain@exemple.com', 'Pascal Parrain', '1980-05-05')
+    db.sql("update clients set telephone = '+509 3700 1111', adresse = '12 rue des Parrains, Pétion-Ville' where id = '%s';" % parrain)
+    vue = pts(parrain, "select public.mon_parrainage();")
+    code_p = vue['code']
+    verifier('le code : GS + 6 signes sans ambiguïté, créé à la première demande', bool(__import__('re').match(r'^GS[A-HJ-KM-NP-Z2-9]{6}$', code_p)), True)
+    verifier('… le même à chaque demande, une seule ligne',
+             [pts(parrain, "select public.mon_parrainage();")['code'] == code_p, nb("select count(*) from codes_parrainage where client_id = '%s';" % parrain)], [True, 1])
+    autre = 'e1ffffff-0000-0000-0000-000000000002'
+    nouveau(autre, 'autre-p@exemple.com', 'Aline Autre', '1981-06-06')
+    sorties = en_parallele(db, [(autre, "select public.mon_parrainage()->>'code';")] * 4)
+    verifier('quatre demandes simultanées : un seul code, jamais deux lignes',
+             [nb("select count(*) from codes_parrainage where client_id = '%s';" % autre), len({(s or '').strip().splitlines()[-1] for s in sorties})], [1, 1])
+    verifier('deux clients, deux codes', pts(autre, "select public.mon_parrainage()->>'code';") if False else un(db, "select count(distinct code) from codes_parrainage;"), '2')
+    verifier('avant publication : le parrainage n\'est pas ouvert, et les chiffres sont à zéro',
+             [vue['actif'], vue['invitations'], vue['inscrits'], vue['valides'], vue['recompenses']], [False, 0, 0, 0, []])
+    verifier('un compte de l\'équipe n\'a pas de code', code(db, EMPLOYE, "select public.mon_parrainage();"), REFUS)
+    verifier('un visiteur non plus', code(db, None, "select public.mon_parrainage();")[:17], 'permission denied')
+    for nom, compte in (('un client', JEAN), ('un employé', EMPLOYE)):
+        verifier('%s : lire la configuration du parrainage refusé' % nom, code(db, compte, "select public.parrainage_config_lire();"), REFUS)
+    for nom, compte in (('un client', JEAN), ('un employé', EMPLOYE), ('un gérant', GERANT)):
+        verifier('%s : modifier, publier ou examiner refusé' % nom,
+                 [code(db, compte, "select public.parrainage_config_modifier('{}');"), code(db, compte, "select public.parrainage_statut('publier');"),
+                  code(db, compte, "select public.parrainage_examiner(1, 'valider', 'motif');")], [REFUS] * 3)
+    verifier('un gérant lit la configuration', code(db, GERANT, "select public.parrainage_config_lire();"), 'aucune')
+
+    print('   Une configuration incomplète ne se publie pas')
+    verifier('publier un brouillon vide : refusé, avec ce qui manque',
+             [code(db, ADMIN, "select public.parrainage_statut('publier');"),
+              (lambda r: 'l\'avantage du parrain' in r and 'les conditions d\'annulation' in r)(db.comme(ADMIN, "select public.parrainage_statut('publier');", echec_permis=True))],
+             ['INCOMPLETE_CAMPAIGN', True])
+    verifier('avant publication : un code ne rattache personne (REFERRAL_INACTIVE) mais ne bloque jamais l\'inscription',
+             [code(db, JEAN, "select public.utiliser_code_parrainage('%s');" % code_p)], ['REFERRAL_INACTIVE'])
+    cfg = {'nom': 'GOship Refer', 'debut': aujourdhui(-1), 'fin': aujourdhui(30), 'parrain_type': 'bonus_fixe', 'parrain_valeur': 10,
+           'filleul_type': 'credit_expedition', 'filleul_valeur': 5, 'operation': 'colis_recu', 'delai_validation_jours': 0,
+           'max_par_parrain': 3, 'cumul_bienvenue': True,
+           'conditions': 'Le filleul doit ouvrir son compte avec ce code et faire sa première opération.',
+           'annulation': 'Une opération annulée ou remboursée avant validation annule les avantages.'}
+    pts(ADMIN, "select public.parrainage_config_modifier(%s);" % js(cfg))
+    verifier('valeurs refusées : type inconnu, valeur négative, dates à l\'envers',
+             [code(db, ADMIN, "select public.parrainage_config_modifier(%s);" % js(d)) for d in
+              ({'parrain_type': 'voiture'}, {'filleul_valeur': -1}, {'debut': aujourdhui(9), 'fin': aujourdhui(2)})], ['INVALID_CAMPAIGN'] * 3)
+    pts(ADMIN, "select public.parrainage_statut('publier');")
+    verifier('publié : actif', pts(ADMIN, "select public.parrainage_config_lire();")['statut'], 'active')
+    verifier('actif : il ne se modifie pas', code(db, ADMIN, "select public.parrainage_config_modifier('{\"parrain_valeur\":500}');"), 'CAMPAIGN_LOCKED')
+
+    print('   Le parrain et le filleul')
+    signe = lambda cle, nom, tel, code_saisi, naissance='1995-04-04': inscrire(db, 'e2ffffff-0000-0000-0000-0000000000%02d' % int(cle), 'f%s@exemple.com' % cle,
+        {'nom_complet': nom, 'telephone': tel, 'date_naissance': naissance, 'code_parrainage': code_saisi}, fournisseur='email')
+    fid = lambda cle: 'e2ffffff-0000-0000-0000-0000000000%02d' % int(cle)
+    signe('01', 'Fanny Filleule', '+509 3700 2201', code_p.lower())
+    verifier('l\'inscription avec le code (même en minuscules) rattache au BON parrain',
+             un(db, "select (select code from clients where id = parrain_id) || '|' || statut || '|' || source from parrainages where filleul_id = '%s';" % fid('01')).split('|')[1:],
+             ['inscrit', 'inscription'])
+    verifier('… le parrain est bien celui du code', un(db, "select parrain_id::text from parrainages where filleul_id = '%s';" % fid('01')), parrain)
+    verifier('l\'inscription seule ne donne aucun avantage, ni au parrain ni au filleul', nb("select count(*) from recompenses where programme in ('refer_parrain', 'refer_filleul');"), 0)
+    verifier('le parrain voit un inscrit en attente de sa première opération, rien d\'acquis',
+             [(lambda v: [v['inscrits'], v['en_attente_premiere_operation'], v['valides'], v['recompenses']])(pts(parrain, "select public.mon_parrainage();"))], [[1, 1, 0, []]])
+    signe('02', 'Gaston Sans Code', '+509 3700 2202', 'GSZZZZZZ')
+    verifier('un code inconnu à l\'inscription : le compte est créé, aucun parrainage', [nb("select count(*) from clients where id = '%s';" % fid('02')), nb("select count(*) from parrainages where filleul_id = '%s';" % fid('02'))], [1, 0])
+    verifier('code inconnu saisi ensuite : refusé avec son code', code(db, fid('02'), "select public.utiliser_code_parrainage('GSZZZZZZ');"), 'INVALID_REFERRAL_CODE')
+    verifier('son propre code : refusé (jamais soi-même)', code(db, parrain, "select public.utiliser_code_parrainage('%s');" % code_p), 'SELF_REFERRAL')
+    verifier('déjà parrainé : un second code est refusé',
+             code(db, fid('01'), "select public.utiliser_code_parrainage('%s');" % pts(autre, "select public.mon_parrainage();")['code']), 'ALREADY_REFERRED')
+    verifier('un cycle (le parrain utilise le code de son propre filleul) : refusé',
+             code(db, parrain, "select public.utiliser_code_parrainage('%s');" % pts(fid('01'), "select public.mon_parrainage();")['code']), 'REFERRAL_CYCLE')
+    verifier('un compte Google saisit un code reçu plus tard : rattaché', [pts(fid('02'), "select public.utiliser_code_parrainage('%s');" % code_p)['enregistre'],
+             un(db, "select source from parrainages where filleul_id = '%s';" % fid('02'))], [True, 'saisie'])
+    signe('03', 'Hugo Trop Tard', '+509 3700 2203', '')
+    colis_de(fid('03'))
+    verifier('une première opération déjà faite : trop tard pour ajouter un code', code(db, fid('03'), "select public.utiliser_code_parrainage('%s');" % code_p), 'REFERRAL_TOO_LATE')
+    verifier('un visiteur n\'utilise aucun code', code(db, None, "select public.utiliser_code_parrainage('%s');" % code_p)[:17], 'permission denied')
+
+    print('   La première opération qualifiante : les deux sont récompensés, une fois')
+    colis_de(fid('01'))
+    pa = un(db, "select id from parrainages where filleul_id = '%s';" % fid('01'))
+    verifier('le parrainage est « récompensé »', un(db, "select statut from parrainages where id = %s;" % pa), 'recompense')
+    verifier('le parrain reçoit son avantage (bonus fixe 10 $) et le filleul le sien (crédit d\'expédition 5 $), chacun avec sa clé unique',
+             un(db, "select string_agg(programme || ':' || type || ':' || valeur || ':' || statut || ':' || cle, ',' order by programme) from recompenses where programme like 'refer_%%';"),
+             'refer_filleul:credit_expedition:5.00:obtenue:refer:%s:filleul,refer_parrain:bonus_fixe:10.00:obtenue:refer:%s:parrain' % (pa, pa))
+    verifier('les deux sont prévenus',
+             [[e['titre'] for e in pts(c, "select public.mes_notifications('compte');")['elements'] if e['type'] == 'reward_earned'] for c in (parrain, fid('01'))],
+             [['🎁 Avantage obtenu'], ['🎁 Avantage obtenu']])
+    colis_de(fid('01'))
+    colis_de(fid('01'))
+    verifier('un événement rejoué, d\'autres colis : rien de plus', nb("select count(*) from recompenses where programme like 'refer_%';"), 2)
+    sorties = en_parallele(db, [(ADMIN, "select public.programmes_operation('%s', 'colis_recu', 'colis:x');" % fid('01'))] * 2)
+    verifier('l\'avantage du parrain est obtenu une seule fois : un index unique sur les clés', nb("select count(*) from (select cle from recompenses group by cle having count(*) > 1) x;"), 0)
+    vue = pts(parrain, "select public.mon_parrainage();")
+    verifier('le parrain voit ses chiffres et son propre avantage',
+             [vue['inscrits'], vue['valides'], [r['statut'] for r in vue['recompenses']], [r['type'] for r in vue['recompenses']], vue['recompenses'][0]['avantage']],
+             [2, 1, ['obtenue'], ['bonus_fixe'], 'un bonus de 10,00 $'])
+    texte_vue = json.dumps(vue)
+    verifier('… sans jamais l\'identité d\'un filleul, ni ses opérations',
+             any(m in texte_vue for m in ('Fanny', 'Filleule', fid('01'), 'f01@exemple.com')), False)
+    verifier('le filleul voit son propre parrainage (il a été invité) sans nom de parrain',
+             [pts(fid('01'), "select public.mon_parrainage();")['mon_parrain'], 'Pascal' in json.dumps(pts(fid('01'), "select public.mon_parrainage();"))], [True, False])
+
+    print('   Les indices d\'abus : examiner, jamais bloquer à l\'aveugle')
+    signe('04', 'Faux Filleul', '+509 3700 1111', code_p)
+    verifier('même téléphone que le parrain : le parrainage est « suspect », rien n\'est bloqué',
+             un(db, "select statut || '|' || motif from parrainages where filleul_id = '%s';" % fid('04')), 'suspect|MEME_TELEPHONE')
+    colis_de(fid('04'))
+    verifier('suspect : sa première opération ne rapporte rien, ni au parrain ni au filleul',
+             nb("select count(*) from recompenses where client_id in ('%s', '%s') and programme like 'refer_%%' and cle like '%%' || (select id::text from parrainages where filleul_id = '%s') || '%%';" % (parrain, fid('04'), fid('04'))), 0)
+    liste = pts(GERANT, "select public.parrainages_liste('suspect');")
+    verifier('l\'équipe voit le cas, avec les deux comptes', [liste['total'], liste['elements'][0]['filleul_nom'], liste['elements'][0]['parrain_nom']], [1, 'Faux Filleul', 'Pascal Parrain'])
+    suspect = liste['elements'][0]['id']
+    verifier('examiner sans motif : refusé', code(db, ADMIN, "select public.parrainage_examiner(%s, 'valider', '');" % suspect), 'REASON_REQUIRED')
+    verifier('décision inconnue : refusée', code(db, ADMIN, "select public.parrainage_examiner(%s, 'peut-etre', 'motif');" % suspect), 'INVALID_DECISION')
+    verifier('un parrainage non suspect ne s\'examine pas', code(db, ADMIN, "select public.parrainage_examiner(%s, 'valider', 'motif');" % pa), 'INVALID_REFERRAL')
+    pts(ADMIN, "select public.parrainage_examiner(%s, 'valider', 'même foyer, deux personnes différentes vérifiées');" % suspect)
+    verifier('validé après examen : le parrainage reprend, les avantages sont accordés (l\'opération avait eu lieu)',
+             [un(db, "select statut from parrainages where id = %s;" % suspect), nb("select count(*) from recompenses where cle like 'refer:%s:%%';" % suspect)], ['recompense', 2])
+    signe('05', 'Autre Suspect', '+509 3700 1111', code_p)
+    colis_de(fid('05'))
+    suspect2 = un(db, "select id from parrainages where filleul_id = '%s';" % fid('05'))
+    pts(ADMIN, "select public.parrainage_examiner(%s, 'refuser', 'compte en double');" % suspect2)
+    verifier('refusé après examen : aucun avantage', [un(db, "select statut from parrainages where id = %s;" % suspect2), nb("select count(*) from recompenses where cle like 'refer:%s:%%';" % suspect2)], ['refuse', 0])
+    verifier('l\'examen est journalisé, avec son motif', un(db, "select count(*) from journal_audit where action = 'parrainage.examen';"), '2')
+
+    print('   Les plafonds : trois parrainages récompensés par parrain')
+    # Les inscriptions de ce banc tiennent en quelques secondes : sans ce vieillissement, la règle
+    # « rafale » (5 en 24 h) classerait « suspect » tout ce qui suit.
+    vieillir = lambda: db.sql("update parrainages set cree_le = cree_le - interval '2 days';")
+    vieillir()
+    signe('06', 'Sixième Filleul', '+509 3700 2206', code_p)
+    colis_de(fid('06'))
+    verifier('le troisième parrainage récompensé de ce parrain : accordé', un(db, "select statut from parrainages where filleul_id = '%s';" % fid('06')), 'recompense')
+    signe('07', 'Septième Filleul', '+509 3700 2207', code_p)
+    colis_de(fid('07'))
+    verifier('le quatrième : refusé (plafond par parrain), aucun avantage',
+             [un(db, "select statut || '|' || motif from parrainages where filleul_id = '%s';" % fid('07')), nb("select count(*) from recompenses where cle like 'refer:' || (select id::text from parrainages where filleul_id = '%s') || ':%%';" % fid('07'))],
+             ['refuse|PLAFOND_PARRAIN', 0])
+    verifier('une rafale d\'inscriptions avec un même code : à partir de la sixième, « suspect »',
+             [signe('%02d' % (10 + i), 'Rafale %d' % i, '+509 3700 33%02d' % i, pts(autre, "select public.mon_parrainage();")['code']) for i in range(6)] and
+             un(db, "select string_agg(distinct statut, ',' order by statut) from parrainages where parrain_id = '%s';" % autre), 'inscrit,suspect')
+    verifier('exactement une rafale : la sixième seulement',
+             un(db, "select count(*) from parrainages where parrain_id = '%s' and motif like '%%RAFALE%%';" % autre), '1')
+
+    print('   Les invitations')
+    pts(autre, "select public.noter_invitation('whatsapp'); select public.noter_invitation('lien');")
+    verifier('chaque partage est compté', pts(autre, "select public.mon_parrainage();")['invitations'], 2)
+    db.comme(autre, "do $$ begin for i in 1..60 loop perform public.noter_invitation('x'); end loop; end $$;")
+    verifier('au plus 50 par jour', pts(autre, "select public.mon_parrainage();")['invitations'], 50)
+    verifier('un visiteur ne compte rien', code(db, None, "select public.noter_invitation('x');")[:17], 'permission denied')
+
+    print('   Cumul avec la bienvenue')
+    vieillir()
+    pts(ADMIN, "select public.parrainage_statut('suspendre');")
+    pts(ADMIN, "select public.parrainage_config_modifier('{\"cumul_bienvenue\":false,\"max_par_parrain\":null}');")
+    pts(ADMIN, "select public.parrainage_statut('reprendre');")
+    camp = pts(ADMIN, "select public.bienvenue_enregistrer(null, %s);" % js(dict(complet, nom='Bienvenue cumul', budget_max=None, debut=aujourdhui(0))))
+    pts(ADMIN, "select public.bienvenue_publier('%s');" % camp['id'])
+    ids_c = 'e3ffffff-0000-0000-0000-000000000001'
+    inscrire(db, ids_c, 'cumul@exemple.com', {'nom_complet': 'Cumul Interdit', 'telephone': '+509 3700 4401', 'date_naissance': '1990-09-09', 'code_parrainage': code_p}, fournisseur='email')
+    colis_de(ids_c)
+    verifier('cumul refusé par le parrainage : le filleul a SA bienvenue mais pas l\'avantage de filleul ; le parrain, lui, est récompensé',
+             [recus(ids_c), nb("select count(*) from recompenses where client_id = '%s' and programme = 'refer_filleul';" % ids_c),
+              nb("select count(*) from recompenses where client_id = '%s' and programme = 'refer_parrain' and cle like 'refer:' || (select id::text from parrainages where filleul_id = '%s') || ':%%';" % (parrain, ids_c))],
+             [1, 0, 1])
+    pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % camp['id'])
+    camp2 = pts(ADMIN, "select public.bienvenue_enregistrer(null, %s);" % js(dict(complet, nom='Bienvenue sans parrainage', budget_max=None, debut=aujourdhui(0), cumul_parrainage=False)))
+    pts(ADMIN, "select public.bienvenue_publier('%s');" % camp2['id'])
+    pts(ADMIN, "select public.parrainage_statut('suspendre');")
+    pts(ADMIN, "select public.parrainage_config_modifier('{\"cumul_bienvenue\":true}');")
+    pts(ADMIN, "select public.parrainage_statut('reprendre');")
+    ids_d = 'e3ffffff-0000-0000-0000-000000000002'
+    inscrire(db, ids_d, 'cumul2@exemple.com', {'nom_complet': 'Sans Bienvenue', 'telephone': '+509 3700 4402', 'date_naissance': '1990-09-10', 'code_parrainage': code_p}, fournisseur='email')
+    colis_de(ids_d)
+    verifier('la bienvenue refuse le cumul : un client parrainé n\'a pas de bienvenue, mais son avantage de filleul',
+             [recus(ids_d), nb("select count(*) from recompenses where client_id = '%s' and programme = 'refer_filleul';" % ids_d)], [0, 1])
+    pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % camp2['id'])
+
+    print('   Validation différée, opération annulée')
+    vieillir()
+    pts(ADMIN, "select public.parrainage_statut('suspendre');")
+    pts(ADMIN, "select public.parrainage_config_modifier('{\"delai_validation_jours\":3}');")
+    pts(ADMIN, "select public.parrainage_statut('reprendre');")
+    signe('20', 'Vingtième Filleul', '+509 3700 5520', code_p)
+    colis_de(fid('20'))
+    pa20 = un(db, "select id from parrainages where filleul_id = '%s';" % fid('20'))
+    verifier('avec un délai : parrainage « qualifié », deux avantages « en attente » (rien d\'acquis)',
+             [un(db, "select statut from parrainages where id = %s;" % pa20), nb("select count(*) from recompenses where cle like 'refer:%s:%%' and statut = 'en_attente';" % pa20)], ['qualifie', 2])
+    verifier('les deux sont prévenus que rien n\'est acquis',
+             [[e['titre'] for e in pts(c, "select public.mes_notifications('compte');")['elements'] if e['type'] == 'reward_pending'] for c in (parrain, fid('20'))],
+             [['Votre avantage est en cours de validation']] * 2)
+    verifier('le travail du jour avant la fin du délai : rien',
+             [json.loads(un(db, "select public.campagnes_quotidien()::text;"))['valides'], un(db, "select statut from parrainages where id = %s;" % pa20)], [0, 'qualifie'])
+    db.sql("update recompenses set valide_apres = current_date - 1 where cle like 'refer:%s:%%';" % pa20)
+    verifier('délai passé, opération valable : les deux avantages sont acquis, le parrainage est « récompensé »',
+             [json.loads(un(db, "select public.campagnes_quotidien()::text;"))['valides'], un(db, "select statut from parrainages where id = %s;" % pa20)], [2, 'recompense'])
+    pts(ADMIN, "select public.parrainage_statut('suspendre');")
+    pts(ADMIN, "select public.parrainage_config_modifier('{\"operation\":\"facture_payee\"}');")
+    pts(ADMIN, "select public.parrainage_statut('reprendre');")
+    signe('21', 'Vingt-et-unième', '+509 3700 5521', code_p)
+    r21 = colis_de(fid('21'))
+    pts(ADMIN, "select public.enregistrer_paiement('%s', %s, null);" % (r21['facture']['id'], js({'montant_usd': r21['facture']['montant_usd'], 'moyen': 'especes'})))
+    pa21 = un(db, "select id from parrainages where filleul_id = '%s';" % fid('21'))
+    verifier('transaction « facture payée » : avantages en attente', [un(db, "select statut from parrainages where id = %s;" % pa21), nb("select count(*) from recompenses where cle like 'refer:%s:%%' and statut = 'en_attente';" % pa21)], ['qualifie', 2])
+    pts(ADMIN, "select public.annuler_paiement((select id from paiements where facture_id = '%s'), 'Remboursé au client');" % r21['facture']['id'])
+    verifier('paiement annulé ou remboursé avant validation : les deux avantages sont annulés, le parrainage aussi',
+             [un(db, "select statut || '|' || motif from parrainages where id = %s;" % pa21), nb("select count(*) from recompenses where cle like 'refer:%s:%%' and statut = 'annulee';" % pa21),
+              nb("select count(*) from recompenses where cle like 'refer:%s:%%' and statut in ('obtenue', 'utilisee');" % pa21)],
+             ['annule|OPERATION_ANNULEE', 2, 0])
+    verifier('les deux sont prévenus de l\'annulation',
+             [[e['titre'] for e in pts(c, "select public.mes_notifications('compte');")['elements'] if e['type'] == 'reward_cancelled'] for c in (parrain, fid('21'))],
+             [['Avantage annulé']] * 2)
+
+    print('   L\'équipe : chiffres, listes, filtres')
+    ap = pts(ADMIN, "select public.parrainage_apercu();")
+    verifier('l\'aperçu : parrains, inscrits, qualifiés, avantages, suspects',
+             [ap['filleuls_inscrits'] == nb("select count(*) from parrainages;"), ap['parrains'] == nb("select count(distinct parrain_id) from parrainages;"),
+              ap['transactions_qualifiantes'] == nb("select count(*) from parrainages where qualifie_le is not null;"),
+              ap['suspects'] == nb("select count(*) from parrainages where statut = 'suspect';")], [True] * 4)
+    lp = pts(GERANT, "select public.parrainages_liste('annule');")
+    verifier('une liste filtrée par statut', [lp['total'], {e['statut'] for e in lp['elements']}], [1, {'annule'}])
+    verifier('filtre inconnu refusé', code(db, GERANT, "select public.parrainages_liste('bizarre');"), 'INVALID_FILTER')
+    rl = pts(GERANT, "select public.recompenses_liste('refer_parrain', 'obtenue');")
+    verifier('les avantages d\'un programme, par statut', {e['programme'] for e in rl['elements']} == {'refer_parrain'} and {e['statut'] for e in rl['elements']} == {'obtenue'}, True)
+    verifier('un employé ne lit ni les parrainages ni les avantages',
+             [code(db, EMPLOYE, "select public.parrainages_liste();"), code(db, EMPLOYE, "select public.recompenses_liste();"), code(db, EMPLOYE, "select public.parrainage_apercu();")], [REFUS] * 3)
+    verifier('toutes les tables des programmes sont fermées, même à l\'administrateur',
+             [code(db, c, "select count(*) from %s;" % tb)[:17] for tb in ('parrainages', 'codes_parrainage', 'recompenses', 'campagnes_bienvenue', 'parrainage_config', 'programmes_erreurs', 'programme_operations', 'points_mouvements') for c in (ADMIN, MARIE)],
+             ['permission denied'] * 16)
+
+    print('\nF. Chaque rôle, chaque permission')
+    matrice = [
+        ('birthdays.view', ["select public.anniversaires_liste();", "select public.anniversaire_reglages_lire();", "select public.anniversaires_messages();",
+                            "select public.anniversaires_erreurs();", "select public.anniversaires_rappels_liste();", "select public.anniversaire_modeles_liste();"], (ADMIN, GERANT)),
+        ('birthdays.manage', ["select public.anniversaire_reglages_modifier('{}');", "select public.anniversaire_modele_modifier('birthday', 'fr', 'T', 'M');",
+                              "select public.anniversaire_modele_restaurer('birthday', 'fr');", "select public.corriger_naissance('%s', '1990-01-01', 'motif');" % MARIE], (ADMIN,)),
+        ('programs.view', ["select public.points_regles_liste();", "select public.points_apercu();", "select public.points_mouvements_liste();", "select public.bienvenue_liste();",
+                           "select public.parrainage_config_lire();", "select public.parrainage_apercu();", "select public.parrainages_liste();",
+                           "select public.recompenses_liste();", "select public.programmes_erreurs_liste();"], (ADMIN, GERANT)),
+        ('programs.manage', ["select public.points_reglages_modifier('{}');", "select public.points_regle_modifier('birthday', '{}');",
+                             "select public.points_offre_enregistrer(null, '{}');", "select public.bienvenue_enregistrer(null, '{}');",
+                             "select public.bienvenue_publier('00000000-0000-0000-0000-000000000000');", "select public.bienvenue_statut('00000000-0000-0000-0000-000000000000', 'terminer');",
+                             "select public.parrainage_config_modifier('{}');", "select public.parrainage_statut('terminer');" if False else "select public.parrainage_statut('xx');",
+                             "select public.parrainage_examiner(0, 'valider', 'motif');"], (ADMIN,)),
+        ('points.adjust', ["select public.points_corriger('%s', 1, 'motif');" % MARIE, "select public.points_annuler_mouvement(0, 'motif');",
+                           "select public.recompense_accorder('%s', 'bonus_fixe', 1, 'motif');" % MARIE, "select public.recompense_annuler('00000000-0000-0000-0000-000000000000', 'motif');"], (ADMIN,)),
+    ]
+    for permission, appels, permis in matrice:
+        for nom, compte in (('administrateur', ADMIN), ('gérant', GERANT), ('employé', EMPLOYE), ('client', MARIE)):
+            refuses = [a for a in appels if code(db, compte, a) == REFUS]
+            verifier('%s : %s' % (permission, nom), 'refusé partout' if len(refuses) == len(appels) else ('accepté partout' if not refuses else 'mélangé : %s' % refuses[:1]),
+                     'accepté partout' if compte in permis else 'refusé partout')
+    # La copie démo des permissions est comparée à la base par essai-permissions.py / .js.
+
+    # D'autres sections suivent (permissions du mode démo : voir essai-permissions.py)
     reussis = sum(S.RESULTATS)
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), reussis))
     sys.exit(0 if reussis == len(S.RESULTATS) else 1)
