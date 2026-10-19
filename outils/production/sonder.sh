@@ -65,7 +65,8 @@ supabase-corrections.sql|historique_modifications||non
 supabase-naissance.sql|ma_naissance||non
 supabase-fidelite.sql|mon_portefeuille||non
 supabase-anniversaires.sql|mes_preferences_programmes||non
-supabase-campagnes.sql|mon_parrainage||non'
+supabase-campagnes.sql|mon_parrainage||non
+supabase-courriel-colis.sql|courriel_colis|p_type=x&p_langue=fr&p_colis=00000000-0000-0000-0000-000000000000&p_code_client=x|non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

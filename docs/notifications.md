@@ -100,6 +100,20 @@ depuis le tableau de bord, onglet **Notifications** ; chaque changement est
 journalisé (`journal_audit`, action `notification.regle`). Relancer la
 migration ne remet pas les règles à leur valeur de départ.
 
+### L'e-mail d'un colis reçu ou disponible
+
+`outils/supabase-courriel-colis.sql` : pour ces deux messages seulement
+(`shipment_received`, `shipment_available`), l'e-mail garde la phrase et ajoute
+un tableau : **Statut**, **Code client**, **N° de colis**, **Expéditeur**,
+**Service**, **Contenu**, **Suivi vendeur** (masqué sauf les quatre derniers
+signes) et **Poids**, dans la langue du compte. Une valeur vide n'a pas de ligne.
+Les valeurs sont lues dans la base au moment de l'envoi et échappées. Les autres
+e-mails (facture, paiement, action requise) gardent leur phrase seule ; emballé,
+expédié, arrivé, transféré et livré n'ont pas d'e-mail. Le téléphone, l'espace
+client et WhatsApp gardent leur court message. Les libellés viennent de
+`courriel_colis_textes()` (ceux du message préparé « à la main » dans
+`assets/js/notifications.js`, plus « Statut »). Essai : `essai-courriel-colis.py`.
+
 ## 4. Textes et langues
 
 `notification_textes()` : titre et message de chaque type en français,

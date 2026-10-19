@@ -340,6 +340,7 @@ Il demande `age` et `age-keygen` (paquet `age`) en plus de pgserver.
 ## Programmes (anniversaires, bienvenue, parrainage, GOPOINTS)
 
     python3 outils/essais-services/essai-programmes.py            # SQL, base jetable (374 vérifications)
+    python3 outils/essais-services/essai-courriel-colis.py        # SQL : l'e-mail d'un colis reçu / disponible (58)
     node outils/essais-services/essai-programmes.js               # copie démo d'api.js (106)
     CHROMIUM=… node outils/essais-services/essai-programmes-tableau.mjs      # onglet Programmes, navigateur
     CHROMIUM=… node outils/essais-services/essai-programmes-navigateur.mjs   # espace client, navigateur

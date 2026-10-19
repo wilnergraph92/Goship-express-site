@@ -29,3 +29,4 @@ supabase-naissance.sql
 supabase-fidelite.sql
 supabase-anniversaires.sql
 supabase-campagnes.sql
+supabase-courriel-colis.sql

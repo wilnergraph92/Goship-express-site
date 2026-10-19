@@ -391,6 +391,9 @@ textes dans `notification_textes()` (quatre langues) + la même chose dans la
 copie démo (`REGLES_NOTIFICATIONS`, `TEXTES_NOTIFICATIONS` dans `api.js`) :
 `essai-notifications.py` compare les deux. Ne jamais marquer un envoi
 « envoye » ou « livre » sans réponse du fournisseur.
+L'e-mail de « Colis reçu » et « Colis disponible » porte le tableau des détails du colis
+(`outils/supabase-courriel-colis.sql`, qui remplace `expedier_envoi` : ne pas relancer
+`supabase-notifications.sql` après lui) ; les autres e-mails gardent leur phrase seule.
 
 ### Supprimer mon compte (`outils/supabase-compte.sql`)
 
@@ -471,7 +474,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
