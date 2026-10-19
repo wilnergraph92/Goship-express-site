@@ -42,8 +42,8 @@ REFUS = 'PERMISSION_DENIED'
 CHAINE = [l.strip() for l in open(os.path.join(OUTILS, 'migrations.txt'), encoding='utf-8')
           if l.strip() and not l.startswith('#')]
 # Les fichiers de cette série, installés après le reste de la chaîne
-NOUVEAUX = [f for f in ('supabase-naissance.sql', 'supabase-anniversaires.sql',
-                        'supabase-fidelite.sql', 'supabase-campagnes.sql') if f in CHAINE]
+NOUVEAUX = [f for f in ('supabase-naissance.sql', 'supabase-fidelite.sql',
+                        'supabase-anniversaires.sql', 'supabase-campagnes.sql') if f in CHAINE]
 ANNA = '55555555-5555-5555-5555-555555555555'
 LEA = '66666666-6666-6666-6666-666666666666'
 GUY = '77777777-7777-7777-7777-777777777777'
@@ -435,7 +435,283 @@ def main():
     verifier('… et le portefeuille ne propose plus d\'offre', pts(MARIE, "select public.mon_portefeuille();")['offres'], [])
     pts(ADMIN, "select public.points_reglages_modifier('{\"actif\":true}');")
 
-    # D'autres sections suivent (anniversaires, campagnes, permissions)
+    print("\nB. Les anniversaires : un message par client et par année")
+    ancre = "'2026-10-20 14:00:00+00'"   # 10 h à Santo Domingo, le 20 octobre 2026
+    avant_heure = "'2026-10-20 12:00:00+00'"   # 8 h : avant l'heure d'envoi (9 h)
+    executer = lambda quand=ancre: json.loads(un(db, "select public.anniversaires_executer(%s::timestamptz)::text;" % quand))
+
+    def nouveau(uid, email, nom, naissance, langue='fr', role=None):
+        inscrire(db, uid, email, {}, fournisseur='google')
+        db.sql("update clients set nom_complet = %s, langue = %s where id = '%s';" % (q(nom), q(langue), uid))
+        if naissance:
+            db.sql("insert into profils_naissance (client_id, date_naissance) values ('%s', '%s');" % (uid, naissance))
+    ids = {}
+    for cle, (nom, naissance, langue) in {
+            'rose': ('Rose Anniversaire', '1990-10-20', 'fr'), 'paul': ('Paul Fête', '1985-10-20', 'ht'),
+            'sans_nom': ('', '1991-10-20', 'fr'), 'refus': ('Marc Silence', '1992-10-20', 'fr'),
+            'sept': ('Sept Jours', '1992-10-27', 'fr'), 'avant': ('Hier Déjà', '1993-10-19', 'fr'),
+            'supprime': ('Sam Parti', '1994-10-20', 'fr'), 'bissextile': ('Bis Sextile', '2000-02-29', 'fr'),
+            'bissextile2': ('Bis Sexte', '2000-02-29', 'es')}.items():
+        i = len(ids) + 1
+        ids[cle] = 'b%dffffff-0000-0000-0000-0000000000%02d' % (i, i)
+        nouveau(ids[cle], '%s@exemple.com' % cle, nom, naissance, langue)
+    # Un compte de l'équipe et un compte supprimé : jamais de message
+    db.sql("update clients set role = 'gerant' where id = '%s';" % ids['sans_nom'] if False else "select 1;")
+    db.sql("update clients set supprime_le = now() where id = '%s';" % ids['supprime'])
+    db.sql("insert into programme_preferences (client_id, anniversaire) values ('%s', false);" % ids['refus'])
+    equipe_nee = 'c1ffffff-0000-0000-0000-000000000001'
+    nouveau(equipe_nee, 'equipe-nee@exemple.com', 'Eva Équipe', '1980-10-20')
+    db.sql("update clients set role = 'employe' where id = '%s';" % equipe_nee)
+
+    print('   Éteint au départ, réglé par les seuls habilités')
+    verifier('éteint : le travailleur ne fait rien', executer(), {'actif': False})
+    verifier('aucune notification, aucun journal', un(db, "select (select count(*) from notifications where type like 'birthday%') || '|' || (select count(*) from anniversaire_journal);"), '0|0')
+    for nom, compte in (('un client', MARIE), ('un employé', EMPLOYE)):
+        verifier('%s : voir les anniversaires refusé' % nom, code(db, compte, "select public.anniversaires_liste();"), REFUS)
+        verifier('%s : voir les réglages refusé' % nom, code(db, compte, "select public.anniversaire_reglages_lire();"), REFUS)
+        verifier('%s : voir les rappels, messages et erreurs refusé' % nom,
+                 [code(db, compte, "select public.anniversaires_rappels_liste();"), code(db, compte, "select public.anniversaires_messages();"),
+                  code(db, compte, "select public.anniversaires_erreurs();")], [REFUS] * 3)
+    for nom, compte in (('un client', MARIE), ('un employé', EMPLOYE), ('un gérant', GERANT)):
+        verifier('%s : allumer l\'automatisation refusé' % nom,
+                 code(db, compte, "select public.anniversaire_reglages_modifier('{\"actif\":true}');"), REFUS)
+        verifier('%s : modifier un modèle refusé' % nom,
+                 code(db, compte, "select public.anniversaire_modele_modifier('birthday', 'fr', 'T', 'M');"), REFUS)
+        verifier('%s : corriger une date de naissance refusé' % nom,
+                 code(db, compte, "select public.corriger_naissance('%s', '1990-01-01', 'motif');" % MARIE), REFUS)
+    verifier('un gérant voit les anniversaires (birthdays.view)', code(db, GERANT, "select public.anniversaires_liste();"), 'aucune')
+    verifier('un visiteur ne peut rien appeler', code(db, None, "select public.anniversaires_liste();")[:17], 'permission denied')
+    verifier('le travailleur est fermé à tous les comptes', code(db, ADMIN, "select public.anniversaires_executer();")[:17], 'permission denied')
+
+    reg = pts(ADMIN, "select public.anniversaire_reglages_lire();")['reglages']
+    verifier('réglages de départ : éteint, 9 h, 29 février le 28, rappel interne 7 jours, rappel client éteint, aucun avantage',
+             [reg['actif'], reg['heure_envoi'], reg['regle_29_fevrier'], reg['rappel_admin_jours'], reg['rappel_client_actif'],
+              reg['avantage_actif'], reg['fuseau']], [False, '09:00', 'fev28', 7, False, False, 'America/Santo_Domingo'])
+    for titre, d, attendu in (('heure illisible', {'heure_envoi': '25:99'}, 'INVALID_PROGRAM_VALUE'),
+                              ('règle du 29 février inconnue', {'regle_29_fevrier': 'jamais'}, 'INVALID_PROGRAM_VALUE'),
+                              ('fuseau inconnu', {'fuseau': 'Mars/Olympus'}, 'INVALID_PROGRAM_VALUE'),
+                              ('canal WhatsApp (pas encore disponible)', {'canaux': ['whatsapp']}, 'INVALID_PROGRAM_VALUE'),
+                              ('rappel de 90 jours', {'rappel_admin_jours': 90}, 'INVALID_PROGRAM_VALUE'),
+                              ('avantage activé sans type', {'avantage_actif': True}, 'BENEFIT_INCOMPLETE'),
+                              ('avantage en GOPOINTS sans règle d\'anniversaire', {'avantage_actif': True, 'avantage_type': 'gopoints'}, 'BENEFIT_INCOMPLETE'),
+                              ('avantage sans valeur ni texte', {'avantage_actif': True, 'avantage_type': 'credit_expedition'}, 'BENEFIT_INCOMPLETE')):
+        verifier('réglage refusé : %s' % titre, code(db, ADMIN, "select public.anniversaire_reglages_modifier(%s);" % js(d)), attendu)
+    verifier('… et rien n\'a changé après ces refus', pts(ADMIN, "select public.anniversaire_reglages_lire();")['reglages']['actif'], False)
+    allume = pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"actif\":true}');")
+    verifier('l\'administrateur allume : la date d\'activation est aujourd\'hui', allume['actif_depuis'], un(db, "select public.aujourdhui_entreprise()::text;"))
+    # L'horloge de l'essai est celle du 20 octobre 2026 : l'activation « a eu lieu » ce jour-là
+    db.sql("update anniversaire_reglages set actif_depuis = date '2026-10-20';")
+
+    print('   Le jour J : un message, pas avant l\'heure, personne d\'autre')
+    verifier('à 8 h (avant 9 h) : aucun message', [executer(avant_heure)['prepares'], un(db, "select count(*) from anniversaire_journal;")], [0, '0'])
+    r = executer()
+    verifier('à 10 h : Rose et Paul reçoivent leur message ; deux comptes sans message (sans prénom, a coupé)',
+             [r['prepares'], r['ignores'], r['erreurs']], [2, 2, 0])
+    verifier('le journal dit pourquoi : SANS_PRENOM, DESACTIVE_PAR_CLIENT',
+             un(db, "select string_agg(motif, ',' order by motif) from anniversaire_journal where statut = 'ignore';"), 'DESACTIVE_PAR_CLIENT,SANS_PRENOM')
+    verifier('ni le compte de l\'équipe, ni le compte supprimé, ni le client né la veille (avant l\'activation)',
+             un(db, "select count(*) from anniversaire_journal where client_id in ('%s', '%s', '%s');" % (equipe_nee, ids['supprime'], ids['avant'])), '0')
+    verifier('une notification « compte » par message, pour le bon client',
+             un(db, "select count(*) || '|' || string_agg(distinct categorie, ',') from notifications where type = 'birthday' and canal = 'app';"), '2|compte')
+    texte = lambda cl, langue: jsonq(db, 'sql', "select public.texte_notification('birthday', '%s', "
+                                      "(select donnees from notifications where type = 'birthday' and client_id = '%s' order by id desc limit 1));" % (langue, cl))
+    fr = texte(ids['rose'], 'fr')
+    verifier('le message français porte le prénom du profil et rien d\'autre de personnel',
+             [fr['titre'], 'Rose' in fr['titre'], 'Anniversaire' in fr['message'], '{{' in fr['message'], '1990' in fr['message']],
+             ['🎉🎂 Joyeux anniversaire, Rose ! 💙🧡', True, False, False, False])
+    verifier('le message ne promet ni cadeau, ni crédit, ni réduction (aucun avantage configuré)',
+             any(m in (fr['message'] + fr['titre']).lower() for m in ('cadeau', 'crédit', 'réduction', 'gopoints', 'offre', 'gift')), False)
+    ht = texte(ids['paul'], 'ht')
+    verifier('le message créole est celui fourni, avec le prénom',
+             [ht['titre'], ht['message'].startswith('Jodi a se yon jou espesyal, epi tout ekip GoShip Express ap voye anpil lanmou ak pi bèl swè pou ou!'),
+              ht['message'].endswith('Avèk anpil afeksyon, ekip GoShip Express. 💙🧡🚚')], ['🎉🎂 Bòn fèt, Paul ! 💙🧡', True, True])
+    verifier('en anglais et en espagnol aussi, avec le prénom',
+             [texte(ids['rose'], 'en')['titre'], texte(ids['rose'], 'es')['titre']],
+             ['🎉🎂 Happy birthday, Rose! 💙🧡', '🎉🎂 ¡Feliz cumpleaños, Rose! 💙🧡'])
+    verifier('la date de naissance n\'est dans aucun message, journal ni notification',
+             un(db, "select (select count(*) from notifications where donnees::text ~ '19[89][0-9]-') + (select count(*) from anniversaire_journal where motif ~ '19[89]') "
+                    "+ (select count(*) from journal_audit where coalesce(apres::text, '') ~ '19[89][0-9]-[0-9][0-9]-[0-9][0-9]');"), '0')
+
+    print('   Aucun doublon, jamais')
+    for _ in range(3):
+        executer()
+    verifier('le travailleur relancé trois fois : rien de plus', un(db, "select (select count(*) from anniversaire_journal) || '|' || (select count(*) from notifications where type = 'birthday');"), '4|2')
+    en_parallele(db, [('sql', "select public.anniversaires_executer(%s::timestamptz);" % ancre)] * 4)
+    verifier('quatre travailleurs en même temps : toujours un seul message par client',
+             un(db, "select (select count(*) from anniversaire_journal) || '|' || (select count(*) from notifications where type = 'birthday') || '|' || (select count(distinct cle) from notifications where type = 'birthday');"), '4|2|2')
+    db.sql("delete from anniversaire_journal;")   # même sans journal, la clé de la notification empêche le doublon
+    r = executer()
+    verifier('journal perdu : la clé unique de la notification empêche un second message',
+             [un(db, "select count(*) from notifications where type = 'birthday';"), r['erreurs']], ['2', 0])
+    executer("'2027-10-20 14:00:00+00'")
+    verifier('l\'année suivante, un nouveau message par client (clé « anniv:<client>:<année> ») : Rose et Paul, sans doublon',
+             un(db, "select (select count(*) from notifications where type = 'birthday' and cle like '%%:2027' and client_id in ('%s', '%s')) || '|' || "
+                    "(select count(*) from notifications where type = 'birthday' and cle like '%%:2027') || '|' || "
+                    "(select count(distinct client_id) from notifications where type = 'birthday' and cle like '%%:2027');" % (ids['rose'], ids['paul'])),
+             '2|4|4')   # + le client né la veille de l'activation, et le nouveau-né du 19 octobre
+    verifier('… dont le client né la veille de l\'activation : son prochain anniversaire, lui, est fêté',
+             un(db, "select count(*) from notifications where type = 'birthday' and cle = 'anniv:%s:2027';" % ids['avant']), '1')
+
+    print('   Les envois : des statuts honnêtes')
+    verifier('canaux non configurés : « annulé » avec la raison, jamais « envoyé »',
+             un(db, "select string_agg(distinct e.canal || ':' || e.statut || ':' || coalesce(e.code_erreur, ''), ',' order by e.canal || ':' || e.statut || ':' || coalesce(e.code_erreur, '')) "
+                    "from notification_envois e join notifications n on n.id = e.notification_id where n.type = 'birthday';"),
+             'email:annule:NON_CONFIGURE,push:annule:SANS_APPAREIL')
+    db.sql("select public.definir_reglage('email_fournisseur', 'brevo'); select public.definir_reglage('email_cle_api', 'cle-essai');"
+           "select public.definir_reglage('email_expediteur', 'essai@exemple.com');"
+           "insert into appareils (client_id, jeton, plateforme) values ('%s', 'ExponentPushToken[essai]', 'android');" % ids['rose'])
+    ids['tard'] = 'b9ffffff-0000-0000-0000-000000000099'
+    nouveau(ids['tard'], 'tard@exemple.com', 'Tard Venu', '1990-10-20')
+    r = executer()
+    verifier('un client créé après le passage du travailleur : son message part au passage suivant (rattrapage du jour)', r['prepares'], 1)
+    db.sql("insert into appareils (client_id, jeton, plateforme) values ('%s', 'ExponentPushToken[tard]', 'android');" % ids['tard'])
+    verifier('les envois d\'un client joignable sont « en attente »',
+             un(db, "select string_agg(e.canal || ':' || e.statut, ',' order by e.canal) from notification_envois e "
+                    "join notifications n on n.id = e.notification_id where n.type = 'birthday' and n.client_id = '%s' and n.cle like '%%2026';" % ids['tard']),
+             'email:attente,push:annule')
+    db.sql("select public.traiter_notifications();")
+    verifier('envoyés au fournisseur, jamais « envoyé » ni « livré » sans sa réponse',
+             un(db, "select count(*) from notification_envois e join notifications n on n.id = e.notification_id "
+                    "where n.type like 'birthday%' and e.statut in ('envoye', 'livre');"), '0')
+    verifier('… le statut est « envoi » (remis à pg_net, réponse pas encore lue)',
+             un(db, "select string_agg(distinct e.statut, ',') from notification_envois e join notifications n on n.id = e.notification_id "
+                    "where n.type = 'birthday' and n.client_id = '%s' and e.canal = 'email';" % ids['tard']), 'envoi')
+    verifier('le client lit son message d\'anniversaire dans ses notifications (catégorie « compte »)',
+             [e['titre'] for e in pts(ids['tard'], "select public.mes_notifications('compte');")['elements']], ['🎉🎂 Joyeux anniversaire, Tard ! 💙🧡'])
+
+    print('   Le 29 février')
+    verifier('né un 29 février, année non bissextile (règle « le 28 février ») : message le 28 février',
+             [executer("'2027-02-28 14:00:00+00'")['prepares'] >= 1,
+              un(db, "select count(*) from anniversaire_journal where client_id = '%s' and annee = 2027;" % ids['bissextile'])], [True, '1'])
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"regle_29_fevrier\":\"mars1\"}');")
+    executer("'2031-02-28 14:00:00+00'")
+    verifier('règle « le 1er mars » : rien le 28 février 2031 pour les clients nés un 29 février',
+             un(db, "select count(*) from anniversaire_journal where annee = 2031 and client_id in ('%s', '%s');" % (ids['bissextile'], ids['bissextile2'])), '0')
+    executer("'2031-03-01 14:00:00+00'")
+    verifier('… le message part le 1er mars', un(db, "select string_agg(distinct anniversaire_le::text, ',') from anniversaire_journal where annee = 2031 and client_id in ('%s', '%s');" % (ids['bissextile'], ids['bissextile2'])), '2031-03-01')
+    verifier('année bissextile (2028) : le 29 février pour les deux',
+             [executer("'2028-02-29 14:00:00+00'")['prepares'], un(db, "select count(*) from anniversaire_journal where annee = 2028 and anniversaire_le = '2028-02-29';")], [2, '2'])
+    verifier('la fonction du jour : 29 février 2000 → 2027 / 2028',
+             un(db, "select public.anniversaire_en('2000-02-29', 2027)::text || ',' || public.anniversaire_en('2000-02-29', 2027, 'mars1')::text || ',' || public.anniversaire_en('2000-02-29', 2028)::text || ',' || public.anniversaire_en('1999-12-31', 2027)::text;"),
+             '2027-02-28,2027-03-01,2028-02-29,2027-12-31')
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"regle_29_fevrier\":\"fev28\"}');")
+
+    print('   Le rappel interne, 7 jours avant')
+    verifier('le rappel est préparé AVANT le jour (client né le 27 octobre, rappel le 20)',
+             un(db, "select prepare_le::text || ' < ' || anniversaire_le::text from anniversaire_rappels where client_id = '%s' and annee = 2026;" % ids['sept']),
+             '2026-10-20 < 2026-10-27')
+    verifier('un résumé pour chaque habilité (administrateur, gérant), pas pour un employé ni un client',
+             un(db, "select string_agg(distinct cl.role, ',' order by cl.role) from notifications n join clients cl on cl.id = n.client_id where n.type = 'birthday_reminder' and n.cle like 'anniv-rappel:2026-10-27:%';"),
+             'admin,gerant')
+    resume = jsonq(db, GERANT, "select public.mes_notifications('compte');")['elements']
+    verifier('le gérant lit le résumé dans ses notifications, avec le nombre, sans aucune date de naissance',
+             [[e['titre'] for e in resume if e['type'] == 'birthday_reminder'][:1],
+              un(db, "select count(*) from notifications where type = 'birthday_reminder' and client_id = '%s' and cle like 'anniv-rappel:2026-10-27:%%';" % GERANT),
+              un(db, "select donnees ->> 'nombre' from notifications where type = 'birthday_reminder' and cle = 'anniv-rappel:2026-10-27:%s';" % GERANT)],
+             [['Anniversaires à venir'], '1', '1'])
+    verifier('relancé : aucun rappel de plus', [executer()['rappels'], un(db, "select count(*) from notifications where type = 'birthday_reminder' and cle like 'anniv-rappel:2026-10-27:%';")], [0, '2'])
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"rappel_admin_jours\":0}');")
+    ids['trente'] = 'bbffff00-0000-0000-0000-000000000030'
+    nouveau(ids['trente'], 'trente@exemple.com', 'Trente Octobre', '1990-10-30')
+    verifier('délai à 0 : plus de rappel interne', [executer()['rappels'], un(db, "select count(*) from anniversaire_rappels where anniversaire_le = '2026-10-30';")], [0, '0'])
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"rappel_admin_jours\":10}');")
+    executer()
+    verifier('délai à 10 jours : le rappel du 30 octobre est préparé le 20', un(db, "select prepare_le::text from anniversaire_rappels where anniversaire_le = '2026-10-30';"), '2026-10-20')
+    liste = pts(GERANT, "select public.anniversaires_rappels_liste();")
+    verifier('un gérant lit les rappels à venir', [e['code'] is not None for e in liste['elements']][:1], [True])
+    verifier('le rappel au client est éteint par défaut : aucun message de plus',
+             un(db, "select count(*) from notifications where type = 'birthday_upcoming';"), '0')
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"rappel_client_actif\":true,\"rappel_client_jours\":10}');")
+    executer(); executer()
+    verifier('allumé : le client né le 30 octobre reçoit UN rappel, jamais deux',
+             un(db, "select count(*) from notifications where type = 'birthday_upcoming' and client_id = '%s';" % ids['trente']), '1')
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"rappel_client_actif\":false}');")
+
+    print('   Une erreur sur un client n\'arrête pas les autres')
+    ids['casse'] = 'bafffff0-0000-0000-0000-0000000000a0'
+    ids['sain'] = 'bafffff0-0000-0000-0000-0000000000a1'
+    nouveau(ids['casse'], 'casse@exemple.com', 'Cas Cassé', '1990-11-05')
+    nouveau(ids['sain'], 'sain@exemple.com', 'Sain Sauf', '1990-11-05')
+    db.sql("alter table notifications add constraint essai_casse check (type not like 'birthday%%' or client_id <> '%s');" % ids['casse'])
+    r = executer("'2026-11-05 14:00:00+00'")
+    db.sql("alter table notifications drop constraint essai_casse;")
+    verifier('un client en erreur : journalisé « erreur », l\'autre reçoit son message', [r['erreurs'], r['prepares'] >= 1], [1, True])
+    verifier('l\'erreur est visible de l\'équipe, sans donnée personnelle',
+             [e['origine'] for e in pts(GERANT, "select public.anniversaires_erreurs();")['elements'] if e['statut'] == 'erreur'], ['preparation'])
+
+    print('   Un avantage d\'anniversaire : annoncé seulement s\'il est vraiment accordé')
+    pts(ADMIN, "select public.points_reglages_modifier('{\"actif\":true}');")
+    pts(ADMIN, "select public.points_regle_modifier('birthday', '{\"points\":20,\"actif\":true}');")
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"avantage_actif\":true,\"avantage_type\":\"gopoints\"}');")
+    ids['gp'] = 'bafffff1-0000-0000-0000-000000000001'
+    nouveau(ids['gp'], 'gp@exemple.com', 'Gabrielle Points', '1990-12-01')
+    executer("'2026-12-01 14:00:00+00'")
+    gp = jsonq(db, 'sql', "select public.texte_notification(type, 'fr', donnees) || jsonb_build_object('type', type) from notifications where client_id = '%s' and type like 'birthday%%' order by id desc limit 1;" % ids['gp'])
+    verifier('avantage en GOPOINTS : le modèle « avec avantage » dit « 20 GOPOINTS »', [gp['type'], '20 GOPOINTS' in gp['message']], ['birthday_avantage', True])
+    verifier('… et les 20 points sont vraiment accordés, une seule fois',
+             un(db, "select (select solde from points_soldes where client_id = '%s') || '|' || (select count(*) from points_mouvements where client_id = '%s' and source = 'birthday');" % (ids['gp'], ids['gp'])), '20|1')
+    executer("'2026-12-01 14:00:00+00'")
+    verifier('relancé : toujours 20 points', un(db, "select solde from points_soldes where client_id = '%s';" % ids['gp']), '20')
+    pts(ADMIN, "select public.anniversaire_reglages_modifier(%s);" % js({'avantage_type': 'credit_expedition', 'avantage_valeur': 5, 'avantage_libelle': "5 $ de crédit d'expédition"}))
+    ids['cr'] = 'bafffff1-0000-0000-0000-000000000002'
+    nouveau(ids['cr'], 'cr@exemple.com', 'Cédric Crédit', '1990-12-02')
+    executer("'2026-12-02 14:00:00+00'")
+    verifier('avantage en crédit d\'expédition : enregistré « obtenu » (à appliquer par l\'équipe), annoncé dans le message',
+             un(db, "select type || '|' || valeur || '|' || statut || '|' || programme from recompenses where client_id = '%s';" % ids['cr']), 'credit_expedition|5.00|obtenue|anniversaire')
+    verifier('… le message dit le crédit',
+             "5 $ de crédit d'expédition" in jsonq(db, 'sql', "select public.texte_notification(type, 'fr', donnees) from notifications where client_id = '%s' and type like 'birthday%%' limit 1;" % ids['cr'])['message'], True)
+    pts(ADMIN, "select public.anniversaire_reglages_modifier('{\"avantage_actif\":false}');")
+    ids['ne'] = 'bafffff1-0000-0000-0000-000000000003'
+    nouveau(ids['ne'], 'ne@exemple.com', 'Nina Neutre', '1990-12-03')
+    executer("'2026-12-03 14:00:00+00'")
+    verifier('avantage désactivé : retour au message sans promesse, rien d\'accordé',
+             un(db, "select (select type from notifications where client_id = '%s' and type like 'birthday%%') || '|' || (select count(*) from recompenses where client_id = '%s') || '|' || (select count(*) from points_mouvements where client_id = '%s');" % (ids['ne'], ids['ne'], ids['ne'])),
+             'birthday|0|0')
+
+    print('   Les modèles se modifient, avec garde-fous')
+    for titre, args, attendu in (('variable inconnue', ("birthday", "fr", "Salut {{nom}}", "Texte"), 'INVALID_TEMPLATE'),
+                                 ('accolade seule', ("birthday", "fr", "Salut {prenom", "Texte"), 'INVALID_TEMPLATE'),
+                                 ('{{avantage}} dans le modèle sans avantage', ("birthday", "fr", "Salut {{prenom}}", "Cadeau : {{avantage}}"), 'INVALID_TEMPLATE'),
+                                 ('titre vide', ("birthday", "fr", "", "Texte"), 'INVALID_TEMPLATE'),
+                                 ('langue inconnue', ("birthday", "de", "Hallo", "Text"), 'INVALID_TEMPLATE'),
+                                 ('type étranger aux anniversaires', ("shipment_received", "fr", "Hack", "Hack"), 'INVALID_TEMPLATE')):
+        verifier('modèle refusé : %s' % titre, code(db, ADMIN, "select public.anniversaire_modele_modifier(%s);" % ', '.join(q(a) for a in args)), attendu)
+    verifier('un modèle trop long est refusé', code(db, ADMIN, "select public.anniversaire_modele_modifier('birthday', 'fr', 'T', %s);" % q('x' * 1300)), 'INVALID_TEMPLATE')
+    pts(ADMIN, "select public.anniversaire_modele_modifier('birthday', 'fr', %s, %s);" % (q('Joyeux anniversaire {{prenom}} !'), q('Toute l\'équipe pense à vous, {{prenom}}.')))
+    nouveau_texte = texte(ids['rose'], 'fr')
+    verifier('un modèle modifié est utilisé tout de suite', [nouveau_texte['titre'], nouveau_texte['message']],
+             ['Joyeux anniversaire Rose !', "Toute l'équipe pense à vous, Rose."])
+    verifier('la liste dit qu\'il est modifié', [m['modifie'] for m in pts(ADMIN, "select public.anniversaire_modeles_liste();") if m['type'] == 'birthday' and m['langue'] == 'fr'], [True])
+    pts(ADMIN, "select public.anniversaire_modele_restaurer('birthday', 'fr');")
+    verifier('« restaurer » remet le modèle d\'origine', texte(ids['rose'], 'fr')['titre'], '🎉🎂 Joyeux anniversaire, Rose ! 💙🧡')
+    verifier('les textes des notifications de colis et de factures n\'ont pas changé',
+             jsonq(db, 'sql', "select public.texte_notification('shipment_received', 'fr', '{\"numero\":\"GSE-1-HT\"}'::jsonb);"),
+             {'titre': 'Colis reçu', 'message': 'Votre colis GSE-1-HT a été reçu à notre entrepôt de Miami.'})
+    verifier('un prénom ne peut pas glisser une variable dans le message',
+             jsonq(db, 'sql', "select public.texte_notification('birthday', 'fr', jsonb_build_object('prenom', public.prenom_client('{{numero}}x Pierre')));")['titre'],
+             '🎉🎂 Joyeux anniversaire, numerox ! 💙🧡')
+
+    print('   Préférence du client, correction d\'une date, listes')
+    verifier('un visiteur ne règle aucune préférence', code(db, None, "select public.regler_ma_preference_anniversaire(false);")[:17], 'permission denied')
+    verifier('un client règle la sienne', [pts(MARIE, "select public.regler_ma_preference_anniversaire(false);")['anniversaire'], pts(MARIE, "select public.mes_preferences_programmes();")['anniversaire']], [False, False])
+    pts(MARIE, "select public.regler_ma_preference_anniversaire(true);")
+    verifier('corriger une date sans motif : refusé', code(db, ADMIN, "select public.corriger_naissance('%s', '1989-10-20', '');" % ids['rose']), 'REASON_REQUIRED')
+    verifier('corriger avec une date future : refusé', code(db, ADMIN, "select public.corriger_naissance('%s', '2999-10-20', 'faute de frappe');" % ids['rose']), 'INVALID_BIRTHDATE')
+    verifier('corriger un compte inconnu : refusé', code(db, ADMIN, "select public.corriger_naissance('%s', '1989-10-20', 'faute de frappe');" % '00000000-0000-0000-0000-000000000000'), 'CLIENT_NOT_FOUND')
+    pts(ADMIN, "select public.corriger_naissance('%s', '1989-10-20', 'faute de frappe corrigée sur pièce justificative');" % ids['rose'])
+    verifier('la correction est faite et journalisée avec son motif, sans la date',
+             un(db, "select (select count(*) from journal_audit where action = 'client.naissance_corrigee' and avant is null and apres::text like '%%faute de frappe%%' and apres::text !~ '19[0-9][0-9]') || '|' || (select corrigee_le is not null from profils_naissance where client_id = '%s');" % ids['rose']), '1|true')
+    jour = pts(GERANT, "select public.anniversaires_liste('2026-10-20', '2026-10-20');")
+    verifier('un gérant voit les anniversaires du jour (nom, âge, état), sans date de naissance complète',
+             [jour['total'] >= 3, 'Rose Anniversaire' in {e['nom'] for e in jour['elements']}, '1990-10-20' in json.dumps(jour), '1989-10-20' in json.dumps(jour)], [True, True, False, False])
+    verifier('une période de plus d\'un an est refusée', code(db, GERANT, "select public.anniversaires_liste('2026-01-01', '2028-01-01');"), 'INVALID_PERIOD')
+    msgs = pts(GERANT, "select public.anniversaires_messages('ignore');")
+    verifier('les messages ignorés, avec leur motif', sorted({e['motif'] for e in msgs['elements']}), ['DESACTIVE_PAR_CLIENT', 'SANS_PRENOM'])
+    errs = pts(GERANT, "select public.anniversaires_erreurs();")
+    verifier('la liste des erreurs montre les envois jamais partis, avec leur code', ['NON_CONFIGURE' in {e['code_erreur'] for e in errs['elements']}, 'SANS_APPAREIL' in {e['code_erreur'] for e in errs['elements']}], [True, True])
+    verifier('le journal d\'audit note chaque réglage et chaque modèle', un(db, "select count(distinct action) from journal_audit where action like 'anniversaire.%';") >= '3', True)
+
+    # D'autres sections suivent (campagnes, permissions)
     reussis = sum(S.RESULTATS)
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), reussis))
     sys.exit(0 if reussis == len(S.RESULTATS) else 1)
