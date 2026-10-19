@@ -2650,5 +2650,17 @@
   "Où le colis est reçu. Le client le lit dans son e-mail : « Colis reçu à Miami », « Colis reçu à Port-au-Prince »…": "Dónde se recibe el paquete. El cliente lo lee en su correo: «Paquete recibido en Miami», «Paquete recibido en Puerto Príncipe»…",
   "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.": "Indique dónde se recibió el paquete (Miami, Santo Domingo, Puerto Príncipe…): el cliente lo lee en su correo.",
   "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).": "Indique dónde se recibió el paquete (Miami, Santo Domingo, Puerto Príncipe…).",
-  "Le lieu de réception est trop long (80 signes au plus).": "El lugar de recepción es demasiado largo (80 caracteres como máximo)."
+  "Le lieu de réception est trop long (80 signes au plus).": "El lugar de recepción es demasiado largo (80 caracteres como máximo).",
+  "Sexe": "Sexo",
+  "Masculin": "Masculino",
+  "Féminin": "Femenino",
+  "Document": "Documento",
+  "Passeport": "Pasaporte",
+  "Cédula": "Cédula",
+  "Sélectionnez votre sexe": "Seleccione su sexo",
+  "Sélectionnez un document": "Seleccione un documento",
+  "jj/mm/aaaa": "dd/mm/aaaa",
+  "Entrez une date de naissance valide, sous la forme jj/mm/aaaa (jour, mois, année).": "Escriba una fecha de nacimiento válida, con el formato dd/mm/aaaa (día, mes, año).",
+  "Identité": "Identidad",
+  "Non renseigné.": "No indicado."
 }

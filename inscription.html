@@ -165,8 +165,24 @@
             </div>
             <div class="gs-champ">
               <label for="ins-naissance">Date de naissance<span class="gs-requis" aria-hidden="true">*</span></label>
-              <input id="ins-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance aria-describedby="ins-naissance-aide">
+              <input id="ins-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="jj/mm/aaaa" data-naissance aria-describedby="ins-naissance-aide">
               <p class="gs-champ__aide" id="ins-naissance-aide">Nous nous en servons pour vous souhaiter votre anniversaire. Seuls les responsables autorisés de Goship Express peuvent la consulter.</p>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-sexe">Sexe<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-sexe" name="sexe" required>
+                <option value="">Sélectionnez votre sexe</option>
+                <option value="M">Masculin</option>
+                <option value="F">Féminin</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-document">Document<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-document" name="type_document" required>
+                <option value="">Sélectionnez un document</option>
+                <option value="passeport">Passeport</option>
+                <option value="cedula">Cédula</option>
+              </select>
             </div>
             <div class="gs-champ">
               <label for="ins-parrain">Code de parrainage (facultatif)</label>
@@ -276,7 +292,7 @@
   <p data-t="erreur-reseau">Connexion impossible. Vérifiez votre connexion Internet, puis réessayez.</p>
   <p data-t="erreur-inconnu">Une erreur est survenue. Réessayez dans un instant.</p>
   <p data-t="champ-requis">Ce champ est obligatoire.</p>
-  <p data-t="champ-naissance">Entrez une date de naissance valide (jour, mois, année).</p>
+  <p data-t="champ-naissance">Entrez une date de naissance valide, sous la forme jj/mm/aaaa (jour, mois, année).</p>
   <p data-t="champ-naissance-futur">La date de naissance ne peut pas être dans le futur.</p>
   <p data-t="erreur-naissance-requise">Indiquez votre date de naissance.</p>
   <p data-t="erreur-naissance-invalide">Cette date de naissance n'est pas valide. Vérifiez le jour, le mois et l'année.</p>

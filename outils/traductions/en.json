@@ -2650,5 +2650,17 @@
   "Où le colis est reçu. Le client le lit dans son e-mail : « Colis reçu à Miami », « Colis reçu à Port-au-Prince »…": "Where the package is received. The customer reads it in their e-mail: “Package received in Miami”, “Package received in Port-au-Prince”…",
   "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.": "Enter where the package was received (Miami, Santo Domingo, Port-au-Prince…): the customer reads it in their e-mail.",
   "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).": "Enter where the package was received (Miami, Santo Domingo, Port-au-Prince…).",
-  "Le lieu de réception est trop long (80 signes au plus).": "The reception place is too long (80 characters at most)."
+  "Le lieu de réception est trop long (80 signes au plus).": "The reception place is too long (80 characters at most).",
+  "Sexe": "Sex",
+  "Masculin": "Male",
+  "Féminin": "Female",
+  "Document": "Document",
+  "Passeport": "Passport",
+  "Cédula": "Cédula (national ID card)",
+  "Sélectionnez votre sexe": "Select your sex",
+  "Sélectionnez un document": "Select a document",
+  "jj/mm/aaaa": "dd/mm/yyyy",
+  "Entrez une date de naissance valide, sous la forme jj/mm/aaaa (jour, mois, année).": "Enter a valid date of birth, in the format dd/mm/yyyy (day, month, year).",
+  "Identité": "Identity",
+  "Non renseigné.": "Not provided."
 }

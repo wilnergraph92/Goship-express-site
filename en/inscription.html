@@ -165,8 +165,24 @@
             </div>
             <div class="gs-champ">
               <label for="ins-naissance">Date of birth<span class="gs-requis" aria-hidden="true">*</span></label>
-              <input id="ins-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance aria-describedby="ins-naissance-aide">
+              <input id="ins-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-naissance aria-describedby="ins-naissance-aide">
               <p class="gs-champ__aide" id="ins-naissance-aide">We use it to wish you a happy birthday. Only authorized Goship Express managers can see it.</p>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-sexe">Sex<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-sexe" name="sexe" required>
+                <option value="">Select your sex</option>
+                <option value="M">Male</option>
+                <option value="F">Female</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-document">Document<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-document" name="type_document" required>
+                <option value="">Select a document</option>
+                <option value="passeport">Passport</option>
+                <option value="cedula">Cédula (national ID card)</option>
+              </select>
             </div>
             <div class="gs-champ">
               <label for="ins-parrain">Referral code (optional)</label>
@@ -276,7 +292,7 @@
   <p data-t="erreur-reseau">Unable to connect. Check your internet connection, then try again.</p>
   <p data-t="erreur-inconnu">Something went wrong. Please try again in a moment.</p>
   <p data-t="champ-requis">This field is required.</p>
-  <p data-t="champ-naissance">Enter a valid date of birth (day, month, year).</p>
+  <p data-t="champ-naissance">Enter a valid date of birth, in the format dd/mm/yyyy (day, month, year).</p>
   <p data-t="champ-naissance-futur">The date of birth cannot be in the future.</p>
   <p data-t="erreur-naissance-requise">Enter your date of birth.</p>
   <p data-t="erreur-naissance-invalide">This date of birth is not valid. Check the day, the month and the year.</p>

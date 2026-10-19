@@ -601,6 +601,9 @@
               // Jour civil « AAAA-MM-JJ », tel que le champ date de la page le donne : la base
               // le vérifie (obligatoire pour une inscription par e-mail) et le garde à part
               date_naissance: d.date_naissance,
+              // Sexe (« M », « F ») et type de document (« passeport », « cedula ») : la base les lit
+              // et les garde dans le profil ; une valeur inconnue y est ignorée
+              sexe: d.sexe, type_document: d.type_document,
               // Le code d'un parrain (lien « inscription.html?parrain=… ») : la base le rattache si
               // il est valable, et ignore un code inconnu sans bloquer l'inscription
               code_parrainage: d.code_parrainage ? String(d.code_parrainage).trim().slice(0, 24) : undefined
@@ -865,6 +868,17 @@
           return c.from('clients').select('id, code, nom_complet, pays, region, ville, telephone, email, langue')
             .eq('code', n).maybeSingle();
         }).then(resultat);
+      },
+
+      // Le sexe et le type de document d'un client (supabase-identite.sql), lus avec sa fiche :
+      // la base ne les rend qu'à qui peut voir les clients. Une base sans ces colonnes : rien.
+      identiteClient: function (id) {
+        return sb().then(function (c) {
+          return c.from('clients').select('sexe, type_document').eq('id', id).maybeSingle();
+        }).then(function (r) {
+          if (r.error && /sexe|type_document|column/i.test(r.error.message || '')) return { sexe: null, type_document: null };
+          return resultat(r);
+        }).then(function (v) { return v || { sexe: null, type_document: null }; });
       },
 
       clients: function (o) {
@@ -4154,7 +4168,10 @@
       var compte = {
         id: identifiant(), email: email, mdp: empreinte(x.motDePasse), role: 'client', code: nouveauCode(d.comptes),
         nom_complet: x.nom_complet, pays: x.pays, region: x.region, ville: x.ville, adresse: x.adresse,
-        telephone: x.telephone, langue: LANGUE, cree_le: maintenant()
+        telephone: x.telephone, langue: LANGUE, cree_le: maintenant(),
+        // Comme lire_sexe et lire_type_document (supabase-identite.sql) : une valeur inconnue est ignorée
+        sexe: x.sexe === 'M' || x.sexe === 'F' ? x.sexe : null,
+        type_document: x.type_document === 'passeport' || x.type_document === 'cedula' ? x.type_document : null
       };
       d.comptes.push(compte);
       programmesCompteCreeDemo(d, compte, x.code_parrainage);
@@ -4579,6 +4596,14 @@
           return c.role === 'client' && (!t || contient([c.code, c.nom_complet, c.telephone, c.email, c.ville, c.region], t));
         }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); }).map(publicProfil);
         return plusTard(page(lignes, o));
+      },
+
+      // Même contrat que la base : le sexe et le type de document, pour qui peut voir les clients
+      identiteClient: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
+        var c = d.comptes.filter(function (x) { return x.id === id; })[0];
+        return plusTard({ sexe: c && c.sexe || null, type_document: c && c.type_document || null });
       },
 
       // Même contrat que creer_colis : { colis, facture, deja }

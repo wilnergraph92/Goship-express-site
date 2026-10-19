@@ -136,7 +136,7 @@
       <form class="gs-form gs-form--compact" data-form="naissance" novalidate>
         <div class="gs-champ">
           <label for="cpt-naissance">Dat nesans<span class="gs-requis" aria-hidden="true">*</span></label>
-          <input id="cpt-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance>
+          <input id="cpt-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="jj/mm/aaaa" data-naissance>
         </div>
         <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
         <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Anrejistre dat nesans mwen</button>
@@ -415,7 +415,7 @@
   <p data-t="erreur-reseau">Nou pa rive konekte. Verifye koneksyon entènèt ou, epi eseye ankò.</p>
   <p data-t="erreur-inconnu">Gen yon erè ki fèt. Eseye ankò nan yon ti moman.</p>
   <p data-t="champ-requis">Ou dwe ranpli chan sa a.</p>
-  <p data-t="champ-naissance">Antre yon dat nesans ki valab (jou, mwa, ane).</p>
+  <p data-t="champ-naissance">Antre yon dat nesans ki valab, nan fòma jj/mm/aaaa (jou, mwa, ane).</p>
   <p data-t="champ-naissance-futur">Dat nesans lan pa ka nan lavni.</p>
   <p data-t="erreur-naissance-requise">Make dat nesans ou.</p>
   <p data-t="erreur-naissance-invalide">Dat nesans sa a pa valab. Verifye jou a, mwa a ak ane a.</p>
