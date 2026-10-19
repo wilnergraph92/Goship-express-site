@@ -327,7 +327,7 @@ def main():
     resume = json.loads(comme_restauree(M.MARIE, 'select public.mon_resume();').splitlines()[-1])
     verifier('Marie retrouve son compte : mon_resume identique à l\'original', resume, resume_avant)
     cree = json.loads(comme_restauree(M.ADMIN, """select public.creer_colis('{"client_id":"%s","description":"Après restauration",
-        "poids_lb":2,"service":"aerien","pays_destination":"HT","destination":"Jacmel"}'::jsonb, null, true);""" % M.MARIE).splitlines()[-1])
+        "poids_lb":2,"service":"aerien","pays_destination":"HT","destination":"Jacmel","lieu":"Miami"}'::jsonb, null, true);""" % M.MARIE).splitlines()[-1])
     verifier('l\'équipe enregistre un colis : numéro, prix et facture calculés par la base',
              (cree['colis']['numero'].startswith('GSE-'), float(cree['colis']['prix_usd']) > 0, cree['facture'] is not None),
              (True, True, True))

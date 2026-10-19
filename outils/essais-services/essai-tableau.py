@@ -460,7 +460,7 @@ def main():
     for n_total in (100, 1000):
         deja = int(un(db, "select count(*) from colis;"))
         db.comme(ADMIN, "select public.creer_colis(jsonb_build_object('client_id', '%s', 'description', 'Vrac ' || g, "
-                        "'poids_lb', 1 + g %% 7), null, true) from generate_series(1, %d) g;" % (CARO, n_total - deja))
+                        "'poids_lb', 1 + g %% 7, 'lieu', 'Miami (Medley), FL'), null, true) from generate_series(1, %d) g;" % (CARO, n_total - deja))
         v = vue(db)
         verifier('%d colis : le total est celui de la table' % n_total, v['colis']['total'],
                  int(un(db, "select count(*) from colis;")))

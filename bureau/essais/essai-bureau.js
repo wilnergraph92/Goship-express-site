@@ -189,7 +189,7 @@ function taillePdf(octets) {
       var client = (await A.admin.clients({})).lignes[0];
       for (var k = 1; k <= 3; k++) {
         await A.admin.creerColis({ client_id: client.id, description: 'Essai bureau ' + k, poids_lb: 2 + k, service: 'aerien',
-                                   pays_destination: 'HT', destination: 'Jacmel', suivi_transporteur: 'BUREAU-ESSAI-' + k },
+                                   pays_destination: 'HT', destination: 'Jacmel', lieu: 'Miami', suivi_transporteur: 'BUREAU-ESSAI-' + k },
                                  'cle-bureau-' + k);
       }
       var l = (await A.admin.colis({ statut: 'recu' })).lignes;

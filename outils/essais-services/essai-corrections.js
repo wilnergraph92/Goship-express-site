@@ -54,7 +54,7 @@ function comme(role) {
   var clients = {};
   (await A.clients({ parPage: 50 })).lignes.forEach(function (c) { clients[c.email] = c.id; });
   var marie = clients['marie-ange@exemple.com'], jean = clients['jean-robert@exemple.com'];
-  var base = { client_id: marie, description: 'Colis', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
+  var base = { client_id: marie, description: 'Colis', lieu: 'Miami (Medley), FL', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
                destination: 'Jacmel' };
   function avec(x) {
     var c = Object.assign({}, base, x);

@@ -31,3 +31,5 @@ supabase-anniversaires.sql
 supabase-campagnes.sql
 supabase-courriel-colis.sql
 supabase-courriel-pied.sql
+supabase-lieu-reception.sql
+supabase-courriel-reseaux.sql

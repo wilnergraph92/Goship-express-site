@@ -108,7 +108,7 @@ function cles(v, chemin) {
   (await A.clients({ parPage: 50 })).lignes.forEach(function (c) { clients[c.email] = c; });
   var marie = clients['marie-ange@exemple.com'], jean = clients['jean-robert@exemple.com'];
   var caro = clients['carolina@exemple.com'];
-  var base = { client_id: marie.id, description: 'Chaussures', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
+  var base = { client_id: marie.id, description: 'Chaussures', lieu: 'Miami (Medley), FL', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
                destination: 'Jacmel' };
   var c1 = (await A.creerColis(Object.assign({}, base, { suivi_transporteur: 'ESSAI7TABLEAU77' }))).colis;
 

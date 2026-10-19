@@ -2661,7 +2661,9 @@
       }
     } else {
       f.code.value = options.code || etat.colis.clientCode || '';
-      f.lieu.value = 'Miami (Medley), FL';
+      // Aucun lieu par défaut : le personnel dit où le colis est reçu (Miami, Santo Domingo,
+      // Port-au-Prince…), et le client le lit dans son e-mail « Colis reçu à… ».
+      f.lieu.value = '';
       champTarif.value = String(API.tarifs.parLivre);
       casePrixManuel.checked = false;
       champPrix.value = '';
@@ -2697,6 +2699,11 @@
     if (!f.description.value.trim()) {
       erreurFormulaire(formColis, 'Décrivez le contenu du colis.');
       f.description.focus();
+      return;
+    }
+    if (!colisEdite && !f.lieu.value.trim()) {
+      erreurFormulaire(formColis, 'Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.');
+      f.lieu.focus();
       return;
     }
     var reception = dateHeureSaisie(f.date_reception.value, f.heure_reception.value);

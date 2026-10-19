@@ -135,7 +135,7 @@ def dater(db, table, colonne, identifiant, quand):
 
 def main():
     base = {'client_id': MARIE, 'description': 'Chaussures', 'poids_lb': 4, 'service': 'aerien',
-            'pays_destination': 'HT', 'destination': 'Pétion-Ville'}
+            'pays_destination': 'HT', 'destination': 'Pétion-Ville', 'lieu': 'Miami (Medley), FL'}
 
     print('A. Migration depuis la version publiée (%s)' % AVANT)
     db = S.Base()

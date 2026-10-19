@@ -2644,5 +2644,11 @@
   "Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.": "Añada la fecha de un cliente que no la ha dado, o corríjala. Se requiere un motivo; el diario guarda que se cambió, nunca la fecha en sí.",
   "Enregistrer la date": "Guardar la fecha",
   "Date de naissance enregistrée.": "Fecha de nacimiento guardada.",
-  "e-mail coupé dans les règles": "correo desactivado en las reglas"
+  "e-mail coupé dans les règles": "correo desactivado en las reglas",
+  "(obligatoire)": "(obligatorio)",
+  "Ex. Miami, Santo Domingo": "Ej. Miami, Santo Domingo",
+  "Où le colis est reçu. Le client le lit dans son e-mail : « Colis reçu à Miami », « Colis reçu à Port-au-Prince »…": "Dónde se recibe el paquete. El cliente lo lee en su correo: «Paquete recibido en Miami», «Paquete recibido en Puerto Príncipe»…",
+  "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.": "Indique dónde se recibió el paquete (Miami, Santo Domingo, Puerto Príncipe…): el cliente lo lee en su correo.",
+  "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).": "Indique dónde se recibió el paquete (Miami, Santo Domingo, Puerto Príncipe…).",
+  "Le lieu de réception est trop long (80 signes au plus).": "El lugar de recepción es demasiado largo (80 caracteres como máximo)."
 }

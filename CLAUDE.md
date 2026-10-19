@@ -397,6 +397,18 @@ L'e-mail de « Colis reçu » et « Colis disponible » porte le tableau des dé
 (`outils/supabase-courriel-pied.sql`, réglages `store_android_url` et `store_ios_url`) ; les e-mails de
 facture, de paiement et de retard sont coupés (règles, pas de code de page).
 
+**Le lieu de réception d'un colis est obligatoire** (`outils/supabase-lieu-reception.sql`) : `creer_colis`
+refuse un colis sans lieu (`LOCATION_REQUIRED`), il n'y a plus de « Miami (Medley), FL » par défaut, ni dans la
+base, ni dans le formulaire, ni dans la copie démo. L'e-mail « Colis reçu » le dit (sujet, titre, phrase,
+statut : « Colis reçu à Miami », « … à Port-au-Prince », « … en République dominicaine », dans les quatre
+langues) à partir du lieu de l'**événement de réception** (`notifications.historique_id`), pas du lieu actuel du
+colis. Les textes courts (espace client, push, WhatsApp) disent encore « entrepôt de Miami ».
+
+Le pied de tous les e-mails porte aussi une ligne « Suivez-nous » avec quatre icônes rondes (Facebook,
+Instagram, TikTok, WhatsApp : `outils/supabase-courriel-reseaux.sql`, `courriel_reseaux`). Ce sont quatre images
+du site (`assets/img/email/*.png`) lues à l'adresse de `site_url` ; sans `site_url`, quatre liens de texte.
+Une icône ajoutée : son PNG ici, sa ligne dans `courriel_reseaux`, et une migration de plus (le pied est dans la base).
+
 ### Supprimer mon compte (`outils/supabase-compte.sql`)
 
 `supprimer_mon_compte('SUPPRIMER')`, appelée par l'application mobile pour le compte
@@ -476,7 +488,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

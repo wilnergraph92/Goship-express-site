@@ -75,7 +75,7 @@ select set_config('request.jwt.claims', '{"sub":"0e55a100-0000-4000-8000-0000000
 do $$ declare r jsonb; r2 jsonb; begin
   r := public.creer_colis(jsonb_build_object('client_id', '0e55a100-0000-4000-8000-0000000000c1',
          'description', 'Essai de préproduction', 'poids_lb', 4, 'service', 'aerien', 'pays_destination', 'HT',
-         'destination', 'Pétion-Ville', 'expediteur', 'Essai', 'prix_usd', 1), 'essai-preproduction-1', false);
+         'destination', 'Pétion-Ville', 'expediteur', 'Essai', 'prix_usd', 1, 'lieu', 'Miami'), 'essai-preproduction-1', false);
   perform set_config('essai.colis', r -> 'colis' ->> 'id', true);
   perform set_config('essai.numero', r -> 'colis' ->> 'numero', true);
   if (r -> 'colis' ->> 'prix_usd')::numeric <> 20 then
@@ -83,13 +83,13 @@ do $$ declare r jsonb; r2 jsonb; begin
   end if;
   r2 := public.creer_colis(jsonb_build_object('client_id', '0e55a100-0000-4000-8000-0000000000c1',
          'description', 'Essai de préproduction', 'poids_lb', 4, 'service', 'aerien', 'pays_destination', 'HT',
-         'destination', 'Pétion-Ville', 'expediteur', 'Essai'), 'essai-preproduction-1', false);
+         'destination', 'Pétion-Ville', 'expediteur', 'Essai', 'lieu', 'Miami'), 'essai-preproduction-1', false);
   if not coalesce((r2 ->> 'deja')::boolean, false) or r2 -> 'colis' ->> 'id' <> r -> 'colis' ->> 'id' then
     raise exception 'ÉCHEC : une requête répétée a créé un second colis';
   end if;
   perform public.creer_colis(jsonb_build_object('client_id', '0e55a100-0000-4000-8000-0000000000c2',
          'description', 'Colis de l''autre client', 'poids_lb', 2, 'service', 'aerien', 'pays_destination', 'HT',
-         'destination', 'Jacmel', 'expediteur', 'Essai'), 'essai-preproduction-2', false);
+         'destination', 'Jacmel', 'expediteur', 'Essai', 'lieu', 'Miami'), 'essai-preproduction-2', false);
   raise notice 'OK colis : prix calculé par la base (20 $), requête répétée sans doublon';
 end $$;
 

@@ -113,7 +113,7 @@ def installer():
 def peupler(db):
     """25 colis pour Marie (plus d'une page), 2 pour Jean, factures, paiements, pré-alertes."""
     base = {'description': 'Chaussures', 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT',
-            'destination': 'Pétion-Ville', 'expediteur': 'Amazon'}
+            'destination': 'Pétion-Ville', 'expediteur': 'Amazon', 'lieu': 'Miami (Medley), FL'}
     d = {'marie': [], 'jean': []}
     for i in range(25):
         r = creer(db, ADMIN, dict(base, client_id=MARIE, description='Colis de Marie %02d' % (i + 1),
@@ -684,7 +684,7 @@ def essais(db, d):
              (c, v.get('message'), v.get('hint'), 'remis' in (v.get('details') or '')), (400, 'ACCOUNT_HAS_SHIPMENTS', 'goship', True))
     # Paul : un colis, sa facture, une pré-alerte en attente, un téléphone, une session
     pc = creer(db, ADMIN, dict(client_id=PAUL, description='Colis de Paul', poids_lb=3, service='aerien',
-                               pays_destination='HT', destination='Jacmel', expediteur='Amazon',
+                               pays_destination='HT', destination='Jacmel', expediteur='Amazon', lieu='Miami',
                                suivi_transporteur='TBAPAUL0001'), facturer=True)
     rpc('creer_prealerte', PAUL, {'p_cle': str(uuid.uuid4()), 'p_magasin': 'SHEIN', 'p_description': 'Robe',
                                   'p_suivi': 'SHEINPAUL01', 'p_valeur': 20, 'p_service': 'aerien'})

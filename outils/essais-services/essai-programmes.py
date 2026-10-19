@@ -790,7 +790,7 @@ def main():
     colis_de(ids_w['a'])
     colis_de(ids_w['a'])
     verifier('d\'autres colis : jamais un second bonus', recus(ids_w['a']), 1)
-    sorties = en_parallele(db, [(ADMIN, "select public.creer_colis(%s, null, true);" % js({'client_id': ids_w['b'], 'description': 'Colis %d' % i, 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT', 'destination': 'Jacmel'})) for i in range(4)])
+    sorties = en_parallele(db, [(ADMIN, "select public.creer_colis(%s, null, true);" % js({'client_id': ids_w['b'], 'description': 'Colis %d' % i, 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT', 'destination': 'Jacmel', 'lieu': 'Miami'})) for i in range(4)])
     verifier('quatre colis reçus en même temps pour un même client : un seul bonus', recus(ids_w['b']), 1)
     colis_de(ids_w['ancien'])
     verifier('un client d\'avant la campagne : aucun bonus', recus(ids_w['ancien']), 0)

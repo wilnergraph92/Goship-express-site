@@ -72,7 +72,7 @@ async function inscrire(nom, options) {
   var clientsDemo = (await A.clients({ parPage: 50 })).lignes;
   var marie = clientsDemo.filter(function (c) { return c.email === 'marie-ange@exemple.com'; })[0].id;
   async function colis(clientId) {
-    return A.creerColis({ client_id: clientId, description: 'Colis', poids_lb: 4, service: 'aerien', pays_destination: 'HT', destination: 'Jacmel' });
+    return A.creerColis({ client_id: clientId, description: 'Colis', lieu: 'Miami (Medley), FL', poids_lb: 4, service: 'aerien', pays_destination: 'HT', destination: 'Jacmel' });
   }
   async function pts() { await API.deconnecter(); }
 
