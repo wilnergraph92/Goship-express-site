@@ -128,6 +128,7 @@ try {
   });
   await page.reload();
   await page.waitForSelector('[data-nom-adresse]:not(:empty)');
+  await page.waitForSelector('[data-completer-naissance]:not([hidden])');
   verifier('la demande de date s\'affiche', await page.$eval('[data-completer-naissance]', (b) => !b.hidden), true);
   verifier("… et le reste du compte marche (colis, adresse)", await page.$eval('[data-address-table]', (t) => !t.hasAttribute('data-incomplet')), true);
   await page.fill('#cpt-naissance', '2999-01-01');
@@ -140,6 +141,7 @@ try {
   verifier('date enregistrée, demande disparue, date affichée', await page.textContent('[data-info="naissance"]'), '1 janvier 1991');
   await page.reload();
   await page.waitForSelector('[data-nom-adresse]:not(:empty)');
+  await page.waitForSelector('[data-info="naissance"]:not(:empty)');
   verifier('après rechargement (nouvelle session de page), la date est toujours là', await page.textContent('[data-info="naissance"]'), '1 janvier 1991');
   const verrou = await page.evaluate(() => window.GoshipAPI.definirNaissance('1992-02-02').then(() => 'accepté', (e) => e.code));
   verifier('une autre date est refusée : elle ne se change pas à volonté', verrou, 'naissance-verrouillee');
@@ -188,6 +190,129 @@ try {
     await c.close();
     void bouton;
   }
+
+  console.log('\n8. Mes avantages : GOPOINTS, bienvenue, GOship Refer (valeurs d\'essai, saisies par l\'équipe)');
+  const cp = await contexte(navigateur, 390, 844);
+  const pg = await cp.newPage();
+  const erreursPage = [];
+  pg.on('pageerror', (e) => erreursPage.push(String(e)));
+  await pg.goto(SITE + '/connexion.html');
+  // L'équipe règle les programmes (comme dans l'onglet Programmes) ; aucune valeur n'existe avant
+  await pg.evaluate(async () => {
+    const A = window.GoshipAPI, P = A.admin.programmes;
+    await A.connecter('admin@goship.demo', 'demo1234');
+    const j = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+    await P.pointsReglages({ actif: true, conditions: 'Conditions GOPOINTS d\'essai.' });
+    await P.pointsRegle('account_created', { points: 30, actif: true });
+    await P.pointsOffre(null, { nom: 'Crédit d\'essai', cout_points: 20, type: 'credit_expedition', valeur: 5, actif: true, limite_client: 1 });
+    const camp = await P.bienvenueEnregistrer(null, { nom: 'Bienvenue d\'essai', description: 'Un bonus pour votre première opération.', debut: j(-1), fin: j(30),
+      type_recompense: 'bonus_fixe', valeur_recompense: 7, operation: 'colis_recu', delai_validation_jours: 0, conditions: 'Un bonus par client, une seule fois.' });
+    await P.bienvenuePublier(camp.id);
+    await P.parrainageConfigModifier({ debut: j(-1), fin: j(60), parrain_type: 'bonus_fixe', parrain_valeur: 10, filleul_type: 'credit_expedition', filleul_valeur: 5,
+      operation: 'colis_recu', conditions: 'Conditions de parrainage d\'essai.', annulation: 'Annulé si l\'opération est annulée.' });
+    await P.parrainageStatut('publier');
+    await A.deconnecter();
+  });
+  await inscrire(pg, 'Pascal Parrain', 'pascal@exemple.com', '1980-01-02');
+  await pg.click('[data-envoyer]');
+  await pg.waitForURL(/mon-compte\.html/);
+  await pg.waitForSelector('[data-avt-parrainage]:not([hidden])');
+  const panneau = pg.locator('[data-panneau-programmes]');
+  verifier('le panneau « Mes avantages » apparaît', await panneau.isVisible(), true);
+  verifier('GOPOINTS : 30 points de bienvenue (valeur d\'essai), l\'offre à 20 points', 
+    [(await pg.textContent('[data-avt-points] .gs-avt__solde')).trim(), await pg.locator('[data-avt-points] .gs-avt__offre').count()], ['30 points', 1]);
+  verifier('bienvenue : à débloquer, l\'avantage décrit avec la virgule', 
+    [(await pg.textContent('[data-avt-bienvenue] .gs-avt__etat')).trim(), (await pg.textContent('[data-avt-bienvenue] .gs-avt__fort')).includes('7,00 $')], ['À débloquer', true]);
+  verifier('la CTA du parrainage', (await pg.textContent('[data-avt-parrainage] .gs-avt__cta')).trim(), 'INVITER UN AMI');
+  const codeP = (await pg.textContent('[data-avt-parrainage] .gs-avt__code')).trim();
+  verifier('le code de parrainage a la bonne forme', /^GS[A-HJKMNP-Z2-9]{6}$/.test(codeP), true);
+  await pg.locator('[data-avt-parrainage]').getByRole('button', { name: 'Copier le code' }).click();
+  verifier('copier le code : le presse-papiers le contient', await pg.evaluate(() => navigator.clipboard.readText()), codeP);
+  await pg.locator('[data-avt-parrainage]').getByRole('button', { name: 'Copier le lien' }).click();
+  verifier('copier le lien : il pointe vers l\'inscription avec le code', (await pg.evaluate(() => navigator.clipboard.readText())).endsWith('inscription.html?parrain=' + codeP), true);
+  await pg.click('.gs-avt__cta');
+  verifier('sans partage natif : le message complet est copié', (await pg.evaluate(() => navigator.clipboard.readText())).includes(codeP), true);
+  verifier('invitations comptées par la base (3 gestes)', (await pg.textContent('[data-avt-parrainage] .gs-avt__chiffres div:first-child dd')).trim() === '0' ? 'a recharger' : 'ok', 'a recharger');
+  await pg.reload();
+  await pg.waitForSelector('[data-avt-parrainage]:not([hidden])');
+  verifier('après rechargement : 3 invitations partagées', (await pg.textContent('[data-avt-parrainage] .gs-avt__chiffres div:first-child dd')).trim(), '3');
+
+  // L'échange de points : une fois, jamais deux
+  await pg.locator('[data-avt-points]').getByRole('button', { name: 'Échanger' }).click();
+  await pg.waitForSelector('[data-avt-ok]:not([hidden])');
+  await pg.waitForFunction(() => document.querySelector('[data-avt-points] .gs-avt__solde').textContent.trim() === '10 points');
+  verifier('échange : 10 points restent, l\'avantage est enregistré',
+    [(await pg.textContent('[data-avt-points] .gs-avt__solde')).trim(), (await pg.textContent('[data-avt-ok]')).includes('enregistré')], ['10 points', true]);
+  verifier('l\'offre à limite 1 : le bouton est désactivé ensuite', await pg.locator('[data-avt-points] .gs-avt__offre button').isDisabled(), true);
+  verifier('l\'historique garde les deux lignes', await pg.locator('[data-avt-points] .gs-avt__liste--histo li').count(), 2);
+
+  // Le filleul arrive par le lien
+  await pg.evaluate(() => { localStorage.removeItem('gse-demo-session'); });
+  await pg.goto(SITE + '/inscription.html?parrain=' + codeP.toLowerCase());
+  verifier('le champ du code est déjà rempli (en capitales)', await pg.inputValue('#ins-parrain'), codeP);
+  await inscrire(pg, 'Fanny Filleule', 'fanny@exemple.com', '1995-03-03');
+  await pg.fill('#ins-parrain', codeP);
+  await pg.click('[data-envoyer]');
+  await pg.waitForURL(/mon-compte\.html/);
+  await pg.waitForSelector('[data-avt-parrainage]:not([hidden])');
+  verifier('le filleul voit qu\'il a un parrain (plus de saisie de code)', await pg.locator('[data-avt-parrainage] details:has(summary:has-text("J\'ai un code"))').count(), 0);
+  verifier('et aucun nom de parrain', (await pg.textContent('[data-panneau-programmes]')).includes('Pascal'), false);
+  await pg.screenshot({ path: process.env.CAPTURES ? process.env.CAPTURES + '/avantages-390.png' : '/dev/null', fullPage: true });
+
+  // Une saisie tardive : mauvais code, son propre code
+  await pg.evaluate(() => { localStorage.removeItem('gse-demo-session'); });
+  await inscrire(pg, 'Gina Google', 'gina@exemple.com', '1991-04-04');
+  await pg.click('[data-envoyer]');
+  await pg.waitForURL(/mon-compte\.html/);
+  await pg.waitForSelector('[data-avt-parrainage]:not([hidden])');
+  await pg.locator('[data-avt-parrainage] summary:has-text("J\'ai un code")').click();
+  await pg.fill('[data-avt-parrainage] .gs-avt__saisie input', 'GSZZZZZZ');
+  await pg.click('[data-avt-parrainage] .gs-avt__saisie button');
+  await pg.waitForSelector('[data-avt-erreur]:not([hidden])');
+  verifier('un code inconnu : message clair, rien d\'enregistré', (await pg.textContent('[data-avt-erreur]')).startsWith('Ce code de parrainage n\'existe pas'), true);
+  await pg.fill('[data-avt-parrainage] .gs-avt__saisie input', codeP);
+  await pg.click('[data-avt-parrainage] .gs-avt__saisie button');
+  await pg.waitForSelector('[data-avt-ok]:not([hidden])');
+  verifier('un bon code saisi plus tard : enregistré', (await pg.textContent('[data-avt-ok]')).includes('enregistré'), true);
+
+  // La case de l'anniversaire
+  const caseAnniv = pg.locator('[data-pref-anniversaire]');
+  verifier('la préférence d\'anniversaire est cochée par défaut', await caseAnniv.isChecked(), true);
+  await caseAnniv.uncheck();
+  await pg.waitForSelector('[data-avt-ok]:not([hidden])');
+  await pg.reload();
+  await pg.waitForSelector('[data-avt-preferences]:not([hidden])');
+  verifier('décochée, elle le reste', await pg.locator('[data-pref-anniversaire]').isChecked(), false);
+  verifier('aucun débordement horizontal à 390 px', await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  verifier('aucune erreur JavaScript', erreursPage, []);
+  await cp.close();
+
+  console.log('\n9. Le créole : la CTA du programme est « ENVITE YON ZANMI », et le texte marketing est celui fourni');
+  const ch = await contexte(navigateur, 390, 844);
+  const ph = await ch.newPage();
+  await ph.goto(SITE + '/connexion.html');
+  await ph.evaluate(async () => {
+    const A = window.GoshipAPI, P = A.admin.programmes;
+    await A.connecter('admin@goship.demo', 'demo1234');
+    const j = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+    await P.parrainageConfigModifier({ debut: j(-1), fin: j(60), parrain_type: 'bonus_fixe', parrain_valeur: 10, filleul_type: 'credit_expedition', filleul_valeur: 5,
+      operation: 'colis_recu', conditions: 'Conditions de parrainage d\'essai.', annulation: 'Annulé si l\'opération est annulée.' }).catch(() => {});
+    await P.parrainageStatut('publier').catch(() => {});
+    await A.deconnecter();
+  });
+  await ph.goto(SITE + '/ht/inscription.html');
+  await ph.fill('#ins-nom', 'Mari Jozèf');
+  await ph.fill('#ins-naissance', '1990-06-06');
+  await ph.selectOption('#ins-pays', 'HT'); await ph.selectOption('#ins-region', { index: 1 }); await ph.selectOption('#ins-ville', { index: 1 });
+  await ph.fill('#ins-adresse', '12 rue Capois'); await ph.fill('#ins-tel', '+509 3712 3999'); await ph.fill('#ins-email', 'mari@exemple.com'); await ph.fill('#ins-mdp', 'motdepasse1');
+  await ph.click('[data-envoyer]');
+  await ph.waitForURL(/mon-compte\.html/);
+  await ph.waitForSelector('[data-avt-parrainage]:not([hidden])');
+  verifier('la CTA en créole', (await ph.textContent('[data-avt-parrainage] .gs-avt__cta')).trim(), 'ENVITE YON ZANMI');
+  verifier('le texte marketing en créole, tel que fourni',
+    (await ph.textContent('[data-avt-parrainage] p')).trim(), 'Envite yon zanmi dekouvri GoShip Express. Lè zanmi ou a kreye kont li epi li fè premye tranzaksyon kalifye li, nou ka rekonpanse nou toulede selon kondisyon pwogram nan.');
+  verifier('le titre du panneau en créole', (await ph.textContent('[data-panneau-programmes] h2')).trim(), 'Avantaj mwen yo');
+  await ch.close();
 } finally {
   await navigateur.close();
 }

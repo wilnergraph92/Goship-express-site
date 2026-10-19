@@ -1190,3 +1190,42 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
 @media print{
   .gs-trace--sombre,.gs-trace--clair{background-image:none!important}
 }
+
+/* ---- Mes avantages : GOPOINTS, offre de bienvenue, GOship Refer (espace client) ---- */
+.gs-avt__bloc{display:flex;flex-direction:column;gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid #e3e8f2}
+.gs-avt__bloc:first-of-type{border-top:0;margin-top:6px;padding-top:0}
+.gs-avt__bloc h3{margin:0;font-size:19px}
+.gs-avt__bloc h4{margin:6px 0 0;font-size:16px}
+.gs-avt__bloc p{margin:0;line-height:1.55}
+.gs-avt__tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.gs-avt__solde{font-family:'Archivo','Manrope',sans-serif;font-size:26px;font-weight:800;color:var(--ink)}
+.gs-avt__fort{font-weight:700}
+.gs-avt__note{font-size:14px;color:#5b6782}
+.gs-avt__etat{display:inline-flex;align-items:center;min-height:28px;padding:0 12px;border-radius:999px;background:#eceff6;color:#4a5670;font-size:13px;font-weight:800}
+.gs-avt__etat--obtenu,.gs-avt__etat--obtenue,.gs-avt__etat--utilisee{background:#e4f6ea;color:#14663a}
+.gs-avt__etat--a_debloquer,.gs-avt__etat--en_attente{background:#e7efff;color:#1747b3}
+.gs-avt__etat--expire,.gs-avt__etat--annulee,.gs-avt__etat--expiree{background:#fdebd8;color:#9a3d0a}
+.gs-avt__etapes{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.gs-avt__etapes li{display:flex;align-items:center;gap:10px;min-height:32px}
+.gs-avt__etapes li::before{content:'';width:20px;height:20px;flex:none;border:2px solid #b9c6e2;border-radius:50%}
+.gs-avt__etapes li.is-fait::before{border-color:#14a05a;background:#14a05a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 10.5 3.2 3.2L15 7' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat}
+.gs-avt__liste{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.gs-avt__liste li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eef1f7}
+.gs-avt__liste li.is-annule{opacity:.55;text-decoration:line-through}
+.gs-avt__offre-texte{display:flex;flex-direction:column;gap:2px;min-width:0}
+.gs-avt__plus{color:#14663a}
+.gs-avt__moins{color:#b91c1c}
+.gs-avt__invitation{display:flex;flex-direction:column;gap:12px;padding:16px;border:1px dashed #b9c6e2;border-radius:16px;background:#f8faff}
+.gs-avt__code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:26px;letter-spacing:.12em;color:var(--ink);word-break:break-all}
+.gs-avt__boutons{display:flex;flex-wrap:wrap;gap:10px}
+.gs-avt__cta{width:100%}
+.gs-avt__chiffres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
+.gs-avt__chiffres div{padding:12px;border:1px solid #e3e8f2;border-radius:14px}
+.gs-avt__chiffres dt{font-size:13px;color:#5b6782}
+.gs-avt__chiffres dd{margin:4px 0 0;font-size:22px;font-weight:800}
+.gs-avt__saisie{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.gs-avt__saisie input{flex:1 1 180px;min-height:48px;padding:0 14px;border:1px solid #cfd7e6;border-radius:12px;font:inherit;text-transform:uppercase}
+.gs-avt__case{display:flex;align-items:center;gap:12px;min-height:44px;cursor:pointer}
+.gs-avt__case input{width:22px;height:22px;flex:none}
+.gs-avt summary{min-height:44px;display:flex;align-items:center;font-weight:700;cursor:pointer}
+@media (max-width:480px){.gs-avt__chiffres{grid-template-columns:1fr}}
