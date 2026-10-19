@@ -389,6 +389,9 @@ def main():
     verifier('un gain reçoit sa date d\'expiration (aujourd\'hui + 30 jours)',
              un(db, "select expire_le::text from points_mouvements where id = %s;" % gain_anna),
              un(db, "select (public.aujourdhui_entreprise() + 30)::text;"))
+    # La suite crée des comptes : la règle « création de compte » ne doit plus leur accorder de points (la création de compte
+    # accorde bien ses points aux nouveaux clients : voir la section E)
+    pts(ADMIN, "select public.points_regle_modifier('account_created', '{\"actif\":false}');")
     # Des gains d'avant : posés avec une date passée, par le moteur d'écriture
     GUY2 = 'a2a2a2a2-0000-0000-0000-000000000003'
     inscrire(db, GUY2, 'expire@exemple.com', {}, fournisseur='google')
@@ -711,7 +714,185 @@ def main():
     verifier('la liste des erreurs montre les envois jamais partis, avec leur code', ['NON_CONFIGURE' in {e['code_erreur'] for e in errs['elements']}, 'SANS_APPAREIL' in {e['code_erreur'] for e in errs['elements']}], [True, True])
     verifier('le journal d\'audit note chaque réglage et chaque modèle', un(db, "select count(distinct action) from journal_audit where action like 'anniversaire.%';") >= '3', True)
 
-    # D'autres sections suivent (campagnes, permissions)
+    print("\nD. GOship APP Welcome : une offre complète, un bonus par client")
+    aujourdhui = lambda n=0: un(db, "select (public.aujourdhui_entreprise() + %d)::text;" % n)
+    colis_de = lambda client, **k: jsonq(db, ADMIN, "select public.creer_colis(%s, null, true);" % js(dict(
+        {'client_id': client, 'description': 'Colis d\'essai', 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT', 'destination': 'Jacmel'}, **k)))
+    nb = lambda requete: int(un(db, requete))
+    recus = lambda client: nb("select count(*) from recompenses where client_id = '%s' and programme = 'welcome' and statut in ('en_attente', 'obtenue', 'utilisee');" % client)
+
+    verifier('au départ : aucune campagne, rien à débloquer pour un client',
+             [pts(MARIE, "select public.ma_bienvenue();"), pts(ADMIN, "select public.bienvenue_liste();")['campagnes']], [None, []])
+    for nom, compte in (('un client', JEAN), ('un employé', EMPLOYE)):
+        verifier('%s : voir les campagnes refusé' % nom, code(db, compte, "select public.bienvenue_liste();"), REFUS)
+    for nom, compte in (('un client', JEAN), ('un employé', EMPLOYE), ('un gérant', GERANT)):
+        verifier('%s : créer une campagne refusé' % nom, code(db, compte, "select public.bienvenue_enregistrer(null, '{\"nom\":\"X\"}');"), REFUS)
+        verifier('%s : accorder un avantage à la main refusé' % nom,
+                 code(db, compte, "select public.recompense_accorder('%s', 'bonus_fixe', 5, 'motif');" % JEAN), REFUS)
+    verifier('un gérant voit les campagnes', code(db, GERANT, "select public.bienvenue_liste();"), 'aucune')
+    verifier('un visiteur ne peut rien appeler',
+             [code(db, None, "select public.ma_bienvenue();")[:17], code(db, None, "select public.bienvenue_liste();")[:17]], ['permission denied'] * 2)
+    verifier('le moteur est fermé à tous les comptes',
+             [code(db, ADMIN, "select public.programmes_operation('%s', 'colis_recu', 'colis:x');" % JEAN)[:17],
+              code(db, ADMIN, "select public.recompense_creer('%s', 'manuel', 'bonus_fixe', 5, 'k', '', '', 0);" % JEAN)[:17]], ['permission denied'] * 2)
+
+    print('   Une campagne incomplète ne se publie pas')
+    brouillon = pts(ADMIN, "select public.bienvenue_enregistrer(null, '{\"nom\":\"Bienvenue d\'essai\"}');") if False else pts(ADMIN, "select public.bienvenue_enregistrer(null, %s);" % js({'nom': 'Bienvenue essai'}))
+    verifier('un brouillon se crée vide', [brouillon['statut'], brouillon['valeur_recompense']], ['brouillon', None])
+    verifier('le publier : refusé, avec ce qui manque',
+             [code(db, ADMIN, "select public.bienvenue_publier('%s');" % brouillon['id']),
+              (lambda r: 'la date de début' in r and 'les conditions générales' in r)(db.comme(ADMIN, "select public.bienvenue_publier('%s');" % brouillon['id'], echec_permis=True))],
+             ['INCOMPLETE_CAMPAIGN', True])
+    for titre, d in (('type de récompense inconnu', {'type_recompense': 'voiture'}), ('valeur négative', {'valeur_recompense': -5}),
+                     ('dates à l\'envers', {'debut': aujourdhui(5), 'fin': aujourdhui(1)}), ('opération inconnue', {'operation': 'connexion'}),
+                     ('délai de 200 jours', {'delai_validation_jours': 200}), ('budget illisible', {'budget_max': 'beaucoup'})):
+        verifier('valeur refusée : %s' % titre, code(db, ADMIN, "select public.bienvenue_enregistrer('%s', %s);" % (brouillon['id'], js(d))),
+                 'INVALID_PROGRAM_VALUE' if titre in ('délai de 200 jours', 'budget illisible') else 'INVALID_CAMPAIGN')
+    verifier('une campagne en points exige le programme GOPOINTS allumé',
+             [pts(ADMIN, "select public.points_reglages_modifier('{\"actif\":false}');")['actif'],
+              (lambda r: 'GOPOINTS' in r)(db.comme(ADMIN, "select public.bienvenue_enregistrer('%s', %s); select public.bienvenue_publier('%s');" % (brouillon['id'], js({'type_recompense': 'gopoints', 'valeur_recompense': 30, 'debut': aujourdhui(-1), 'fin': aujourdhui(30), 'operation': 'colis_recu', 'conditions': 'Conditions de l offre essai.'}), brouillon['id']), echec_permis=True))],
+             [False, True])
+    pts(ADMIN, "select public.points_reglages_modifier('{\"actif\":true}');")
+
+    complet = {'nom': 'Bienvenue GoShip', 'description': 'Votre première opération vous rapporte un crédit.',
+               'debut': aujourdhui(-1), 'fin': aujourdhui(30), 'type_recompense': 'credit_expedition', 'valeur_recompense': 5,
+               'operation': 'colis_recu', 'budget_max': 2, 'delai_validation_jours': 0, 'cumul_parrainage': True,
+               'conditions': 'Offre réservée aux nouveaux clients, une seule fois par client.'}
+    pts(ADMIN, "select public.bienvenue_enregistrer('%s', %s);" % (brouillon['id'], js(complet)))
+    verifier('un gérant ne publie pas', code(db, GERANT, "select public.bienvenue_publier('%s');" % brouillon['id']), REFUS)
+    pub = pts(ADMIN, "select public.bienvenue_publier('%s');" % brouillon['id'])
+    verifier('complète : publiée, active dès aujourd\'hui', pub['statut'], 'active')
+    verifier('une campagne active ne se modifie pas', code(db, ADMIN, "select public.bienvenue_enregistrer('%s', '{\"valeur_recompense\":500}');" % brouillon['id']), 'CAMPAIGN_LOCKED')
+
+    print('   Le parcours : compte → première opération → bonus, une fois')
+    ids_w = {}
+    for cle, nom in (('a', 'Alice Bienvenue'), ('b', 'Bruno Bienvenue'), ('c', 'Clara Bienvenue'), ('ancien', 'Ancien Client'), ('d', 'Denis Concurrent')):
+        ids_w[cle] = 'd%sffffff-0000-0000-0000-00000000000%d' % (len(ids_w), len(ids_w) + 1)
+        nouveau(ids_w[cle], '%s-w@exemple.com' % cle, nom, '1990-01-0%d' % (len(ids_w)))
+    db.sql("update clients set cree_le = now() - interval '60 days' where id = '%s';" % ids_w['ancien'])
+    vue_a = pts(ids_w['a'], "select public.ma_bienvenue();")
+    verifier('un nouveau client voit l\'offre « à débloquer » : nom, avantage, conditions, fin, deux étapes',
+             [vue_a['nom'], vue_a['statut'], vue_a['avantage'], vue_a['fin'] == aujourdhui(30), len(vue_a['etapes']), [e['fait'] for e in vue_a['etapes']]],
+             ['Bienvenue GoShip', 'a_debloquer', '5,00 $ de crédit d\'expédition', True, 2, [True, False]])
+    verifier('un client inscrit AVANT la campagne n\'y a pas droit : rien à voir', pts(ids_w['ancien'], "select public.ma_bienvenue();"), None)
+    verifier('l\'inscription seule ne donne rien (aucun avantage tant que la première opération n\'a pas eu lieu)', recus(ids_w['a']), 0)
+    verifier('un compte de l\'équipe ne voit pas d\'offre', pts(EMPLOYE, "select public.ma_bienvenue();"), None)
+    colis_de(ids_w['a'])
+    verifier('première opération qualifiante (colis reçu) : le bonus est accordé', recus(ids_w['a']), 1)
+    verifier('… « crédit d\'expédition 5 $ », obtenu, avec sa référence unique',
+             un(db, "select type || '|' || valeur || '|' || statut || '|' || cle from recompenses where client_id = '%s' and programme = 'welcome';" % ids_w['a']).split('|')[:3]
+             + [un(db, "select cle like 'welcome:%%' from recompenses where client_id = '%s' and programme = 'welcome';" % ids_w['a'])],
+             ['credit_expedition', '5.00', 'obtenue', 't'])
+    verifier('le client est prévenu, et l\'offre devient « obtenu »',
+             [pts(ids_w['a'], "select public.ma_bienvenue();")['statut'],
+              [e['titre'] for e in pts(ids_w['a'], "select public.mes_notifications('compte');")['elements'] if e['type'] == 'reward_earned']],
+             ['obtenu', ['🎁 Avantage obtenu']])
+    colis_de(ids_w['a'])
+    colis_de(ids_w['a'])
+    verifier('d\'autres colis : jamais un second bonus', recus(ids_w['a']), 1)
+    sorties = en_parallele(db, [(ADMIN, "select public.creer_colis(%s, null, true);" % js({'client_id': ids_w['b'], 'description': 'Colis %d' % i, 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT', 'destination': 'Jacmel'})) for i in range(4)])
+    verifier('quatre colis reçus en même temps pour un même client : un seul bonus', recus(ids_w['b']), 1)
+    colis_de(ids_w['ancien'])
+    verifier('un client d\'avant la campagne : aucun bonus', recus(ids_w['ancien']), 0)
+    colis_de(ids_w['c'])
+    verifier('budget de 2 avantages : atteint avec Alice et Bruno, la troisième cliente n\'a rien',
+             [nb("select count(*) from recompenses where programme = 'welcome' and statut in ('en_attente', 'obtenue');"), recus(ids_w['c'])], [2, 0])
+    colis_de(ids_w['d'])
+    verifier('… le troisième client n\'a rien (plafond respecté)', recus(ids_w['d']), 0)
+    verifier('… et son offre est « expirée », pas « obtenue »', pts(ids_w['d'], "select public.ma_bienvenue();")['statut'], 'expire')
+    verifier('rien d\'autre n\'a bougé : un seul bonus par client, jamais deux',
+             nb("select count(*) from (select client_id from recompenses where programme = 'welcome' group by client_id having count(*) > 1) x;"), 0)
+    verifier('l\'index unique l\'impose même hors du moteur',
+             code(db, 'sql', "insert into recompenses (client_id, programme, type, valeur, statut, cle) values ('%s', 'welcome', 'bonus_fixe', 1, 'obtenue', 'pirate-1');" % ids_w['a'])[:20], 'duplicate key value')
+
+    print('   Suspendre, reprendre, terminer')
+    verifier('suspendre', pts(ADMIN, "select public.bienvenue_statut('%s', 'suspendre');" % brouillon['id'])['statut'], 'suspendue')
+    nouveau('d5ffffff-0000-0000-0000-000000000099', 'e-w@exemple.com', 'Eve Suspendue', '1990-01-09')
+    colis_de('d5ffffff-0000-0000-0000-000000000099')
+    verifier('suspendue : une première opération ne rapporte rien', recus('d5ffffff-0000-0000-0000-000000000099'), 0)
+    verifier('action impossible dans cet état : refusée', code(db, ADMIN, "select public.bienvenue_statut('%s', 'suspendre');" % brouillon['id']), 'INVALID_CAMPAIGN_STATUS')
+    verifier('suspendue : elle se modifie', pts(ADMIN, "select public.bienvenue_enregistrer('%s', '{\"budget_max\":10}');" % brouillon['id'])['budget_max'], 10)
+    verifier('reprendre : active de nouveau', pts(ADMIN, "select public.bienvenue_statut('%s', 'reprendre');" % brouillon['id'])['statut'], 'active')
+    verifier('terminer', pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % brouillon['id'])['statut'], 'terminee')
+    verifier('terminée : elle ne se modifie ni ne se reprend plus',
+             [code(db, ADMIN, "select public.bienvenue_enregistrer('%s', '{\"budget_max\":99}');" % brouillon['id']), code(db, ADMIN, "select public.bienvenue_statut('%s', 'reprendre');" % brouillon['id'])],
+             ['CAMPAIGN_LOCKED', 'INVALID_CAMPAIGN_STATUS'])
+    verifier('le client voit son bonus déjà obtenu, même campagne terminée', pts(ids_w['a'], "select public.ma_bienvenue();")['statut'], 'obtenu')
+    liste = pts(ADMIN, "select public.bienvenue_liste();")['campagnes'][0]
+    verifier('l\'équipe voit les chiffres : clients admissibles, avantages par statut',
+             [liste['clients_admissibles'] >= 5, liste['recompenses']], [True, {'obtenue': 2}])
+    futur = pts(ADMIN, "select public.bienvenue_enregistrer(null, %s);" % js(dict(complet, nom='Campagne à venir', debut=aujourdhui(10), fin=aujourdhui(40))))
+    verifier('une campagne qui commence plus tard est « programmée », sans effet avant sa date',
+             [pts(ADMIN, "select public.bienvenue_publier('%s');" % futur['id'])['statut']], ['programmee'])
+    pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % futur['id'])
+
+    print('   Une opération annulée ne donne rien (délai de validation)')
+    delai = pts(ADMIN, "select public.bienvenue_enregistrer(null, %s);" % js(dict(complet, nom='Bienvenue payée', operation='facture_payee', delai_validation_jours=3, budget_max=None, type_recompense='bonus_fixe', valeur_recompense=8)))
+    pts(ADMIN, "select public.bienvenue_publier('%s');" % delai['id'])
+    ids_w['p1'] = 'd6ffffff-0000-0000-0000-000000000011'
+    ids_w['p2'] = 'd6ffffff-0000-0000-0000-000000000012'
+    ids_w['p3'] = 'd6ffffff-0000-0000-0000-000000000013'
+    for cle, nom in (('p1', 'Paula Paiement'), ('p2', 'Pierre Paiement'), ('p3', 'Perrine Paiement')):
+        nouveau(ids_w[cle], '%s-w@exemple.com' % cle, nom, '1990-02-1%d' % int(cle[1]))
+    factures = {}
+    for cle in ('p1', 'p2', 'p3'):
+        r = colis_de(ids_w[cle], description='Colis payé')
+        factures[cle] = r['facture']
+        verifier('colis reçu seul : pas de bonus (la campagne attend une facture payée), %s' % cle, recus(ids_w[cle]), 0)
+    payer = lambda facture: pts(ADMIN, "select public.enregistrer_paiement('%s', %s, null);" % (facture['id'], js({'montant_usd': facture['montant_usd'], 'moyen': 'especes'})))
+    payer(factures['p1'])
+    verifier('facture payée : l\'avantage est « en attente de validation » (3 jours), pas encore acquis',
+             un(db, "select statut || '|' || valide_apres::text from recompenses where client_id = '%s' and programme = 'welcome';" % ids_w['p1']), 'en_attente|' + aujourdhui(3))
+    vue = pts(ids_w['p1'], "select public.ma_bienvenue();")
+    verifier('le client voit « en attente », jamais « obtenu »', vue['statut'], 'en_attente')
+    verifier('… et reçoit un message qui ne promet rien d\'acquis',
+             [e['titre'] for e in pts(ids_w['p1'], "select public.mes_notifications('compte');")['elements'] if e['type'] == 'reward_pending'], ['Votre avantage est en cours de validation'])
+    pts(ADMIN, "select public.annuler_paiement((select id from paiements where facture_id = '%s'), 'Chèque refusé');" % factures['p1']['id'])
+    verifier('paiement annulé avant la fin du délai : l\'avantage est annulé, jamais accordé',
+             [un(db, "select statut || '|' || motif from recompenses where client_id = '%s' and programme = 'welcome';" % ids_w['p1']),
+              [e['titre'] for e in pts(ids_w['p1'], "select public.mes_notifications('compte');")['elements'] if e['type'] == 'reward_cancelled']],
+             ['annulee|OPERATION_ANNULEE', ['Avantage annulé']])
+    verifier('… et le client n\'a plus d\'avantage de bienvenue en cours', recus(ids_w['p1']), 0)
+    payer(factures['p2'])
+    db.sql("update recompenses set valide_apres = current_date - 1 where client_id = '%s';" % ids_w['p2'])
+    verifier('délai passé, opération toujours valable : l\'avantage est acquis par le travail du jour',
+             [json.loads(un(db, "select public.campagnes_quotidien()::text;"))['valides'], un(db, "select statut from recompenses where client_id = '%s' and programme = 'welcome';" % ids_w['p2'])],
+             [1, 'obtenue'])
+    verifier('le travail du jour relancé : rien de plus', [json.loads(un(db, "select public.campagnes_quotidien()::text;"))['valides'], recus(ids_w['p2'])], [0, 1])
+    payer(factures['p3'])
+    pts(ADMIN, "select public.annuler_facture('%s', 'Erreur de saisie');" % factures['p3']['id']) if False else None
+    db.sql("update recompenses set valide_apres = current_date - 1 where client_id = '%s';" % ids_w['p3'])
+    db.sql("update factures set statut = 'annulee' where id = '%s';" % factures['p3']['id']) if False else None
+    verifier('en attente, puis facture annulée : annulé au travail du jour',
+             [json.loads(un(db, "select public.campagnes_quotidien()::text;")) is not None, recus(ids_w['p3'])], [True, 1])
+
+    print('   Les avantages à la main et les erreurs')
+    verifier('accorder à la main : un motif obligatoire', code(db, ADMIN, "select public.recompense_accorder('%s', 'bonus_fixe', 5, '');" % JEAN), 'REASON_REQUIRED')
+    verifier('… un type et une valeur valables', code(db, ADMIN, "select public.recompense_accorder('%s', 'voiture', 5, 'motif');" % JEAN), 'INVALID_REWARD')
+    manuel = pts(ADMIN, "select public.recompense_accorder('%s', 'gopoints', 40, 'geste de la direction');" % JEAN)
+    verifier('en points : l\'avantage est « obtenu » et les points entrent dans le registre',
+             [manuel['statut'], un(db, "select count(*) from points_mouvements where reference = '%s' and source = 'recompense';" % manuel['id'])], ['obtenue', '1'])
+    solde_avant = nb("select solde from points_soldes where client_id = '%s';" % JEAN)
+    pts(ADMIN, "select public.recompense_annuler('%s', 'accordé par erreur');" % manuel['id'])
+    verifier('annuler : les points sont retirés par une annulation du registre',
+             [nb("select solde from points_soldes where client_id = '%s';" % JEAN), un(db, "select statut from recompenses where id = '%s';" % manuel['id'])], [solde_avant - 40, 'annulee'])
+    verifier('annuler deux fois : refusé', code(db, ADMIN, "select public.recompense_annuler('%s', 'encore');" % manuel['id']), 'INVALID_REWARD')
+    db.sql("alter table recompenses add constraint essai_casse check (client_id <> '%s');" % 'd5ffffff-0000-0000-0000-000000000098')
+    nouveau('d5ffffff-0000-0000-0000-000000000098', 'casse-w@exemple.com', 'Cas Cassé Bienvenue', '1990-03-03')
+    pts(ADMIN, "select public.bienvenue_enregistrer(null, %s);" % js(dict(complet, nom='Pour l\'erreur', debut=aujourdhui(0))))
+    campagne_err = un(db, "select id from campagnes_bienvenue where nom = 'Pour l''erreur';")
+    pts(ADMIN, "select public.bienvenue_publier('%s');" % campagne_err)
+    colis_ok = colis_de('d5ffffff-0000-0000-0000-000000000098')
+    db.sql("alter table recompenses drop constraint essai_casse;")
+    verifier('une erreur du moteur ne bloque pas la réception du colis : le colis existe, l\'erreur est journalisée',
+             [colis_ok['colis']['numero'][:4], nb("select count(*) from programmes_erreurs where programme = 'operation';") >= 1 if False else nb("select count(*) from programmes_erreurs;") >= 1],
+             ['GSE-', True])
+    verifier('l\'équipe voit l\'erreur', pts(GERANT, "select public.programmes_erreurs_liste();")['total'] >= 1, True)
+    verifier('un employé ne la voit pas', code(db, EMPLOYE, "select public.programmes_erreurs_liste();"), REFUS)
+    pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % campagne_err)
+    pts(ADMIN, "select public.bienvenue_statut('%s', 'terminer');" % delai['id'])
+
+    # D'autres sections suivent (parrainage, permissions)
     reussis = sum(S.RESULTATS)
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), reussis))
     sys.exit(0 if reussis == len(S.RESULTATS) else 1)

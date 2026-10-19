@@ -28,3 +28,4 @@ supabase-corrections.sql
 supabase-naissance.sql
 supabase-fidelite.sql
 supabase-anniversaires.sql
+supabase-campagnes.sql
