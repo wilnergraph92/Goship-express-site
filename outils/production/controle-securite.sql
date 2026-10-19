@@ -92,7 +92,8 @@ colonnes_attendues(table_name, column_name, fichier) as (values
   ('clients', 'supprime_le', 'supabase-compte.sql'),
   ('colis', 'adresse_livraison', 'supabase-corrections.sql'),
   ('factures', 'rectifiee_le', 'supabase-corrections.sql'),
-  ('journal_audit', 'motif', 'supabase-corrections.sql')),
+  ('journal_audit', 'motif', 'supabase-corrections.sql'),
+  ('recompenses', 'valide_apres', 'supabase-campagnes.sql')),
 -- Une migration de la chaîne officielle = un objet qu'elle seule installe
 migrations(ordre, fichier, present) as (values
   (1,  'supabase.sql',                 to_regprocedure('public.permissions_du_role(text)') is not null),
@@ -114,7 +115,11 @@ migrations(ordre, fichier, present) as (values
   (15, 'supabase-connexion.sql',       exists (select 1 from pg_proc where proname = 'nom_depuis_metadonnees')),
   (16, 'supabase-profil-complet.sql',  exists (select 1 from pg_proc where proname = 'profil_complet')),
   (17, 'supabase-frais-service.sql',   exists (select 1 from pg_proc where proname = 'encaisser_facture')),
-  (18, 'supabase-corrections.sql',     exists (select 1 from pg_proc where proname = 'historique_modifications'))),
+  (18, 'supabase-corrections.sql',     exists (select 1 from pg_proc where proname = 'historique_modifications')),
+  (19, 'supabase-naissance.sql',       exists (select 1 from pg_proc where proname = 'ma_naissance')),
+  (20, 'supabase-fidelite.sql',        exists (select 1 from pg_proc where proname = 'mon_portefeuille')),
+  (21, 'supabase-anniversaires.sql',   exists (select 1 from pg_proc where proname = 'anniversaires_executer')),
+  (22, 'supabase-campagnes.sql',       exists (select 1 from pg_proc where proname = 'mon_parrainage'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,

@@ -564,6 +564,11 @@
     return res.data;
   }
 
+  // Une fonction de la base, ses paramètres, sa réponse : les programmes n'en font pas d'autre usage
+  function appelBase(nom, params) {
+    return sb().then(function (c) { return c.rpc(nom, params || {}); }).then(resultat);
+  }
+
   var supabaseAPI = {
     session: function () {
       return sb().then(function (c) { return c.auth.getSession(); }).then(function (res) {
@@ -595,7 +600,10 @@
               adresse: d.adresse, telephone: d.telephone, langue: LANGUE,
               // Jour civil « AAAA-MM-JJ », tel que le champ date de la page le donne : la base
               // le vérifie (obligatoire pour une inscription par e-mail) et le garde à part
-              date_naissance: d.date_naissance
+              date_naissance: d.date_naissance,
+              // Le code d'un parrain (lien « inscription.html?parrain=… ») : la base le rattache si
+              // il est valable, et ignore un code inconnu sans bloquer l'inscription
+              code_parrainage: d.code_parrainage ? String(d.code_parrainage).trim().slice(0, 24) : undefined
             },
             emailRedirectTo: urlPage('mon-compte.html')
           }
@@ -624,6 +632,21 @@
       return sb().then(function (c) { return c.rpc('definir_ma_naissance', { p_date: String(texte == null ? '' : texte) }); })
         .then(resultat);
     },
+
+    /* ---- Les programmes du client (GOPOINTS, Welcome, Refer, anniversaire) --------
+       Rien n'est calculé ici : le solde, les offres, le code et les avantages viennent de la
+       base (outils/supabase-fidelite.sql, supabase-campagnes.sql, supabase-anniversaires.sql).
+       Une base qui n'a pas encore ces fichiers répond « absent » : la page n'affiche rien. */
+    portefeuille: function (page) { return appelBase('mon_portefeuille', { p_page: page || 0, p_par_page: 20 }); },
+    // cle : tirée une fois par appui (un double clic ne dépense qu'une fois)
+    utiliserPoints: function (offre, cle) { return appelBase('utiliser_points', { p_offre: offre, p_cle: cle }); },
+    mesAvantages: function () { return appelBase('mes_recompenses'); },
+    maBienvenue: function () { return appelBase('ma_bienvenue'); },
+    monParrainage: function () { return appelBase('mon_parrainage'); },
+    noterInvitation: function (canal) { return appelBase('noter_invitation', { p_canal: canal || '' }); },
+    utiliserCodeParrainage: function (code) { return appelBase('utiliser_code_parrainage', { p_code: String(code || '') }); },
+    preferencesProgrammes: function () { return appelBase('mes_preferences_programmes'); },
+    reglerAnniversaire: function (actif) { return appelBase('regler_ma_preference_anniversaire', { p_actif: !!actif }); },
 
     connecter: function (email, motDePasse) {
       return sb().then(function (c) {
@@ -1257,6 +1280,77 @@
         return sb().then(function (c) { return c.rpc('rapport_donnees', { p_parametres: p || {} }); }).then(resultat);
       },
 
+      /* ---- Les programmes (outils/supabase-fidelite.sql, -anniversaires, -campagnes) ---
+         Lire demande programs.view (anniversaires : birthdays.view), régler programs.manage
+         (birthdays.manage), corriger un solde ou accorder un avantage points.adjust : la base
+         refuse d'elle-même, et ne rend la date de naissance qu'à qui peut voir les
+         anniversaires. Rien ne s'additionne dans la page. */
+      programmes: {
+        // GOPOINTS
+        pointsRegles: function () { return appelBase('points_regles_liste'); },
+        pointsReglages: function (d) { return appelBase('points_reglages_modifier', { p_donnees: d || {} }); },
+        pointsRegle: function (evenement, d) { return appelBase('points_regle_modifier', { p_evenement: evenement, p_donnees: d || {} }); },
+        pointsOffre: function (id, d) { return appelBase('points_offre_enregistrer', { p_id: id || null, p_donnees: d || {} }); },
+        pointsCorriger: function (client, points, motif) { return appelBase('points_corriger', { p_client: client, p_points: points, p_motif: motif || '' }); },
+        pointsAnnuler: function (id, motif) { return appelBase('points_annuler_mouvement', { p_id: id, p_motif: motif || '' }); },
+        pointsApercu: function (o) { o = o || {}; return appelBase('points_apercu', { p_debut: o.debut || null, p_fin: o.fin || null }); },
+        // o : { recherche, type, debut, fin, page }
+        pointsMouvements: function (o) {
+          o = o || {};
+          return appelBase('points_mouvements_liste', { p_recherche: o.recherche || '', p_type: o.type || '', p_debut: o.debut || null,
+                                                       p_fin: o.fin || null, p_page: o.page || 0, p_par_page: 50 });
+        },
+        // Anniversaires
+        anniversaires: function (o) {
+          o = o || {};
+          return appelBase('anniversaires_liste', { p_debut: o.debut || null, p_fin: o.fin || null, p_page: o.page || 0, p_par_page: 50 });
+        },
+        anniversairesMessages: function (o) {
+          o = o || {};
+          return appelBase('anniversaires_messages', { p_statut: o.statut || '', p_debut: o.debut || null, p_fin: o.fin || null,
+                                                      p_page: o.page || 0, p_par_page: 50 });
+        },
+        anniversairesErreurs: function (o) { return appelBase('anniversaires_erreurs', { p_page: (o && o.page) || 0, p_par_page: 50 }); },
+        anniversairesRappels: function (o) { return appelBase('anniversaires_rappels_liste', { p_page: (o && o.page) || 0, p_par_page: 50 }); },
+        anniversaireReglages: function () { return appelBase('anniversaire_reglages_lire'); },
+        anniversaireReglagesModifier: function (d) { return appelBase('anniversaire_reglages_modifier', { p_donnees: d || {} }); },
+        anniversaireModeles: function () { return appelBase('anniversaire_modeles_liste'); },
+        anniversaireModele: function (type, langue, titre, message) {
+          return appelBase('anniversaire_modele_modifier', { p_type: type, p_langue: langue, p_titre: titre, p_message: message });
+        },
+        anniversaireModeleRestaurer: function (type, langue) { return appelBase('anniversaire_modele_restaurer', { p_type: type, p_langue: langue }); },
+        corrigerNaissance: function (client, date, motif) { return appelBase('corriger_naissance', { p_client: client, p_date: date, p_motif: motif || '' }); },
+        // GOship APP Welcome
+        bienvenueListe: function () { return appelBase('bienvenue_liste'); },
+        bienvenueEnregistrer: function (id, d) { return appelBase('bienvenue_enregistrer', { p_id: id || null, p_donnees: d || {} }); },
+        bienvenuePublier: function (id) { return appelBase('bienvenue_publier', { p_id: id }); },
+        // action : suspendre, terminer, reprendre
+        bienvenueStatut: function (id, action) { return appelBase('bienvenue_statut', { p_id: id, p_action: action }); },
+        // GOship Refer
+        parrainageConfig: function () { return appelBase('parrainage_config_lire'); },
+        parrainageConfigModifier: function (d) { return appelBase('parrainage_config_modifier', { p_donnees: d || {} }); },
+        // action : publier, reprendre, suspendre, terminer
+        parrainageStatut: function (action) { return appelBase('parrainage_statut', { p_action: action }); },
+        parrainageApercu: function (o) { o = o || {}; return appelBase('parrainage_apercu', { p_debut: o.debut || null, p_fin: o.fin || null }); },
+        parrainages: function (o) {
+          o = o || {};
+          return appelBase('parrainages_liste', { p_statut: o.statut || '', p_debut: o.debut || null, p_fin: o.fin || null,
+                                                 p_page: o.page || 0, p_par_page: 50 });
+        },
+        // decision : valider, refuser ; un motif est obligatoire
+        parrainageExaminer: function (id, decision, motif) { return appelBase('parrainage_examiner', { p_id: id, p_decision: decision, p_motif: motif || '' }); },
+        // Les avantages de tous les programmes
+        recompenses: function (o) {
+          o = o || {};
+          return appelBase('recompenses_liste', { p_programme: o.programme || '', p_statut: o.statut || '', p_page: o.page || 0, p_par_page: 50 });
+        },
+        recompenseAccorder: function (client, type, valeur, motif) {
+          return appelBase('recompense_accorder', { p_client: client, p_type: type, p_valeur: valeur, p_motif: motif || '' });
+        },
+        recompenseAnnuler: function (id, motif) { return appelBase('recompense_annuler', { p_id: id, p_motif: motif || '' }); },
+        erreurs: function (o) { return appelBase('programmes_erreurs_liste', { p_page: (o && o.page) || 0, p_par_page: 50 }); }
+      },
+
       /* ---- Tableau de bord (outils/supabase-tableau-de-bord.sql) -------
          Chaque chiffre est compté par la base, sur les vraies tables et avec
          leurs règles : la page n'additionne rien. Une partie que le rôle ne
@@ -1547,7 +1641,8 @@
       statut_precedent: avant, auteur_id: moi ? moi.id : null, auteur_role: moi ? moi.role : null,
       metadonnees: avant ? {} : { source: 'creation' }, cle_idempotence: null, visibilite: 'publique',
       corrige_id: null, cree_le: date || maintenant()
-    });
+    });    // Le colis vient d'arriver à l'entrepôt : une opération qualifiante pour les programmes (jamais bloquante)
+    if (!avant) programmesOperationDemo(d, c.client_id, 'colis_recu', 'colis:' + c.id);
   }
 
   // Les opérations du poste de scan, et la fiche qu'il affiche : même
@@ -1699,6 +1794,7 @@
       cle_idempotence: cle, visibilite: t.visibilite, corrige_id: corrige, cree_le: maintenant()
     };
     d.historique.push(e);
+    if (v === 'COLIS_RECU' && t.visibilite === 'publique') programmesOperationDemo(d, c.client_id, 'colis_recu', 'colis:' + c.id);
     if (cible !== c.statut || t.special === 'mise_a_jour') {
       var avant = { statut: c.statut, lieu: c.lieu || '', note: c.note || '' };
       c.statut = cible;
@@ -1928,6 +2024,10 @@
     d.evenementsFacturation.push({ id: d.evenementsFacturation.length + 1, type: type, facture_id: f ? f.id : null,
                                    paiement_id: p ? p.id : null, client_id: f ? f.client_id : null,
                                    donnees: donnees || {}, cree_le: maintenant(), traite_le: null });
+    // programmes_evenement_facturation : une facture payée est une opération qualifiante ; une facture
+    // ou un paiement annulé annule les avantages encore en attente
+    if (type === 'FACTURE_PAYEE' && f && f.client_id) programmesOperationDemo(d, f.client_id, 'facture_payee', 'facture:' + f.id);
+    else if ((type === 'FACTURE_ANNULEE' || type === 'PAIEMENT_ANNULE') && f) operationAnnuleeDemo(d, 'facture:' + f.id);
   }
 
   // recalculer_facture : payé, statut, date et moyen suivent les paiements valides
@@ -3516,6 +3616,519 @@
     return r;
   }
 
+  /* ---- Les programmes, version démonstration -------------------------------
+     La copie, dans le navigateur, de outils/supabase-fidelite.sql (GOPOINTS),
+     supabase-anniversaires.sql et supabase-campagnes.sql (Welcome, Refer, avantages) :
+     mêmes règles, mêmes codes d'erreur, mêmes phrases, mêmes formes de réponse.
+     Toute règle changée là-bas se change ici ; outils/essais-services/essai-programmes.js
+     compare les deux. Deux écarts, voulus : aucun message ne part (la démo n'a ni e-mail
+     ni application : un anniversaire préparé reste « en attente »), et les travaux
+     du jour (expiration des points, rappels) ne tournent pas — la base seule les fait.
+     -------------------------------------------------------------------------- */
+  var TYPES_AVANTAGE = ['credit_expedition', 'reduction_frais', 'bonus_fixe', 'gopoints', 'avantage_colis'];
+  var OPERATIONS_PROGRAMME = ['colis_recu', 'facture_payee'];
+  var EVENEMENTS_POINTS = [
+    ['account_created', 'Création du compte'], ['first_operation', 'Première opération qualifiante'],
+    ['repeat_operation', 'Opérations répétées'], ['referral_validated', 'Parrainage validé'],
+    ['campaign', 'Campagne promotionnelle'], ['birthday', 'Anniversaire du client']
+  ];
+  var MODELES_ANNIVERSAIRE = {
+    'birthday_avantage|en': ['🎉🎂 Happy birthday, {{prenom}}! 💙🧡', 'Today is a special day, and the whole GoShip Express team is sending you lots of love and our very best wishes!\nTo celebrate, here is your gift: {{avantage}}.\nWe hope this new year brings you health, joy, success, prosperity and many lovely surprises. Thank you for trusting GoShip Express to be with you in all your deliveries.\nIt is a pleasure to have you in our community. Have an extraordinary day and keep making your beautiful dreams come true!\nWith all our affection, the GoShip Express team. 💙🧡🚚'],
+    'birthday_avantage|es': ['🎉🎂 ¡Feliz cumpleaños, {{prenom}}! 💙🧡', '¡Hoy es un día especial, y todo el equipo de GoShip Express le envía mucho cariño y sus mejores deseos!\nPara celebrarlo, este es su regalo: {{avantage}}.\nDeseamos que este nuevo año le traiga salud, alegría, éxito, prosperidad y muchas bonitas sorpresas. Gracias por confiar en GoShip Express para acompañarle en todas sus entregas.\nEs un placer contarle entre nuestra comunidad. ¡Pase un día extraordinario y siga cumpliendo sus hermosos sueños!\nCon todo nuestro cariño, el equipo de GoShip Express. 💙🧡🚚'],
+    'birthday_avantage|fr': ['🎉🎂 Joyeux anniversaire, {{prenom}} ! 💙🧡', 'Aujourd\'hui est un jour spécial, et toute l\'équipe GoShip Express vous envoie beaucoup d\'affection et ses plus beaux vœux !\nPour fêter ça, voici votre cadeau : {{avantage}}.\nNous souhaitons que cette nouvelle année vous apporte santé, joie, réussite, prospérité et de belles surprises. Merci de faire confiance à GoShip Express pour vous accompagner dans toutes vos livraisons.\nC\'est un plaisir de vous compter dans notre communauté. Passez une journée extraordinaire et continuez à réaliser vos beaux rêves !\nAvec toute notre affection, l\'équipe GoShip Express. 💙🧡🚚'],
+    'birthday_avantage|ht': ['🎉🎂 Bòn fèt, {{prenom}} ! 💙🧡', 'Jodi a se yon jou espesyal, epi tout ekip GoShip Express ap voye anpil lanmou ak pi bèl swè pou ou!\nPou n selebre sa, men kado ou : {{avantage}}.\nNou swete nouvo ane sa a pote sante, lajwa, siksè, pwosperite ak anpil bèl sipriz nan lavi ou. Mèsi paske ou fè GoShip Express konfyans pou akonpaye w nan tout livrezon ou yo.\nSe yon plezi pou ou fè pati kominote nou an. Pase yon jounen ekstraòdinè epi kontinye reyalize bèl rèv ou yo!\nAvèk anpil afeksyon, ekip GoShip Express. 💙🧡🚚'],
+    'birthday_reminder|en': ['Upcoming birthdays', '{{nombre}} customer(s) will celebrate a birthday in {{jours}} day(s). Open Programs > Birthdays to prepare your offers.'],
+    'birthday_reminder|es': ['Próximos cumpleaños', '{{nombre}} cliente(s) cumplirán años dentro de {{jours}} día(s). Abra Programas > Cumpleaños para preparar sus ofertas.'],
+    'birthday_reminder|fr': ['Anniversaires à venir', '{{nombre}} client(s) fêteront leur anniversaire dans {{jours}} jour(s). Ouvrez Programmes > Anniversaires pour préparer vos offres.'],
+    'birthday_reminder|ht': ['Fèt k ap vini', '{{nombre}} kliyan ap fete fèt yo nan {{jours}} jou. Louvri Pwogram > Fèt pou prepare òf ou yo.'],
+    'birthday_upcoming|en': ['🎂 Your birthday is coming, {{prenom}}!', 'In {{jours}} day(s), the whole GoShip Express team will wish you a happy birthday. 💙🧡'],
+    'birthday_upcoming|es': ['🎂 ¡Se acerca su cumpleaños, {{prenom}}!', 'Dentro de {{jours}} día(s), todo el equipo de GoShip Express le deseará un feliz cumpleaños. 💙🧡'],
+    'birthday_upcoming|fr': ['🎂 Votre anniversaire approche, {{prenom}} !', 'Dans {{jours}} jour(s), toute l\'équipe GoShip Express vous souhaitera un joyeux anniversaire. 💙🧡'],
+    'birthday_upcoming|ht': ['🎂 Fèt ou ap pwoche, {{prenom}} !', 'Nan {{jours}} jou, tout ekip GoShip Express ap swete w bòn fèt. 💙🧡'],
+    'birthday|en': ['🎉🎂 Happy birthday, {{prenom}}! 💙🧡', 'Today is a special day, and the whole GoShip Express team is sending you lots of love and our very best wishes!\nWe hope this new year brings you health, joy, success, prosperity and many lovely surprises. Thank you for trusting GoShip Express to be with you in all your deliveries.\nIt is a pleasure to have you in our community. Have an extraordinary day and keep making your beautiful dreams come true!\nWith all our affection, the GoShip Express team. 💙🧡🚚'],
+    'birthday|es': ['🎉🎂 ¡Feliz cumpleaños, {{prenom}}! 💙🧡', '¡Hoy es un día especial, y todo el equipo de GoShip Express le envía mucho cariño y sus mejores deseos!\nDeseamos que este nuevo año le traiga salud, alegría, éxito, prosperidad y muchas bonitas sorpresas. Gracias por confiar en GoShip Express para acompañarle en todas sus entregas.\nEs un placer contarle entre nuestra comunidad. ¡Pase un día extraordinario y siga cumpliendo sus hermosos sueños!\nCon todo nuestro cariño, el equipo de GoShip Express. 💙🧡🚚'],
+    'birthday|fr': ['🎉🎂 Joyeux anniversaire, {{prenom}} ! 💙🧡', 'Aujourd\'hui est un jour spécial, et toute l\'équipe GoShip Express vous envoie beaucoup d\'affection et ses plus beaux vœux !\nNous souhaitons que cette nouvelle année vous apporte santé, joie, réussite, prospérité et de belles surprises. Merci de faire confiance à GoShip Express pour vous accompagner dans toutes vos livraisons.\nC\'est un plaisir de vous compter dans notre communauté. Passez une journée extraordinaire et continuez à réaliser vos beaux rêves !\nAvec toute notre affection, l\'équipe GoShip Express. 💙🧡🚚'],
+    'birthday|ht': ['🎉🎂 Bòn fèt, {{prenom}} ! 💙🧡', 'Jodi a se yon jou espesyal, epi tout ekip GoShip Express ap voye anpil lanmou ak pi bèl swè pou ou!\nNou swete nouvo ane sa a pote sante, lajwa, siksè, pwosperite ak anpil bèl sipriz nan lavi ou. Mèsi paske ou fè GoShip Express konfyans pou akonpaye w nan tout livrezon ou yo.\nSe yon plezi pou ou fè pati kominote nou an. Pase yon jounen ekstraòdinè epi kontinye reyalize bèl rèv ou yo!\nAvèk anpil afeksyon, ekip GoShip Express. 💙🧡🚚']
+  };
+
+  function aLaCle(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+
+  // lire_entier_programme : un entier dans l'intervalle, null si vide, la phrase de la base sinon
+  function entierProgramme(donnees, cle, min, max) {
+    var v = donnees[cle];
+    if (v === undefined || v === null || String(v).trim() === '') return null;
+    var t = String(v).trim();
+    if (!/^-?[0-9]{1,9}$/.test(t) || +t < min || +t > max) {
+      throw Erreur('INVALID_PROGRAM_VALUE', 'La valeur « ' + cle + ' » doit être un nombre entier entre ' + min + ' et ' + max + '.');
+    }
+    return +t;
+  }
+
+  function programmesDemo(d) {
+    if (!d.prog) {
+      d.prog = {
+        seq: 0,
+        points: {
+          reglages: { actif: false, expiration_jours: null, conditions: '' },
+          regles: EVENEMENTS_POINTS.map(function (e) {
+            return { evenement: e[0], libelle: e[1], points: 0, actif: false, operation: null, limite_jour: null,
+                     limite_mois: null, limite_client: null, expiration_jours: null, conditions: '' };
+          }),
+          offres: [], mouvements: []
+        },
+        anniv: {
+          fuseau: 'America/Santo_Domingo',
+          reglages: { actif: false, actif_depuis: null, heure_envoi: '09:00', regle_29_fevrier: 'fev28', rattrapage_jours: 1,
+                      canaux: ['push', 'email'], rappel_admin_jours: 7, rappel_client_actif: false, rappel_client_jours: 3,
+                      avantage_actif: false, avantage_type: 'aucun', avantage_valeur: null, avantage_libelle: '' },
+          modeles: {}, journal: []
+        },
+        campagnes: [],
+        parrainage: { nom: 'GOship Refer', statut: 'brouillon', debut: null, fin: null, parrain_type: null, parrain_valeur: null,
+                      filleul_type: null, filleul_valeur: null, operation: null, delai_validation_jours: 0, max_recompenses: null,
+                      max_par_parrain: null, cumul_bienvenue: true, expiration_jours: null, conditions: '', annulation: '' },
+        parrainages: [], codes: {}, invitations: [], operations: [], recompenses: [], erreurs: [], prefs: {}
+      };
+    }
+    return d.prog;
+  }
+
+  function clientDemo(d, id) {
+    return d.comptes.filter(function (c) { return c.id === id; })[0] || null;
+  }
+  function clientActifDemo(d, id) {
+    var c = clientDemo(d, id);
+    return c && c.role === 'client' && !c.supprime_le ? c : null;
+  }
+  function prenomDemo(nom) {
+    return String(nom || '').trim().split(' ')[0].replace(/[{}<>]/g, '').slice(0, 40);
+  }
+  function aujourdhuiDemo() { return jourSD(maintenant()); }
+
+  // texte_recompense : la phrase qui décrit un avantage, jamais un montant sans sa nature
+  function texteRecompense(type, valeur, langue) {
+    var n = Number(valeur), m = n.toFixed(2), pts = String(Math.round(n));
+    if (type === 'gopoints') return pts + ' GOPOINTS';
+    if (langue === 'en') {
+      return { credit_expedition: '$' + m + ' shipping credit', reduction_frais: '$' + m + ' off the service fee',
+               bonus_fixe: '$' + m + ' bonus' }[type] || 'a $' + m + ' benefit on your next package';
+    }
+    if (langue === 'es') {
+      return { credit_expedition: 'crédito de envío de $' + m, reduction_frais: '$' + m + ' de descuento en la tarifa de servicio',
+               bonus_fixe: 'bono de $' + m }[type] || 'un beneficio de $' + m + ' en su próximo paquete';
+    }
+    if (langue === 'ht') {
+      return { credit_expedition: 'kredi ekspedisyon $' + m, reduction_frais: '$' + m + ' rabè sou frè sèvis la',
+               bonus_fixe: 'bonis $' + m }[type] || 'yon avantaj $' + m + ' sou pwochen koli ou';
+    }
+    var f = m.replace('.', ',');
+    return { credit_expedition: f + ' $ de crédit d\'expédition', reduction_frais: f + ' $ de réduction sur les frais de service',
+             bonus_fixe: 'un bonus de ' + f + ' $' }[type] || 'un avantage de ' + f + ' $ sur votre prochain colis';
+  }
+
+  function noterErreurProgramme(p, programme, evenement, client, message) {
+    p.erreurs.push({ date: maintenant(), programme: programme, evenement: evenement, client_id: client || null,
+                     message: String(message || '').slice(0, 200) });
+  }
+
+  // campagnes_maj_statuts : une campagne programmée devient active à sa date, terminée le lendemain de sa fin
+  function majStatutsCampagnes(p) {
+    var jour = aujourdhuiDemo();
+    p.campagnes.concat([p.parrainage]).forEach(function (c) {
+      if (c.statut === 'programmee' && c.debut <= jour) c.statut = 'active';
+      if (['active', 'programmee', 'suspendue'].indexOf(c.statut) >= 0 && c.fin && c.fin < jour) c.statut = 'terminee';
+    });
+  }
+
+  /* -- GOPOINTS : le registre et les soldes -- */
+  function soldePoints(p, client) {
+    return p.points.mouvements.filter(function (m) { return m.client_id === client; })
+      .reduce(function (s, m) { return s + m.points; }, 0);
+  }
+
+  // points_ecrire : un mouvement de plus, idempotent par sa clé, jamais un solde négatif
+  function pointsEcrireDemo(d, client, type, points, source, reference, cle, motif, auteur, expire, annule, offre) {
+    var p = programmesDemo(d);
+    if (!clientDemo(d, client)) throw Erreur('CLIENT_NOT_FOUND', 'Client introuvable.');
+    if (p.points.mouvements.some(function (m) { return m.cle === cle; })) return null;
+    if (soldePoints(p, client) + points < 0) throw Erreur('INSUFFICIENT_POINTS', 'Le solde de points ne suffit pas.');
+    p.seq += 1;
+    p.points.mouvements.push({ id: p.seq, client_id: client, type: type, points: points, source: source || '', reference: reference || '',
+                               cle: cle, motif: motif || '', auteur_id: auteur || null, expire_le: expire || null,
+                               annule_id: annule || null, offre_id: offre || null, cree_le: maintenant() });
+    return p.seq;
+  }
+
+  function mouvementAnnule(p, m) {
+    return p.points.mouvements.some(function (a) { return a.annule_id === m.id; });
+  }
+
+  // points_attribuer : les points d'un événement selon sa règle, null si elle n'y a pas droit (jamais une erreur)
+  function pointsAttribuerDemo(d, client, evenement, reference, points) {
+    var p = programmesDemo(d), g = p.points.reglages;
+    var r = p.points.regles.filter(function (x) { return x.evenement === evenement; })[0];
+    if (!r || !g.actif || !r.actif) return null;
+    var v = points == null ? r.points : points;
+    if (!v || v <= 0) return null;
+    var jour = aujourdhuiDemo();
+    var gains = p.points.mouvements.filter(function (m) { return m.client_id === client && m.type === 'gain' && m.source === evenement; });
+    if (r.limite_jour != null && gains.filter(function (m) { return jourSD(m.cree_le) === jour; }).length >= r.limite_jour) return null;
+    if (r.limite_mois != null && gains.filter(function (m) { return jourSD(m.cree_le).slice(0, 7) === jour.slice(0, 7); }).length >= r.limite_mois) return null;
+    if (r.limite_client != null && gains.length >= r.limite_client) return null;
+    var duree = r.expiration_jours != null ? r.expiration_jours : g.expiration_jours;
+    return pointsEcrireDemo(d, client, 'gain', v, evenement, reference || '', 'gain:' + evenement + ':' + (reference || ''),
+                            '', null, duree == null ? null : decalerJour(jour, duree));
+  }
+
+  // points_gain_campagne : le nombre de points est celui de la campagne, pas celui d'une règle
+  function pointsGainCampagneDemo(d, client, source, reference, points) {
+    var g = programmesDemo(d).points.reglages;
+    if (!g.actif || !points || points <= 0) return null;
+    return pointsEcrireDemo(d, client, 'gain', points, source, reference, 'gain:' + source + ':' + reference, '', null,
+                            g.expiration_jours == null ? null : decalerJour(aujourdhuiDemo(), g.expiration_jours));
+  }
+
+  /* -- Les avantages -- */
+  function avantageActif(r) { return ['en_attente', 'obtenue', 'utilisee'].indexOf(r.statut) >= 0; }
+
+  // recompense_finaliser : un avantage devient acquis (les points entrent dans le registre)
+  function recompenseFinaliserDemo(d, r) {
+    var p = programmesDemo(d);
+    if (r.statut !== 'en_attente' && r.statut !== 'obtenue') return false;
+    if (r.type === 'gopoints') {
+      var ok = pointsGainCampagneDemo(d, r.client_id, 'recompense', r.id, Math.round(r.valeur));
+      if (ok === null && !p.points.mouvements.some(function (m) { return m.cle === 'gain:recompense:' + r.id; })) {
+        r.statut = 'en_attente'; r.motif = 'POINTS_INDISPONIBLES';
+        return false;
+      }
+    }
+    r.statut = 'obtenue'; r.motif = '';
+    return true;
+  }
+
+  // recompense_creer : une clé unique (rien en double), un seul bonus de bienvenue par client, un délai de validation éventuel
+  function recompenseCreerDemo(d, client, programme, type, valeur, cle, campagne, reference, delai, expiration) {
+    var p = programmesDemo(d), jour = aujourdhuiDemo();
+    if (p.recompenses.some(function (r) { return r.cle === cle; })) return null;
+    if (programme === 'welcome' && p.recompenses.some(function (r) { return r.client_id === client && r.programme === 'welcome' && avantageActif(r); })) return null;
+    p.seq += 1;
+    var r = { id: 'rec-' + p.seq, client_id: client, programme: programme, type: type, valeur: Number(valeur),
+              statut: delai > 0 ? 'en_attente' : 'obtenue', cle: cle, campagne: campagne || '', reference: reference || '',
+              motif: '', auteur_id: null, cree_le: maintenant(),
+              valide_apres: delai > 0 ? decalerJour(jour, delai) : null,
+              expire_le: expiration == null ? null : decalerJour(jour, (delai || 0) + expiration) };
+    p.recompenses.push(r);
+    if (!(delai > 0)) recompenseFinaliserDemo(d, r);
+    return r.id;
+  }
+
+  // operation_valable : l'opération d'un avantage tient-elle encore ? (« colis:… » ou « facture:… »)
+  function operationValableDemo(d, reference) {
+    if (String(reference).indexOf('facture:') === 0) {
+      var f = (d.factures || []).filter(function (x) { return x.id === reference.slice(8); })[0];
+      if (!f || f.statut === 'annulee') return false;
+      var tous = f.paiements || [];
+      return !(tous.some(function (x) { return x.annule_le; }) && !paiementsValides(f).length);
+    }
+    if (String(reference).indexOf('colis:') === 0) return !!trouverColisDemo(d, reference.slice(6));
+    return true;
+  }
+
+  // parrainage_actualiser : « récompensé » quand plus aucun avantage n'attend, « annulé » si tous sont annulés
+  function parrainageActualiserDemo(p, id) {
+    var cles = ['refer:' + id + ':parrain', 'refer:' + id + ':filleul'];
+    var liste = p.recompenses.filter(function (r) { return cles.indexOf(r.cle) >= 0; });
+    var attente = liste.filter(function (r) { return r.statut === 'en_attente'; }).length;
+    var valides = liste.filter(function (r) { return r.statut === 'obtenue' || r.statut === 'utilisee'; }).length;
+    var pa = p.parrainages.filter(function (x) { return x.id === id; })[0];
+    if (!pa || pa.statut !== 'qualifie') return;
+    if (attente === 0 && valides > 0) pa.statut = 'recompense';
+    else if (attente === 0 && valides === 0) { pa.statut = 'annule'; pa.motif = 'OPERATION_ANNULEE'; }
+    pa.maj_le = maintenant();
+  }
+
+  // programmes_operation_annulee : les avantages seulement « en attente » sont annulés, jamais accordés
+  function operationAnnuleeDemo(d, reference) {
+    var p = programmesDemo(d);
+    p.operations.forEach(function (o) { if (o.reference === reference && !o.annulee_le) o.annulee_le = maintenant(); });
+    p.recompenses.filter(function (r) { return r.reference === reference && r.statut === 'en_attente'; }).forEach(function (r) {
+      r.statut = 'annulee'; r.motif = 'OPERATION_ANNULEE';
+      if (r.cle.indexOf('refer:') === 0) parrainageActualiserDemo(p, +r.cle.split(':')[1]);
+    });
+  }
+
+  // Le travail du jour (campagnes_quotidien), fait à la demande : les avantages dont le délai est passé
+  // sont acquis si leur opération tient encore, annulés sinon
+  function programmesJourDemo(d) {
+    var p = programmesDemo(d), jour = aujourdhuiDemo();
+    majStatutsCampagnes(p);
+    p.recompenses.filter(function (r) { return r.statut === 'en_attente' && r.valide_apres && r.valide_apres <= jour; }).forEach(function (r) {
+      if (operationValableDemo(d, r.reference)) recompenseFinaliserDemo(d, r);
+      else { r.statut = 'annulee'; r.motif = 'OPERATION_ANNULEE'; }
+      if (r.cle.indexOf('refer:') === 0) parrainageActualiserDemo(p, +r.cle.split(':')[1]);
+    });
+  }
+
+  /* -- Le moteur -- */
+  // programmes_operation : une opération qualifiante vue (idempotente : rejouée, elle ne fait rien de plus)
+  function programmesOperationDemo(d, client, operation, reference) {
+    var p = programmesDemo(d);
+    if (!clientActifDemo(d, client)) return;
+    try {
+      majStatutsCampagnes(p);
+      if (p.operations.some(function (o) { return o.client_id === client && o.operation === operation && o.reference === reference; })) return;
+      p.operations.push({ client_id: client, operation: operation, reference: reference, annulee_le: null, cree_le: maintenant() });
+      var rang = p.operations.filter(function (o) { return o.client_id === client && o.operation === operation && !o.annulee_le; }).length;
+      var regle = function (ev) { return p.points.regles.filter(function (r) { return r.evenement === ev; })[0]; };
+      if (rang === 1 && regle('first_operation').operation === operation) pointsAttribuerDemo(d, client, 'first_operation', reference);
+      else if (rang > 1 && regle('repeat_operation').operation === operation) pointsAttribuerDemo(d, client, 'repeat_operation', reference);
+
+      var cl = clientDemo(d, client), cree = jourSD(cl.cree_le);
+      var deja = p.parrainages.some(function (x) { return x.filleul_id === client && ['inscrit', 'qualifie', 'recompense', 'suspect'].indexOf(x.statut) >= 0; });
+      var b = p.campagnes.filter(function (x) { return x.statut === 'active' && x.operation === operation && cree >= x.debut && cree <= x.fin; })
+        .sort(function (x, y) { return x.debut < y.debut ? -1 : x.debut > y.debut ? 1 : (x.id < y.id ? -1 : 1); })[0];
+      if (b && !(!b.cumul_parrainage && deja) &&
+          (b.budget_max == null || p.recompenses.filter(function (r) { return r.programme === 'welcome' && r.campagne === b.id && avantageActif(r); }).length < b.budget_max)) {
+        recompenseCreerDemo(d, client, 'welcome', b.type_recompense, b.valeur_recompense, 'welcome:' + b.id + ':' + client, b.id, reference, b.delai_validation_jours);
+      }
+
+      var c = p.parrainage;
+      var pa = p.parrainages.filter(function (x) { return x.filleul_id === client && x.statut === 'inscrit'; })[0];
+      if (pa && c.statut === 'active' && c.operation === operation) {
+        var comptes = function (filtre) { return p.parrainages.filter(function (x) { return (x.statut === 'qualifie' || x.statut === 'recompense') && filtre(x); }).length; };
+        if (c.max_recompenses != null && comptes(function () { return true; }) >= c.max_recompenses) { pa.statut = 'refuse'; pa.motif = 'PLAFOND_GLOBAL'; }
+        else if (c.max_par_parrain != null && comptes(function (x) { return x.parrain_id === pa.parrain_id; }) >= c.max_par_parrain) { pa.statut = 'refuse'; pa.motif = 'PLAFOND_PARRAIN'; }
+        else {
+          pa.statut = 'qualifie'; pa.qualifie_le = maintenant(); pa.maj_le = maintenant();
+          if (c.cumul_bienvenue || !p.recompenses.some(function (r) { return r.client_id === client && r.programme === 'welcome' && avantageActif(r); })) {
+            recompenseCreerDemo(d, client, 'refer_filleul', c.filleul_type, c.filleul_valeur, 'refer:' + pa.id + ':filleul', 'parrainage', reference, c.delai_validation_jours, c.expiration_jours);
+          }
+          recompenseCreerDemo(d, pa.parrain_id, 'refer_parrain', c.parrain_type, c.parrain_valeur, 'refer:' + pa.id + ':parrain', 'parrainage', reference, c.delai_validation_jours, c.expiration_jours);
+          if (c.parrain_type !== 'gopoints' && c.delai_validation_jours === 0) pointsAttribuerDemo(d, pa.parrain_id, 'referral_validated', 'parrainage:' + pa.id);
+          parrainageActualiserDemo(p, pa.id);
+        }
+      }
+    } catch (e) {
+      // Une erreur dans ces calculs ne bloque jamais l'opération qui les a causés : elle est journalisée
+      noterErreurProgramme(p, 'operation', operation, client, e.code || e.message);
+    }
+  }
+
+  // code_parrainage_de : créé à la première demande, 8 signes sans ambiguïté (ni O, ni 0, ni I, ni 1, ni L)
+  function codeParrainageDe(p, client) {
+    if (p.codes[client]) return p.codes[client];
+    var alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', code, pris = function (c) {
+      return Object.keys(p.codes).some(function (k) { return p.codes[k] === c; });
+    };
+    do {
+      code = 'GS';
+      for (var i = 0; i < 6; i++) code += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    } while (pris(code));
+    p.codes[client] = code;
+    return code;
+  }
+
+  // parrainage_rattacher : à l'inscription (strict faux) un code invalide est ignoré ; saisi par le client (strict vrai) il est refusé avec sa raison
+  function parrainageRattacherDemo(d, filleul, code, source, strict) {
+    var p = programmesDemo(d), c = p.parrainage;
+    majStatutsCampagnes(p);
+    var refus = function (c2, phrase) { if (strict) throw Erreur(c2, phrase); return null; };
+    var saisi = String(code || '').trim().toUpperCase();
+    var parrain = Object.keys(p.codes).filter(function (k) { return p.codes[k] === saisi; })[0];
+    if (!parrain) return refus('INVALID_REFERRAL_CODE', 'Ce code de parrainage n\'existe pas. Vérifiez-le.');
+    if (parrain === filleul) return refus('SELF_REFERRAL', 'Vous ne pouvez pas utiliser votre propre code de parrainage.');
+    var jour = aujourdhuiDemo();
+    if (c.statut !== 'active' || !(jour >= c.debut && jour <= c.fin)) {
+      return refus('REFERRAL_INACTIVE', 'Le parrainage n\'est pas ouvert pour le moment : ce code ne peut pas être utilisé.');
+    }
+    var f = clientActifDemo(d, filleul), pr = clientActifDemo(d, parrain);
+    if (!f || !pr) return refus('INVALID_REFERRAL_CODE', 'Ce code de parrainage ne peut pas être utilisé.');
+    if (p.parrainages.some(function (x) { return x.filleul_id === filleul; })) return refus('ALREADY_REFERRED', 'Un code de parrainage est déjà enregistré pour votre compte.');
+    if (p.parrainages.some(function (x) { return x.filleul_id === parrain && x.parrain_id === filleul; })) {
+      return refus('REFERRAL_CYCLE', 'Ce parrainage n\'est pas possible : cette personne a été invitée par vous.');
+    }
+    if (p.operations.some(function (o) { return o.client_id === filleul && o.operation === c.operation; })) {
+      return refus('REFERRAL_TOO_LATE', 'Un code de parrainage ne peut plus être ajouté : votre première opération a déjà eu lieu.');
+    }
+    if (source === 'saisie' && Date.now() - new Date(f.cree_le).getTime() > 30 * 864e5) {
+      return refus('REFERRAL_TOO_LATE', 'Un code de parrainage ne s\'ajoute que dans les 30 jours qui suivent l\'ouverture du compte.');
+    }
+    // Les indices d'abus : un seul ne bloque rien, mais le parrainage attend l'examen d'un administrateur
+    var chiffres = function (t) { return String(t || '').replace(/\D/g, ''); }, motif = [];
+    if (chiffres(f.telephone).length >= 7 && chiffres(f.telephone) === chiffres(pr.telephone)) motif.push('MEME_TELEPHONE');
+    if (String(f.adresse || '').trim().length >= 8 && String(f.adresse).trim().toLowerCase() === String(pr.adresse || '').trim().toLowerCase()) motif.push('MEME_ADRESSE');
+    var nomMail = function (e) { return String(e || '').toLowerCase().split('@')[0]; };
+    if (nomMail(f.email) && nomMail(f.email) === nomMail(pr.email)) motif.push('MEME_IDENTIFIANT_EMAIL');
+    if (p.parrainages.filter(function (x) { return x.parrain_id === parrain && Date.now() - new Date(x.cree_le).getTime() < 864e5; }).length >= 5) motif.push('RAFALE_INSCRIPTIONS');
+    p.seq += 1;
+    p.parrainages.push({ id: p.seq, parrain_id: parrain, filleul_id: filleul, code: saisi, statut: motif.length ? 'suspect' : 'inscrit',
+                         motif: motif.join(' '), source: source, cree_le: maintenant(), maj_le: maintenant(), qualifie_le: null });
+    return p.seq;
+  }
+
+  // Un compte créé (programmes_compte_cree) : les points de bienvenue et le rattachement au parrain du formulaire
+  function programmesCompteCreeDemo(d, compte, code) {
+    var p = programmesDemo(d);
+    try {
+      pointsAttribuerDemo(d, compte.id, 'account_created', 'compte:' + compte.id);
+      if (String(code || '').trim()) parrainageRattacherDemo(d, compte.id, code, 'inscription', false);
+    } catch (e) {
+      noterErreurProgramme(p, 'compte', 'cree', compte.id, e.code || e.message);
+    }
+  }
+
+  /* -- Anniversaires -- */
+  // anniversaire_en : le 29 février d'une année non bissextile tombe le 28 février ou le 1er mars, au choix
+  function anniversaireEnDemo(naissance, annee, regle) {
+    var mo = naissance.slice(5, 7), j = naissance.slice(8, 10);
+    var bissextile = (annee % 4 === 0 && annee % 100 !== 0) || annee % 400 === 0;
+    if (mo === '02' && j === '29' && !bissextile) return annee + (regle === 'mars1' ? '-03-01' : '-02-28');
+    return annee + '-' + mo + '-' + j;
+  }
+
+  function modeleAnniversaire(p, type, langue) {
+    var cle = type + '|' + langue, m = p.anniv.modeles[cle], defaut = MODELES_ANNIVERSAIRE[cle];
+    return { type: type, langue: langue, titre: m ? m[0] : defaut[0], message: m ? m[1] : defaut[1],
+             modifie: !!m && (m[0] !== defaut[0] || m[1] !== defaut[1]) };
+  }
+
+  // Les anniversaires du jour sont préparés une fois par client et par année (anniversaires_executer). Aucun envoi
+  // n'a lieu en démonstration : les envois restent « en attente », jamais « envoyé ».
+  function anniversairesPreparerDemo(d) {
+    var p = programmesDemo(d), r = p.anniv.reglages, jour = aujourdhuiDemo();
+    if (!r.actif || !d.naissances) return;
+    var annee = +jour.slice(0, 4);
+    Object.keys(d.naissances).forEach(function (id) {
+      var cl = clientActifDemo(d, id);
+      if (!cl || anniversaireEnDemo(d.naissances[id], annee, r.regle_29_fevrier) !== jour) return;
+      if (r.actif_depuis && jour < r.actif_depuis) return;
+      if (p.anniv.journal.some(function (j) { return j.client_id === id && j.annee === annee; })) return;
+      var refuse = p.prefs[id] && p.prefs[id].anniversaire === false;
+      p.seq += 1;
+      p.anniv.journal.push({ id: p.seq, client_id: id, annee: annee, anniversaire_le: jour, statut: refuse ? 'ignore' : 'prepare',
+                             motif: refuse ? 'DESACTIVE_PAR_LE_CLIENT' : '', cree_le: maintenant(),
+                             envois: refuse ? [] : r.canaux.map(function (c) {
+                               return { canal: c, statut: 'attente', tentative: 0, code_erreur: null, envoye_le: null, livre_le: null };
+                             }) });
+    });
+  }
+
+  function pagePropre(page) { return Math.max(+page || 0, 0); }
+  function tranche(liste, page, par) { return liste.slice(page * par, page * par + par); }
+
+  // Ce qui manque à une campagne ou au parrainage pour être publié (bienvenue_manques, parrainage_manques)
+  function manquesCampagne(p, b) {
+    var m = [], jour = aujourdhuiDemo();
+    if (String(b.nom || '').trim().length < 2) m.push('le nom');
+    if (!b.debut) m.push('la date de début');
+    if (!b.fin) m.push('la date de fin');
+    if (!b.type_recompense) m.push('le type de récompense');
+    if (b.valeur_recompense == null) m.push('la valeur de la récompense');
+    if (!b.operation) m.push('l\'opération qualifiante');
+    if (String(b.conditions || '').trim().length < 10) m.push('les conditions générales (visibles par le client)');
+    if (b.fin && b.fin < jour) m.push('une date de fin qui n\'est pas déjà passée');
+    if (b.type_recompense === 'gopoints' && !p.points.reglages.actif) m.push('le programme GOPOINTS allumé (la récompense est en points)');
+    return m;
+  }
+  function manquesParrainage(p, c) {
+    var m = [], jour = aujourdhuiDemo();
+    if (!c.debut) m.push('la date de début');
+    if (!c.fin) m.push('la date de fin');
+    if (!c.parrain_type || c.parrain_valeur == null) m.push('l\'avantage du parrain (type et valeur)');
+    if (!c.filleul_type || c.filleul_valeur == null) m.push('l\'avantage du filleul (type et valeur)');
+    if (!c.operation) m.push('la transaction qualifiante');
+    if (String(c.conditions || '').trim().length < 10) m.push('les conditions générales (visibles par le client)');
+    if (String(c.annulation || '').trim().length < 10) m.push('les conditions d\'annulation');
+    if (c.fin && c.fin < jour) m.push('une date de fin qui n\'est pas déjà passée');
+    if ((c.parrain_type === 'gopoints' || c.filleul_type === 'gopoints') && !p.points.reglages.actif) m.push('le programme GOPOINTS allumé (un avantage est en points)');
+    return m;
+  }
+
+  // Une valeur de campagne : type connu, nombre, date AAAA-MM-JJ, sinon la phrase de la base
+  function valeurCampagne(champ, v) {
+    if (v === undefined || v === null || String(v).trim() === '') return null;
+    var invalide = function () { throw Erreur('INVALID_CAMPAIGN', 'La campagne contient une valeur qui n\'est pas valable (type, dates, nombres) : vérifiez-la.'); };
+    if (champ === 'date') {
+      var t = String(v).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(t) || isNaN(new Date(t + 'T00:00:00Z').getTime())) invalide();
+      return t;
+    }
+    if (champ === 'type' && TYPES_AVANTAGE.indexOf(v) < 0) invalide();
+    if (champ === 'operation' && OPERATIONS_PROGRAMME.indexOf(v) < 0) invalide();
+    if (champ === 'nombre') {
+      var n = Number(String(v).replace(',', '.'));
+      if (!isFinite(n) || n <= 0) invalide();
+      return n;
+    }
+    return v;
+  }
+  function verifierPeriodeCampagne(debut, fin) {
+    if (debut && fin && debut > fin) {
+      throw Erreur('INVALID_CAMPAIGN', 'La campagne contient une valeur qui n\'est pas valable (type, dates, nombres) : vérifiez-la.');
+    }
+  }
+
+  // La copie de bienvenue_enregistrer et parrainage_config_modifier : seuls les champs présents changent
+  function appliquerChamps(cible, donnees, champs) {
+    champs.forEach(function (c) {
+      if (!aLaCle(donnees, c[0])) return;
+      var v = donnees[c[0]];
+      if (c[1] === 'texte') cible[c[0]] = String(v == null ? '' : v).trim().slice(0, c[2]);
+      else if (c[1] === 'texte-brut') cible[c[0]] = String(v == null ? '' : v).slice(0, c[2]);
+      else if (c[1] === 'entier') cible[c[0]] = entierProgramme(donnees, c[0], c[2], c[3]);
+      else if (c[1] === 'entier0') cible[c[0]] = entierProgramme(donnees, c[0], c[2], c[3]) || 0;
+      else if (c[1] === 'booleen') cible[c[0]] = v === true || v === 'true';
+      else cible[c[0]] = valeurCampagne(c[1], v);
+    });
+  }
+  var CHAMPS_BIENVENUE = [['nom', 'texte', 80], ['description', 'texte', 500], ['debut', 'date'], ['fin', 'date'], ['type_recompense', 'type'],
+                          ['valeur_recompense', 'nombre'], ['operation', 'operation'], ['budget_max', 'entier', 1, 10000000],
+                          ['delai_validation_jours', 'entier0', 0, 90], ['cumul_parrainage', 'booleen'], ['conditions', 'texte-brut', 4000]];
+  var CHAMPS_PARRAINAGE = [['nom', 'texte', 80], ['debut', 'date'], ['fin', 'date'], ['parrain_type', 'type'], ['parrain_valeur', 'nombre'],
+                           ['filleul_type', 'type'], ['filleul_valeur', 'nombre'], ['operation', 'operation'],
+                           ['delai_validation_jours', 'entier0', 0, 90], ['max_recompenses', 'entier', 1, 10000000],
+                           ['max_par_parrain', 'entier', 1, 100000], ['cumul_bienvenue', 'booleen'], ['expiration_jours', 'entier', 1, 3650],
+                           ['conditions', 'texte-brut', 4000], ['annulation', 'texte-brut', 2000]];
+
+  function copieCampagne(c, extra) { return Object.assign({}, c, extra || {}); }
+
+  // Les réglages des anniversaires, tels que la base les rend (heure « HH:MM », fuseau, canaux)
+  function reglagesAnniversaire(p) {
+    return Object.assign({ id: true }, p.anniv.reglages, { fuseau: p.anniv.fuseau });
+  }
+
+  // Un appel du client ou de l'équipe : la permission, le travail du jour, puis la réponse. On n'écrit que si quelque chose a
+  // changé (une lecture ne doit pas réveiller les écrans qui surveillent les données).
+  function appelProgrammes(permission, faire) {
+    var d = lireDonnees();
+    try {
+      var moi = permission ? exiger(d, permission) : compteConnecte(d);
+      if (!moi) throw Erreur('non-autorise');
+      var p = programmesDemo(d);
+      var avant = JSON.stringify(d.prog);
+      programmesJourDemo(d);
+      var r = faire(d, p, moi);
+      if (JSON.stringify(d.prog) !== avant) ecrireDonnees(d, 'programmes');
+      return plusTard(r);
+    } catch (e) { return rejeter(e); }
+  }
+  function clientSeul(moi) {
+    if (!moi || moi.role !== 'client') throw Erreur('non-autorise');
+  }
+
+  function publierCampagneDemo(id) {
+    return appelProgrammes('programs.manage', function (d, p, moi) {
+      var b = p.campagnes.filter(function (x) { return x.id === id; })[0];
+      if (!b) throw Erreur('INVALID_CAMPAIGN', 'Cette campagne n\'existe pas.');
+      if (['brouillon', 'suspendue'].indexOf(b.statut) < 0) throw Erreur('INVALID_CAMPAIGN_STATUS', 'Seul un brouillon ou une campagne suspendue se publie.');
+      var m = manquesCampagne(p, b);
+      if (m.length) throw Erreur('INCOMPLETE_CAMPAIGN', 'La campagne est incomplète : il manque ' + m.join(', ') + '.');
+      b.statut = b.debut > aujourdhuiDemo() ? 'programmee' : 'active'; b.maj_le = maintenant();
+      journaliser(d, moi, 'bienvenue.publication', 'programme', b.id, null, { statut: b.statut });
+      return Object.assign({}, b);
+    });
+  }
+
   var demoAPI = {
     identifiantsAdmin: ADMIN_DEMO,
 
@@ -3543,6 +4156,7 @@
         telephone: x.telephone, langue: LANGUE, cree_le: maintenant()
       };
       d.comptes.push(compte);
+      programmesCompteCreeDemo(d, compte, x.code_parrainage);
       // À part des comptes, comme la table profils_naissance : publicProfil ne la montre jamais
       d.naissances = d.naissances || {};
       d.naissances[compte.id] = naissance;
@@ -3568,6 +4182,151 @@
       d.naissances[moi.id] = v;
       ecrireDonnees(d);
       return plusTard(v);
+    },
+
+    /* ---- Les programmes du client : copie de supabase-fidelite.sql et supabase-campagnes.sql ---- */
+    portefeuille: function (page) {
+      return appelProgrammes(null, function (d, p, moi) {
+        var g = p.points.reglages, jour = aujourdhuiDemo(), pg = pagePropre(page);
+        var mien = p.points.mouvements.filter(function (m) { return m.client_id === moi.id; });
+        var somme = function (f) { return mien.filter(f).reduce(function (s, m) { return s + m.points; }, 0); };
+        var tri = mien.slice().sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : a.cree_le > b.cree_le ? -1 : b.id - a.id; });
+        return {
+          actif: g.actif, conditions: g.actif ? g.conditions : '', solde: soldePoints(p, moi.id),
+          gagnes: somme(function (m) { return m.points > 0; }),
+          utilises: -somme(function (m) { return m.type === 'utilisation'; }),
+          expires: -somme(function (m) { return m.type === 'expiration'; }),
+          total: mien.length,
+          elements: tranche(tri, pg, 20).map(function (m) {
+            return { id: m.id, type: m.type, points: m.points, source: m.source, date: m.cree_le, expire_le: m.expire_le,
+                     statut: mouvementAnnule(p, m) ? 'annule' : 'valide' };
+          }),
+          offres: !g.actif ? [] : p.points.offres.filter(function (o) {
+            return o.actif && (!o.debut || o.debut <= jour) && (!o.fin || o.fin >= jour) && (o.stock == null || o.stock > 0);
+          }).sort(function (a, b) { return a.cout_points - b.cout_points || (a.nom < b.nom ? -1 : 1); }).map(function (o) {
+            return { id: o.id, nom: o.nom, description: o.description, cout_points: o.cout_points, type: o.type,
+                     valeur: o.valeur, fin: o.fin, conditions: o.conditions };
+          })
+        };
+      });
+    },
+
+    utiliserPoints: function (offre, cle) {
+      return appelProgrammes(null, function (d, p, moi) {
+        if (!cle) throw Erreur('INVALID_REQUEST', 'Requête incomplète.');
+        var k = 'use:' + moi.id + ':' + cle, jour = aujourdhuiDemo();
+        var o = p.points.offres.filter(function (x) { return x.id === offre; })[0];
+        var deja = p.recompenses.filter(function (r) { return r.cle === k; })[0];
+        if (deja) return { deja: true, recompense: deja.id, valeur: deja.valeur, type: deja.type };
+        if (!p.points.reglages.actif) throw Erreur('OFFER_UNAVAILABLE', 'Le programme GOPOINTS n\'est pas ouvert pour le moment.');
+        if (!o || !o.actif || (o.debut && o.debut > jour) || (o.fin && o.fin < jour)) throw Erreur('OFFER_UNAVAILABLE', 'Cette offre n\'est pas disponible.');
+        if (o.stock != null && o.stock <= 0) throw Erreur('OFFER_OUT_OF_STOCK', 'Cette offre n\'est plus disponible : le stock est épuisé.');
+        if (o.limite_client != null && p.points.mouvements.filter(function (m) {
+              return m.client_id === moi.id && m.type === 'utilisation' && m.offre_id === o.id && !mouvementAnnule(p, m);
+            }).length >= o.limite_client) {
+          throw Erreur('OFFER_LIMIT_REACHED', 'Vous avez déjà utilisé cette offre le nombre de fois permis.');
+        }
+        var mv = pointsEcrireDemo(d, moi.id, 'utilisation', -o.cout_points, 'offre', o.nom, k, '', null, null, null, o.id);
+        if (mv === null) throw Erreur('DUPLICATE_OPERATION', 'Cet échange a déjà été fait.');
+        if (o.stock != null) o.stock -= 1;
+        p.seq += 1;
+        var r = { id: 'rec-' + p.seq, client_id: moi.id, programme: 'points', type: o.type, valeur: Number(o.valeur), statut: 'obtenue', cle: k,
+                  campagne: o.nom, reference: 'mouvement:' + mv, motif: '', auteur_id: null, cree_le: maintenant(), valide_apres: null, expire_le: null };
+        p.recompenses.push(r);
+        return { deja: false, recompense: r.id, valeur: r.valeur, type: r.type, points: o.cout_points, solde: soldePoints(p, moi.id) };
+      });
+    },
+
+    mesAvantages: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        return p.recompenses.filter(function (r) { return r.client_id === moi.id; })
+          .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; }).map(function (r) {
+            return { id: r.id, programme: r.programme, type: r.type, valeur: r.valeur, statut: r.statut, date: r.cree_le, expire_le: r.expire_le };
+          });
+      });
+    },
+
+    maBienvenue: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        var cree = jourSD(moi.cree_le), b, statut;
+        var r = p.recompenses.filter(function (x) { return x.client_id === moi.id && x.programme === 'welcome'; })
+          .sort(function (x, y) { return x.cree_le < y.cree_le ? 1 : -1; })[0];
+        if (r) {
+          b = p.campagnes.filter(function (x) { return x.id === r.campagne; })[0];
+          statut = r.statut === 'en_attente' ? 'en_attente' : (r.statut === 'obtenue' || r.statut === 'utilisee' ? 'obtenu' : 'expire');
+        } else {
+          b = p.campagnes.filter(function (x) { return (x.statut === 'active' || x.statut === 'terminee') && cree >= x.debut && cree <= x.fin; })
+            .sort(function (x, y) { return (y.statut === 'active') - (x.statut === 'active') || (x.debut < y.debut ? 1 : -1); })[0];
+          if (!b) return null;
+          statut = b.statut === 'active' && (b.budget_max == null || p.recompenses.filter(function (x) {
+            return x.programme === 'welcome' && x.campagne === b.id && avantageActif(x);
+          }).length < b.budget_max) ? 'a_debloquer' : 'expire';
+        }
+        if (!b) return null;
+        return { nom: b.nom, description: b.description, statut: statut, fin: b.fin, operation: b.operation, type: b.type_recompense,
+                 valeur: b.valeur_recompense, avantage: texteRecompense(b.type_recompense, b.valeur_recompense, moi.langue),
+                 delai_validation_jours: b.delai_validation_jours, conditions: b.conditions,
+                 etapes: [{ cle: 'compte', fait: true }, { cle: 'operation', fait: statut === 'en_attente' || statut === 'obtenu' }] };
+      });
+    },
+
+    monParrainage: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        var c = p.parrainage, jour = aujourdhuiDemo(), code = codeParrainageDe(p, moi.id);
+        var miens = p.parrainages.filter(function (x) { return x.parrain_id === moi.id; });
+        var lien = new URL('inscription.html?parrain=' + code, location.href).href;
+        return {
+          actif: c.statut === 'active' && !!c.debut && jour >= c.debut && jour <= c.fin,
+          nom: c.nom, code: code, lien: lien, fin: c.fin, operation: c.operation,
+          avantage_parrain: c.parrain_type ? texteRecompense(c.parrain_type, c.parrain_valeur, moi.langue) : '',
+          avantage_filleul: c.filleul_type ? texteRecompense(c.filleul_type, c.filleul_valeur, moi.langue) : '',
+          delai_validation_jours: c.delai_validation_jours, conditions: c.conditions, annulation: c.annulation,
+          invitations: p.invitations.filter(function (i) { return i.parrain_id === moi.id; }).length,
+          inscrits: miens.filter(function (x) { return x.statut !== 'refuse'; }).length,
+          en_attente_premiere_operation: miens.filter(function (x) { return x.statut === 'inscrit' || x.statut === 'suspect'; }).length,
+          valides: miens.filter(function (x) { return x.statut === 'qualifie' || x.statut === 'recompense'; }).length,
+          recompenses: p.recompenses.filter(function (r) { return r.client_id === moi.id && r.programme === 'refer_parrain'; })
+            .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; }).map(function (r) {
+              return { id: r.id, type: r.type, valeur: r.valeur, statut: r.statut, date: r.cree_le,
+                       avantage: texteRecompense(r.type, r.valeur, moi.langue) };
+            }),
+          mon_parrain: p.parrainages.some(function (x) { return x.filleul_id === moi.id; })
+        };
+      });
+    },
+
+    noterInvitation: function (canal) {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        var recentes = p.invitations.filter(function (i) { return i.parrain_id === moi.id && Date.now() - new Date(i.cree_le).getTime() < 864e5; });
+        if (recentes.length < 50) p.invitations.push({ parrain_id: moi.id, canal: String(canal || '').slice(0, 20), cree_le: maintenant() });
+        return p.invitations.filter(function (i) { return i.parrain_id === moi.id; }).length;
+      });
+    },
+
+    utiliserCodeParrainage: function (code) {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        if (parrainageRattacherDemo(d, moi.id, code, 'saisie', true) === null) {
+          throw Erreur('ALREADY_REFERRED', 'Un code de parrainage est déjà enregistré pour votre compte.');
+        }
+        return { enregistre: true };
+      });
+    },
+
+    preferencesProgrammes: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        return { anniversaire: !(p.prefs[moi.id] && p.prefs[moi.id].anniversaire === false) };
+      });
+    },
+
+    reglerAnniversaire: function (actif) {
+      return appelProgrammes(null, function (d, p, moi) {
+        p.prefs[moi.id] = { anniversaire: actif !== false };
+        return { anniversaire: actif !== false };
+      });
     },
 
     connecter: function (email, motDePasse) {
@@ -4980,6 +5739,533 @@
         } catch (e) { return rejeter(e); }
       },
 
+      /* ---- Les programmes : copie des fonctions d'équipe de supabase-fidelite.sql,
+         supabase-anniversaires.sql et supabase-campagnes.sql (mêmes permissions, mêmes refus) ---- */
+      programmes: {
+        // GOPOINTS
+        pointsRegles: function () {
+          return appelProgrammes('programs.view', function (d, p) {
+            return { reglages: Object.assign({ id: true }, p.points.reglages), regles: p.points.regles.slice().sort(function (a, b) { return a.evenement < b.evenement ? -1 : 1; }),
+                     offres: p.points.offres.slice().sort(function (a, b) { return a.cree_le < b.cree_le ? -1 : 1; }) };
+          });
+        },
+        pointsReglages: function (donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var g = p.points.reglages, avant = { actif: g.actif, expiration_jours: g.expiration_jours };
+            if (aLaCle(donnees, 'expiration_jours')) g.expiration_jours = entierProgramme(donnees, 'expiration_jours', 1, 3650);
+            if (aLaCle(donnees, 'actif')) g.actif = donnees.actif === true || donnees.actif === 'true';
+            if (aLaCle(donnees, 'conditions')) g.conditions = String(donnees.conditions || '').slice(0, 4000);
+            journaliser(d, moi, 'points.reglages', 'programme', 'gopoints', avant, { actif: g.actif, expiration_jours: g.expiration_jours });
+            return Object.assign({ id: true }, g);
+          });
+        },
+        pointsRegle: function (evenement, donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var r = p.points.regles.filter(function (x) { return x.evenement === evenement; })[0];
+            if (!r) throw Erreur('INVALID_RULE', 'Cet événement n\'existe pas dans le programme.');
+            var avant = Object.assign({}, r);
+            var points = aLaCle(donnees, 'points') ? (entierProgramme(donnees, 'points', 0, 1000000) || 0) : r.points;
+            var actif = aLaCle(donnees, 'actif') ? (donnees.actif === true || donnees.actif === 'true') : r.actif;
+            var operation = aLaCle(donnees, 'operation') ? (donnees.operation || null) : r.operation;
+            if (actif && points <= 0) throw Erreur('INVALID_RULE', 'Une règle allumée doit accorder au moins 1 point : indiquez le nombre de points avant de l\'activer.');
+            if (actif && (evenement === 'first_operation' || evenement === 'repeat_operation') && !operation) {
+              throw Erreur('INVALID_RULE', 'Choisissez l\'opération qualifiante (colis reçu ou facture payée) avant d\'activer cette règle.');
+            }
+            if (operation && OPERATIONS_PROGRAMME.indexOf(operation) < 0) throw Erreur('INVALID_RULE', 'Opération qualifiante inconnue.');
+            var limite = function (cle, max) { return aLaCle(donnees, cle) ? entierProgramme(donnees, cle, 1, max) : r[cle]; };
+            r.limite_jour = limite('limite_jour', 100000); r.limite_mois = limite('limite_mois', 100000);
+            r.limite_client = limite('limite_client', 100000); r.expiration_jours = limite('expiration_jours', 3650);
+            r.points = points; r.actif = actif; r.operation = operation;
+            if (aLaCle(donnees, 'conditions')) r.conditions = String(donnees.conditions || '').slice(0, 2000);
+            journaliser(d, moi, 'points.regle', 'programme', evenement, avant, Object.assign({}, r));
+            return Object.assign({}, r);
+          });
+        },
+        pointsOffre: function (id, donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var o = id ? p.points.offres.filter(function (x) { return x.id === id; })[0] : null, avant = null;
+            if (id && !o) throw Erreur('INVALID_OFFER', 'Cette offre n\'existe pas.');
+            var incomplete = function () { return Erreur('INVALID_OFFER', 'L\'offre est incomplète ou ses valeurs ne sont pas valables (type, dates, nombres).'); };
+            var valeur = aLaCle(donnees, 'valeur') && donnees.valeur !== '' && donnees.valeur != null ? Number(String(donnees.valeur).replace(',', '.')) : (o ? o.valeur : null);
+            if (valeur != null && !isFinite(valeur)) throw Erreur('INVALID_OFFER', 'La valeur de l\'offre n\'est pas un nombre.');
+            if (!o) {
+              if (!String(donnees.nom || '').trim() || donnees.cout_points == null || !donnees.type || donnees.valeur == null) {
+                throw Erreur('INVALID_OFFER', 'Une offre a un nom, un coût en points, un type et une valeur.');
+              }
+              p.seq += 1;
+              o = { id: 'off-' + p.seq + '-' + identifiant().slice(0, 8), nom: '', description: '', cout_points: null, type: null, valeur: null,
+                    actif: false, stock: null, limite_client: null, debut: null, fin: null, conditions: '', cree_le: maintenant() };
+            } else avant = Object.assign({}, o);
+            var copie = Object.assign({}, o);
+            if (aLaCle(donnees, 'nom')) copie.nom = String(donnees.nom || '').trim();
+            if (aLaCle(donnees, 'description')) copie.description = String(donnees.description || '').slice(0, 500);
+            if (aLaCle(donnees, 'cout_points')) copie.cout_points = entierProgramme(donnees, 'cout_points', 1, 10000000);
+            if (aLaCle(donnees, 'type')) copie.type = donnees.type;
+            copie.valeur = valeur;
+            if (aLaCle(donnees, 'actif')) copie.actif = donnees.actif === true || donnees.actif === 'true';
+            if (aLaCle(donnees, 'stock')) copie.stock = entierProgramme(donnees, 'stock', 0, 10000000);
+            if (aLaCle(donnees, 'limite_client')) copie.limite_client = entierProgramme(donnees, 'limite_client', 1, 100000);
+            ['debut', 'fin'].forEach(function (k) {
+              if (aLaCle(donnees, k)) {
+                var t = String(donnees[k] || '').trim();
+                if (t && !/^\d{4}-\d{2}-\d{2}$/.test(t)) throw incomplete();
+                copie[k] = t || null;
+              }
+            });
+            if (aLaCle(donnees, 'conditions')) copie.conditions = String(donnees.conditions || '').slice(0, 2000);
+            if (String(copie.nom).trim().length < 2 || String(copie.nom).trim().length > 80 || !copie.cout_points || ['credit_expedition', 'reduction_frais', 'bonus_fixe', 'avantage_colis'].indexOf(copie.type) < 0 ||
+                copie.valeur == null || copie.valeur < 0 || (copie.debut && copie.fin && copie.debut > copie.fin)) throw incomplete();
+            Object.assign(o, copie, { maj_le: maintenant() });
+            if (!avant) p.points.offres.push(o);
+            journaliser(d, moi, avant ? 'points.offre_modification' : 'points.offre_creation', 'programme', o.id, avant, Object.assign({}, o));
+            return Object.assign({}, o);
+          });
+        },
+        pointsCorriger: function (client, points, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (!points || +points === 0 || Math.abs(+points) > 1000000 || Math.round(+points) !== +points) {
+              throw Erreur('INVALID_POINTS', 'Indiquez un nombre de points non nul (positif pour ajouter, négatif pour retirer).');
+            }
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour corriger un solde.');
+            var id = pointsEcrireDemo(d, client, 'correction', +points, 'admin', '', 'corr:' + identifiant(), String(motif).trim(), moi.id);
+            journaliser(d, moi, 'points.correction', 'client', client, null, { mouvement: id, points: +points, motif: String(motif).trim().slice(0, 200) });
+            return { mouvement: id, solde: soldePoints(p, client) };
+          });
+        },
+        pointsAnnuler: function (id, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour annuler un mouvement.');
+            var m = p.points.mouvements.filter(function (x) { return x.id === id; })[0];
+            if (!m || (m.type !== 'gain' && m.type !== 'utilisation')) throw Erreur('INVALID_MOVEMENT', 'Seul un gain ou une utilisation peut être annulé.');
+            if (mouvementAnnule(p, m)) throw Erreur('MOVEMENT_ALREADY_CANCELLED', 'Ce mouvement est déjà annulé.');
+            var a = pointsEcrireDemo(d, m.client_id, 'annulation', -m.points, 'admin', 'mouvement:' + m.id, 'annul:' + m.id, String(motif).trim(), moi.id, null, m.id);
+            if (a === null) throw Erreur('MOVEMENT_ALREADY_CANCELLED', 'Ce mouvement est déjà annulé.');
+            if (m.type === 'utilisation' && m.offre_id) {
+              p.recompenses.filter(function (r) { return r.reference === 'mouvement:' + m.id && (r.statut === 'obtenue' || r.statut === 'en_attente'); })
+                .forEach(function (r) { r.statut = 'annulee'; r.motif = String(motif).trim().slice(0, 200); });
+              var o = p.points.offres.filter(function (x) { return x.id === m.offre_id; })[0];
+              if (o && o.stock != null) o.stock += 1;
+            }
+            journaliser(d, moi, 'points.annulation', 'client', m.client_id, null, { mouvement: id, annulation: a, motif: String(motif).trim().slice(0, 200) });
+            return { annulation: a, solde: soldePoints(p, m.client_id) };
+          });
+        },
+        pointsApercu: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var dans = function (m) { var j = jourSD(m.cree_le); return (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin); };
+            var somme = function (types, signe) {
+              return p.points.mouvements.filter(function (m) { return types.indexOf(m.type) >= 0 && dans(m); })
+                .reduce(function (s, m) { return s + signe * m.points; }, 0);
+            };
+            var soldes = {};
+            p.points.mouvements.forEach(function (m) { soldes[m.client_id] = (soldes[m.client_id] || 0) + m.points; });
+            var parSource = {};
+            p.points.mouvements.filter(function (m) { return m.type === 'gain' && dans(m); }).forEach(function (m) { parSource[m.source] = (parSource[m.source] || 0) + m.points; });
+            return {
+              actif: p.points.reglages.actif,
+              solde_total: Object.keys(soldes).reduce(function (s, k) { return s + soldes[k]; }, 0),
+              clients_avec_points: Object.keys(soldes).filter(function (k) { return soldes[k] > 0; }).length,
+              gagnes: somme(['gain'], 1), utilises: somme(['utilisation'], -1), expires: somme(['expiration'], -1),
+              corriges: somme(['correction', 'annulation'], 1),
+              recompenses_utilisees: p.recompenses.filter(function (r) { return r.programme === 'points' && dans(r); }).length,
+              par_source: parSource
+            };
+          });
+        },
+        pointsMouvements: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var texte = String(o.recherche || '').trim().toLowerCase(), pg = pagePropre(o.page);
+            var lignes = p.points.mouvements.map(function (m) { return { m: m, c: clientDemo(d, m.client_id) || {} }; }).filter(function (x) {
+              var j = jourSD(x.m.cree_le);
+              return (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin) && (!o.type || x.m.type === o.type) &&
+                (!texte || [x.c.code, x.c.nom_complet, x.m.source, x.m.reference].some(function (t) { return String(t || '').toLowerCase().indexOf(texte) >= 0; }));
+            }).sort(function (a, b) { return a.m.cree_le < b.m.cree_le ? 1 : a.m.cree_le > b.m.cree_le ? -1 : b.m.id - a.m.id; });
+            return { total: lignes.length, elements: tranche(lignes, pg, 50).map(function (x) {
+              return { id: x.m.id, client_id: x.m.client_id, client_code: x.c.code, client_nom: x.c.nom_complet, type: x.m.type, points: x.m.points,
+                       source: x.m.source, reference: x.m.reference, motif: x.m.motif, date: x.m.cree_le, expire_le: x.m.expire_le,
+                       statut: mouvementAnnule(p, x.m) ? 'annule' : 'valide' };
+            }) };
+          });
+        },
+
+        // Anniversaires (birthdays.view pour lire, birthdays.manage pour régler)
+        anniversaires: function (o) {
+          o = o || {};
+          return appelProgrammes('birthdays.view', function (d, p) {
+            anniversairesPreparerDemo(d);
+            var debut = o.debut || aujourdhuiDemo(), fin = o.fin || debut;
+            if (fin < debut || joursEntre(debut, fin).length > 366) throw Erreur('INVALID_PERIOD', 'La période doit aller d\'un jour à un an au plus.');
+            var lignes = [];
+            joursEntre(debut, fin).forEach(function (jour) {
+              Object.keys(d.naissances || {}).forEach(function (id) {
+                var cl = clientActifDemo(d, id), annee = +jour.slice(0, 4);
+                if (!cl || anniversaireEnDemo(d.naissances[id], annee, p.anniv.reglages.regle_29_fevrier) !== jour) return;
+                var j = p.anniv.journal.filter(function (x) { return x.client_id === id && x.annee === annee; })[0];
+                lignes.push({ client_id: id, code: cl.code, nom: cl.nom_complet, date: jour, age: annee - +d.naissances[id].slice(0, 4),
+                              statut: j ? j.statut : 'a_venir', motif: j ? j.motif : null,
+                              envois: j ? j.envois.map(function (e) { return { canal: e.canal, statut: e.statut, code_erreur: e.code_erreur }; }) : [] });
+              });
+            });
+            lignes.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (String(a.nom) < String(b.nom) ? -1 : 1); });
+            return { du: debut, au: fin, total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50) };
+          });
+        },
+        anniversairesMessages: function (o) {
+          o = o || {};
+          return appelProgrammes('birthdays.view', function (d, p) {
+            if (['', 'prepare', 'ignore', 'erreur'].indexOf(o.statut || '') < 0) throw Erreur('INVALID_FILTER', 'Filtre inconnu.');
+            anniversairesPreparerDemo(d);
+            var lignes = p.anniv.journal.filter(function (j) {
+              return (!o.statut || j.statut === o.statut) && (!o.debut || j.anniversaire_le >= o.debut) && (!o.fin || j.anniversaire_le <= o.fin);
+            }).sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : b.id - a.id; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50).map(function (j) {
+              var cl = clientDemo(d, j.client_id) || {};
+              return { id: j.id, client_id: j.client_id, code: cl.code, nom: cl.nom_complet, date: j.anniversaire_le, statut: j.statut, motif: j.motif,
+                       prepare_le: j.cree_le, envois: j.envois };
+            }) };
+          });
+        },
+        anniversairesErreurs: function (o) {
+          return appelProgrammes('birthdays.view', function (d, p) {
+            var lignes = p.anniv.journal.filter(function (j) { return j.statut === 'erreur'; }).map(function (j) {
+              var cl = clientDemo(d, j.client_id) || {};
+              return { date: j.cree_le, code: cl.code, nom: cl.nom_complet, origine: 'preparation', statut: 'erreur', code_erreur: j.motif, canal: null };
+            });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o && o.page), 50) };
+          });
+        },
+        anniversairesRappels: function () {
+          return appelProgrammes('birthdays.view', function () { return { total: 0, elements: [] }; });
+        },
+        anniversaireReglages: function () {
+          return appelProgrammes('birthdays.view', function (d, p) {
+            var jour = aujourdhuiDemo(), r = p.anniv.reglages, annee = +jour.slice(0, 4);
+            var parJour = function (j) {
+              return Object.keys(d.naissances || {}).filter(function (id) {
+                return clientActifDemo(d, id) && anniversaireEnDemo(d.naissances[id], +j.slice(0, 4), r.regle_29_fevrier) === j;
+              }).length;
+            };
+            var clients = d.comptes.filter(function (c) { return c.role === 'client' && !c.supprime_le; });
+            var avec = clients.filter(function (c) { return d.naissances && d.naissances[c.id]; }).length;
+            return {
+              reglages: reglagesAnniversaire(p),
+              canaux_configures: { push: false, email: false, whatsapp: false },
+              whatsapp_disponible: false,
+              chiffres: { aujourdhui: parJour(jour), sept_jours: parJour(decalerJour(jour, 7)), clients_avec_date: avec, clients_sans_date: clients.length - avec,
+                          messages_annee: p.anniv.journal.filter(function (j) { return j.statut === 'prepare' && j.annee === annee; }).length,
+                          erreurs: p.anniv.journal.filter(function (j) { return j.statut === 'erreur'; }).length }
+            };
+          });
+        },
+        anniversaireReglagesModifier: function (donnees) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var r = p.anniv.reglages, avant = Object.assign({}, r, { fuseau: p.anniv.fuseau });
+            var actif = aLaCle(donnees, 'actif') ? (donnees.actif === true || donnees.actif === 'true') : r.actif;
+            var heure = aLaCle(donnees, 'heure_envoi') ? String(donnees.heure_envoi) : r.heure_envoi;
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(heure)) throw Erreur('INVALID_PROGRAM_VALUE', 'L\'heure d\'envoi doit s\'écrire HH:MM (par exemple 09:00).');
+            if (aLaCle(donnees, 'regle_29_fevrier') && ['fev28', 'mars1'].indexOf(donnees.regle_29_fevrier) < 0) {
+              throw Erreur('INVALID_PROGRAM_VALUE', 'La règle du 29 février est « fev28 » (le 28 février) ou « mars1 » (le 1er mars).');
+            }
+            var canaux = r.canaux;
+            if (aLaCle(donnees, 'canaux')) {
+              canaux = (donnees.canaux || []).filter(function (c, i, a) { return a.indexOf(c) === i; });
+              if (canaux.some(function (c) { return c !== 'push' && c !== 'email'; })) {
+                throw Erreur('INVALID_PROGRAM_VALUE', 'Les canaux possibles sont « push » (application) et « email » : WhatsApp n\'est pas encore disponible pour les anniversaires.');
+              }
+            }
+            var fuseau = p.anniv.fuseau;
+            if (aLaCle(donnees, 'fuseau')) {
+              try { new Intl.DateTimeFormat('en-CA', { timeZone: donnees.fuseau }); } catch (e) {
+                throw Erreur('INVALID_PROGRAM_VALUE', 'Ce fuseau horaire n\'existe pas (par exemple America/Santo_Domingo).');
+              }
+              fuseau = donnees.fuseau;
+            }
+            var type = aLaCle(donnees, 'avantage_type') ? donnees.avantage_type : r.avantage_type;
+            var avActif = aLaCle(donnees, 'avantage_actif') ? (donnees.avantage_actif === true || donnees.avantage_actif === 'true') : r.avantage_actif;
+            var valeur = r.avantage_valeur;
+            if (aLaCle(donnees, 'avantage_valeur')) {
+              valeur = donnees.avantage_valeur === '' || donnees.avantage_valeur == null ? null : Number(String(donnees.avantage_valeur).replace(',', '.'));
+              if (valeur !== null && !isFinite(valeur)) throw Erreur('INVALID_PROGRAM_VALUE', 'La valeur de l\'avantage n\'est pas un nombre.');
+            }
+            var libelle = aLaCle(donnees, 'avantage_libelle') ? String(donnees.avantage_libelle || '').trim().slice(0, 120) : r.avantage_libelle;
+            if (avActif) {
+              if (type === 'aucun') throw Erreur('BENEFIT_INCOMPLETE', 'Choisissez le type d\'avantage avant de l\'activer.');
+              if (type === 'gopoints') {
+                var regle = p.points.regles.filter(function (x) { return x.evenement === 'birthday'; })[0];
+                if (!(regle.actif && p.points.reglages.actif)) {
+                  throw Erreur('BENEFIT_INCOMPLETE', 'Pour un avantage en GOPOINTS, allumez d\'abord le programme GOPOINTS et la règle « Anniversaire du client » (avec son nombre de points).');
+                }
+              } else if (!(valeur > 0) || !libelle.length) {
+                throw Erreur('BENEFIT_INCOMPLETE', 'Un avantage a une valeur et un texte (par exemple « 5 $ de crédit d\'expédition ») : indiquez-les avant de l\'activer.');
+              }
+            }
+            var rap = aLaCle(donnees, 'rappel_admin_jours') ? (entierProgramme(donnees, 'rappel_admin_jours', 0, 60) || 0) : r.rappel_admin_jours;
+            var rapClient = aLaCle(donnees, 'rappel_client_jours') ? (entierProgramme(donnees, 'rappel_client_jours', 1, 30) || 3) : r.rappel_client_jours;
+            var ratt = aLaCle(donnees, 'rattrapage_jours') ? entierProgramme(donnees, 'rattrapage_jours', 0, 7) : r.rattrapage_jours;
+            Object.assign(r, {
+              actif: actif, actif_depuis: actif && !r.actif ? aujourdhuiDemo() : (!actif ? null : r.actif_depuis),
+              heure_envoi: heure, regle_29_fevrier: aLaCle(donnees, 'regle_29_fevrier') ? donnees.regle_29_fevrier : r.regle_29_fevrier,
+              rattrapage_jours: ratt == null ? r.rattrapage_jours : ratt, canaux: canaux, rappel_admin_jours: rap,
+              rappel_client_actif: aLaCle(donnees, 'rappel_client_actif') ? (donnees.rappel_client_actif === true || donnees.rappel_client_actif === 'true') : r.rappel_client_actif,
+              rappel_client_jours: rapClient, avantage_actif: avActif, avantage_type: type, avantage_valeur: valeur, avantage_libelle: libelle
+            });
+            p.anniv.fuseau = fuseau;
+            journaliser(d, moi, 'anniversaire.reglages', 'programme', 'anniversaires', avant, Object.assign({}, r, { fuseau: fuseau }));
+            return reglagesAnniversaire(p);
+          });
+        },
+        anniversaireModeles: function () {
+          return appelProgrammes('birthdays.view', function (d, p) {
+            var liste = [];
+            ['birthday', 'birthday_avantage', 'birthday_reminder', 'birthday_upcoming'].forEach(function (t) {
+              ['en', 'es', 'fr', 'ht'].forEach(function (l) { liste.push(modeleAnniversaire(p, t, l)); });
+            });
+            return liste;
+          });
+        },
+        anniversaireModele: function (type, langue, titre, message) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            if (!MODELES_ANNIVERSAIRE[type + '|' + langue]) throw Erreur('INVALID_TEMPLATE', 'Ce modèle n\'existe pas.');
+            titre = String(titre || '').trim(); message = String(message || '').trim();
+            if (!titre.length || titre.length > 120 || !message.length || message.length > 1200) {
+              throw Erreur('INVALID_TEMPLATE', 'Le titre (120 signes au plus) et le message (1 200 au plus) sont obligatoires.');
+            }
+            var permises = { birthday: ['prenom'], birthday_avantage: ['prenom', 'avantage'], birthday_upcoming: ['prenom', 'jours'], birthday_reminder: ['nombre', 'jours'] }[type] || [];
+            [titre, message].forEach(function (t) {
+              (t.match(/\{\{[^{}]*\}\}/g) || []).forEach(function (v) {
+                var nom = v.slice(2, -2);
+                if (permises.indexOf(nom) < 0) {
+                  throw Erreur('INVALID_TEMPLATE', 'La variable {{' + nom + '}} n\'est pas permise dans ce modèle (permises : ' + (permises.join(', ') || 'aucune') + ').');
+                }
+              });
+              if (/[{}]/.test(t.replace(/\{\{[^{}]*\}\}/g, ''))) throw Erreur('INVALID_TEMPLATE', 'Les accolades { } ne servent qu\'aux variables, par exemple {{prenom}}.');
+            });
+            p.anniv.modeles[type + '|' + langue] = [titre, message];
+            journaliser(d, moi, 'anniversaire.modele', 'programme', type + ':' + langue, null, { titre: titre });
+            return modeleAnniversaire(p, type, langue);
+          });
+        },
+        anniversaireModeleRestaurer: function (type, langue) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            if (!MODELES_ANNIVERSAIRE[type + '|' + langue]) throw Erreur('INVALID_TEMPLATE', 'Ce modèle n\'existe pas.');
+            delete p.anniv.modeles[type + '|' + langue];
+            journaliser(d, moi, 'anniversaire.modele_restaure', 'programme', type + ':' + langue, null, null);
+            return modeleAnniversaire(p, type, langue);
+          });
+        },
+        corrigerNaissance: function (client, date, motif) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour corriger une date de naissance.');
+            if (!clientActifDemo(d, client)) throw Erreur('CLIENT_NOT_FOUND', 'Client introuvable.');
+            var v = validerNaissanceDemo(date);
+            d.naissances = d.naissances || {};
+            // Le journal garde le fait, jamais la date elle-même
+            journaliser(d, moi, 'naissance.correction', 'client', client, null, { motif: String(motif).trim().slice(0, 200) });
+            d.naissances[client] = v;
+            return { corrigee: true };
+          });
+        },
+
+        // GOship APP Welcome
+        bienvenueListe: function () {
+          return appelProgrammes('programs.view', function (d, p) {
+            var clients = d.comptes.filter(function (c) { return c.role === 'client' && !c.supprime_le; });
+            return {
+              campagnes: p.campagnes.slice().sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; }).map(function (b) {
+                var rec = {};
+                p.recompenses.filter(function (r) { return r.programme === 'welcome' && r.campagne === b.id; }).forEach(function (r) { rec[r.statut] = (rec[r.statut] || 0) + 1; });
+                return copieCampagne(b, { manques: manquesCampagne(p, b),
+                  clients_admissibles: !b.debut || !b.fin ? 0 : clients.filter(function (c) { var j = jourSD(c.cree_le); return j >= b.debut && j <= b.fin; }).length,
+                  recompenses: Object.keys(rec).length ? rec : null });
+              }),
+              erreurs: p.erreurs.filter(function (e) { return ['compte', 'operation', 'recompense'].indexOf(e.programme) >= 0; }).length
+            };
+          });
+        },
+        bienvenueEnregistrer: function (id, donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var b = id ? p.campagnes.filter(function (x) { return x.id === id; })[0] : null, avant = null;
+            if (id && !b) throw Erreur('INVALID_CAMPAIGN', 'Cette campagne n\'existe pas.');
+            if (b && (b.statut === 'active' || b.statut === 'terminee')) {
+              throw Erreur('CAMPAIGN_LOCKED', 'Une campagne active ou terminée ne se modifie pas : suspendez-la d\'abord (une campagne terminée se duplique).');
+            }
+            var copie = b ? Object.assign({}, b) : { id: null, nom: '', description: '', statut: 'brouillon', debut: null, fin: null, type_recompense: null,
+              valeur_recompense: null, operation: null, budget_max: null, delai_validation_jours: 0, cumul_parrainage: true, conditions: '', cree_le: maintenant() };
+            appliquerChamps(copie, donnees, CHAMPS_BIENVENUE);
+            verifierPeriodeCampagne(copie.debut, copie.fin);
+            if (!b) { p.seq += 1; copie.id = 'camp-' + p.seq + '-' + identifiant().slice(0, 8); p.campagnes.push(copie); b = copie; }
+            else { avant = Object.assign({}, b); Object.assign(b, copie); }
+            b.maj_le = maintenant();
+            journaliser(d, moi, avant ? 'bienvenue.modification' : 'bienvenue.creation', 'programme', b.id, avant, Object.assign({}, b));
+            return Object.assign({}, b);
+          });
+        },
+        bienvenuePublier: function (id) { return publierCampagneDemo(id); },
+        bienvenueStatut: function (id, action) {
+          if (action === 'reprendre') return publierCampagneDemo(id);
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            var b = p.campagnes.filter(function (x) { return x.id === id; })[0];
+            if (!b) throw Erreur('INVALID_CAMPAIGN', 'Cette campagne n\'existe pas.');
+            var nouveau = action === 'suspendre' && ['active', 'programmee'].indexOf(b.statut) >= 0 ? 'suspendue'
+              : (action === 'terminer' && ['active', 'programmee', 'suspendue'].indexOf(b.statut) >= 0 ? 'terminee' : null);
+            if (!nouveau) throw Erreur('INVALID_CAMPAIGN_STATUS', 'Cette action n\'est pas possible dans l\'état actuel de la campagne.');
+            b.statut = nouveau; b.maj_le = maintenant();
+            journaliser(d, moi, 'bienvenue.' + action, 'programme', b.id, null, { statut: b.statut });
+            return Object.assign({}, b);
+          });
+        },
+
+        // GOship Refer
+        parrainageConfig: function () {
+          return appelProgrammes('programs.view', function (d, p) { return copieCampagne(p.parrainage, { id: true, manques: manquesParrainage(p, p.parrainage) }); });
+        },
+        parrainageConfigModifier: function (donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            var c = p.parrainage;
+            if (c.statut === 'active' || c.statut === 'terminee') throw Erreur('CAMPAIGN_LOCKED', 'Le parrainage actif ou terminé ne se modifie pas : suspendez-le d\'abord.');
+            var avant = Object.assign({}, c, { conditions: undefined, annulation: undefined }), copie = Object.assign({}, c);
+            appliquerChamps(copie, donnees || {}, CHAMPS_PARRAINAGE);
+            verifierPeriodeCampagne(copie.debut, copie.fin);
+            Object.assign(c, copie, { maj_le: maintenant() });
+            journaliser(d, moi, 'parrainage.configuration', 'programme', 'parrainage', avant, Object.assign({}, c, { conditions: undefined, annulation: undefined }));
+            return Object.assign({ id: true }, c);
+          });
+        },
+        parrainageStatut: function (action) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            var c = p.parrainage, nouveau;
+            if (action === 'publier' || action === 'reprendre') {
+              if (['brouillon', 'suspendue'].indexOf(c.statut) < 0) throw Erreur('INVALID_CAMPAIGN_STATUS', 'Seul un brouillon ou un parrainage suspendu se publie.');
+              var m = manquesParrainage(p, c);
+              if (m.length) throw Erreur('INCOMPLETE_CAMPAIGN', 'Le parrainage est incomplet : il manque ' + m.join(', ') + '.');
+              nouveau = c.debut > aujourdhuiDemo() ? 'programmee' : 'active';
+            } else if (action === 'suspendre' && ['active', 'programmee'].indexOf(c.statut) >= 0) nouveau = 'suspendue';
+            else if (action === 'terminer' && ['active', 'programmee', 'suspendue'].indexOf(c.statut) >= 0) nouveau = 'terminee';
+            else throw Erreur('INVALID_CAMPAIGN_STATUS', 'Cette action n\'est pas possible dans l\'état actuel du parrainage.');
+            c.statut = nouveau; c.maj_le = maintenant();
+            journaliser(d, moi, 'parrainage.' + action, 'programme', 'parrainage', null, { statut: c.statut });
+            return Object.assign({ id: true }, c);
+          });
+        },
+        parrainageApercu: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var dans = function (iso) { if (!iso) return false; var j = jourSD(iso); return (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin); };
+            var liste = p.parrainages.filter(function (x) { return dans(x.cree_le); }), parStatut = {};
+            liste.forEach(function (x) { parStatut[x.statut] = (parStatut[x.statut] || 0) + 1; });
+            var refer = function (r) { return r.programme === 'refer_parrain' || r.programme === 'refer_filleul'; };
+            return {
+              statut: p.parrainage.statut,
+              parrains: liste.filter(function (x, i, a) { return a.map(function (y) { return y.parrain_id; }).indexOf(x.parrain_id) === i; }).length,
+              filleuls_inscrits: liste.length,
+              transactions_qualifiantes: p.parrainages.filter(function (x) { return dans(x.qualifie_le); }).length,
+              recompenses_accordees: p.recompenses.filter(function (r) { return refer(r) && (r.statut === 'obtenue' || r.statut === 'utilisee') && dans(r.cree_le); }).length,
+              recompenses_en_attente: p.recompenses.filter(function (r) { return refer(r) && r.statut === 'en_attente'; }).length,
+              suspects: p.parrainages.filter(function (x) { return x.statut === 'suspect'; }).length,
+              en_attente_premiere_operation: p.parrainages.filter(function (x) { return x.statut === 'inscrit'; }).length,
+              par_statut: parStatut
+            };
+          });
+        },
+        parrainages: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            if (['', 'inscrit', 'qualifie', 'recompense', 'refuse', 'annule', 'suspect'].indexOf(o.statut || '') < 0) throw Erreur('INVALID_FILTER', 'Filtre inconnu.');
+            var lignes = p.parrainages.filter(function (x) {
+              var j = jourSD(x.cree_le);
+              return (!o.statut || x.statut === o.statut) && (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin);
+            }).sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : a.cree_le > b.cree_le ? -1 : b.id - a.id; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50).map(function (x) {
+              var pa = clientDemo(d, x.parrain_id) || {}, fi = clientDemo(d, x.filleul_id) || {};
+              return { id: x.id, statut: x.statut, motif: x.motif, source: x.source, date: x.cree_le, qualifie_le: x.qualifie_le,
+                       parrain_code: pa.code, parrain_nom: pa.nom_complet, filleul_code: fi.code, filleul_nom: fi.nom_complet };
+            }) };
+          });
+        },
+        parrainageExaminer: function (id, decision, motif) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour examiner un parrainage.');
+            if (['valider', 'refuser'].indexOf(decision) < 0) throw Erreur('INVALID_DECISION', 'La décision est « valider » ou « refuser ».');
+            var pa = p.parrainages.filter(function (x) { return x.id === id; })[0];
+            if (!pa || pa.statut !== 'suspect') throw Erreur('INVALID_REFERRAL', 'Seul un parrainage suspect peut être examiné.');
+            pa.statut = decision === 'valider' ? 'inscrit' : 'refuse'; pa.motif = String(motif).trim().slice(0, 200); pa.maj_le = maintenant();
+            journaliser(d, moi, 'parrainage.examen', 'programme', id, null, { decision: decision, motif: pa.motif });
+            // Validé : si le filleul a déjà fait l'opération qualifiante, le parrainage reprend où il s'était arrêté
+            var c = p.parrainage;
+            var op = p.operations.filter(function (o) { return o.client_id === pa.filleul_id && o.operation === c.operation && !o.annulee_le; })[0];
+            if (decision === 'valider' && op && c.statut === 'active') {
+              pa.statut = 'qualifie'; pa.qualifie_le = maintenant();
+              if (c.cumul_bienvenue || !p.recompenses.some(function (r) { return r.client_id === pa.filleul_id && r.programme === 'welcome' && avantageActif(r); })) {
+                recompenseCreerDemo(d, pa.filleul_id, 'refer_filleul', c.filleul_type, c.filleul_valeur, 'refer:' + pa.id + ':filleul', 'parrainage', op.reference, c.delai_validation_jours, c.expiration_jours);
+              }
+              recompenseCreerDemo(d, pa.parrain_id, 'refer_parrain', c.parrain_type, c.parrain_valeur, 'refer:' + pa.id + ':parrain', 'parrainage', op.reference, c.delai_validation_jours, c.expiration_jours);
+              parrainageActualiserDemo(p, pa.id);
+            }
+            return { id: pa.id, statut: pa.statut };
+          });
+        },
+
+        // Les avantages de tous les programmes
+        recompenses: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var lignes = p.recompenses.filter(function (r) { return (!o.programme || r.programme === o.programme) && (!o.statut || r.statut === o.statut); })
+              .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50).map(function (r) {
+              var cl = clientDemo(d, r.client_id) || {};
+              return { id: r.id, client_code: cl.code, client_nom: cl.nom_complet, programme: r.programme, type: r.type, valeur: r.valeur, statut: r.statut,
+                       motif: r.motif, date: r.cree_le, valide_apres: r.valide_apres, expire_le: r.expire_le, reference: r.reference };
+            }) };
+          });
+        },
+        recompenseAccorder: function (client, type, valeur, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour accorder un avantage à la main.');
+            var v = Number(valeur);
+            if (TYPES_AVANTAGE.indexOf(type) < 0 || !isFinite(v) || v <= 0) throw Erreur('INVALID_REWARD', 'Le type et la valeur de l\'avantage sont obligatoires (valeur positive).');
+            if (!clientActifDemo(d, client)) throw Erreur('CLIENT_NOT_FOUND', 'Client introuvable.');
+            var id = recompenseCreerDemo(d, client, 'manuel', type, v, 'manuel:' + identifiant(), 'manuel', '', 0);
+            var r = p.recompenses.filter(function (x) { return x.id === id; })[0];
+            r.motif = String(motif).trim().slice(0, 200); r.auteur_id = moi.id;
+            journaliser(d, moi, 'recompense.accordee', 'client', client, null, { recompense: id, type: type, valeur: v, motif: r.motif });
+            return { id: id, statut: r.statut };
+          });
+        },
+        recompenseAnnuler: function (id, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour annuler un avantage.');
+            var r = p.recompenses.filter(function (x) { return x.id === id; })[0];
+            if (!r || ['en_attente', 'obtenue'].indexOf(r.statut) < 0) throw Erreur('INVALID_REWARD', 'Seul un avantage en attente ou obtenu, pas encore utilisé, peut être annulé.');
+            if (r.type === 'gopoints') {
+              var g = p.points.mouvements.filter(function (m) { return m.cle === 'gain:recompense:' + r.id; })[0];
+              if (g && !mouvementAnnule(p, g)) {
+                pointsEcrireDemo(d, r.client_id, 'annulation', -g.points, 'admin', 'recompense:' + r.id, 'annul:' + g.id, String(motif).trim(), moi.id, null, g.id);
+              }
+            }
+            r.statut = 'annulee'; r.motif = String(motif).trim().slice(0, 200); r.auteur_id = moi.id;
+            if (r.cle.indexOf('refer:') === 0) parrainageActualiserDemo(p, +r.cle.split(':')[1]);
+            journaliser(d, moi, 'recompense.annulee', 'client', r.client_id, null, { recompense: id, motif: r.motif });
+            return { id: id, statut: 'annulee' };
+          });
+        },
+        erreurs: function (o) {
+          return appelProgrammes('programs.view', function (d, p) {
+            var lignes = p.erreurs.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o && o.page), 50).map(function (e) {
+              var cl = clientDemo(d, e.client_id) || {};
+              return { date: e.date, programme: e.programme, evenement: e.evenement, client_code: cl.code || null, message: e.message };
+            }) };
+          });
+        }
+      },
+
       // Rapports : liste_rapports, creer_rapport, modifier_rapport, supprimer_rapport,
       // rapport_donnees (outils/supabase-rapports.sql), mêmes permissions
       rapports: function (o) {
@@ -5136,7 +6422,9 @@
   var offAPI = {
     session: function () { return Promise.resolve(null); },
     profil: function () { return Promise.resolve(null); },
-    inscrire: ferme, naissance: ferme, definirNaissance: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    inscrire: ferme, naissance: ferme, definirNaissance: ferme, portefeuille: ferme, utiliserPoints: ferme, mesAvantages: ferme,
+    maBienvenue: ferme, monParrainage: ferme, noterInvitation: ferme, utiliserCodeParrainage: ferme, preferencesProgrammes: ferme,
+    reglerAnniversaire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
     surSessionPerdue: function () { return function () {}; },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
     fournisseursConnexion: function () { return Promise.resolve([]); }, connecterAvec: ferme,

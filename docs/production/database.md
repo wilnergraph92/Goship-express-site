@@ -38,6 +38,10 @@ on revient en arrière par une nouvelle migration ou une restauration
 | `supabase-profil-complet.sql` (16, pas de pré-alerte sans profil complet) | exécuté par le propriétaire le 29/09/2026 ; contrôle : `2 \| false \| 1` |
 | `supabase-frais-service.sql` (17, frais de service au regroupement et à l'encaissement) | **à exécuter** par le propriétaire ; contrôle attendu : `4 \| false \| 0` |
 | `supabase-corrections.sql` (18, prix fixé sans poids, ville obligatoire, adresse de livraison, journal des modifications) | **à exécuter** par le propriétaire, après le 17 et **avant** de publier le site qui l'utilise ; contrôle attendu : `3 \| 2 \| false \| 2` |
+| `supabase-naissance.sql` (19, date de naissance obligatoire à l'inscription par e-mail, table fermée `profils_naissance`) | **à exécuter** par le propriétaire, après le 18 ; **avant** de publier le site qui l'utilise. Elle redéfinit `creer_profil_client` : tester une inscription par e-mail et une par Google ensuite ; contrôle attendu : `2 \| false \| true \| 2` |
+| `supabase-fidelite.sql` (20, GOPOINTS : registre immuable, règles, offres ; programme éteint) | **à exécuter**, après le 19 ; contrôle attendu : `7 \| 6 \| false \| true \| true` |
+| `supabase-anniversaires.sql` (21, anniversaires : modèles en quatre langues, planification toutes les 15 minutes, programme éteint) | **à exécuter**, après le 20 ; l'extension pg_cron est nécessaire pour l'envoi ; contrôle attendu : `16 \| false \| true \| true` |
+| `supabase-campagnes.sql` (22, GOship APP Welcome, GOship Refer, avantages ; campagnes en brouillon) | **à exécuter**, après le 21 ; contrôle attendu : `9 \| 12 \| 3 \| false \| true \| true` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de
