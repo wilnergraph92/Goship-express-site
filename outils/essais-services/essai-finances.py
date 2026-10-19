@@ -562,8 +562,9 @@ def main():
     grp = jsonq(db, ADMIN, "select public.regrouper_factures(array['%s']::uuid[]);"
                 % "','".join(r['facture']['id'] for r in rs))['facture']
     jsonq(db, ADMIN, "select public.definir_lien_paiement('%s', 'https://paiement.exemple/g');" % grp['id'])
+    # Une échéance lointaine : une date fixe proche passait « en retard » le jour venu et faisait échouer l'essai
     db.sql("select set_config('goship.finances', 'on', false); "
-           "update factures set echeance_le = '2026-10-15', note = 'Regroupé au comptoir' where id = '%s';" % grp['id'])
+           "update factures set echeance_le = '2099-12-31', note = 'Regroupé au comptoir' where id = '%s';" % grp['id'])
     verifier('regroupées : 20 + 15 + 30 + 10 = 75 $', grp['montant_usd'], 75)
     sortir = "select public.sortir_du_regroupement('%s', array[%s]::uuid[], %s);"
     nb_factures = "select count(*) from factures;"
@@ -578,7 +579,7 @@ def main():
              (55, sorted(cs[1:])))
     verifier('échéance et note reprises ; pas le lien de paiement, qui portait le montant regroupé',
              [(x['echeance_le'], x['note'], x['lien_paiement']) for x in (so['facture'], so['reste'])],
-             [('2026-10-15', 'Regroupé au comptoir', '')] * 2)
+             [('2099-12-31', 'Regroupé au comptoir', '')] * 2)
     verifier('la facture regroupée : annulée, motif, remplacée par celle qui garde le regroupement',
              un(db, "select statut || ' ' || (motif_annulation = 'Sortie du regroupement : ' || "
                     "(select numero from colis where id = '%s')) || ' ' || (remplacee_par = '%s') "
