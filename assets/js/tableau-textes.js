@@ -1305,6 +1305,7 @@ window.GoshipTextesTableau = {
   "dont regroupées": ["of which merged", "de ellas agrupadas", "ladan yo regwoupe"],
   "du facturé déjà payé": ["of the invoiced amount already paid", "de lo facturado ya pagado", "nan sa ki fakti a deja peye"],
   "dû aujourd’hui": ["due today", "pendiente hoy", "dwe jodi a"],
+  "e-mail coupé dans les règles": ["email turned off in the rules", "correo desactivado en las reglas", "imèl koupe nan règ yo"],
   "emballé": ["packed", "embalado", "anbale"],
   "emballés": ["packed", "embalados", "anbale"],
   "embarqué": ["shipped", "embarcado", "anbake"],

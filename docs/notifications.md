@@ -86,10 +86,10 @@ Réglages de départ :
 | Colis disponible | ✓ | ✓ | ✓ | ✓ (modèle `colis_disponible`) | — |
 | Action requise | ✓ | ✓ (texte neutre) | ✓ | — | — |
 | Action résolue | ✓ | ✓ | — | — | — |
-| Nouvelle facture | ✓ | ✓ (texte neutre) | ✓ | — | — |
-| Paiement enregistré | ✓ | ✓ (texte neutre) | ✓ | — | — |
+| Nouvelle facture | ✓ | ✓ (texte neutre) | — (coupé le 19/10/2026) | — | — |
+| Paiement enregistré | ✓ | ✓ (texte neutre) | — (coupé le 19/10/2026) | — | — |
 | Facture payée | ✓ | ✓ (texte neutre) | — | — | — |
-| Facture en retard | ✓ | ✓ (texte neutre) | ✓ | — | — |
+| Facture en retard | ✓ | ✓ (texte neutre) | — (coupé le 19/10/2026) | — | — |
 
 Un canal coché ne part que s'il est **configuré** (section 6). Aucun SMS :
 le projet n'a pas de fournisseur SMS. WhatsApp ne part que pour les types qui
@@ -99,6 +99,19 @@ L'administrateur (`settings.manage`) coupe une règle ou change ses canaux
 depuis le tableau de bord, onglet **Notifications** ; chaque changement est
 journalisé (`journal_audit`, action `notification.regle`). Relancer la
 migration ne remet pas les règles à leur valeur de départ.
+
+### Le pied des e-mails et la fin des e-mails de facturation
+
+`outils/supabase-courriel-pied.sql` : (1) le pied de **tous** les e-mails envoyés par la base
+n'a plus l'adresse de Medley ni le numéro WhatsApp ; à leur place, deux boutons, **Google Play**
+et **App Store**, puis la phrase « Vous recevez ce message car… ». Leurs adresses sont deux
+réglages du coffre : `store_android_url` (posé par la migration : fiche `com.goshipexpress.app`) et
+`store_ios_url` (aucune fiche n'existe avant le compte Apple Developer). Une adresse absente, vide
+ou qui n'est pas en https affiche « Bientôt sur », sans lien ; pour retirer un lien :
+`select public.definir_reglage('store_android_url', '-');`. (2) « Nouvelle facture », « Paiement
+enregistré » et « Facture en retard » n'ont plus le canal e-mail (le téléphone et l'espace client
+gardent leur message) ; un e-mail de ces types qui attendait est annulé (`REGLE_COUPEE`). On en
+rallume un dans le tableau de bord, onglet Notifications. Essai : `essai-courriel-pied.py`.
 
 ### L'e-mail d'un colis reçu ou disponible
 

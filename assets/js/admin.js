@@ -3030,7 +3030,7 @@
   // Pourquoi un envoi n'est pas parti : une configuration qui manque, une coordonnée
   // absente, un fournisseur qui refuse — jamais une question de droits de l'équipe.
   var RAISONS = {
-    NON_CONFIGURE: 'canal non configuré', PREFERENCE: 'coupé par le client', SANS_APPAREIL: 'aucun téléphone enregistré',
+    NON_CONFIGURE: 'canal non configuré', PREFERENCE: 'coupé par le client', REGLE_COUPEE: 'e-mail coupé dans les règles', SANS_APPAREIL: 'aucun téléphone enregistré',
     SANS_DESTINATAIRE: 'pas d’adresse ou de numéro', SANS_MODELE: 'pas de modèle WhatsApp pour ce message',
     APPAREIL_INCONNU: 'téléphone oublié', DeviceNotRegistered: 'application désinstallée',
     RESEAU: 'fournisseur injoignable', ERREUR_INTERNE: 'erreur interne'
