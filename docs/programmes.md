@@ -125,9 +125,9 @@ Rien n'est inventé. Avant d'allumer un programme, décidez :
 
 - **Mode démonstration** : copie fidèle des règles, mais aucun message ne part
   (les anniversaires restent « en attente ») et l'expiration des points ne tourne pas.
-- Corriger une date de naissance : la fonction existe (`corriger_naissance`,
-  administrateur, motif obligatoire) ; il n'y a pas encore d'écran dans le
-  tableau de bord.
+- Corriger ou ajouter une date de naissance : onglet Programmes > Anniversaires, bloc
+  « Date de naissance d'un client » (administrateur, code du client, motif obligatoire,
+  journalisé sans la date). Un client ne déclare la sienne qu'une fois.
 - Les avantages hors points ne sont pas déduits automatiquement des factures.
 - L'application doit être mise à jour pour afficher l'écran « Mes avantages » ;
   les versions déjà installées continuent de fonctionner sans.

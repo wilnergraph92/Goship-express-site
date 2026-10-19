@@ -2639,5 +2639,9 @@
   "GOship Refer": "GOship Refer",
   "GoShip Express": "GoShip Express",
   "{1}Date de naissance :{/1} demandée à l'inscription pour vous souhaiter votre anniversaire. Elle est gardée à part de votre profil, visible seulement des responsables autorisés, et ne peut pas être modifiée sans une demande à notre équipe. Vous pouvez désactiver le message d'anniversaire dans votre compte.": "{1}Dat nesans :{/1} nou mande l lè w enskri pou nou ka swete w bon fèt. Nou kenbe l apa de pwofil ou, se sèlman responsab ki gen otorizasyon ki wè l, e yo pa ka chanje l san w pa mande ekip nou an. Ou ka dezaktive mesaj fèt la nan kont ou.",
-  "{1}Programmes de fidélité :{/1} si vous participez à GOPOINTS, à l'offre de bienvenue ou au parrainage, nous gardons vos points, vos avantages et, pour un parrainage, le code utilisé. Un parrain ne voit jamais l'identité ni les opérations de ses filleuls.": "{1}Pwogram fidelite :{/1} si w patisipe nan GOPOINTS, nan òf byenveni an oswa nan parennaj la, nou kenbe pwen ou yo, avantaj ou yo e, pou yon parennaj, kòd yo itilize a. Yon parenn pa janm wè idantite ni operasyon fiyèl li yo."
+  "{1}Programmes de fidélité :{/1} si vous participez à GOPOINTS, à l'offre de bienvenue ou au parrainage, nous gardons vos points, vos avantages et, pour un parrainage, le code utilisé. Un parrain ne voit jamais l'identité ni les opérations de ses filleuls.": "{1}Pwogram fidelite :{/1} si w patisipe nan GOPOINTS, nan òf byenveni an oswa nan parennaj la, nou kenbe pwen ou yo, avantaj ou yo e, pou yon parennaj, kòd yo itilize a. Yon parenn pa janm wè idantite ni operasyon fiyèl li yo.",
+  "Date de naissance d'un client": "Dat nesans yon kliyan",
+  "Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.": "Ajoute dat yon kliyan ki pa t bay li, oswa korije li. Yon rezon obligatwa ; jounal la sonje ke yo chanje li, jamè dat la menm.",
+  "Enregistrer la date": "Anrejistre dat la",
+  "Date de naissance enregistrée.": "Dat nesans anrejistre."
 }

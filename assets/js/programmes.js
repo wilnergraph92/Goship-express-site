@@ -70,7 +70,13 @@
     if (valeur == null || valeur === '') return '—';
     return type === 'gopoints' ? O.nombre(valeur) + ' GOPOINTS' : O.argent(valeur);
   }
-  function dateTexte(iso) { return iso ? O.date(iso) : '—'; }
+  // Un jour civil (AAAA-MM-JJ : un anniversaire, la fin d'une campagne) n'a pas de fuseau : confié tel quel à Date, il
+  // devient minuit UTC, donc la veille au soir à Miami ou à Santo Domingo. On le pose à midi, heure de l'appareil.
+  function dateTexte(iso) {
+    if (!iso) return '—';
+    var j = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
+    return O.date(j ? new Date(Number(j[1]), Number(j[2]) - 1, Number(j[3]), 12) : iso);
+  }
   function jourAvecDecalage(n) {
     var t = new Date(Date.now() + n * 864e5);
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
@@ -400,6 +406,22 @@
           rappel_client_jours: v.rappel_client_jours, avantage_actif: v.avantage_actif, avantage_type: v.avantage_type,
           avantage_valeur: v.avantage_valeur, avantage_libelle: v.avantage_libelle
         }).then(function () { annoncer('Réglages enregistrés.'); afficherAnniversaires(); });
+      }));
+    }
+
+    // La date de naissance d'un client : ajoutée ou corrigée par l'équipe (un client ne la déclare qu'une fois)
+    if (gerer) {
+      var nv = titre(zone, 'Date de naissance d\'un client',
+        'Ajoutez la date d\'un client qui ne l\'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu\'elle a été changée, jamais la date elle-même.');
+      var fn = formulaire([{ nom: 'code', type: 'texte', libelle: 'Code du client', aide: 'Par exemple GSE-1234.' },
+                           { nom: 'date', type: 'date', libelle: 'Date de naissance' },
+                           { nom: 'motif', type: 'texte', libelle: 'Motif', large: true }]);
+      nv.appendChild(fn);
+      actions(nv).appendChild(bouton('Enregistrer la date', 'gs-bouton--sombre', function () {
+        var v = fn.lire();
+        return clientParCode(v.code).then(function (c) {
+          return P.corrigerNaissance(c.id, v.date || '', v.motif).then(function () { annoncer('Date de naissance enregistrée.'); afficherAnniversaires(); });
+        });
       }));
     }
 

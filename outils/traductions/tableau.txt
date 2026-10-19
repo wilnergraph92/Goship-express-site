@@ -1424,3 +1424,8 @@ transférés à la succursale
 ✓ COLIS TROUVÉ
 ✓ trouvé
 ✕ COLIS INTROUVABLE
+Date de naissance
+Date de naissance d'un client
+Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.
+Enregistrer la date
+Date de naissance enregistrée.

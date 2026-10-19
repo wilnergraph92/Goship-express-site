@@ -4105,10 +4105,11 @@
       var moi = permission ? exiger(d, permission) : compteConnecte(d);
       if (!moi) throw Erreur('non-autorise');
       var p = programmesDemo(d);
-      var avant = JSON.stringify(d.prog);
+      // Les dates de naissance vivent à côté des programmes (d.naissances) : une correction doit s'enregistrer aussi
+      var avant = JSON.stringify([d.prog, d.naissances]);
       programmesJourDemo(d);
       var r = faire(d, p, moi);
-      if (JSON.stringify(d.prog) !== avant) ecrireDonnees(d, 'programmes');
+      if (JSON.stringify([d.prog, d.naissances]) !== avant) ecrireDonnees(d, 'programmes');
       return plusTard(r);
     } catch (e) { return rejeter(e); }
   }
