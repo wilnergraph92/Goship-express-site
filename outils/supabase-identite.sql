@@ -3,8 +3,8 @@
 --
 -- À exécuter une fois : Supabase > SQL Editor > New query > coller tout ce
 -- fichier (bouton « Copy raw file » sur GitHub) > Run. Sans risque : ce fichier
--- AJOUTE deux colonnes vides à « clients », deux petites fonctions, un déclencheur,
--- et REMPLACE la fonction qui crée le profil d'un nouveau compte. Il ne change
+-- AJOUTE deux colonnes vides à « clients », une table fermée, quatre petites fonctions,
+-- un déclencheur, et REMPLACE la fonction qui crée le profil d'un nouveau compte. Il ne change
 -- aucune donnée existante, ne bloque aucun compte déjà ouvert, et peut être relancé
 -- autant de fois qu'on veut.
 --
@@ -15,10 +15,19 @@
 -- Ce que le formulaire d'inscription du site demande de plus :
 --    · Sexe      : Masculin (M) ou Féminin (F)
 --    · Document  : Passeport (passeport) ou Cédula (cedula)
--- Seul le TYPE du document est gardé, jamais son numéro.
+--    · Numéro    : le numéro du passeport ou de la cédula choisi
+--
+-- Où c'est gardé : le sexe et le TYPE du document sont deux colonnes de « clients » (lues avec
+-- la fiche du client, comme son profil). Le NUMÉRO est une donnée personnelle sensible : comme
+-- la date de naissance (supabase-naissance.sql), il vit dans une table à part,
+-- profils_document, qui n'a AUCUNE règle de lecture directe : ni un client, ni un employé, ni le
+-- site ne la lisent. L'équipe le lit par document_client, réservée à clients.edit
+-- (administration et gérance), et il n'est jamais recopié dans le journal d'audit.
+-- Format : lettres et chiffres seulement, sans espaces ni tirets (un passeport : 5 à 20 signes ;
+-- une cédula : 6 à 15 chiffres). Un numéro illisible n'est pas gardé.
 --
 -- Règles :
---    · Les deux colonnes sont facultatives côté base : l'application mobile déjà installée
+--    · Tout est facultatif côté base : l'application mobile déjà installée
 --      n'envoie rien de tout cela et son inscription doit continuer de marcher ; une
 --      connexion avec Google ou Apple n'en envoie pas non plus. C'est le formulaire du
 --      site qui les rend obligatoires.
@@ -26,18 +35,19 @@
 --      vide, l'inscription n'est pas refusée pour si peu. Les colonnes ont aussi une contrainte :
 --      aucun autre chemin d'écriture ne peut y mettre autre chose.
 --    · Un client ne les modifie pas lui-même (la liste des colonnes qu'il peut écrire, dans
---      supabase.sql, ne les contient pas) ; l'équipe les lit avec la fiche du client
---      (clients.view), comme le reste de son profil.
---    · Quand un client supprime son compte, les deux valeurs sont effacées.
+--      supabase.sql, ne les contient pas) ; l'équipe lit le sexe et le type avec la fiche du
+--      client (clients.view), le numéro par document_client (clients.edit).
+--    · Quand un client supprime son compte, les trois valeurs sont effacées.
 --
 -- Contenu :
 --    1. garde : la chaîne est-elle à jour ?
---    2. les colonnes
---    3. lire_sexe, lire_type_document
+--    2. les colonnes et la table du numéro
+--    3. lire_sexe, lire_type_document, lire_numero_document
 --    4. le profil d'un nouveau compte (REMPLACE celui de supabase-naissance.sql)
---    5. effacement à la suppression du compte
---    6. droits
---    7. contrôle
+--    5. document_client : la lecture du numéro par l'équipe
+--    6. effacement à la suppression du compte
+--    7. droits
+--    8. contrôle
 -- =============================================================================
 
 
@@ -49,6 +59,7 @@ begin
      or to_regprocedure('public.nom_depuis_metadonnees(jsonb)') is null
      or to_regprocedure('public.langue_depuis_metadonnees(jsonb)') is null
      or to_regprocedure('public.nouveau_code_client()') is null
+     or to_regprocedure('public.exiger_permission(text, uuid)') is null
      or to_regclass('public.profils_naissance') is null then
     raise exception 'Base incomplète : exécutez d''abord toute la chaîne (outils/migrations.txt), puis ce fichier.';
   end if;
@@ -56,7 +67,7 @@ end;
 $garde$;
 
 
--- 2. Les colonnes --------------------------------------------------------------------
+-- 2. Les colonnes et la table du numéro --------------------------------------------------
 alter table public.clients add column if not exists sexe text;
 alter table public.clients add column if not exists type_document text;
 
@@ -71,6 +82,16 @@ begin
   end if;
 end;
 $contraintes$;
+
+create table if not exists public.profils_document (
+  client_id  uuid primary key references public.clients (id) on delete cascade,
+  numero     text not null check (numero ~ '^[A-Z0-9]{5,20}$'),
+  declare_le timestamptz not null default now()
+);
+
+alter table public.profils_document enable row level security;
+-- Aucune règle de lecture ni d'écriture : seules les fonctions de ce fichier la touchent.
+revoke all on public.profils_document from anon, authenticated;
 
 comment on column public.clients.sexe is 'M (masculin) ou F (féminin), demandé à l''inscription ; vide si non donné.';
 comment on column public.clients.type_document is 'Type du document d''identité : passeport ou cedula (jamais son numéro) ; vide si non donné.';
@@ -103,6 +124,21 @@ as $$
          end
 $$;
 
+-- Le numéro, selon le document : lettres et chiffres seulement (espaces, points et tirets
+-- retirés, majuscules). Une cédula n'a que des chiffres. Illisible : null.
+create or replace function public.lire_numero_document(p_type text, p_numero text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_type
+           when 'passeport' then case when n ~ '^[A-Z0-9]{5,20}$' then n end
+           when 'cedula' then case when n ~ '^[0-9]{6,15}$' then n end
+         end
+    from (select upper(regexp_replace(coalesce(p_numero, ''), '[\s.-]', '', 'g')) as n) x
+$$;
+
 
 -- 4. Le profil d'un nouveau compte ---------------------------------------------------------
 -- Celui de supabase-naissance.sql (date de naissance obligatoire pour une inscription par
@@ -117,7 +153,9 @@ declare
   m jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
   v_fournisseur text := coalesce(nullif(new.raw_app_meta_data ->> 'provider', ''), 'email');
   v_date date;
+  v_numero text;
 begin
+  v_numero := public.lire_numero_document(public.lire_type_document(m ->> 'type_document'), m ->> 'numero_document');
   if v_fournisseur = 'email' then
     v_date := public.valider_date_naissance(m ->> 'date_naissance');
   elsif coalesce(m ->> 'date_naissance', '') <> '' then
@@ -149,6 +187,10 @@ begin
     insert into public.profils_naissance (client_id, date_naissance) values (new.id, v_date)
     on conflict (client_id) do nothing;
   end if;
+  if v_numero is not null then
+    insert into public.profils_document (client_id, numero) values (new.id, v_numero)
+    on conflict (client_id) do nothing;
+  end if;
   return new;
 end;
 $$;
@@ -159,9 +201,26 @@ create trigger creer_profil_client
   for each row execute function public.creer_profil_client();
 
 
--- 5. Effacement à la suppression du compte --------------------------------------------------
+-- 5. La lecture du numéro par l'équipe -------------------------------------------------------
+-- Réservée à clients.edit (administration, gérance) : la table n'a aucune règle de lecture, et
+-- le numéro n'est jamais copié ailleurs. Rend null si le client n'en a pas donné.
+create or replace function public.document_client(p_client uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.exiger_permission('clients.edit');
+  return (select numero from public.profils_document where client_id = p_client);
+end;
+$$;
+
+
+-- 6. Effacement à la suppression du compte --------------------------------------------------
 -- supprimer_mon_compte garde la ligne « clients » (rendue anonyme) pour les colis et les
--- factures : le sexe et le document n'ont plus de raison d'être gardés.
+-- factures : le sexe, le document et son numéro n'ont plus de raison d'être gardés.
 create or replace function public.effacer_identite_compte_supprime()
 returns trigger
 language plpgsql
@@ -171,6 +230,7 @@ as $$
 begin
   new.sexe := null;
   new.type_document := null;
+  delete from public.profils_document where client_id = new.id;
   return new;
 end;
 $$;
@@ -182,21 +242,29 @@ create trigger effacer_identite
           execute function public.effacer_identite_compte_supprime();
 
 
--- 6. Droits ----------------------------------------------------------------------------------
+-- 7. Droits ----------------------------------------------------------------------------------
 revoke execute on function public.lire_sexe(text) from public, anon, authenticated;
 revoke execute on function public.lire_type_document(text) from public, anon, authenticated;
+revoke execute on function public.lire_numero_document(text, text) from public, anon, authenticated;
+revoke execute on function public.document_client(uuid) from public, anon;
+grant execute on function public.document_client(uuid) to authenticated;
 revoke execute on function public.creer_profil_client() from public, anon, authenticated;
 revoke execute on function public.effacer_identite_compte_supprime() from public, anon, authenticated;
 
 
--- 7. Contrôle -------------------------------------------------------------------------------------
--- colonnes : 2 ; fonctions : 2 ; ouvertes_aux_visiteurs : false ; profil_a_jour : true.
+-- 8. Contrôle -------------------------------------------------------------------------------------
+-- colonnes : 2 ; fonctions : 4 ; ouvertes_aux_visiteurs : false ; profil_a_jour : true ;
+-- table_fermee : true.
 select (select count(*) from information_schema.columns
          where table_schema = 'public' and table_name = 'clients' and column_name in ('sexe', 'type_document')) as colonnes,
        (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and p.proname in ('lire_sexe', 'lire_type_document')) as fonctions,
+         where n.nspname = 'public' and p.proname in ('lire_sexe', 'lire_type_document', 'lire_numero_document', 'document_client')) as fonctions,
        (select coalesce(bool_or(has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')), false)
           from pg_proc p join pg_namespace n on n.oid = p.pronamespace
          where n.nspname = 'public'
-           and p.proname in ('lire_sexe', 'lire_type_document', 'creer_profil_client', 'effacer_identite_compte_supprime')) as ouvertes_aux_visiteurs,
-       position('lire_type_document' in pg_get_functiondef('public.creer_profil_client()'::regprocedure)) > 0 as profil_a_jour;
+           and p.proname in ('lire_sexe', 'lire_type_document', 'lire_numero_document', 'creer_profil_client',
+                             'effacer_identite_compte_supprime'))
+         or has_function_privilege('anon', 'public.document_client(uuid)', 'execute') as ouvertes_aux_visiteurs,
+       position('lire_numero_document' in pg_get_functiondef('public.creer_profil_client()'::regprocedure)) > 0 as profil_a_jour,
+       not has_table_privilege('authenticated', 'public.profils_document', 'select')
+         and not has_table_privilege('anon', 'public.profils_document', 'select') as table_fermee;

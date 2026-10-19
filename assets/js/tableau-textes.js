@@ -824,6 +824,7 @@ window.GoshipTextesTableau = {
   "Nouvelle facture": ["New invoice", "Nueva factura", "Nouvo fakti"],
   "Nouvelle offre": ["New offer", "Nueva oferta", "Nouvo òf"],
   "Nouvelle valeur": ["New value", "Nuevo valor", "Nouvo valè"],
+  "Numéro": ["Number", "Número", "Nimewo"],
   "Numéro, contenu, magasin, suivi du vendeur, destination…": ["Number, contents, store, seller tracking, destination…", "Número, contenido, tienda, seguimiento del vendedor, destino…", "Nimewo, sa ki ladan, magazen, swivi machann, destinasyon…"],
   "N°": ["No.", "N.º", "Nimewo"],
   "N° colis": ["Package no.", "N.º de paquete", "Nimewo koli"],

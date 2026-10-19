@@ -824,6 +824,7 @@ Nouvelle campagne
 Nouvelle facture
 Nouvelle offre
 Nouvelle valeur
+Numéro
 Numéro, contenu, magasin, suivi du vendeur, destination…
 N°
 N° colis

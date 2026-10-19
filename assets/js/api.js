@@ -604,6 +604,9 @@
               // Sexe (« M », « F ») et type de document (« passeport », « cedula ») : la base les lit
               // et les garde dans le profil ; une valeur inconnue y est ignorée
               sexe: d.sexe, type_document: d.type_document,
+              // Le numéro du passeport ou de la cédula : la base le garde à part (table fermée), lisible
+              // seulement par l'administration et la gérance
+              numero_document: d.numero_document,
               // Le code d'un parrain (lien « inscription.html?parrain=… ») : la base le rattache si
               // il est valable, et ignore un code inconnu sans bloquer l'inscription
               code_parrainage: d.code_parrainage ? String(d.code_parrainage).trim().slice(0, 24) : undefined
@@ -880,6 +883,10 @@
           return resultat(r);
         }).then(function (v) { return v || { sexe: null, type_document: null }; });
       },
+
+      // Le numéro du passeport ou de la cédula d'un client (document_client, supabase-identite.sql) :
+      // réservé à clients.edit, la table n'a aucune règle de lecture. null si le client n'en a pas donné.
+      numeroDocument: function (id) { return appelBase('document_client', { p_client: id }).then(function (v) { return v || null; }); },
 
       clients: function (o) {
         o = o || {};
@@ -1552,6 +1559,14 @@
   }
   function echec(code) {
     return new Promise(function (ok, ko) { setTimeout(function () { ko(Erreur(code)); }, 220); });
+  }
+
+  // La copie démo de lire_numero_document (supabase-identite.sql) : mêmes règles, vide si illisible
+  function numeroDocumentDemo(type, texte) {
+    var n = String(texte == null ? '' : texte).replace(/[\s.\-]/g, '').toUpperCase();
+    if (type === 'passeport') return /^[A-Z0-9]{5,20}$/.test(n) ? n : '';
+    if (type === 'cedula') return /^[0-9]{6,15}$/.test(n) ? n : '';
+    return '';
   }
 
   // La copie démo de valider_date_naissance (supabase-naissance.sql) : mêmes refus, mêmes phrases.
@@ -4178,6 +4193,9 @@
       // À part des comptes, comme la table profils_naissance : publicProfil ne la montre jamais
       d.naissances = d.naissances || {};
       d.naissances[compte.id] = naissance;
+      // Le numéro du document, lui aussi à part des comptes (publicProfil ne le montre jamais)
+      var numero = numeroDocumentDemo(compte.type_document, x.numero_document);
+      if (numero) { d.documents = d.documents || {}; d.documents[compte.id] = numero; }
       ecrireDonnees(d);
       stockage('ecrire', CLE_SESSION, compte.id);
       return plusTard({ profil: publicProfil(compte), confirmation: false });
@@ -4596,6 +4614,13 @@
           return c.role === 'client' && (!t || contient([c.code, c.nom_complet, c.telephone, c.email, c.ville, c.region], t));
         }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); }).map(publicProfil);
         return plusTard(page(lignes, o));
+      },
+
+      // Même contrat que document_client : réservé à clients.edit (administration, gérance)
+      numeroDocument: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'clients.edit'); } catch (e) { return echec(e.code); }
+        return plusTard(d.documents && d.documents[id] || null);
       },
 
       // Même contrat que la base : le sexe et le type de document, pour qui peut voir les clients

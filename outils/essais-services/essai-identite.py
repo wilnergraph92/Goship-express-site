@@ -11,7 +11,9 @@ comptes à l'ancienne, puis on installe le fichier DEUX fois. Ensuite :
   D. aucun autre chemin d'écriture ne peut y mettre autre chose (contraintes), le client ne les
      modifie pas lui-même, l'équipe et le client les lisent ;
   E. la suppression du compte les efface ;
-  F. rien n'est ouvert aux comptes ni aux visiteurs, et relancer le fichier ne change aucune donnée.
+  F. rien n'est ouvert aux comptes ni aux visiteurs, et relancer le fichier ne change aucune donnée ;
+  G. le numéro du passeport ou de la cédula : dans une table fermée, normalisé, lisible seulement
+     par clients.edit (administration, gérance), effacé avec le compte.
 
 Depuis la racine du site :
 
@@ -32,7 +34,7 @@ S = A.S
 
 RACINE = S.RACINE
 OUTILS = os.path.join(RACINE, 'outils')
-ADMIN, MARIE, JEAN, EMPLOYE = A.ADMIN, A.MARIE, A.JEAN, A.EMPLOYE
+ADMIN, GERANT, MARIE, JEAN, EMPLOYE = A.ADMIN, A.GERANT, A.MARIE, A.JEAN, A.EMPLOYE
 verifier = S.verifier
 NOUVEAU = 'supabase-identite.sql'
 CHAINE = [l.strip() for l in open(os.path.join(OUTILS, 'migrations.txt'), encoding='utf-8')
@@ -66,6 +68,9 @@ def main():
         db.sql(texte)
         return uid, None
 
+    def numero(uid):
+        return un(db, "select coalesce((select numero from profils_document where client_id = '%s'), '-');" % uid)
+
     def champs(uid):
         return un(db, "select coalesce(sexe, '-') || '|' || coalesce(type_document, '-') from clients where id = '%s';" % uid)
 
@@ -80,14 +85,16 @@ def main():
     for _ in range(2):
         db.fichier(os.path.join(OUTILS, NOUVEAU))
     verifier('installé deux fois : aucune erreur', 'oui', 'oui')
-    verifier('le contrôle du fichier : 2 colonnes, 2 fonctions, rien d\'ouvert, profil à jour',
+    verifier('le contrôle du fichier : 2 colonnes, 4 fonctions, rien d\'ouvert, profil à jour, table du numéro fermée',
              un(db, "select (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'clients' "
                     "and column_name in ('sexe', 'type_document'))::text || '|' || "
-                    "(select count(*) from pg_proc where proname in ('lire_sexe', 'lire_type_document'))::text || '|' || "
-                    "(select coalesce(bool_or(has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')), false) "
-                    "from pg_proc p where p.proname in ('lire_sexe', 'lire_type_document', 'creer_profil_client', 'effacer_identite_compte_supprime'))::text || '|' || "
-                    "(position('lire_type_document' in pg_get_functiondef('public.creer_profil_client()'::regprocedure)) > 0)::text;"),
-             '2|2|false|true')
+                    "(select count(*) from pg_proc where proname in ('lire_sexe', 'lire_type_document', 'lire_numero_document', 'document_client'))::text || '|' || "
+                    "((select coalesce(bool_or(has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')), false) "
+                    "from pg_proc p where p.proname in ('lire_sexe', 'lire_type_document', 'lire_numero_document', 'creer_profil_client', 'effacer_identite_compte_supprime')) "
+                    "or has_function_privilege('anon', 'public.document_client(uuid)', 'execute'))::text || '|' || "
+                    "(position('lire_numero_document' in pg_get_functiondef('public.creer_profil_client()'::regprocedure)) > 0)::text || '|' || "
+                    "(not has_table_privilege('authenticated', 'public.profils_document', 'select') and not has_table_privilege('anon', 'public.profils_document', 'select'))::text;"),
+             '2|4|false|true|true')
     verifier("un compte d'avant le fichier : ni sexe ni document, rien d'inventé", champs(ancien), '-|-')
     verifier("les comptes de l'équipe et les clients des essais : vides aussi",
              un(db, "select count(*) from clients where sexe is not null or type_document is not null;"), '0')
@@ -150,11 +157,42 @@ def main():
     print("\nF. Les droits, et relancer le fichier ne change aucune donnée")
     for nom, requete in (('lire_sexe', "select public.lire_sexe('M');"),
                          ('lire_type_document', "select public.lire_type_document('cedula');"),
+                         ('lire_numero_document', "select public.lire_numero_document('cedula', '0011234567');"),
                          ('creer_profil_client', "select public.creer_profil_client();"),
                          ('effacer_identite_compte_supprime', "select public.effacer_identite_compte_supprime();")):
         for qui, compte in (('un visiteur', None), ('un client', MARIE), ('un employé', EMPLOYE), ('un administrateur', ADMIN)):
             verifier('%s ne peut pas appeler %s' % (qui, nom), db.erreur(compte, requete)[:17], 'permission denied')
-    photo = lambda: un(db, "select md5(string_agg(id::text || coalesce(sexe, '') || coalesce(type_document, ''), ',' order by id)) from clients;")
+    print("\nG. Le numéro du passeport ou de la cédula")
+    for meta, attendu, titre in (({'type_document': 'passeport', 'numero_document': 'ab 1234-567'}, 'AB1234567', 'passeport : espaces et tirets retirés, majuscules'),
+                                 ({'type_document': 'cedula', 'numero_document': '001-1234567-8'}, '00112345678', 'cédula : 001-1234567-8 devient 00112345678'),
+                                 ({'type_document': 'Pasaporte', 'numero_document': 'X9Y8Z7W6'}, 'X9Y8Z7W6', 'le type en espagnol marche aussi'),
+                                 ({'type_document': 'passeport', 'numero_document': 'AB12'}, '-', 'passeport trop court : pas gardé'),
+                                 ({'type_document': 'passeport', 'numero_document': 'A' * 21}, '-', 'passeport trop long : pas gardé'),
+                                 ({'type_document': 'cedula', 'numero_document': '12AB567'}, '-', 'cédula avec des lettres : pas gardée'),
+                                 ({'type_document': 'cedula', 'numero_document': '12345'}, '-', 'cédula trop courte : pas gardée'),
+                                 ({'numero_document': 'AB1234567'}, '-', 'un numéro sans type de document : pas gardé'),
+                                 ({'type_document': 'permis', 'numero_document': 'AB1234567'}, '-', 'un type inconnu : numéro pas gardé'),
+                                 ({'type_document': 'passeport', 'numero_document': "A'; drop table clients; --"}, '-', 'texte piégé : pas gardé')):
+        uid, _ = inscrire(dict(base, **meta))
+        verifier(titre, numero(uid), attendu)
+        verifier('   … et l\'inscription n\'est pas refusée (le compte existe)', un(db, "select count(*) from clients where id = '%s';" % uid), '1')
+    nid, _ = inscrire(dict(base, sexe='F', type_document='passeport', numero_document='PA1234567'))
+    verifier("la table du numéro est fermée à un administrateur, même en lecture directe",
+             db.erreur(ADMIN, "select numero from profils_document;")[:17], 'permission denied')
+    verifier("… à un client, à un visiteur", [db.erreur(MARIE, "select numero from profils_document;")[:17], db.erreur(None, "select numero from profils_document;")[:17]],
+             ['permission denied', 'permission denied'])
+    lire = lambda compte: db.erreur(compte, "select public.document_client('%s');" % nid)
+    verifier("document_client : l'administrateur lit le numéro", un(db, "select public.document_client('%s');" % nid, ADMIN), 'PA1234567')
+    verifier("… le gérant (clients.edit) aussi", un(db, "select public.document_client('%s');" % nid, GERANT), 'PA1234567')
+    verifier("… un employé (clients.view, sans clients.edit) est refusé", lire(EMPLOYE)[:17], 'PERMISSION_DENIED')
+    verifier("… un client aussi (même le sien)", db.erreur(nid, "select public.document_client('%s');" % nid)[:17], 'PERMISSION_DENIED')
+    verifier("… et un visiteur", lire(None)[:17], 'permission denied')
+    verifier("un client sans numéro : null", un(db, "select coalesce(public.document_client('%s'), 'null');" % MARIE, ADMIN), 'null')
+    verifier("la suppression du compte efface le numéro", [numero(nid), (db.sql("update clients set supprime_le = now() where id = '%s';" % nid), numero(nid))[1]], ['PA1234567', '-'])
+    verifier("le journal d'audit ne contient jamais un numéro",
+             un(db, "select count(*) from journal_audit where avant::text like '%%PA1234567%%' or apres::text like '%%PA1234567%%';"), '0')
+
+    photo = lambda: un(db, "select md5(string_agg(id::text || coalesce(sexe, '') || coalesce(type_document, '') || coalesce((select numero from profils_document d where d.client_id = clients.id), ''), ',' order by id)) from clients;")
     avant = photo()
     db.fichier(os.path.join(OUTILS, NOUVEAU))
     verifier("relancer le fichier : mêmes valeurs pour tous les clients", photo(), avant)

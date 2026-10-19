@@ -6309,7 +6309,11 @@
           var lignes = [];
           if (v.sexe) lignes.push(ligneListe('Sexe', v.sexe === 'F' ? 'Féminin' : 'Masculin', null, null));
           if (v.type_document) lignes.push(ligneListe('Document', v.type_document === 'cedula' ? 'Cédula' : 'Passeport', null, null));
-          return lignes;
+          // Le numéro : seulement pour qui a clients.edit (la base le refuse aux autres) ; refusé, rien
+          return API.admin.numeroDocument(client.id).then(function (n) {
+            if (n) lignes.push(ligneListe('Numéro', n, null, null));
+            return lignes;
+          }, function () { return lignes; });
         });
       }, 'Non renseigné.');
     }

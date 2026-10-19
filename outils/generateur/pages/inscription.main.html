@@ -66,8 +66,7 @@
             </div>
             <div class="gs-champ">
               <label for="ins-naissance">Date de naissance<span class="gs-requis" aria-hidden="true">*</span></label>
-              <input id="ins-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="jj/mm/aaaa" data-naissance aria-describedby="ins-naissance-aide">
-              <p class="gs-champ__aide" id="ins-naissance-aide">Nous nous en servons pour vous souhaiter votre anniversaire. Seuls les responsables autorisés de Goship Express peuvent la consulter.</p>
+              <input id="ins-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="jj/mm/aaaa" data-naissance>
             </div>
             <div class="gs-champ">
               <label for="ins-sexe">Sexe<span class="gs-requis" aria-hidden="true">*</span></label>
@@ -84,6 +83,10 @@
                 <option value="passeport">Passeport</option>
                 <option value="cedula">Cédula</option>
               </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-numero-document" data-libelle-document>Numéro du document<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-numero-document" name="numero_document" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="24" disabled placeholder="Choisissez d'abord un document" data-numero-document>
             </div>
             <div class="gs-champ">
               <label for="ins-parrain">Code de parrainage (facultatif)</label>

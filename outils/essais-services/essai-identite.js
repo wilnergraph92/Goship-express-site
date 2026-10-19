@@ -96,6 +96,35 @@ function paire(p) { return (p.sexe || '-') + '|' + (p.type_document || '-'); }
   await inscrire();
   verifier('un client ne lit pas ceux d\'un autre', await code(API.admin.identiteClient(cible.id)), REFUS);
 
+  console.log('\nE. Le numéro du passeport ou de la cédula');
+  async function numeroDe(extra) {
+    var p = await inscrire(extra);
+    var id = p.id;
+    await API.deconnecter();
+    await comme('admin');
+    var n = await API.admin.numeroDocument(id);
+    await API.deconnecter();
+    return { id: id, numero: n };
+  }
+  verifier('passeport : espaces et tirets retirés, majuscules', (await numeroDe({ sexe: 'M', type_document: 'passeport', numero_document: 'ab 1234-567' })).numero, 'AB1234567');
+  verifier('cédula : 001-1234567-8 devient 00112345678', (await numeroDe({ type_document: 'cedula', numero_document: '001-1234567-8' })).numero, '00112345678');
+  verifier('passeport trop court : pas gardé', (await numeroDe({ type_document: 'passeport', numero_document: 'AB12' })).numero, null);
+  verifier('cédula avec des lettres : pas gardée', (await numeroDe({ type_document: 'cedula', numero_document: '12AB567' })).numero, null);
+  verifier('un numéro sans type de document : pas gardé', (await numeroDe({ numero_document: 'AB1234567' })).numero, null);
+  verifier('texte piégé : pas gardé', (await numeroDe({ type_document: 'passeport', numero_document: '<b>x</b>' })).numero, null);
+  var avecNumero = await numeroDe({ type_document: 'passeport', numero_document: 'PA1234567' });
+  verifier('le profil du client ne montre jamais le numéro',
+           JSON.stringify((await (async function () { await API.connecter('id1@exemple.com', 'secret12').catch(function () {}); return API.profil(); })()) || {}).indexOf('PA1234567'), -1);
+  await API.deconnecter();
+  await comme('gerant');
+  verifier('le gérant (clients.edit) lit le numéro', await API.admin.numeroDocument(avecNumero.id), 'PA1234567');
+  await comme('employe');
+  verifier('un employé (sans clients.edit) est refusé', await code(API.admin.numeroDocument(avecNumero.id)), REFUS);
+  await API.deconnecter();
+  verifier('un visiteur est refusé', await code(API.admin.numeroDocument(avecNumero.id)), REFUS);
+  await inscrire();
+  verifier('un client est refusé', await code(API.admin.numeroDocument(avecNumero.id)), REFUS);
+
   var reussis = resultats.filter(Boolean).length;
   console.log('\n' + resultats.length + ' vérifications, ' + reussis + ' réussies.');
   process.exit(reussis === resultats.length ? 0 : 1);
