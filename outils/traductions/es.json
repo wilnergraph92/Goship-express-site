@@ -2643,5 +2643,6 @@
   "Date de naissance d'un client": "Fecha de nacimiento de un cliente",
   "Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.": "Añada la fecha de un cliente que no la ha dado, o corríjala. Se requiere un motivo; el diario guarda que se cambió, nunca la fecha en sí.",
   "Enregistrer la date": "Guardar la fecha",
-  "Date de naissance enregistrée.": "Fecha de nacimiento guardada."
+  "Date de naissance enregistrée.": "Fecha de nacimiento guardada.",
+  "e-mail coupé dans les règles": "correo desactivado en las reglas"
 }

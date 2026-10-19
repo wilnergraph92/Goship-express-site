@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — le pied des e-mails : boutons Google Play et App Store ; plus d'e-mail de facturation (19/10/2026)
+
+**Migration à passer avant de publier**, après les 23 premières : `supabase-courriel-pied.sql` (24e ; contrôle attendu `2 | false | true | true`). Elle remplace `courriel_gabarit` : ne pas relancer `supabase.sql` après elle. Le pied de tous les e-mails n'a plus l'adresse ni le numéro WhatsApp ; deux boutons les remplacent (réglages `store_android_url`, posé par la migration, et `store_ios_url`, vide tant qu'il n'y a pas de fiche App Store : le bouton dit « Bientôt sur »). Les e-mails « Nouvelle facture », « Paiement enregistré » et « Facture en retard » sont coupés (règles de notification) ; le téléphone et l'espace client les gardent.
+
 ## Non publié — l'e-mail « Colis reçu » et « Colis disponible » donne les détails du colis (19/10/2026)
 
 **Migration à passer avant de publier**, après les 22 premières : `supabase-courriel-colis.sql` (23e ; contrôle attendu `3 | false | true`). Elle remplace `expedier_envoi` : ne pas relancer `supabase-notifications.sql` après elle. L'e-mail garde la phrase et ajoute un tableau (statut, code client, n° de colis, expéditeur, service, contenu, suivi du vendeur masqué sauf les 4 derniers signes, poids), dans la langue du compte. Seulement pour « Colis reçu » et « Colis disponible », les deux seuls messages de colis qui ont un e-mail ; rien ne change pour le téléphone, l'espace client, WhatsApp, ni pour les e-mails de facture. Aucun e-mail déjà parti n'est rejoué.

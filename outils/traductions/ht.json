@@ -2643,5 +2643,6 @@
   "Date de naissance d'un client": "Dat nesans yon kliyan",
   "Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.": "Ajoute dat yon kliyan ki pa t bay li, oswa korije li. Yon rezon obligatwa ; jounal la sonje ke yo chanje li, jamè dat la menm.",
   "Enregistrer la date": "Anrejistre dat la",
-  "Date de naissance enregistrée.": "Dat nesans anrejistre."
+  "Date de naissance enregistrée.": "Dat nesans anrejistre.",
+  "e-mail coupé dans les règles": "imèl koupe nan règ yo"
 }

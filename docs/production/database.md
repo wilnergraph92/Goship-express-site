@@ -43,6 +43,7 @@ on revient en arrière par une nouvelle migration ou une restauration
 | `supabase-anniversaires.sql` (21, anniversaires : modèles en quatre langues, planification toutes les 15 minutes, programme éteint) | **à exécuter**, après le 20 ; l'extension pg_cron est nécessaire pour l'envoi ; contrôle attendu : `16 \| false \| true \| true` |
 | `supabase-campagnes.sql` (22, GOship APP Welcome, GOship Refer, avantages ; campagnes en brouillon) | **à exécuter**, après le 21 ; contrôle attendu : `9 \| 12 \| 3 \| false \| true \| true` |
 | `supabase-courriel-colis.sql` (23, l'e-mail « Colis reçu » et « Colis disponible » donne les détails du colis) | **à exécuter**, après le 22 ; il remplace `expedier_envoi` : ne **pas** relancer `supabase-notifications.sql` après lui ; contrôle attendu : `3 \| false \| true` |
+| `supabase-courriel-pied.sql` (24, pied des e-mails : boutons Google Play et App Store à la place de l'adresse ; plus d'e-mail de facturation) | **à exécuter**, après le 23 ; remplace `courriel_gabarit` : ne **pas** relancer `supabase.sql` après lui ; contrôle attendu : `2 \| false \| true \| true` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de
