@@ -233,6 +233,36 @@ try {
     verifier('les titres de l\'onglet Anniversaires ne sont plus en français (' + langue + ')', francais.some((x) => /^(Réglages|Modèles de messages|Erreurs)$/.test(x.trim())), false);
     await lc.close();
   }
+
+  console.log('\nLes cases à cocher : l\'état coché se voit (clair et sombre), et le texte les bascule aussi');
+  // Régression : « .gs-champ input » retire l'apparence native de tout champ, et une case cochée ressemblait alors
+  // à une case vide (le réglage s'enregistrait sans qu'on le voie). On compare donc le rendu, pas seulement .checked.
+  // Session à part : l'onglet « Offre de bienvenue » s'ouvre par défaut et se recharge à chaque retour.
+  {
+    const cc = await contexte(navigateur, 1440, 900);
+    const pc = await cc.newPage();
+    await connecter(pc, 'admin@goship.demo');
+    await ouvrirProgrammes(pc);
+    await ongletProg(pc, 'anniversaires');
+    const interrupteur = pc.locator('[data-prog-panneau="anniversaires"] [name="actif"]').first();
+    // Les 200 ms de la transition du fond, plus de la marge
+    const rendu = async () => { await pc.waitForTimeout(450); return interrupteur.evaluate((n) => ({ fond: getComputedStyle(n).backgroundColor, pastille: getComputedStyle(n, '::after').transform })); };
+    const videClair = await rendu();
+    await interrupteur.click();
+    const cocheClair = await rendu();
+    verifier('clair : cochée, la case n\'a ni le même fond ni la même pastille que vide',
+      (await interrupteur.isChecked()) && videClair.fond !== cocheClair.fond && videClair.pastille !== cocheClair.pastille, true);
+    await pc.locator('[data-prog-panneau="anniversaires"] .gs-prog__champ--case label', { hasText: 'Envoyer les messages' }).click();
+    verifier('clic sur le texte : la case se décoche et reprend son rendu vide',
+      (await interrupteur.isChecked()) === false && (await rendu()).fond === videClair.fond, true);
+    await pc.evaluate(() => document.documentElement.setAttribute('data-apparence', 'sombre'));
+    const videSombre = await rendu();
+    await interrupteur.click();
+    const cocheSombre = await rendu();
+    verifier('sombre : cochée, la case se distingue de la case vide',
+      videSombre.fond !== cocheSombre.fond && videSombre.fond !== videClair.fond, true);
+    await cc.close();
+  }
 } finally {
   await navigateur.close();
 }

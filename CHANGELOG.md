@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — correctif : les cases à cocher de l'onglet Programmes se voient (19/10/2026)
+
+Dans le tableau de bord, une case cochée (« Envoyer les messages d'anniversaire », les canaux, les cumuls…) ressemblait à une case vide : le réglage s'enregistrait, mais rien ne le montrait, et l'on croyait ne pas pouvoir le cocher ni le décocher. Ces cases sont maintenant des interrupteurs (clair et sombre). Aucune migration, rien dans la base ni dans l'application ; `essai-programmes-tableau.mjs` compare désormais le rendu d'une case cochée et d'une case vide.
+
 ## Non publié — programmes : adresse officielle, date de naissance, anniversaires, bienvenue, parrainage, GOPOINTS (19/10/2026)
 
 **Migrations à passer avant de publier le site**, dans cet ordre : `supabase-naissance.sql`,
