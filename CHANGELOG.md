@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — la date de naissance d'un client se saisit dans le tableau de bord, et s'affiche le bon jour (19/10/2026)
+
+Onglet Programmes > Anniversaires : un bloc « Date de naissance d'un client » (code du client, date, motif obligatoire) appelle `corriger_naissance`, qui existait en base sans écran. Réservé à `birthdays.manage`. Les jours civils des listes (un anniversaire, la fin d'une campagne) s'affichaient la veille à Miami (« 2026-10-19 » lu comme minuit UTC) : ils sont maintenant lus à midi, heure de l'appareil. En mode démo, la correction d'une date ne s'enregistrait pas : corrigé. Aucune migration.
+
 ## Non publié — correctif : les cases à cocher de l'onglet Programmes se voient (19/10/2026)
 
 Dans le tableau de bord, une case cochée (« Envoyer les messages d'anniversaire », les canaux, les cumuls…) ressemblait à une case vide : le réglage s'enregistrait, mais rien ne le montrait, et l'on croyait ne pas pouvoir le cocher ni le décocher. Ces cases sont maintenant des interrupteurs (clair et sombre). Aucune migration, rien dans la base ni dans l'application ; `essai-programmes-tableau.mjs` compare désormais le rendu d'une case cochée et d'une case vide.

@@ -186,6 +186,7 @@ try {
   verifier('… en lecture seule : champs désactivés, aucun bouton d\'enregistrement',
     [await gerant.locator('[data-prog-panneau="anniversaires"] .gs-prog__formulaire input:not([disabled]):not([type="date"])').count() === 0,
      await gerant.getByRole('button', { name: 'Enregistrer les réglages' }).count()], [true, 0]);
+  verifier('… et ne peut pas saisir la date de naissance d\'un client', await gerant.getByRole('button', { name: 'Enregistrer la date' }).count(), 0);
   await ongletProg(gerant, 'bienvenue');
   verifier('le gérant ne crée pas de campagne', await gerant.getByRole('button', { name: 'Nouvelle campagne' }).count(), 0);
   await ongletProg(gerant, 'avantages');
@@ -262,6 +263,38 @@ try {
     verifier('sombre : cochée, la case se distingue de la case vide',
       videSombre.fond !== cocheSombre.fond && videSombre.fond !== videClair.fond, true);
     await cc.close();
+  }
+
+  console.log('\nLa date de naissance d\'un client : saisie par l\'équipe, et affichée le bon jour');
+  // Régression : « 2026-10-19 » confié tel quel à Date devenait minuit UTC, donc le 18 au soir à Miami. On joue donc
+  // l'essai dans le fuseau de Miami (celui de l'équipe), en prenant un anniversaire dans trois jours.
+  {
+    const dc = await navigateur.newContext({ viewport: { width: 1440, height: 900 }, locale: 'fr-FR', timezoneId: 'America/New_York' });
+    await dc.route('**/assets/js/config.js', (r) => r.fulfill({ contentType: 'application/javascript', body: 'window.GOSHIP_CONFIG={};' }));
+    await dc.route(/supabase\.co/, (r) => r.abort());
+    const pd = await dc.newPage();
+    await connecter(pd, 'admin@goship.demo');
+    await pd.evaluate(() => window.GoshipAPI.admin.exemples());
+    const client = await pd.evaluate(async () => { const r = await window.GoshipAPI.admin.clients({ parPage: 1 }); return { code: r.lignes[0].code, nom: r.lignes[0].nom_complet || r.lignes[0].nom }; });
+    await ouvrirProgrammes(pd);
+    await ongletProg(pd, 'anniversaires');
+    const bloc = pd.locator('[data-prog-panneau="anniversaires"] .gs-prog__bloc', { hasText: 'Date de naissance d\'un client' });
+    verifier('l\'administrateur voit le bloc « Date de naissance d\'un client »', await bloc.count(), 1);
+    const dans3 = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + 3 * 864e5));
+    await remplir(bloc, 'code', client.code); await remplir(bloc, 'date', '1990' + dans3.slice(4));
+    await bloc.getByRole('button', { name: 'Enregistrer la date' }).click();
+    verifier('sans motif : refusé avec la phrase de la base',
+      (await message(pd, 'Un motif est obligatoire')).startsWith('Un motif est obligatoire pour corriger une date de naissance'), true);
+    await remplir(bloc, 'motif', 'Donnée par téléphone');
+    await bloc.getByRole('button', { name: 'Enregistrer la date' }).click();
+    verifier('avec motif : enregistrée', await message(pd, 'Date de naissance enregistrée'), 'Date de naissance enregistrée.');
+    const lignes = pd.locator('[data-prog-panneau="anniversaires"] table tr', { hasText: client.code });
+    await lignes.first().waitFor();
+    const jourAffiche = (await lignes.first().locator('td').first().textContent()).trim().split(' ')[0];
+    verifier('la liste affiche le bon jour (pas la veille) dans le fuseau de Miami', jourAffiche, String(parseInt(dans3.slice(8), 10)));
+    verifier('l\'âge atteint est calculé par la base', (await lignes.first().locator('td').nth(2).textContent()).trim(), String(Number(dans3.slice(0, 4)) - 1990));
+    verifier('la date elle-même n\'est affichée nulle part', (await pd.locator('[data-prog-panneau="anniversaires"]').textContent()).includes('1990'), false);
+    await dc.close();
   }
 } finally {
   await navigateur.close();
