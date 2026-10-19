@@ -29,6 +29,7 @@
 <script src="assets/js/admin.js" defer></script>
 <script src="assets/js/scan-parser.js" defer></script>
 <script src="assets/js/scanner.js" defer></script>
+<script src="assets/js/programmes.js" defer></script>
 </head>
 <body class="gs-admin-body">
 <a class="gs-skip" href="#contenu-principal">Aller au contenu</a>
@@ -70,6 +71,7 @@
       <div class="gs-td__nav" role="tablist" aria-labelledby="menu-gestion" aria-orientation="vertical">
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="analytics" data-permission="reports.view" tabindex="-1" title="Analytics"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16V5"/></svg><span class="gs-td__libelle">Analytics</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="rapports" data-permission="reports.view" tabindex="-1" title="Rapport"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 18v-3M12 18v-6M16 18v-4"/></svg><span class="gs-td__libelle">Rapport</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="programmes" data-permission="programs.view" tabindex="-1" title="Programmes"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8c-1.5-3-5-3.5-5-1.2C7 8.2 9 8 12 8Zm0 0c1.5-3 5-3.5 5-1.2C17 8.2 15 8 12 8Z"/></svg><span class="gs-td__libelle">Programmes</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
       </div>
       <div class="gs-td__nav">
@@ -675,6 +677,31 @@
       </div>
       <p class="gs-apercu__message" data-analytics-message role="alert" hidden></p>
       <div class="gs-analytics__corps" data-analytics-corps aria-live="polite"></div>
+    </div>
+
+    <!-- Les programmes (assets/js/programmes.js) : anniversaires, offre de bienvenue, parrainage,
+         GOPOINTS et avantages accordés. Tout est lu et réglé par les fonctions de la base
+         (outils/supabase-fidelite.sql, -anniversaires.sql, -campagnes.sql) ; cette page n'en calcule rien. -->
+    <div class="gs-admin-vue gs-prog" data-vue="programmes" data-permission="programs.view" role="tabpanel" hidden>
+      <div class="gs-rapports__tete">
+        <div>
+          <h2 class="gs-rapports__titre">Programmes</h2>
+          <p class="gs-rapports__intro">Anniversaires, offre de bienvenue, parrainage et GOPOINTS. Chaque programme naît éteint ou en brouillon, et ne promet rien au client tant qu'il n'est pas complet.</p>
+        </div>
+      </div>
+      <div class="gs-prog__onglets" role="tablist" aria-label="Programmes">
+        <button type="button" role="tab" aria-selected="false" tabindex="-1" data-prog-onglet="anniversaires" data-permission="birthdays.view">Anniversaires</button>
+        <button type="button" role="tab" aria-selected="true" data-prog-onglet="bienvenue">Offre de bienvenue</button>
+        <button type="button" role="tab" aria-selected="false" tabindex="-1" data-prog-onglet="parrainage">Parrainages</button>
+        <button type="button" role="tab" aria-selected="false" tabindex="-1" data-prog-onglet="points">GOPOINTS</button>
+        <button type="button" role="tab" aria-selected="false" tabindex="-1" data-prog-onglet="avantages">Avantages</button>
+      </div>
+      <p class="gs-apercu__message" data-prog-message role="status" hidden></p>
+      <section class="gs-prog__panneau" data-prog-panneau="anniversaires" data-permission="birthdays.view" hidden></section>
+      <section class="gs-prog__panneau" data-prog-panneau="bienvenue" hidden></section>
+      <section class="gs-prog__panneau" data-prog-panneau="parrainage" hidden></section>
+      <section class="gs-prog__panneau" data-prog-panneau="points" hidden></section>
+      <section class="gs-prog__panneau" data-prog-panneau="avantages" hidden></section>
     </div>
 
     <!-- Les rapports (outils/supabase-rapports.sql) : une période, des filtres, les données
@@ -1549,6 +1576,29 @@
     <div class="gs-dialogue__pied">
       <button type="button" class="gs-bouton gs-bouton--danger" data-abandon-confirmer>Fermer sans enregistrer</button>
       <button type="button" class="gs-bouton gs-bouton--plein" data-abandon-continuer autofocus>Continuer la saisie</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Un motif obligatoire (annuler un mouvement ou un avantage, examiner un parrainage) : gardé au journal -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="prog-motif" aria-labelledby="dlg-prog-motif-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-prog-motif-titre" data-prog-motif-titre>Motif</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide" data-prog-motif-aide></p>
+      <div class="gs-champ">
+        <label for="prog-motif-saisie">Motif</label>
+        <input type="text" id="prog-motif-saisie" data-prog-motif-saisie maxlength="200" autocomplete="off">
+      </div>
+      <p class="gs-form__erreur" data-prog-motif-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-prog-motif-annuler>Retour</button>
+      <button type="button" class="gs-bouton gs-bouton--plein" data-prog-motif-confirmer>Confirmer</button>
     </div>
   </div>
 </dialog>
