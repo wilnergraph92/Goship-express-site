@@ -684,7 +684,7 @@ def essais(db, d):
              (c, v.get('message'), v.get('hint'), 'remis' in (v.get('details') or '')), (400, 'ACCOUNT_HAS_SHIPMENTS', 'goship', True))
     # Paul : un colis, sa facture, une pré-alerte en attente, un téléphone, une session
     pc = creer(db, ADMIN, dict(client_id=PAUL, description='Colis de Paul', poids_lb=3, service='aerien',
-                               pays_destination='HT', destination='Jacmel', expediteur='Amazon',
+                               pays_destination='HT', destination='Jacmel', expediteur='Amazon', lieu='Miami',
                                suivi_transporteur='TBAPAUL0001'), facturer=True)
     rpc('creer_prealerte', PAUL, {'p_cle': str(uuid.uuid4()), 'p_magasin': 'SHEIN', 'p_description': 'Robe',
                                   'p_suivi': 'SHEINPAUL01', 'p_valeur': 20, 'p_service': 'aerien'})
