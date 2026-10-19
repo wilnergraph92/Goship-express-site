@@ -406,7 +406,7 @@ colis. Les textes courts (espace client, push, WhatsApp) disent encore « entrep
 
 Le pied de tous les e-mails porte aussi une ligne « Suivez-nous » avec quatre icônes rondes (Facebook,
 Instagram, TikTok, WhatsApp : `outils/supabase-courriel-reseaux.sql`, `courriel_reseaux`). Ce sont quatre images
-du site (`assets/img/email/*.png`) lues à l'adresse de `site_url` ; sans `site_url`, quatre liens de texte.
+du site (`assets/img/email/*.png`) lues à l'adresse du réglage `courriel_icones_url` (à défaut `site_url`) ; sans adresse https, quatre liens de texte.
 Une icône ajoutée : son PNG ici, sa ligne dans `courriel_reseaux`, et une migration de plus (le pied est dans la base).
 
 ### Supprimer mon compte (`outils/supabase-compte.sql`)

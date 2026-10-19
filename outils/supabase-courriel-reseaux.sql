@@ -15,9 +15,14 @@
 -- « Vous recevez ce message car… », une ligne « Suivez-nous » avec quatre icônes rondes
 -- cliquables : Facebook, Instagram, TikTok et WhatsApp (les mêmes comptes que le pied du site).
 --
--- Les icônes sont quatre petites images du site (assets/img/email/*.png), lues à l'adresse du
--- réglage site_url (en https), comme le logo. Sans site_url, les quatre noms s'écrivent en liens
--- de texte, jamais un trou. Le numéro WhatsApp n'est écrit nulle part : seul le lien y mène.
+-- Les icônes sont quatre petites images du site (assets/img/email/*.png). Leur adresse de base
+-- est le réglage courriel_icones_url (en https), à défaut site_url ; ce fichier pose
+-- courriel_icones_url une fois, s'il n'existe pas, à l'adresse où le site est publié
+-- (https://wilnergraph92.github.io/Goship-express-site/) : site_url, lui, est vide tant que le
+-- domaine n'est pas basculé, et le bouton « Ouvrir mon espace » en dépend. Après la bascule :
+--     select public.definir_reglage('courriel_icones_url', 'https://goshipexpress.net/');
+-- Sans aucune adresse https, les quatre noms s'écrivent en liens de texte, jamais un trou.
+-- Le numéro WhatsApp n'est écrit nulle part : seul le lien y mène.
 --
 -- Contenu :
 --    1. garde : la chaîne est-elle à jour ?
@@ -35,7 +40,8 @@ begin
      or to_regprocedure('public.courriel_boutiques(text)') is null
      or to_regprocedure('public.html_echappe(text)') is null
      or to_regprocedure('public.lire_reglage(text)') is null
-     or to_regprocedure('public.langue_notification(text)') is null then
+     or to_regprocedure('public.langue_notification(text)') is null
+     or to_regprocedure('public.definir_reglage(text, text)') is null then
     raise exception 'Base incomplète : exécutez d''abord toute la chaîne (outils/migrations.txt), puis ce fichier.';
   end if;
 end;
@@ -68,6 +74,7 @@ set search_path = ''
 as $fn$
 declare
   v_t jsonb := public.courriel_reseaux_textes() -> public.langue_notification(p_langue);
+  v_icones text := trim(coalesce(public.lire_reglage('courriel_icones_url'), ''));
   v_site text := coalesce(public.lire_reglage('site_url'), '');
   v_base text;
   -- nom, fichier de l'icône, adresse du compte (les mêmes que le pied du site)
@@ -76,21 +83,24 @@ declare
     ['Instagram', 'instagram', 'https://www.instagram.com/goshipexpressllc'],
     ['TikTok',    'tiktok',    'https://www.tiktok.com/@goshipexpress.net'],
     ['WhatsApp',  'whatsapp',  'https://wa.me/18495386262']];
-  v_icones text := '';
+  v_images text := '';
   i integer;
 begin
-  -- Les icônes sont des images du site : seulement à l'adresse officielle (https)
-  v_base := case when v_site ~ '^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$'
+  -- Les icônes sont des images du site : seulement à une adresse https sûre. Le réglage
+  -- courriel_icones_url passe avant site_url ; l'un ou l'autre illisible, on prend l'autre.
+  v_base := case when v_icones ~ '^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$'
+                 then regexp_replace(v_icones, '/?$', '/') || 'assets/img/email/'
+                 when v_site ~ '^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$'
                  then regexp_replace(v_site, '/?$', '/') || 'assets/img/email/' else '' end;
   for i in 1 .. array_length(v_reseaux, 1) loop
     if v_base <> '' then
-      v_icones := v_icones || '<td style="padding:0 5px"><a href="' || public.html_echappe(v_reseaux[i][3]) ||
+      v_images := v_images || '<td style="padding:0 5px"><a href="' || public.html_echappe(v_reseaux[i][3]) ||
         '" style="text-decoration:none"><img src="' || public.html_echappe(v_base || v_reseaux[i][2] || '.png') ||
         '" width="36" height="36" alt="' || public.html_echappe(v_reseaux[i][1]) ||
         '" style="display:block;width:36px;height:36px;border:0;border-radius:18px;background:#0d2b6b;' ||
         'color:#ffffff;font-size:11px;text-align:center"></a></td>';
     else
-      v_icones := v_icones || '<td style="padding:0 7px"><a href="' || public.html_echappe(v_reseaux[i][3]) ||
+      v_images := v_images || '<td style="padding:0 7px"><a href="' || public.html_echappe(v_reseaux[i][3]) ||
         '" style="color:#0d2b6b;font-size:13px;font-weight:bold;text-decoration:underline;' ||
         'font-family:Arial,Helvetica,sans-serif">' || public.html_echappe(v_reseaux[i][1]) || '</a></td>';
     end if;
@@ -98,9 +108,18 @@ begin
   return '<tr><td align="center" style="padding:10px 32px 4px;font-size:14px;font-weight:bold;color:#061a3f">' ||
          public.html_echappe(v_t ->> 'titre') || '</td></tr>' ||
          '<tr><td align="center" style="padding:6px 32px 18px"><table role="presentation" cellpadding="0" cellspacing="0" align="center">' ||
-         '<tr>' || v_icones || '</tr></table></td></tr>';
+         '<tr>' || v_images || '</tr></table></td></tr>';
 end;
 $fn$;
+
+-- L'adresse de base des icônes, posée une fois (jamais écrasée : le propriétaire peut la changer)
+do $reglage$
+begin
+  if public.lire_reglage('courriel_icones_url') is null then
+    perform public.definir_reglage('courriel_icones_url', 'https://wilnergraph92.github.io/Goship-express-site/');
+  end if;
+end;
+$reglage$;
 
 
 -- 3. La coquille des e-mails ----------------------------------------------------------------------
