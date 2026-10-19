@@ -2121,7 +2121,7 @@
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
-                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports' };
+                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports', programmes: 'Programmes' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
@@ -2142,6 +2142,8 @@
     if (vue === 'apercu' && Date.now() - etatApercu.charge > 60000) chargerApercu();
     if (vue === 'analytics') afficherAnalytics();
     if (vue === 'rapports') ouvrirVueRapports();
+    // Les vues qui vivent dans leur propre fichier (programmes.js) l'apprennent par cet événement
+    window.dispatchEvent(new CustomEvent('goship:vue', { detail: vue }));
   }
   onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });

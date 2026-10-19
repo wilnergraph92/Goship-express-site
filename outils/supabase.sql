@@ -301,6 +301,18 @@ $$;
 --   roles.manage       donner ou retirer un rôle
 --   settings.manage    réglages du site (logo des e-mails, renvoi des e-mails)
 --   audit_logs.view    journal d'audit et file des événements de facturation
+--   birthdays.view     voir les anniversaires, les messages et les rappels
+--                      (supabase-anniversaires.sql) : donnée personnelle sensible,
+--                      jamais donnée à un employé ni par « clients.view »
+--   birthdays.manage   régler l'automatisation, les modèles de message, l'avantage
+--                      d'anniversaire, corriger une date de naissance (avec motif)
+--   programs.view      lire les programmes GOship APP Welcome, GOship Refer et
+--                      GOPOINTS : campagnes, chiffres, cas à examiner
+--                      (supabase-fidelite.sql, supabase-campagnes.sql)
+--   programs.manage    créer, publier, suspendre une campagne ; changer les
+--                      règles du parrainage et des points ; examiner un cas suspect
+--   points.adjust      corriger un solde de GOPOINTS ou attribuer une récompense à la
+--                      main, avec un motif (journalisé, jamais un solde négatif)
 --
 -- assets/js/api.js en garde une copie (PERMISSIONS_DES_ROLES) pour le mode
 -- démonstration ; outils/essais-services/essai-permissions.py vérifie que les
@@ -319,7 +331,8 @@ as $$
       'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
       'payments.view', 'payments.create', 'payments.cancel',
       'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
-      'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view']
+      'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
+      'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust']
     when 'gerant' then array[
       'clients.view', 'clients.create', 'clients.edit',
       'shipments.view', 'shipments.create', 'shipments.edit',
@@ -327,7 +340,8 @@ as $$
       'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
       'payments.view', 'payments.create', 'payments.cancel',
       'reports.view', 'reports.create',
-      'users.view']
+      'users.view',
+      'birthdays.view', 'programs.view']
     when 'employe' then array[
       'clients.view', 'clients.create',
       'shipments.view', 'shipments.create', 'shipments.edit',
@@ -1506,7 +1520,7 @@ set search_path = ''
 as $fn$
   select jsonb_build_object(
     'ligne1', '8140 NW 74th Ave Unit 3',
-    'ligne2', 'APT-46780',
+    'ligne2', 'ABX-46780',
     'ville', 'Medley',
     'etat', 'Florida',
     'zip', '33166',

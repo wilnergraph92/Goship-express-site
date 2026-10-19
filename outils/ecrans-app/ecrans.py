@@ -336,7 +336,7 @@ def ecran_accueil():
 
     # Carte « Mon adresse à Miami »
     y = haut_entete - 20
-    lignes = ['Marie-Ange Dorvil · GSE-4323', '8140 NW 74th Ave, Unit 3 — APT-46780',
+    lignes = ['Marie-Ange Dorvil · GSE-4323', '8140 NW 74th Ave, Unit 3 — ABX-46780',
               'Medley, Florida 33166, USA']
     bas = y + 17 + 12 + 9 + len(lignes) * 21 + 14 + 46 + 17
     carte(im, (18, y, LARGEUR - 18, bas), 22)

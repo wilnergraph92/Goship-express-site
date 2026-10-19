@@ -56,12 +56,10 @@ PAUL = 'dddddddd-0000-0000-0000-00000000000d'
 LEA = 'eeeeeeee-0000-0000-0000-00000000000e'
 verifier, jsonq, creer, un = S.verifier, S.jsonq, S.creer, S.un
 
-FICHIERS = ('supabase.sql', 'supabase-facturation.sql', 'supabase-services.sql', 'supabase-evenements.sql',
-            'supabase-scanner.sql', 'supabase-finances.sql', 'supabase-tableau-de-bord.sql',
-            'supabase-analytics.sql', 'supabase-mobile.sql', 'supabase-notifications.sql',
-            'supabase-production.sql', 'supabase-rapports.sql', 'supabase-compte.sql',
-            'supabase-regroupement.sql', 'supabase-connexion.sql', 'supabase-profil-complet.sql',
-            'supabase-frais-service.sql', 'supabase-corrections.sql')
+# La chaîne officielle, telle que outils/migrations.txt la donne : un fichier de plus dans la
+# chaîne est installé ici sans toucher à ce banc
+FICHIERS = tuple(l.strip() for l in open(os.path.join(S.RACINE, 'outils', 'migrations.txt'), encoding='utf-8')
+                 if l.strip() and not l.startswith('#'))
 
 # Les comptes d'essai (mots de passe d'essai, valables sur cette base jetable seulement)
 COMPTES = {
@@ -359,9 +357,16 @@ def fabriquer_gestionnaire(etat):
                         return self.repondre(422, {'code': 422, 'error_code': 'weak_password',
                                                    'msg': 'Password should be at least 6 characters.'})
                     uid = str(uuid.uuid4())
-                    etat.db.sql("insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) "
-                                "values ('%s', %s, now(), '%s'::jsonb);"
-                                % (uid, q(email), json.dumps(meta).replace("'", "''")))
+                    # Comme GoTrue : le fournisseur « email » est écrit dans raw_app_meta_data, que le
+                    # client ne peut pas modifier ; la base en tire l'obligation de la date de naissance
+                    sortie = etat.db.sql("insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data, raw_app_meta_data) "
+                                         "values ('%s', %s, now(), '%s'::jsonb, '{\"provider\":\"email\"}'::jsonb);"
+                                         % (uid, q(email), json.dumps(meta).replace("'", "''")), echec_permis=True)
+                    if 'ERROR' in sortie:
+                        # Un déclencheur de la base refuse le compte (date de naissance absente ou invalide) :
+                        # GoTrue répond par cette erreur-là, sans le motif
+                        return self.repondre(500, {'code': 500, 'error_code': 'unexpected_failure',
+                                                   'msg': 'Database error saving new user'})
                     etat.comptes[email] = {'id': uid, 'mdp': d.get('password')}
                     return self.repondre(200, session(etat, email))
             self.repondre(404, {'code': 404, 'msg': 'not found'})
@@ -732,7 +737,7 @@ def essais(db, d):
     verifier('une seconde demande (ancienne session) : « déjà supprimé »', (c, v.get('message')), (400, 'ACCOUNT_ALREADY_DELETED'))
     c, v = auth_http('token?grant_type=password', {'email': 'paul@exemple.com', 'password': 'paul-essai-1'})
     verifier('Paul ne peut plus se connecter', (c, v.get('error_code')), (400, 'invalid_credentials'))
-    c, v = auth_http('signup', {'email': 'paul@exemple.com', 'password': 'nouveau-depart-1', 'data': {'nom_complet': 'Paul Retour'}})
+    c, v = auth_http('signup', {'email': 'paul@exemple.com', 'password': 'nouveau-depart-1', 'data': {'nom_complet': 'Paul Retour', 'date_naissance': '1980-06-15'}})
     nouveau = (v.get('user') or {}).get('id')
     verifier('son adresse e-mail est libre : une nouvelle inscription donne un nouveau compte, vide',
              (c, bool(nouveau) and nouveau != PAUL,

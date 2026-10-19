@@ -9,7 +9,11 @@
 (obligatoire pour corriger le montant, gardé au journal)
 (obligatoire, gardé au journal)
 + Colis
+0 : accordé aussitôt. Sinon l'avantage attend, et s'annule si l'opération est annulée.
+0 : accordé aussitôt. Sinon les deux avantages attendent, et s'annulent si l'opération est annulée.
+0 pour aucun rappel.
 0 à 30 jours
+0 à 7.
 1 facture retirée de la liste.
 12 derniers mois
 14 jours
@@ -29,6 +33,9 @@ A4 automatique
 A4 paysage
 A4 portrait
 Absent quand la période précédente vaut zéro : on écrit « nouveau » plutôt qu’un pourcentage infini.
+Accorder
+Accorder un avantage à la main
+Accès refusé : votre rôle ne permet pas cette action.
 Accès réservé
 Actifs
 Actifs sur la période
@@ -38,6 +45,7 @@ Action requise par destination
 Action réservée : votre rôle ne le permet pas, ou la session a expiré (reconnectez-vous).
 Action résolue
 Actions
+Active
 Actives
 Activité
 Activité des clients actifs
@@ -66,24 +74,36 @@ Ajouter un colis
 Ajout…
 Alertes
 Aller au contenu
+Allumé
 Analytics
 Ancien statut
 Ancienne valeur
+Anglais
 Animations
+Anniversaire
+Anniversaire avec avantage
+Anniversaires
+Anniversaires de la période
+Anniversaires, offre de bienvenue, parrainage et GOPOINTS. Chaque programme naît éteint ou en brouillon, et ne promet rien au client tant qu'il n'est pas complet.
 Annuel
 Annulation
 Annulation d’un paiement
 Annulation d’une facture
 Annuler
+Annuler ce mouvement
+Annuler cet avantage
 Annuler cette facture
+Annuler l'avantage
 Annuler la facture
 Annuler la sélection
+Annuler le mouvement
 Annuler le paiement
 Annuler un paiement
 Annuler une facture
 Annulé
 Annulée
 Annulées
+Annulés
 Année du
 Anomalie
 Anomalies
@@ -101,6 +121,8 @@ Argent
 Arrivé au centre de distribution
 Au
 Aucun
+Aucun anniversaire sur cette période.
+Aucun avantage.
 Aucun changement de statut pendant cette période.
 Aucun client actif pendant cette période.
 Aucun client inscrit pour l’instant. Les comptes créés sur le site apparaissent ici, avec leur code GSE.
@@ -117,9 +139,12 @@ Aucun colis reçu pendant cette période.
 Aucun colis reçu sur la période.
 Aucun colis sur ces deux périodes.
 Aucun colis à ajouter.
+Aucun message pour ce filtre.
+Aucun mouvement.
 Aucun paiement reçu pendant cette période.
 Aucun paiement reçu pour l'instant.
 Aucun paiement reçu pour l’instant.
+Aucun parrainage pour ce filtre.
 Aucun rapport enregistré. Choisissez une période, affichez-la, puis enregistrez-la ; ou « Créer un rapport ».
 Aucun rapport ne porte ce nom.
 Aucun scan pour l'instant.
@@ -128,8 +153,10 @@ Aucun événement pour l'instant.
 Aucun événement pour l’instant.
 Aucune alerte critique.
 Aucune anomalie de facturation.
+Aucune campagne. Créez-en une : elle reste en brouillon tant qu'elle est incomplète.
 Aucune donnée
 Aucune donnée disponible pour cette période.
+Aucune erreur.
 Aucune facture pour ce filtre.
 Aucune facture à payer. Créez-en une avec « Nouvelle facture ».
 Aucune facture échue
@@ -139,9 +166,11 @@ Aucune incohérence trouvée.
 Aucune modification pour ces critères.
 Aucune note.
 Aucune notification pour ce colis (règle coupée, ou colis sans client).
+Aucune offre : le catalogue est vide.
 Aucune opération pendant cette période.
 Aucune opération permise pour ce colis à ce statut.
 Aucune opération sur la période.
+Aucune promesse n'est faite au client tant que l'avantage n'est pas complet et allumé.
 Aucune ville dans les colis
 Aucune ville de destination sur la période.
 Aucune ville indiquée.
@@ -155,15 +184,41 @@ Autres villes
 Autres villes des colis
 Avant
 Avant le
+Avantage
+Avantage accordé.
+Avantage annulé.
+Avantage du filleul : type
+Avantage du filleul : valeur
+Avantage du parrain : type
+Avantage du parrain : valeur
+Avantage obtenu
+Avantage sur un prochain colis
+Avantages
+Avantages accordés
+Avantages en attente
+Avantages obtenus avec des points
 Avec des colis en cours
 Avec un solde à payer
 Azul (carte)
 Aérien
 Aérienne
 Base de données en ligne (Supabase)
+Beaucoup d'inscriptions en 24 heures
+Bienvenue
+Bonus fixe
+Brouillon
+Budget
+Budget : nombre maximal d'avantages
 COLIS DÉJÀ LIVRÉ
 Calculé par le système : poids × tarif.
 Calculé à partir des colis cochés, sans frais de service : ils s'ajoutent à l'encaissement.
+Campagne enregistrée.
+Campagne publiée.
+Campagne suspendue.
+Campagne terminée.
+Campagnes
+Campagnes actives
+Cas à examiner
 Ce changement de statut n’est pas permis.
 Ce client n’a pas d’autre facture de colis à payer sans paiement : ajoutez un colis pour le regrouper avec cette facture.
 Ce colis est déjà sur une facture.
@@ -190,7 +245,9 @@ Changement de statut
 Changer le rôle
 Changer le statut
 Changer un statut
+Chaque client a un code unique et un lien à partager. Les deux avantages sont accordés après la première transaction qualifiante du filleul. Un cas suspect attend votre examen : rien n'est bloqué ni accordé automatiquement.
 Chaque membre de l'équipe a un rôle, et chaque rôle une liste de permissions. La base de données les vérifie à chaque action : un bouton masqué ici n'est qu'un confort, jamais la protection.
+Chaque message est suivi canal par canal. Un envoi n'est « envoyé » ou « livré » que sur réponse du fournisseur.
 Chaque modification d'un colis ou d'une facture : qui, quand, l'ancienne et la nouvelle valeur, et le motif. Réservé aux administrateurs ; jamais montré au client.
 Chaque scan affiche le colis et les opérations permises.
 Chargement des alertes…
@@ -217,19 +274,25 @@ Client actif
 Client introuvable : choisissez un client existant.
 Client prévenu
 Client supprimé
+Client, source ou référence
 Clients
 Clients actifs
+Clients admissibles
+Clients avec date
+Clients avec des points
 Clients avec solde
 Clients concernés
 Clients correspondants
 Clients inscrits
 Clients inscrits (fin de période)
 Clients les plus actifs
+Clients sans date
 Cochez le colis qui sort de la facture.
 Cochez les blocs à afficher et rangez-les avec les flèches. Gardé sur cet appareil seulement.
 Code
 Code client
 Code client, nom, téléphone, e-mail, ville…
+Code du client
 Code-barres
 Colis
 Colis ajouté, sans facture
@@ -252,6 +315,7 @@ Colis passés en action requise
 Colis passés à ce statut pendant la période, chacun une fois, sans les étapes annulées par une correction. Source : les événements (colis_historique).
 Colis qui sortent
 Colis reçu
+Colis reçu à l'entrepôt
 Colis reçus
 Colis reçus et livrés
 Colis reçus par jour
@@ -270,10 +334,17 @@ Compte
 Compte supprimé par le client
 Comptes et colis sont enregistrés uniquement dans ce navigateur. Une fois Supabase configuré (voir le fichier README.md), ce tableau de bord utilise la vraie base de données.
 Comptées en jours de Santo Domingo
+Conditions
+Conditions (visibles par le client)
+Conditions d'annulation
+Conditions générales (visibles par le client)
+Configuration
+Configuration enregistrée.
 Confirmer
 Conformes
 Connexion administrateur
 Connexion impossible. Vérifiez la connexion Internet, puis réessayez.
+Connexion impossible. Vérifiez votre réseau et réessayez.
 Connexion perdue.
 Connexion rétablie : les données sont actualisées.
 Connexion…
@@ -289,8 +360,12 @@ Contrôler
 Coordonnées
 Correction
 Correction d’une étape
+Corriger
+Corriger un solde
 Corriger une étape
 Coupé
+Coût
+Coût en points
 Créances en fin de période
 Créances, maintenant
 Création
@@ -298,13 +373,18 @@ Création d’un client
 Création d’un colis
 Création d’un rapport
 Création d’une facture
+Crédit d'expédition
 Créer un client
 Créer un rapport
 Créer une facture
+Créole
 Créé le
 Créé par
 Créée le
 Créée par
+Cumulable avec l'offre de bienvenue
+Cumulable avec le parrainage
+Dans 7 jours
 Dans la fenêtre qui s’ouvre, choisissez « Enregistrer au format PDF ».
 Date
 Date de création
@@ -343,17 +423,24 @@ Données à inclure
 Dont frais de service
 Dont transport
 Du
+Dupliquer
+Durée de vie (jours)
+Durée de vie d'un avantage obtenu (jours)
+Durée de vie des points (jours)
 Durée moyenne
 Durée moyenne dans l’état
 Durée médiane
 Durées négatives
 Début
+Décision enregistrée.
 Déconnexion
 Découpage
 Décrivez le contenu du colis.
 Définition
 Définitions et sources
 Déjà payé
+Délai de validation
+Délai de validation (jours)
 Délai moyen
 Délai moyen Reçu → Livré
 Délai médian Reçu → Livré
@@ -364,6 +451,7 @@ Départ
 Départ d’un colis
 Dépenses, dettes et résultat
 Déplier le menu
+Désactivé par le client
 Détail
 Détail du colis
 Détails
@@ -381,10 +469,14 @@ Embarqué → Disponible (acheminement)
 Embarqués
 Employé
 En action requise maintenant
+En attente
 En attente (reçu, emballé)
+En attente de première opération
 En cours
 En cours (tous sauf livrés)
 En direct
+En dollars, ou en points pour des GOPOINTS. Aucune valeur n'est proposée : c'est à vous de la fixer.
+En erreur
 En pause
 En retard
 En transit
@@ -399,15 +491,25 @@ Encaissé pendant la période
 Enregistrement…
 Enregistrer
 Enregistrer ce rapport
+Enregistrer cette règle
+Enregistrer en brouillon
 Enregistrer le colis
 Enregistrer le paiement
 Enregistrer les modifications
+Enregistrer les réglages
 Enregistrer un autre colis
 Enregistrer un colis
 Enregistré le
 Ensemble, après la sortie
+Envoi
+Envois
 Envoyer depuis mon WhatsApp
+Envoyer les messages d'anniversaire
+Envoyé
 Erreur
+Erreurs
+Erreurs des programmes
+Espagnol
 Espèces
 Essai de notification
 Ex. 4,5
@@ -421,6 +523,9 @@ Ex. Vêtements, chaussures…
 Ex. poids corrigé à la pesée
 Ex. remise accordée au client
 Exemples ajoutés : 3 clients et 7 colis.
+Expiration
+Expiré
+Expirés
 Expéditeur
 Expéditeur (magasin)
 Expéditions
@@ -432,6 +537,7 @@ Facturation
 Facture
 Facture mise à jour.
 Facture moyenne
+Facture payée
 Factures
 Factures supprimées (hors total)
 Factures à regrouper
@@ -446,6 +552,8 @@ Fermer le rapport
 Fermer sans enregistrer
 Fermer sans enregistrer ?
 Fiche complète
+Filleul
+Filleuls inscrits
 Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
 Filtrer les clients
 Filtrer les factures
@@ -465,8 +573,13 @@ Frais de service
 Frais de service (une fois)
 Frais de service ajoutés
 Frais de service retirés
+Français
+Fuseau horaire de l'entreprise
+GOPOINTS
+GOPOINTS éteint
 GSE-1001-HT, QR de l'étiquette ou suivi du vendeur
 GSE-1204-HT, FAC-2026-0042…
+Gain
 Gardés sur cet appareil seulement : chaque membre de l'équipe règle le sien.
 Gestion
 Goship Express — voir le site
@@ -479,13 +592,17 @@ Gérant
 Haïti
 Hebdomadaire
 Heure
+Heure d'envoi
 Heure de réception
 Historique
 Historique des modifications
 Historique interne
 Identifiant
 Identifiant GSE, nom ou e-mail
+Ignoré
+Ignorés
 Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.
+Illimité
 Impayé
 Impayées
 Imprimer
@@ -506,7 +623,9 @@ Indiquez l’agence où le client peut retirer son colis.
 Indiquez s’il faut ajouter le frais de service.
 Informations générales
 Informations personnelles
+Inscrit
 Inscrit le
+Inscrits
 Inscrits (fin de période)
 Inscrits récemment
 Inspecté
@@ -517,6 +636,7 @@ Journalier
 Jours
 Jours avec des scans
 L'heure en haut de l'écran, à la seconde près.
+La base n'est pas à jour : lancez les fichiers SQL des programmes (outils/migrations.txt).
 La date de début doit être antérieure à la date de fin.
 La date de fin est avant la date de début.
 La facture reste sans frais de service.
@@ -526,17 +646,24 @@ Laissez vide : lien PayPal créé automatiquement
 Laissé vide, un lien PayPal est créé avec le montant : le client paie par carte Visa ou Mastercard. Vous pouvez aussi coller un lien Azul.
 Langue
 Langue du tableau de bord
+Le 1er mars
+Le 28 février
+Le catalogue reste vide tant que vous n'y ajoutez rien. L'avantage obtenu est enregistré ; l'équipe l'applique à la facture à la main.
+Le client en est prévenu ; le motif est gardé au journal.
 Le colis a changé de statut entre-temps : rechargez la liste.
 Le colis qui reste, sur sa facture
 Le colis sorti, sur sa facture
 Le compte
 Le frais de service sera ajouté à la facture en même temps que le paiement.
 Le jour
+Le motif est gardé au journal.
 Le plus de colis en cours
 Le poids est un nombre de livres supérieur à zéro (ex. 4,5).
 Le prix du colis doit être compris entre 0 et 100 000 $.
 Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.
+Le téléchargement de l'application n'est pas une opération vérifiable.
 Lecture des envois…
+Lecture seule : seuls les administrateurs règlent le programme.
 Les cartes qui apparaissent au défilement, le léger relief des fonds. Coupées d'office si le système demande moins d'animations.
 Les chiffres se lisent dans la base à chaque ouverture du rapport.
 Les colis cochés passent sur leur propre facture ; les autres restent ensemble sur une nouvelle facture. Celle-ci est annulée et renvoie vers la nouvelle. Le frais de service reste sur la facture qui garde le regroupement ; celle des colis sortis n'en a pas (il pourra s'ajouter à l'encaissement).
@@ -555,6 +682,9 @@ Lieu de réception
 Lieu du poste
 Lieu non indiqué
 Lignes par page
+Limite par client
+Limite par jour
+Limite par mois
 Liste
 Listes des colis, des clients et des colis à traiter.
 Livraison
@@ -570,13 +700,18 @@ Là où se trouve le colis : USA = au dépôt de Miami (reçu, emballé) ; Haït
 Maj
 Maritime
 Maximum
+Maximum de parrainages récompensés au total
+Maximum de parrainages récompensés par parrain
 Membre de l’équipe
 Mensuel
 Menu du tableau de bord
 Menu latéral réduit
+Message
 Message pour le client
 Messages au client
+Messages cette année
 Messages envoyés au client
+Messages préparés
 Mettez à jour l'application GoShip Express.
 Mettre à jour
 Mettre à jour le statut
@@ -597,13 +732,19 @@ Modification d’un colis
 Modification d’un rapport
 Modification d’une facture
 Modifier
+Modifier l'offre
+Modifier la campagne
 Modifier le rapport
 Modifier les informations du colis
 Modifier un client
 Modifier un colis
 Modifier un rapport
 Modifier une facture
+Modifié
 Modifié le
+Modèle enregistré.
+Modèle restauré.
+Modèles de messages
 Moins de 24 h
 Moins de deux factures dans la liste : ajoutez-en une, ou un colis.
 Moins de deux factures dans la liste : rien à regrouper.
@@ -629,13 +770,20 @@ Mot de passe
 Motif
 Motif de la correction
 Motif de la modification
+Mouvement annulé.
 Moyen
 Moyenne
 Médiane
+Même adresse que le parrain
+Même identifiant e-mail que le parrain
 Même nombre de jours juste avant ; « ce mois » : le mois précédent aux mêmes dates ; « cette année » : l’année précédente aux mêmes dates.
 Même taux, période précédente
+Même téléphone que le parrain
 Nom
 Nom (A → Z)
+Nom de l'offre
+Nom de la campagne
+Nom du programme
 Nom du rapport
 Nom du rapport…
 Nombre
@@ -651,11 +799,14 @@ Note pour le client
 Note pour le client (facultatif)
 Notes les plus fréquentes
 Notification
+Notification du téléphone (push)
 Notifications du poste de travail
 Nouveau statut
 Nouveaux
 Nouveaux clients
+Nouvelle campagne
 Nouvelle facture
+Nouvelle offre
 Nouvelle valeur
 Numéro, contenu, magasin, suivi du vendeur, destination…
 N°
@@ -667,9 +818,21 @@ N° de facture
 N° de reçu, de transaction…
 N° de suivi du vendeur
 N° facture
+Né le 29 février : fêté
 Objet
 Obligatoire : le prix se calcule poids × tarif.
+Obtenu
+Obtenus
+Offre
+Offre de bienvenue
+Offre de bienvenue — GOship APP Welcome
+Offre enregistrée.
+Offre visible par les clients
+Offres échangeables
+Offrir un avantage d'anniversaire (désactivé par défaut)
 Opération
+Opération annulée
+Opération qualifiante
 Opérations
 Opérations au poste de scan
 Opérations au scanner
@@ -701,6 +864,9 @@ Paiements valides reçus pendant la période, quelle que soit la facture. Source
 Par
 Par compte
 Par employé
+Par exemple America/Santo_Domingo.
+Par exemple GSE-1234.
+Par exemple « 5 $ de crédit d'expédition ». Vous le choisissez.
 Par jour
 Par lieu
 Par mois
@@ -712,6 +878,13 @@ Par poids
 Par semaine
 Par solde
 Parcours
+Parrain
+Parrainage publié.
+Parrainage suspendu.
+Parrainage terminé.
+Parrainage — GOship Refer
+Parrainages
+Parrains
 Part
 Passés en action requise
 Pays
@@ -734,6 +907,8 @@ Personnaliser le tableau de bord
 Personnalisé
 Personnalisée…
 Petite
+Plafond global atteint
+Plafond par parrain atteint
 Plus de 7 jours
 Plus de 90 jours
 Poids
@@ -743,8 +918,16 @@ Poids invalide : indiquez un nombre de livres supérieur à zéro.
 Poids moyen
 Poids reçu
 Poids total
+Points
+Points (négatif pour retirer)
+Points accordés
+Points en circulation
+Points expirés
+Points gagnés
+Points utilisés
 Poste de scan
 Pour info
+Pour publier, il manque :
 Pourcentage
 Prix
 Prix arrêté à l’enregistrement du colis.
@@ -755,11 +938,21 @@ Prix fixé à la main
 Prix invalide : un montant en dollars, de 0 à 100 000.
 Prix moyen
 Prix moyen d’un colis
+Programme
+Programme GOPOINTS allumé
+Programme enregistré.
+Programmes
+Programmée
+Précédent
 Précédente
 Préférence de notification
+Préparation
 Préparation…
+Préparé
+Préparés
 Prévenir le client
 Prêt : scannez un colis
+Publier
 Période
 Période choisie comparée à la période précédente de même longueur.
 Période close
@@ -769,11 +962,19 @@ Période en cours : les chiffres peuvent encore changer.
 Période personnalisée
 Période précédente
 Périodes
+Qualifié
+Qualifiés
 Qualité des données
+Quatre langues ; la langue du client décide de celle du message. Le prénom du client remplace {{prenom}}. Le modèle d'origine se restaure.
 Raccourcis
 Raison de l’action requise
 Raison, visible par le client (ex. adresse à vérifier)
 Rapide
+Rappel au client
+Rappel au client, jours avant
+Rappel à l'équipe
+Rappel à l'équipe, jours avant
+Rappeler au client son anniversaire à venir (désactivé par défaut)
 Rapport
 Rapport complet
 Rapport enregistré.
@@ -781,6 +982,7 @@ Rapport modifié.
 Rapport supprimé. Les colis, factures et paiements restent intacts.
 Rapports
 Rapports enregistrés
+Rattrapage si un envoi est manqué (jours)
 Recherche du client…
 Recherche impossible
 Recherche rapide : colis, clients, factures
@@ -790,6 +992,11 @@ Rechercher un colis
 Rechercher un rapport
 Recherche…
 Reconnectez-vous pour continuer.
+Refuser
+Refuser ce parrainage
+Refusé
+Refusés
+Registre des mouvements
 Regroupement de factures
 Regrouper
 Regrouper avec d'autres factures de ce client
@@ -797,10 +1004,12 @@ Regrouper des factures
 Remplacée par
 Rendus disponibles
 Renseignez votre e-mail et votre mot de passe.
+Reprendre
 Reprendre le direct
 Repris
 Rescanner
 Restait dû à la fin de la période
+Restaurer le modèle d'origine
 Reste dû
 Reste sur les factures de la période
 Reste à payer
@@ -832,13 +1041,21 @@ Routes et villes
 Rubriques Analytics
 Rubriques des réglages
 Rue, quartier, repère : seulement si le colis est livré à une adresse
+Règle allumée
 Règle de notification
+Règle enregistrée.
 Règlement des factures
+Règles
+Récompense
+Récompensé
+Récompensés
+Réduction sur les frais de service
 Réduire le menu
 Réessayer
 Référence
 Réglages
 Réglages du site
+Réglages enregistrés.
 Réinitialiser les filtres
 République dominicaine
 Réservé à l'équipe Goship Express.
@@ -851,8 +1068,10 @@ Saisi par
 Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.
 Sans effet : le prix du colis est fixé à la main
 Sans facture
+Sans limite
 Sans mouvement
 Sans mouvement depuis
+Sans nom
 Sans échéance
 Santo Domingo
 Scanner
@@ -873,6 +1092,7 @@ Situation
 Solde
 Solde (maintenant)
 Solde actuel
+Solde corrigé.
 Solde le plus élevé
 Sombre
 Son
@@ -882,12 +1102,15 @@ Sortir des colis de cette facture
 Sortir des colis de la facture
 Sortir du regroupement
 Sortir et encaisser
+Source
 Sous-total des colis
 Statistiques
 Statistiques financières
 Statut
 Statut avant
 Statut du colis
+Stock
+Suivant
 Suivante
 Suivi du vendeur
 Suivi vendeur
@@ -908,7 +1131,9 @@ Supprimées
 Supprimées (hors total)
 Sur aucune facture active
 Sur la période
+Suspendre
 Suspendre le direct
+Suspendue
 Synthèse
 Système
 Sélectionner tous les colis affichés
@@ -923,8 +1148,12 @@ Taux de livraison
 Taux de livraison de la cohorte
 Temps de traitement
 Tendances
+Terminer
 Terminé
+Terminée
 Terrestre
+Texte de l'avantage
+Titre
 Total
 Total colis
 Total de la facture
@@ -932,6 +1161,7 @@ Total des factures émises pendant la période, hors annulées ; montants arrêt
 Tous
 Tous les clients
 Tous les colis
+Tous les programmes. Un crédit, une réduction ou un bonus est enregistré ici : l'équipe l'applique à la facture du client (la facturation n'est jamais modifiée automatiquement).
 Tous les réglages
 Tous les réglages…
 Tous les services
@@ -941,6 +1171,8 @@ Toutes
 Toutes les destinations
 Toutes les factures
 Toutes les modifications de cet objet
+Transaction qualifiante
+Transactions qualifiantes
 Transfert d'argent (Western Union, Ria…)
 Transfert d’argent
 Transféré à la succursale
@@ -953,23 +1185,53 @@ Trimestre du
 Trimestriel
 Trop de tentatives. Patientez quelques minutes.
 Type
+Type d'avantage
 Type de rapport
+Type de récompense
 Téléphone
+Téléphone (push)
 USA
 Un acompte suffit : la facture reste à payer pour le reste.
+Un avantage, une seule fois par client, après sa première opération qualifiante vue par la base. Une opération annulée ou échouée ne donne rien. Une campagne incomplète ne se publie pas.
+Un message par client et par année, le jour de son anniversaire, envoyé par le système de notifications existant. Le programme est éteint tant que vous ne l'allumez pas, et rien ne part sans un canal réellement configuré. La date de naissance n'est visible que par les comptes autorisés.
+Un motif est obligatoire ; l'action est journalisée.
+Un mouvement de plus, avec un motif. Le solde ne peut jamais devenir négatif.
+Un mouvement inverse est ajouté au registre ; le motif est gardé au journal.
 Un paiement enregistré ne se modifie plus. En cas d'erreur, annulez-le avec son motif, puis saisissez le bon : les deux restent visibles.
+Un parrainage actif ou terminé ne se modifie pas : suspendez-le d'abord.
 Un prix fixé à la main est réservé à qui peut modifier les factures.
+Un registre qui ne se modifie jamais : chaque gain, chaque utilisation, chaque correction est une ligne de plus. Aucune règle ni aucune offre n'a de valeur tant que vous ne la fixez pas.
 Un rôle ne se change que depuis l'onglet « Équipe », par un administrateur. La base vérifie chaque permission à chaque action : un menu masqué ici n'est qu'un confort.
 Un scanner USB ou Bluetooth (mode clavier) n'a rien à installer : scannez un code pour le vérifier.
+Une erreur dans le calcul d'un programme ne bloque jamais l'opération qui l'a causée (réception d'un colis, paiement) : elle est notée ici.
 Une erreur est survenue. Réessayez.
 Une notification du système quand une alerte apparaît (action requise, facture en retard…) et que la fenêtre n'est pas au premier plan.
 Une opération compte quand le scan l'a enregistrée. Une simple consultation, un scan déjà fait ou un code introuvable n'écrivent rien : les scans échoués ne sont pas enregistrés, ils ne sont donc pas comptés ici.
 Une période de trois ans au plus.
+Une règle allumée doit accorder au moins 1 point. La première opération et les suivantes demandent l'opération qualifiante.
 Une seule fois pour toute la facture, sur une ligne à part. Sans lui, il pourra s'ajouter à l'encaissement.
 Une ville du pays de destination.
+Une étape les invite à la compléter.
 Utilisateur
+Utilisation
+Utilisé
+Utilisés
+Valeur
+Valeur de l'avantage
+Valeur de l'avantage (en dollars)
 Valeurs extrêmes
 Valide
+Valider
+Valider ce parrainage
+Variable permise : {{prenom}}.
+Variables permises : {{nombre}}, {{jours}}.
+Variables permises : {{prenom}}, {{avantage}}.
+Variables permises : {{prenom}}, {{jours}}.
+Vide : celle du programme.
+Vide : il n'expire pas.
+Vide : illimité.
+Vide : les points n'expirent pas.
+Vide : sans limite.
 Ville
 Ville de livraison
 Ville à compléter
@@ -999,6 +1261,7 @@ Vous corrigez le montant de la facture : indiquez-en le motif (5 caractères au 
 Vous n’avez pas la permission d’utiliser le poste de scan.
 Vue d'ensemble logistique
 Vue générale
+WhatsApp
 WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour que la base l’envoie elle-même, configurez l’API WhatsApp (docs/notifications.md).
 action requise
 actions requises
@@ -1029,6 +1292,7 @@ colis reçus sur la période
 colis sans ville
 colis sans ville indiquée
 colis, maintenant
+configuré
 créole
 disponible
 disponibles
@@ -1059,6 +1323,7 @@ impayée
 impayées
 jour
 jours
+jusqu'au
 lb
 les dix premières
 les siens
@@ -1068,6 +1333,7 @@ livré
 livrés
 maintenant
 même compte, même jour
+non configuré
 nouveau
 nouveau client
 nouveau client sur la période
@@ -1083,6 +1349,7 @@ par e-mail et WhatsApp que son colis est reçu
 par jour
 par mois
 par semaine
+pas encore disponible pour les anniversaires
 payée
 payée en partie
 payées
@@ -1105,30 +1372,40 @@ supprimés
 sur aucune facture active
 sur ces factures
 sur la période
+toujours actif
 transféré à la succursale
 transférés à la succursale
 « Encaisser » enregistre le paiement d'une facture : payée, elle quitte la liste. « Retirer » l'enlève de la liste sans rien changer à la facture.
 « Sortir et encaisser » ouvre ensuite le paiement de la facture des colis sortis.
 · mot de passe
+À choisir
 À encaisser
+À examiner
 À la création
+À la main
 À payer
 À payer avant le
 À recouvrer
 À regarder
 À surveiller
+À venir
 Âge
 Âge des créances
 Âge des créances (depuis l’émission)
 Échap
+Échec
 Échue le
+Écrivez le code du client, par exemple GSE-1234.
+Écrivez un motif d'au moins 3 signes.
 Élément
 Émise le
 Équipe
 Étape
 Étape mise à jour
 État
+État :
 États-Unis
+Éteint
 Étiquette
 Évolution
 Événement

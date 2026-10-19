@@ -48,6 +48,11 @@ create table auth.users (
   email text,
   email_confirmed_at timestamptz,
   raw_user_meta_data jsonb default '{}'::jsonb,
+  -- Chez Supabase, le fournisseur de connexion (« email », « google »…) est écrit par GoTrue dans
+  -- raw_app_meta_data, que le client ne peut pas modifier. Les comptes de fixture des essais
+  -- (créés sans formulaire) sont d'un fournisseur « test » : ils n'ont pas à donner de date de
+  -- naissance, comme un compte Google. Les essais d'inscription posent « email » eux-mêmes.
+  raw_app_meta_data jsonb default '{"provider":"test"}'::jsonb,
   -- Les colonnes et tables de GoTrue que touche supprimer_mon_compte (supabase-compte.sql)
   encrypted_password text,
   phone text,

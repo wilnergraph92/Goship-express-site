@@ -164,6 +164,16 @@
               <input id="ins-nom" name="nom_complet" autocomplete="name" required minlength="3" maxlength="120" placeholder="Antre non konplè ou">
             </div>
             <div class="gs-champ">
+              <label for="ins-naissance">Dat nesans<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance aria-describedby="ins-naissance-aide">
+              <p class="gs-champ__aide" id="ins-naissance-aide">Nou sèvi ak li pou swete w bòn fèt. Se sèlman responsab Goship Express ki gen otorizasyon ki ka wè l.</p>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-parrain">Kòd parennaj (opsyonèl)</label>
+              <input id="ins-parrain" name="code_parrainage" autocomplete="off" autocapitalize="characters" maxlength="24" spellcheck="false" data-parrain aria-describedby="ins-parrain-aide">
+              <p class="gs-champ__aide" id="ins-parrain-aide">Yon zanmi envite w ? Antre kòd li : li deja ranpli si ou vini nan lyen li.</p>
+            </div>
+            <div class="gs-champ">
               <label for="ins-pays">Peyi<span class="gs-requis" aria-hidden="true">*</span></label>
               <select id="ins-pays" name="pays" required data-pays>
                 <option value="">Chwazi yon peyi</option>
@@ -266,6 +276,14 @@
   <p data-t="erreur-reseau">Nou pa rive konekte. Verifye koneksyon entènèt ou, epi eseye ankò.</p>
   <p data-t="erreur-inconnu">Gen yon erè ki fèt. Eseye ankò nan yon ti moman.</p>
   <p data-t="champ-requis">Ou dwe ranpli chan sa a.</p>
+  <p data-t="champ-naissance">Antre yon dat nesans ki valab (jou, mwa, ane).</p>
+  <p data-t="champ-naissance-futur">Dat nesans lan pa ka nan lavni.</p>
+  <p data-t="erreur-naissance-requise">Make dat nesans ou.</p>
+  <p data-t="erreur-naissance-invalide">Dat nesans sa a pa valab. Verifye jou a, mwa a ak ane a.</p>
+  <p data-t="erreur-naissance-verrouillee">Dat nesans ou anrejistre deja. Pou korije l, ekri nou : ekip nou an ap okipe l.</p>
+  <p data-t="erreur-inscription-refusee">Nou pa t ka anrejistre enskripsyon ou an. Verifye enfòmasyon ou yo, sitou dat nesans ou, epi eseye ankò.</p>
+  <p data-t="naissance-ok">Dat nesans anrejistre ✓</p>
+  <p data-t="adresse-manquante">Ranpli pwofil ou (non ak kòd kliyan) pou w jwenn adrès konplè ou a : nou pa ka konpoze l san yo.</p>
   <p data-t="champ-email">Antre yon adrès imèl ki valab.</p>
   <p data-t="champ-mdp">Omwen 6 karaktè.</p>
   <p data-t="champ-tel">Antre yon nimewo telefòn ki valab.</p>
@@ -332,6 +350,71 @@
   <p data-t="message-autre">Mesaj Goship Express</p>
   <p data-t="admin-avis">Sa a se yon kont ekip Goship Express.</p>
   <p data-t="admin-lien">Louvri tablo bò a</p>
+  <p data-t="points-un">1 pwen</p>
+  <p data-t="points-n">{n} pwen</p>
+  <p data-t="points-titre">GOPOINTS</p>
+  <p data-t="points-ferme">Pwogram GOPOINTS la pa louvri pou kounye a.</p>
+  <p data-t="points-offres">Echanje pwen mwen yo</p>
+  <p data-t="points-echanger">Echanje</p>
+  <p data-t="points-historique">Dènye mouvman yo</p>
+  <p data-t="mouvement-gain">Pwen yo genyen</p>
+  <p data-t="mouvement-utilisation">Pwen yo itilize</p>
+  <p data-t="mouvement-expiration">Pwen ki ekspire</p>
+  <p data-t="mouvement-correction">Koreksyon</p>
+  <p data-t="mouvement-annulation">Anilasyon</p>
+  <p data-t="points-ok">Echanj fèt : avantaj ou anrejistre ✓</p>
+  <p data-t="points-deja">Echanj sa a te deja anrejistre.</p>
+  <p data-t="conditions">Kondisyon</p>
+  <p data-t="bienvenue-titre">Òf byenveni</p>
+  <p data-t="bienvenue-a_debloquer">Pou debloke</p>
+  <p data-t="bienvenue-en_attente">Ap tann validasyon</p>
+  <p data-t="bienvenue-obtenu">Jwenn</p>
+  <p data-t="bienvenue-expire">Ekspire</p>
+  <p data-t="bienvenue-fin">Jiska {date}</p>
+  <p data-t="bienvenue-avantage">Avantaj ou : {avantage}</p>
+  <p data-t="bienvenue-etape-compte">Kont kreye</p>
+  <p data-t="bienvenue-etape-colis_recu">Premye koli resevwa Miami</p>
+  <p data-t="bienvenue-etape-facture_payee">Premye fakti peye</p>
+  <p data-t="bienvenue-attente">Avantaj ou a ap konfime apre nou fin verifye operasyon an. Anyen pa pou ou anvan konfimasyon sa a.</p>
+  <p data-t="refer-titre">GOship Refer</p>
+  <p data-t="refer-cta">ENVITE YON ZANMI</p>
+  <p data-t="refer-texte">Envite yon zanmi dekouvri GoShip Express. Lè zanmi ou a kreye kont li epi li fè premye tranzaksyon kalifye li, nou ka rekonpanse nou toulede selon kondisyon pwogram nan.</p>
+  <p data-t="refer-inactif">Parennaj la pa louvri pou kounye a.</p>
+  <p data-t="refer-avantage-parrain">Avantaj ou : {avantage}</p>
+  <p data-t="refer-avantage-filleul">Avantaj zanmi ou an : {avantage}</p>
+  <p data-t="refer-code">Kòd parennaj ou</p>
+  <p data-t="refer-copier-code">Kopye kòd la</p>
+  <p data-t="refer-copier-lien">Kopye lyen an</p>
+  <p data-t="refer-copie">Kopye ✓</p>
+  <p data-t="refer-invitations">Envitasyon ou pataje</p>
+  <p data-t="refer-inscrits">Zanmi ki enskri</p>
+  <p data-t="refer-attente">Ap tann premye operasyon yo</p>
+  <p data-t="refer-valides">Parennaj valide</p>
+  <p data-t="refer-recompenses">Avantaj parennaj ou yo</p>
+  <p data-t="avantage-en_attente">Ap tann validasyon</p>
+  <p data-t="avantage-obtenue">Jwenn</p>
+  <p data-t="avantage-utilisee">Itilize</p>
+  <p data-t="avantage-annulee">Anile</p>
+  <p data-t="avantage-expiree">Ekspire</p>
+  <p data-t="refer-j-ai-un-code">Mwen gen yon kòd parennaj</p>
+  <p data-t="refer-code-champ">Kòd parennaj</p>
+  <p data-t="refer-code-envoyer">Sèvi ak kòd sa a</p>
+  <p data-t="refer-code-ok">Kòd parennaj anrejistre ✓</p>
+  <p data-t="refer-partage-titre">GoShip Express</p>
+  <p data-t="refer-partage-message">Vin jwenn mwen sou GoShip Express ak kòd mwen {code} : {lien}</p>
+  <p data-t="pref-ok">Preferans anrejistre ✓</p>
+  <p data-t="erreur-OFFER_UNAVAILABLE">Òf sa a pa disponib.</p>
+  <p data-t="erreur-OFFER_OUT_OF_STOCK">Òf sa a fini.</p>
+  <p data-t="erreur-OFFER_LIMIT_REACHED">Ou deja itilize òf sa a kantite fwa yo pèmèt la.</p>
+  <p data-t="erreur-INSUFFICIENT_POINTS">Pwen ou yo pa ase.</p>
+  <p data-t="erreur-DUPLICATE_OPERATION">Echanj sa a deja fèt.</p>
+  <p data-t="erreur-INVALID_REFERRAL_CODE">Kòd parennaj sa a pa egziste. Verifye l.</p>
+  <p data-t="erreur-SELF_REFERRAL">Ou pa ka itilize pwòp kòd parennaj ou.</p>
+  <p data-t="erreur-ALREADY_REFERRED">Gen yon kòd parennaj ki deja anrejistre pou kont ou.</p>
+  <p data-t="erreur-REFERRAL_INACTIVE">Parennaj la pa louvri pou kounye a : yo pa ka itilize kòd sa a.</p>
+  <p data-t="erreur-REFERRAL_TOO_LATE">Li two ta pou ajoute yon kòd parennaj : premye operasyon ou an deja fèt oswa delè a pase.</p>
+  <p data-t="erreur-REFERRAL_CYCLE">Parennaj sa a pa posib.</p>
+  <p data-t="erreur-copie">Kopye a pa mache. Chwazi tèks la epi kopye l alamen.</p>
 </template>
 </main>
 

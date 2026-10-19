@@ -130,6 +130,19 @@
       <button type="button" class="gs-bouton gs-bouton--plein" data-action="completer-profil">Compléter mon profil</button>
     </div>
 
+    <div class="gs-alerte gs-alerte--info gs-espace__completer" data-completer-naissance hidden>
+      <strong>Ajoutez votre date de naissance</strong>
+      <p>Nous nous en servons pour vous souhaiter votre anniversaire. Vous ne pouvez la déclarer qu'une seule fois : pour la corriger ensuite, écrivez-nous.</p>
+      <form class="gs-form gs-form--compact" data-form="naissance" novalidate>
+        <div class="gs-champ">
+          <label for="cpt-naissance">Date de naissance<span class="gs-requis" aria-hidden="true">*</span></label>
+          <input id="cpt-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance>
+        </div>
+        <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+        <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Enregistrer ma date de naissance</button>
+      </form>
+    </div>
+
     <div class="gs-espace__grille">
       <div class="gs-espace__principal">
         <div class="gs-panneau">
@@ -188,21 +201,36 @@
             <h2>Votre adresse en Floride</h2>
           </div>
           <p class="gs-panneau__intro">À utiliser comme adresse de livraison pour tous vos achats en ligne (Amazon, SHEIN, Walmart, eBay…).</p>
-          <div class="gs-adresse" data-address-table>
-            <div><span translate="no">Name</span><span data-nom-adresse translate="no"></span></div>
-            <div><span translate="no">Address 1</span><span translate="no">8140 NW 74th Ave Unit 3</span></div>
-            <div><span translate="no">Address 2</span><span translate="no">APT-46780</span></div>
-            <div><span translate="no">City</span><span translate="no">Medley</span></div>
-            <div><span translate="no">State</span><span translate="no">Florida</span></div>
-            <div><span translate="no">Zip Code</span><span translate="no">33166</span></div>
-            <div><span translate="no">Country</span><span translate="no">United States</span></div>
-            <div><span translate="no">Phone</span><span translate="no">786 525-2944</span></div>
+          <div class="gs-adresse" data-address-table data-incomplet>
+            <div><span translate="no">Name</span><span data-nom-adresse translate="no"></span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Address 1</span><span translate="no">8140 NW 74th Ave Unit 3</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Address 2</span><span translate="no">ABX-46780</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">City</span><span translate="no">Medley</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">State</span><span translate="no">Florida</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Zip Code</span><span translate="no">33166</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Country</span><span translate="no">United States</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Phone</span><span translate="no">786 525-2944</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
           </div>
+          <p class="gs-form__erreur" data-adresse-manquante role="status" hidden></p>
           <p class="gs-panneau__note">Écrivez toujours votre code client juste après votre nom : nous reconnaissons ainsi vos colis dès leur arrivée.</p>
           <div class="gs-panneau__actions">
-            <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copier l'adresse</button>
+            <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copier l'adresse complète</button>
             <span class="gs-copie-ok" data-copy-feedback hidden role="status">Adresse copiée ✓</span>
           </div>
+        </div>
+
+        <div class="gs-panneau gs-avt" data-panneau-programmes hidden>
+          <div class="gs-panneau__tete">
+            <h2>Mes avantages</h2>
+          </div>
+          <p class="gs-form__erreur" data-avt-erreur role="alert" hidden></p>
+          <p class="gs-copie-ok" data-avt-ok role="status" hidden></p>
+          <section class="gs-avt__bloc" data-avt-bienvenue aria-live="polite" hidden></section>
+          <section class="gs-avt__bloc" data-avt-points aria-live="polite" hidden></section>
+          <section class="gs-avt__bloc" data-avt-parrainage aria-live="polite" hidden></section>
+          <section class="gs-avt__bloc" data-avt-preferences hidden>
+            <label class="gs-avt__case"><input type="checkbox" data-pref-anniversaire> <span>Recevoir mon message d'anniversaire</span></label>
+          </section>
         </div>
 
         <div class="gs-panneau" data-panneau-messages hidden>
@@ -225,6 +253,7 @@
             <div><dt>Téléphone</dt><dd data-info="telephone" translate="no"></dd></div>
             <div><dt>Adresse</dt><dd data-info="adresse" translate="no"></dd></div>
             <div><dt>Ville et région</dt><dd data-info="lieu" translate="no"></dd></div>
+            <div data-ligne-naissance hidden><dt>Date de naissance</dt><dd data-info="naissance" translate="no"></dd></div>
           </dl>
           <form class="gs-form gs-form--compact" data-form="profil" novalidate hidden>
             <div class="gs-champ">
@@ -386,6 +415,14 @@
   <p data-t="erreur-reseau">Connexion impossible. Vérifiez votre connexion Internet, puis réessayez.</p>
   <p data-t="erreur-inconnu">Une erreur est survenue. Réessayez dans un instant.</p>
   <p data-t="champ-requis">Ce champ est obligatoire.</p>
+  <p data-t="champ-naissance">Entrez une date de naissance valide (jour, mois, année).</p>
+  <p data-t="champ-naissance-futur">La date de naissance ne peut pas être dans le futur.</p>
+  <p data-t="erreur-naissance-requise">Indiquez votre date de naissance.</p>
+  <p data-t="erreur-naissance-invalide">Cette date de naissance n'est pas valide. Vérifiez le jour, le mois et l'année.</p>
+  <p data-t="erreur-naissance-verrouillee">Votre date de naissance est déjà enregistrée. Pour la corriger, écrivez-nous : notre équipe s'en occupera.</p>
+  <p data-t="erreur-inscription-refusee">Votre inscription n'a pas pu être enregistrée. Vérifiez vos informations, en particulier votre date de naissance, puis réessayez.</p>
+  <p data-t="naissance-ok">Date de naissance enregistrée ✓</p>
+  <p data-t="adresse-manquante">Complétez votre profil (nom et code client) pour obtenir votre adresse complète : nous ne pouvons pas la composer sans eux.</p>
   <p data-t="champ-email">Entrez une adresse e-mail valide.</p>
   <p data-t="champ-mdp">6 caractères minimum.</p>
   <p data-t="champ-tel">Entrez un numéro de téléphone valide.</p>
@@ -452,6 +489,71 @@
   <p data-t="message-autre">Message de Goship Express</p>
   <p data-t="admin-avis">Ce compte est un compte de l'équipe Goship Express.</p>
   <p data-t="admin-lien">Ouvrir le tableau de bord</p>
+  <p data-t="points-un">1 point</p>
+  <p data-t="points-n">{n} points</p>
+  <p data-t="points-titre">GOPOINTS</p>
+  <p data-t="points-ferme">Le programme GOPOINTS n'est pas ouvert pour le moment.</p>
+  <p data-t="points-offres">Échanger mes points</p>
+  <p data-t="points-echanger">Échanger</p>
+  <p data-t="points-historique">Derniers mouvements</p>
+  <p data-t="mouvement-gain">Points gagnés</p>
+  <p data-t="mouvement-utilisation">Points utilisés</p>
+  <p data-t="mouvement-expiration">Points expirés</p>
+  <p data-t="mouvement-correction">Correction</p>
+  <p data-t="mouvement-annulation">Annulation</p>
+  <p data-t="points-ok">Échange effectué : votre avantage est enregistré ✓</p>
+  <p data-t="points-deja">Cet échange était déjà enregistré.</p>
+  <p data-t="conditions">Conditions</p>
+  <p data-t="bienvenue-titre">Offre de bienvenue</p>
+  <p data-t="bienvenue-a_debloquer">À débloquer</p>
+  <p data-t="bienvenue-en_attente">En attente de validation</p>
+  <p data-t="bienvenue-obtenu">Obtenu</p>
+  <p data-t="bienvenue-expire">Expiré</p>
+  <p data-t="bienvenue-fin">Jusqu'au {date}</p>
+  <p data-t="bienvenue-avantage">Votre avantage : {avantage}</p>
+  <p data-t="bienvenue-etape-compte">Compte créé</p>
+  <p data-t="bienvenue-etape-colis_recu">Premier colis reçu à Miami</p>
+  <p data-t="bienvenue-etape-facture_payee">Première facture payée</p>
+  <p data-t="bienvenue-attente">Votre avantage sera confirmé après vérification de l'opération. Rien n'est acquis avant cette confirmation.</p>
+  <p data-t="refer-titre">GOship Refer</p>
+  <p data-t="refer-cta">INVITER UN AMI</p>
+  <p data-t="refer-texte">Invitez un ami à découvrir GoShip Express. Quand votre ami crée son compte et fait sa première transaction qualifiante, nous pouvons vous récompenser tous les deux selon les conditions du programme.</p>
+  <p data-t="refer-inactif">Le parrainage n'est pas ouvert pour le moment.</p>
+  <p data-t="refer-avantage-parrain">Votre avantage : {avantage}</p>
+  <p data-t="refer-avantage-filleul">L'avantage de votre ami : {avantage}</p>
+  <p data-t="refer-code">Votre code de parrainage</p>
+  <p data-t="refer-copier-code">Copier le code</p>
+  <p data-t="refer-copier-lien">Copier le lien</p>
+  <p data-t="refer-copie">Copié ✓</p>
+  <p data-t="refer-invitations">Invitations partagées</p>
+  <p data-t="refer-inscrits">Amis inscrits</p>
+  <p data-t="refer-attente">En attente de leur première opération</p>
+  <p data-t="refer-valides">Parrainages validés</p>
+  <p data-t="refer-recompenses">Vos avantages de parrainage</p>
+  <p data-t="avantage-en_attente">En attente de validation</p>
+  <p data-t="avantage-obtenue">Obtenu</p>
+  <p data-t="avantage-utilisee">Utilisé</p>
+  <p data-t="avantage-annulee">Annulé</p>
+  <p data-t="avantage-expiree">Expiré</p>
+  <p data-t="refer-j-ai-un-code">J'ai un code de parrainage</p>
+  <p data-t="refer-code-champ">Code de parrainage</p>
+  <p data-t="refer-code-envoyer">Utiliser ce code</p>
+  <p data-t="refer-code-ok">Code de parrainage enregistré ✓</p>
+  <p data-t="refer-partage-titre">GoShip Express</p>
+  <p data-t="refer-partage-message">Rejoins-moi sur GoShip Express avec mon code {code} : {lien}</p>
+  <p data-t="pref-ok">Préférence enregistrée ✓</p>
+  <p data-t="erreur-OFFER_UNAVAILABLE">Cette offre n'est pas disponible.</p>
+  <p data-t="erreur-OFFER_OUT_OF_STOCK">Cette offre est épuisée.</p>
+  <p data-t="erreur-OFFER_LIMIT_REACHED">Vous avez déjà utilisé cette offre le nombre de fois permis.</p>
+  <p data-t="erreur-INSUFFICIENT_POINTS">Vos points ne suffisent pas.</p>
+  <p data-t="erreur-DUPLICATE_OPERATION">Cet échange a déjà été fait.</p>
+  <p data-t="erreur-INVALID_REFERRAL_CODE">Ce code de parrainage n'existe pas. Vérifiez-le.</p>
+  <p data-t="erreur-SELF_REFERRAL">Vous ne pouvez pas utiliser votre propre code de parrainage.</p>
+  <p data-t="erreur-ALREADY_REFERRED">Un code de parrainage est déjà enregistré pour votre compte.</p>
+  <p data-t="erreur-REFERRAL_INACTIVE">Le parrainage n'est pas ouvert pour le moment : ce code ne peut pas être utilisé.</p>
+  <p data-t="erreur-REFERRAL_TOO_LATE">Il est trop tard pour ajouter un code de parrainage : votre première opération a déjà eu lieu ou le délai est dépassé.</p>
+  <p data-t="erreur-REFERRAL_CYCLE">Ce parrainage n'est pas possible.</p>
+  <p data-t="erreur-copie">La copie n'a pas fonctionné. Sélectionnez le texte et copiez-le à la main.</p>
 </template>
 </main>
 

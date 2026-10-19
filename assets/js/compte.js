@@ -19,6 +19,15 @@
   function $$(sel, scope) { return Array.prototype.slice.call((scope || document).querySelectorAll(sel)); }
   function waUrl(message) { return 'https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(message); }
 
+  /* ---- Le code d'un parrain, gardé sur l'appareil (jamais une donnée sensible) ------------ */
+  var CLE_PARRAIN = 'gse-parrain';
+  function garderParrain(code) {
+    try { if (code) localStorage.setItem(CLE_PARRAIN, code); else localStorage.removeItem(CLE_PARRAIN); } catch (e) { /* stockage bloqué : le champ suffit */ }
+  }
+  function lireParrain() {
+    try { return localStorage.getItem(CLE_PARRAIN) || ''; } catch (e) { return ''; }
+  }
+
   /* ---- Régions et villes : assets/js/lieux.js, chargé avant cette page ---------- */
   var LIEUX = window.GoshipLieux || { REGIONS: {}, ETATS_US: [] };
   var REGIONS = LIEUX.REGIONS;
@@ -127,6 +136,36 @@
     }
   }
 
+  /* ---- Date de naissance : un jour civil « AAAA-MM-JJ », sans fuseau ------------------ */
+  // Le jour d'aujourd'hui de l'appareil, écrit à la main : toISOString() donnerait celui d'UTC.
+  function aujourdhuiLocal() {
+    var n = new Date();
+    return n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2);
+  }
+
+  // Vide si la date est bonne, sinon la clé du message. La base refait toujours ce contrôle.
+  function messageNaissance(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m) return 'champ-naissance';
+    var a = +m[1], mo = +m[2], j = +m[3], u = new Date(Date.UTC(a, mo - 1, j));
+    if (u.getUTCFullYear() !== a || u.getUTCMonth() !== mo - 1 || u.getUTCDate() !== j || a < 1900) return 'champ-naissance';
+    if (v > aujourdhuiLocal()) return 'champ-naissance-futur';
+    return '';
+  }
+
+  // Un jour civil lisible dans la langue de la page, sans jamais passer par le fuseau de l'appareil
+  function jourCivil(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+    if (!m) return '';
+    try {
+      return new Intl.DateTimeFormat(API.langue || 'fr', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
+        .format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
+    } catch (e) { return v; }
+  }
+
+  // Le champ date ne laisse pas choisir demain : l'attribut max est le jour de l'appareil
+  $$('input[data-naissance]').forEach(function (c) { c.max = aujourdhuiLocal(); });
+
   function verifierChamp(champ) {
     if (champ.disabled || champ.hidden || champ.classList.contains('gs-hp')) return true;
     var v = String(champ.value || '').trim();
@@ -136,6 +175,7 @@
     else if (/^mot_de_passe$/.test(champ.name) && champ.minLength > 0 && champ.value.length < champ.minLength) message = t('champ-mdp');
     else if (champ.type === 'tel' && v.replace(/\D/g, '').length < 7) message = t('champ-tel');
     else if (champ.name === 'nom_complet' && v.split(/\s+/).length < 2) message = t('champ-nom');
+    else if (champ.name === 'date_naissance' && v && messageNaissance(v)) message = t(messageNaissance(v));
     erreurChamp(champ, message);
     return !message;
   }
@@ -311,6 +351,13 @@
       formInscription.elements.nom_complet.focus();
     });
 
+    // Un lien de parrainage (« ?parrain=CODE ») remplit le champ ; le code est aussi gardé sur l'appareil,
+    // pour un compte ouvert avec Google (qui n'a pas ce champ) : il sera saisi à l'arrivée dans l'espace client.
+    var champParrain = formInscription.elements.code_parrainage;
+    var venuDuLien = /[?&]parrain=([A-Za-z0-9]{4,24})/.exec(location.search);
+    if (venuDuLien) garderParrain(venuDuLien[1].toUpperCase());
+    if (champParrain) champParrain.value = lireParrain();
+
     // Déjà connecté : direction l'espace client
     API.session().then(function (s) { if (s) location.replace('mon-compte.html'); }, function () {});
 
@@ -326,6 +373,8 @@
         pays: lieu.pays, region: lieu.region, ville: lieu.ville,
         adresse: f.adresse.value.trim(),
         telephone: f.telephone.value.trim(),
+        date_naissance: f.date_naissance.value,
+        code_parrainage: f.code_parrainage ? f.code_parrainage.value.trim().toUpperCase() : '',
         email: f.email.value.trim().toLowerCase(),
         motDePasse: f.mot_de_passe.value
       };
@@ -342,11 +391,14 @@
           return;
         }
         annoncerSession();
+        // Le code est entré dans le compte par la base ; inutile de le rejouer ensuite
+        if (donnees.code_parrainage) garderParrain('');
         location.href = 'mon-compte.html?bienvenue=1';
       }).catch(function (err) {
         attente(formInscription);
         montrerErreur(formInscription, err);
-        if (err.code === 'email-existe' || err.code === 'email-invalide') f.email.focus();
+        if (/^naissance-/.test(err.code) || err.code === 'inscription-refusee') f.date_naissance.focus();
+        else if (err.code === 'email-existe' || err.code === 'email-invalide') f.email.focus();
         else if (err.code === 'mot-de-passe-faible') f.mot_de_passe.focus();
       });
     });
@@ -476,7 +528,16 @@
       var prenom = (profil.nom_complet || '').trim().split(/\s+/)[0] || '';
       $('[data-prenom]').textContent = prenom ? ', ' + prenom : '';
       $$('[data-code]').forEach(function (el) { el.textContent = profil.code || '—'; });
-      $('[data-nom-adresse]').textContent = ((profil.nom_complet || '') + ' ' + (profil.code || '')).trim();
+      // Le nom et le code viennent du compte connecté, jamais d'ailleurs. Sans l'un des deux,
+      // l'adresse serait fausse (les colis ne seraient pas reconnus) : on n'en compose pas, on le dit.
+      var nomPropre = (profil.nom_complet || '').trim();
+      var adresseComplete = !!nomPropre && !!profil.code;
+      var tableAdresse = $('[data-address-table]');
+      $('[data-nom-adresse]').textContent = adresseComplete ? nomPropre + ' ' + profil.code : '';
+      if (adresseComplete) tableAdresse.removeAttribute('data-incomplet'); else tableAdresse.setAttribute('data-incomplet', '');
+      var noteAdresse = $('[data-adresse-manquante]');
+      noteAdresse.hidden = adresseComplete;
+      noteAdresse.textContent = adresseComplete ? '' : t('adresse-manquante');
       var infos = {
         nom_complet: profil.nom_complet, email: profil.email, telephone: profil.telephone, adresse: profil.adresse,
         lieu: [profil.ville, profil.region, nomPays(profil.pays)].filter(Boolean).join(', ')
@@ -863,6 +924,254 @@
       });
     });
 
+    // La date de naissance : demandée une fois aux comptes qui n'en ont pas (comptes d'avant,
+    // Google, Apple), jamais imposée : tout le reste du compte fonctionne sans.
+    var formNaissance = $('form[data-form="naissance"]');
+    var chargerNaissance = function () {
+      var banniere = $('[data-completer-naissance]');
+      if (!formNaissance || !banniere || !profil || API.regles.rolesEquipe.indexOf(profil.role) >= 0) return;
+      API.naissance().then(function (v) {
+        banniere.hidden = !!v;
+        $('[data-ligne-naissance]').hidden = !v;
+        $('[data-info="naissance"]').textContent = v ? jourCivil(v) : '';
+      }, function () { banniere.hidden = true; }); // base sans la fonction : aucune demande
+    };
+    if (formNaissance) {
+      formNaissance.addEventListener('submit', function (e) {
+        e.preventDefault();
+        cacherErreur(formNaissance);
+        if (!verifierFormulaire(formNaissance)) return;
+        attente(formNaissance, 'attente-enregistrement');
+        API.definirNaissance(formNaissance.elements.date_naissance.value).then(function () {
+          attente(formNaissance);
+          chargerNaissance();
+          var ok = $('[data-profil-ok]');
+          ok.textContent = t('naissance-ok');
+          ok.hidden = false;
+          setTimeout(function () { ok.hidden = true; }, 2600);
+        }).catch(function (err) {
+          attente(formNaissance);
+          montrerErreur(formNaissance, err);
+        });
+      });
+    }
+
+    /* ---- Mes avantages : GOPOINTS, offre de bienvenue, GOship Refer, anniversaire --------
+       Rien n'est calculé ici : le solde, le code, le statut d'un avantage viennent de la base
+       (outils/supabase-fidelite.sql, supabase-campagnes.sql). Un avantage n'est jamais montré
+       comme acquis avant qu'elle le dise, et une base qui n'a pas ces fichiers ne montre rien. */
+    var panneauAvt = $('[data-panneau-programmes]');
+    function avtMessage(zone, texte, erreur) {
+      var n = $(zone);
+      n.textContent = texte || '';
+      n.hidden = !texte;
+      if (texte && !erreur) setTimeout(function () { n.hidden = true; }, 3200);
+    }
+    function avtErreur(err) {
+      var code = err && err.code ? err.code : 'inconnu';
+      avtMessage('[data-avt-erreur]', t('erreur-' + code) || t('erreur-inconnu'), true);
+    }
+    function noeud(balise, classe, texte) {
+      var n = document.createElement(balise);
+      if (classe) n.className = classe;
+      if (texte !== undefined && texte !== null) n.textContent = texte;
+      return n;
+    }
+    function pointsTexte(n) { return n === 1 ? t('points-un') : t('points-n', { n: O.nombre(n) }); }
+    function dateCourte(iso) { return iso ? O.date(iso) : ''; }
+    function clePartage() {
+      var o = new Uint8Array(16);
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(o);
+      else for (var i = 0; i < o.length; i++) o[i] = Math.floor(Math.random() * 256);
+      var h = Array.prototype.map.call(o, function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join('');
+      return h.slice(0, 8) + '-' + h.slice(8, 12) + '-4' + h.slice(13, 16) + '-8' + h.slice(17, 20) + '-' + h.slice(20, 32);
+    }
+
+    function dessinerBienvenue(b) {
+      var zone = $('[data-avt-bienvenue]');
+      zone.textContent = '';
+      if (!b) { zone.hidden = true; return; }
+      zone.hidden = false;
+      var tete = noeud('div', 'gs-avt__tete');
+      tete.appendChild(noeud('h3', null, b.nom || t('bienvenue-titre')));
+      tete.appendChild(noeud('span', 'gs-avt__etat gs-avt__etat--' + b.statut, t('bienvenue-' + b.statut)));
+      zone.appendChild(tete);
+      if (b.description) zone.appendChild(noeud('p', null, b.description));
+      zone.appendChild(noeud('p', 'gs-avt__fort', t('bienvenue-avantage', { avantage: b.avantage })));
+      var etapes = noeud('ol', 'gs-avt__etapes');
+      (b.etapes || []).forEach(function (e) {
+        var li = noeud('li', e.fait ? 'is-fait' : '', t(e.cle === 'compte' ? 'bienvenue-etape-compte' : 'bienvenue-etape-' + b.operation));
+        etapes.appendChild(li);
+      });
+      zone.appendChild(etapes);
+      if (b.statut === 'en_attente') zone.appendChild(noeud('p', 'gs-avt__note', t('bienvenue-attente')));
+      if (b.fin && b.statut === 'a_debloquer') zone.appendChild(noeud('p', 'gs-avt__note', t('bienvenue-fin', { date: dateCourte(b.fin) })));
+      if (b.conditions) {
+        var d = noeud('details'); d.appendChild(noeud('summary', null, t('conditions')));
+        d.appendChild(noeud('p', null, b.conditions)); zone.appendChild(d);
+      }
+    }
+
+    function dessinerPoints(w) {
+      var zone = $('[data-avt-points]');
+      zone.textContent = '';
+      if (!w || (!w.actif && !w.total)) { zone.hidden = true; return; }
+      zone.hidden = false;
+      var tete = noeud('div', 'gs-avt__tete');
+      tete.appendChild(noeud('h3', null, t('points-titre')));
+      tete.appendChild(noeud('strong', 'gs-avt__solde', pointsTexte(w.solde)));
+      zone.appendChild(tete);
+      if (!w.actif) zone.appendChild(noeud('p', 'gs-avt__note', t('points-ferme')));
+      if (w.offres && w.offres.length) {
+        zone.appendChild(noeud('h4', null, t('points-offres')));
+        var liste = noeud('ul', 'gs-avt__liste');
+        w.offres.forEach(function (o) {
+          var li = noeud('li', 'gs-avt__offre');
+          var texte = noeud('div', 'gs-avt__offre-texte');
+          texte.appendChild(noeud('strong', null, o.nom));
+          if (o.description) texte.appendChild(noeud('span', null, o.description));
+          texte.appendChild(noeud('span', 'gs-avt__note', pointsTexte(o.cout_points) + (o.fin ? ' · ' + t('bienvenue-fin', { date: dateCourte(o.fin) }) : '')));
+          li.appendChild(texte);
+          var b = noeud('button', 'gs-bouton gs-bouton--sombre', t('points-echanger'));
+          b.type = 'button'; b.disabled = w.solde < o.cout_points;
+          // Une clé par appui : un double clic ou une coupure ne dépense qu'une fois
+          var cle = null;
+          b.addEventListener('click', function () {
+            b.disabled = true; cle = cle || clePartage();
+            API.utiliserPoints(o.id, cle).then(function (r) {
+              avtMessage('[data-avt-ok]', t(r.deja ? 'points-deja' : 'points-ok'));
+              chargerProgrammes();
+            }).catch(function (err) { cle = null; avtErreur(err); b.disabled = false; });
+          });
+          li.appendChild(b); liste.appendChild(li);
+        });
+        zone.appendChild(liste);
+      }
+      if (w.elements && w.elements.length) {
+        zone.appendChild(noeud('h4', null, t('points-historique')));
+        var h = noeud('ul', 'gs-avt__liste gs-avt__liste--histo');
+        w.elements.slice(0, 10).forEach(function (m) {
+          var li = noeud('li', m.statut === 'annule' ? 'is-annule' : '');
+          li.appendChild(noeud('span', null, t('mouvement-' + m.type) + ' · ' + dateCourte(m.date)));
+          li.appendChild(noeud('strong', m.points > 0 ? 'gs-avt__plus' : 'gs-avt__moins', (m.points > 0 ? '+' : '') + O.nombre(m.points)));
+          h.appendChild(li);
+        });
+        zone.appendChild(h);
+      }
+      if (w.conditions) {
+        var d = noeud('details'); d.appendChild(noeud('summary', null, t('conditions')));
+        d.appendChild(noeud('p', null, w.conditions)); zone.appendChild(d);
+      }
+    }
+
+    function copierTexte(texte, bouton, canal) {
+      O.copier(texte).then(function () {
+        var ancien = bouton.textContent; bouton.textContent = t('refer-copie');
+        setTimeout(function () { bouton.textContent = ancien; }, 1800);
+        API.noterInvitation(canal).catch(function () {});
+      }).catch(function () { avtMessage('[data-avt-erreur]', t('erreur-copie'), true); });
+    }
+
+    function dessinerParrainage(r) {
+      var zone = $('[data-avt-parrainage]');
+      zone.textContent = '';
+      // Fermé et jamais utilisé : rien à montrer. Fermé mais déjà des filleuls : l'historique reste visible.
+      if (!r || (!r.actif && !r.inscrits && !(r.recompenses && r.recompenses.length))) { zone.hidden = true; return; }
+      zone.hidden = false;
+      var tete = noeud('div', 'gs-avt__tete');
+      tete.appendChild(noeud('h3', null, r.nom || t('refer-titre')));
+      zone.appendChild(tete);
+      zone.appendChild(noeud('p', null, t('refer-texte')));
+      if (!r.actif) zone.appendChild(noeud('p', 'gs-avt__note', t('refer-inactif')));
+      if (r.avantage_parrain) zone.appendChild(noeud('p', 'gs-avt__fort', t('refer-avantage-parrain', { avantage: r.avantage_parrain })));
+      if (r.avantage_filleul) zone.appendChild(noeud('p', 'gs-avt__fort', t('refer-avantage-filleul', { avantage: r.avantage_filleul })));
+      if (r.actif) {
+        var boite = noeud('div', 'gs-avt__invitation');
+        boite.appendChild(noeud('span', 'gs-avt__note', t('refer-code')));
+        boite.appendChild(noeud('strong', 'gs-avt__code', r.code)).setAttribute('translate', 'no');
+        var lignes = noeud('div', 'gs-avt__boutons');
+        var bc = noeud('button', 'gs-bouton gs-bouton--contour', t('refer-copier-code')); bc.type = 'button';
+        bc.addEventListener('click', function () { copierTexte(r.code, bc, 'code'); });
+        lignes.appendChild(bc);
+        if (r.lien) {
+          var bl = noeud('button', 'gs-bouton gs-bouton--contour', t('refer-copier-lien')); bl.type = 'button';
+          bl.addEventListener('click', function () { copierTexte(r.lien, bl, 'lien'); });
+          lignes.appendChild(bl);
+        }
+        // Le bouton principal : le partage natif de l'appareil s'il existe, sinon la copie du message complet
+        var message = t('refer-partage-message', { code: r.code, lien: r.lien || '' }).trim();
+        var cta = noeud('button', 'gs-bouton gs-bouton--plein gs-avt__cta', t('refer-cta')); cta.type = 'button';
+        cta.addEventListener('click', function () {
+          if (navigator.share) {
+            navigator.share({ title: t('refer-partage-titre'), text: message, url: r.lien || undefined }).then(function () {
+              API.noterInvitation('partage').catch(function () {});
+            }).catch(function () { /* partage annulé : rien à compter */ });
+          } else copierTexte(message, cta, 'message');
+        });
+        boite.appendChild(cta); boite.appendChild(lignes); zone.appendChild(boite);
+      }
+      var chiffres = noeud('dl', 'gs-avt__chiffres');
+      [['refer-invitations', r.invitations], ['refer-inscrits', r.inscrits], ['refer-attente', r.en_attente_premiere_operation], ['refer-valides', r.valides]].forEach(function (c) {
+        var d = noeud('div'); d.appendChild(noeud('dt', null, t(c[0]))); d.appendChild(noeud('dd', null, O.nombre(c[1]))); chiffres.appendChild(d);
+      });
+      zone.appendChild(chiffres);
+      if (r.recompenses && r.recompenses.length) {
+        zone.appendChild(noeud('h4', null, t('refer-recompenses')));
+        var l = noeud('ul', 'gs-avt__liste gs-avt__liste--histo');
+        r.recompenses.forEach(function (x) {
+          var li = noeud('li');
+          li.appendChild(noeud('span', null, x.avantage + ' · ' + dateCourte(x.date)));
+          li.appendChild(noeud('span', 'gs-avt__etat gs-avt__etat--' + x.statut, t('avantage-' + x.statut)));
+          l.appendChild(li);
+        });
+        zone.appendChild(l);
+      }
+      // Un code reçu plus tard (compte ouvert avec Google, ami oublié à l'inscription)
+      if (r.actif && !r.mon_parrain) {
+        var d2 = noeud('details'); d2.appendChild(noeud('summary', null, t('refer-j-ai-un-code')));
+        var form = noeud('form', 'gs-avt__saisie'); form.noValidate = true;
+        var champ = noeud('input'); champ.name = 'code'; champ.maxLength = 24; champ.autocomplete = 'off';
+        champ.setAttribute('aria-label', t('refer-code-champ')); champ.placeholder = t('refer-code-champ');
+        champ.value = lireParrain();
+        var envoyer = noeud('button', 'gs-bouton gs-bouton--sombre', t('refer-code-envoyer')); envoyer.type = 'submit';
+        form.appendChild(champ); form.appendChild(envoyer);
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          envoyer.disabled = true;
+          API.utiliserCodeParrainage(champ.value.trim().toUpperCase()).then(function () {
+            garderParrain('');
+            avtMessage('[data-avt-ok]', t('refer-code-ok'));
+            chargerProgrammes();
+          }).catch(function (err) { avtErreur(err); envoyer.disabled = false; });
+        });
+        d2.appendChild(form); zone.appendChild(d2);
+      }
+      var cond = [r.conditions, r.annulation].filter(Boolean);
+      if (cond.length) {
+        var d3 = noeud('details'); d3.appendChild(noeud('summary', null, t('conditions')));
+        cond.forEach(function (c) { d3.appendChild(noeud('p', null, c)); }); zone.appendChild(d3);
+      }
+    }
+
+    var chargerProgrammes = function () {
+      if (!panneauAvt || !profil || API.regles.rolesEquipe.indexOf(profil.role) >= 0) return;
+      // Chaque morceau se charge seul : une base qui n'a pas l'un des fichiers n'empêche pas les autres
+      var vus = 0;
+      function montrer() { vus += 1; if (vus < 4) return; panneauAvt.hidden = !$$('.gs-avt__bloc', panneauAvt).some(function (b) { return !b.hidden; }); }
+      API.maBienvenue().then(dessinerBienvenue, function () { dessinerBienvenue(null); }).then(montrer);
+      API.portefeuille().then(dessinerPoints, function () { dessinerPoints(null); }).then(montrer);
+      API.monParrainage().then(dessinerParrainage, function () { dessinerParrainage(null); }).then(montrer);
+      var pref = $('[data-avt-preferences]');
+      API.preferencesProgrammes().then(function (p) {
+        pref.hidden = false;
+        $('[data-pref-anniversaire]').checked = !!p.anniversaire;
+      }, function () { pref.hidden = true; }).then(montrer);
+    };
+    var casePref = $('[data-pref-anniversaire]');
+    if (casePref) casePref.addEventListener('change', function () {
+      API.reglerAnniversaire(casePref.checked).then(function () { avtMessage('[data-avt-ok]', t('pref-ok')); }, function (err) { avtErreur(err); casePref.checked = !casePref.checked; });
+    });
+
     // Déconnexion
     $('[data-action="deconnexion"]').addEventListener('click', function () {
       API.deconnecter().then(function () {
@@ -885,6 +1194,11 @@
         bienvenue.hidden = false;
         history.replaceState(null, '', location.pathname);
       }
+      chargerNaissance();
+      chargerProgrammes();
+      // Un code de parrain gardé sur l'appareil (lien d'invitation, compte ouvert avec Google) : on l'enregistre
+      // une fois, sans bruit ; un refus (parrainage fermé, déjà parrainé) n'est pas une erreur à montrer.
+      if (lireParrain()) API.utiliserCodeParrainage(lireParrain()).then(function () { garderParrain(''); chargerProgrammes(); }, function () { garderParrain(''); });
       chargerColis();
       chargerFactures();
       chargerResume();

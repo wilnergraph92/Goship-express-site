@@ -61,7 +61,11 @@ supabase-regroupement.sql|sortir_du_regroupement|p_facture=00000000-0000-0000-00
 supabase-connexion.sql|nom_depuis_metadonnees|p_meta=%7B%7D|non
 supabase-profil-complet.sql|profil_complet|p_client=00000000-0000-0000-0000-000000000000|non
 supabase-frais-service.sql|colis_a_regrouper|p_client=00000000-0000-0000-0000-000000000000|non
-supabase-corrections.sql|historique_modifications||non'
+supabase-corrections.sql|historique_modifications||non
+supabase-naissance.sql|ma_naissance||non
+supabase-fidelite.sql|mon_portefeuille||non
+supabase-anniversaires.sql|mes_preferences_programmes||non
+supabase-campagnes.sql|mon_parrainage||non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

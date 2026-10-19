@@ -130,6 +130,19 @@
       <button type="button" class="gs-bouton gs-bouton--plein" data-action="completer-profil">Konplete pwofil mwen</button>
     </div>
 
+    <div class="gs-alerte gs-alerte--info gs-espace__completer" data-completer-naissance hidden>
+      <strong>Ajoute dat nesans ou</strong>
+      <p>Nou sèvi ak li pou swete w bòn fèt. Ou ka deklare l yon sèl fwa sèlman : pou korije l apre, ekri nou.</p>
+      <form class="gs-form gs-form--compact" data-form="naissance" novalidate>
+        <div class="gs-champ">
+          <label for="cpt-naissance">Dat nesans<span class="gs-requis" aria-hidden="true">*</span></label>
+          <input id="cpt-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance>
+        </div>
+        <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+        <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Anrejistre dat nesans mwen</button>
+      </form>
+    </div>
+
     <div class="gs-espace__grille">
       <div class="gs-espace__principal">
         <div class="gs-panneau">
@@ -188,21 +201,36 @@
             <h2>Adrès ou nan Florid</h2>
           </div>
           <p class="gs-panneau__intro">Sèvi ak li kòm adrès livrezon pou tout acha ou fè sou entènèt (Amazon, SHEIN, Walmart, eBay…).</p>
-          <div class="gs-adresse" data-address-table>
-            <div><span translate="no">Name</span><span data-nom-adresse translate="no"></span></div>
-            <div><span translate="no">Address 1</span><span translate="no">8140 NW 74th Ave Unit 3</span></div>
-            <div><span translate="no">Address 2</span><span translate="no">APT-46780</span></div>
-            <div><span translate="no">City</span><span translate="no">Medley</span></div>
-            <div><span translate="no">State</span><span translate="no">Florida</span></div>
-            <div><span translate="no">Zip Code</span><span translate="no">33166</span></div>
-            <div><span translate="no">Country</span><span translate="no">United States</span></div>
-            <div><span translate="no">Phone</span><span translate="no">786 525-2944</span></div>
+          <div class="gs-adresse" data-address-table data-incomplet>
+            <div><span translate="no">Name</span><span data-nom-adresse translate="no"></span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Address 1</span><span translate="no">8140 NW 74th Ave Unit 3</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Address 2</span><span translate="no">ABX-46780</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">City</span><span translate="no">Medley</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">State</span><span translate="no">Florida</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Zip Code</span><span translate="no">33166</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Country</span><span translate="no">United States</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
+            <div><span translate="no">Phone</span><span translate="no">786 525-2944</span><button type="button" class="gs-adresse__copier" data-copier-champ><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button></div>
           </div>
+          <p class="gs-form__erreur" data-adresse-manquante role="status" hidden></p>
           <p class="gs-panneau__note">Toujou ekri kòd kliyan ou dirèkteman apre non ou : konsa n ap rekonèt koli ou yo depi yo rive.</p>
           <div class="gs-panneau__actions">
-            <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Kopye adrès la</button>
+            <button type="button" class="gs-bouton gs-bouton--sombre" data-action="copy-address"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Kopye adrès konplè a</button>
             <span class="gs-copie-ok" data-copy-feedback hidden role="status">Adrès la kopye ✓</span>
           </div>
+        </div>
+
+        <div class="gs-panneau gs-avt" data-panneau-programmes hidden>
+          <div class="gs-panneau__tete">
+            <h2>Avantaj mwen yo</h2>
+          </div>
+          <p class="gs-form__erreur" data-avt-erreur role="alert" hidden></p>
+          <p class="gs-copie-ok" data-avt-ok role="status" hidden></p>
+          <section class="gs-avt__bloc" data-avt-bienvenue aria-live="polite" hidden></section>
+          <section class="gs-avt__bloc" data-avt-points aria-live="polite" hidden></section>
+          <section class="gs-avt__bloc" data-avt-parrainage aria-live="polite" hidden></section>
+          <section class="gs-avt__bloc" data-avt-preferences hidden>
+            <label class="gs-avt__case"><input type="checkbox" data-pref-anniversaire> <span>Resevwa mesaj fèt mwen</span></label>
+          </section>
         </div>
 
         <div class="gs-panneau" data-panneau-messages hidden>
@@ -225,6 +253,7 @@
             <div><dt>Telefòn</dt><dd data-info="telephone" translate="no"></dd></div>
             <div><dt>Adrès</dt><dd data-info="adresse" translate="no"></dd></div>
             <div><dt>Vil ak rejyon</dt><dd data-info="lieu" translate="no"></dd></div>
+            <div data-ligne-naissance hidden><dt>Dat nesans</dt><dd data-info="naissance" translate="no"></dd></div>
           </dl>
           <form class="gs-form gs-form--compact" data-form="profil" novalidate hidden>
             <div class="gs-champ">
@@ -386,6 +415,14 @@
   <p data-t="erreur-reseau">Nou pa rive konekte. Verifye koneksyon entènèt ou, epi eseye ankò.</p>
   <p data-t="erreur-inconnu">Gen yon erè ki fèt. Eseye ankò nan yon ti moman.</p>
   <p data-t="champ-requis">Ou dwe ranpli chan sa a.</p>
+  <p data-t="champ-naissance">Antre yon dat nesans ki valab (jou, mwa, ane).</p>
+  <p data-t="champ-naissance-futur">Dat nesans lan pa ka nan lavni.</p>
+  <p data-t="erreur-naissance-requise">Make dat nesans ou.</p>
+  <p data-t="erreur-naissance-invalide">Dat nesans sa a pa valab. Verifye jou a, mwa a ak ane a.</p>
+  <p data-t="erreur-naissance-verrouillee">Dat nesans ou anrejistre deja. Pou korije l, ekri nou : ekip nou an ap okipe l.</p>
+  <p data-t="erreur-inscription-refusee">Nou pa t ka anrejistre enskripsyon ou an. Verifye enfòmasyon ou yo, sitou dat nesans ou, epi eseye ankò.</p>
+  <p data-t="naissance-ok">Dat nesans anrejistre ✓</p>
+  <p data-t="adresse-manquante">Ranpli pwofil ou (non ak kòd kliyan) pou w jwenn adrès konplè ou a : nou pa ka konpoze l san yo.</p>
   <p data-t="champ-email">Antre yon adrès imèl ki valab.</p>
   <p data-t="champ-mdp">Omwen 6 karaktè.</p>
   <p data-t="champ-tel">Antre yon nimewo telefòn ki valab.</p>
@@ -452,6 +489,71 @@
   <p data-t="message-autre">Mesaj Goship Express</p>
   <p data-t="admin-avis">Sa a se yon kont ekip Goship Express.</p>
   <p data-t="admin-lien">Louvri tablo bò a</p>
+  <p data-t="points-un">1 pwen</p>
+  <p data-t="points-n">{n} pwen</p>
+  <p data-t="points-titre">GOPOINTS</p>
+  <p data-t="points-ferme">Pwogram GOPOINTS la pa louvri pou kounye a.</p>
+  <p data-t="points-offres">Echanje pwen mwen yo</p>
+  <p data-t="points-echanger">Echanje</p>
+  <p data-t="points-historique">Dènye mouvman yo</p>
+  <p data-t="mouvement-gain">Pwen yo genyen</p>
+  <p data-t="mouvement-utilisation">Pwen yo itilize</p>
+  <p data-t="mouvement-expiration">Pwen ki ekspire</p>
+  <p data-t="mouvement-correction">Koreksyon</p>
+  <p data-t="mouvement-annulation">Anilasyon</p>
+  <p data-t="points-ok">Echanj fèt : avantaj ou anrejistre ✓</p>
+  <p data-t="points-deja">Echanj sa a te deja anrejistre.</p>
+  <p data-t="conditions">Kondisyon</p>
+  <p data-t="bienvenue-titre">Òf byenveni</p>
+  <p data-t="bienvenue-a_debloquer">Pou debloke</p>
+  <p data-t="bienvenue-en_attente">Ap tann validasyon</p>
+  <p data-t="bienvenue-obtenu">Jwenn</p>
+  <p data-t="bienvenue-expire">Ekspire</p>
+  <p data-t="bienvenue-fin">Jiska {date}</p>
+  <p data-t="bienvenue-avantage">Avantaj ou : {avantage}</p>
+  <p data-t="bienvenue-etape-compte">Kont kreye</p>
+  <p data-t="bienvenue-etape-colis_recu">Premye koli resevwa Miami</p>
+  <p data-t="bienvenue-etape-facture_payee">Premye fakti peye</p>
+  <p data-t="bienvenue-attente">Avantaj ou a ap konfime apre nou fin verifye operasyon an. Anyen pa pou ou anvan konfimasyon sa a.</p>
+  <p data-t="refer-titre">GOship Refer</p>
+  <p data-t="refer-cta">ENVITE YON ZANMI</p>
+  <p data-t="refer-texte">Envite yon zanmi dekouvri GoShip Express. Lè zanmi ou a kreye kont li epi li fè premye tranzaksyon kalifye li, nou ka rekonpanse nou toulede selon kondisyon pwogram nan.</p>
+  <p data-t="refer-inactif">Parennaj la pa louvri pou kounye a.</p>
+  <p data-t="refer-avantage-parrain">Avantaj ou : {avantage}</p>
+  <p data-t="refer-avantage-filleul">Avantaj zanmi ou an : {avantage}</p>
+  <p data-t="refer-code">Kòd parennaj ou</p>
+  <p data-t="refer-copier-code">Kopye kòd la</p>
+  <p data-t="refer-copier-lien">Kopye lyen an</p>
+  <p data-t="refer-copie">Kopye ✓</p>
+  <p data-t="refer-invitations">Envitasyon ou pataje</p>
+  <p data-t="refer-inscrits">Zanmi ki enskri</p>
+  <p data-t="refer-attente">Ap tann premye operasyon yo</p>
+  <p data-t="refer-valides">Parennaj valide</p>
+  <p data-t="refer-recompenses">Avantaj parennaj ou yo</p>
+  <p data-t="avantage-en_attente">Ap tann validasyon</p>
+  <p data-t="avantage-obtenue">Jwenn</p>
+  <p data-t="avantage-utilisee">Itilize</p>
+  <p data-t="avantage-annulee">Anile</p>
+  <p data-t="avantage-expiree">Ekspire</p>
+  <p data-t="refer-j-ai-un-code">Mwen gen yon kòd parennaj</p>
+  <p data-t="refer-code-champ">Kòd parennaj</p>
+  <p data-t="refer-code-envoyer">Sèvi ak kòd sa a</p>
+  <p data-t="refer-code-ok">Kòd parennaj anrejistre ✓</p>
+  <p data-t="refer-partage-titre">GoShip Express</p>
+  <p data-t="refer-partage-message">Vin jwenn mwen sou GoShip Express ak kòd mwen {code} : {lien}</p>
+  <p data-t="pref-ok">Preferans anrejistre ✓</p>
+  <p data-t="erreur-OFFER_UNAVAILABLE">Òf sa a pa disponib.</p>
+  <p data-t="erreur-OFFER_OUT_OF_STOCK">Òf sa a fini.</p>
+  <p data-t="erreur-OFFER_LIMIT_REACHED">Ou deja itilize òf sa a kantite fwa yo pèmèt la.</p>
+  <p data-t="erreur-INSUFFICIENT_POINTS">Pwen ou yo pa ase.</p>
+  <p data-t="erreur-DUPLICATE_OPERATION">Echanj sa a deja fèt.</p>
+  <p data-t="erreur-INVALID_REFERRAL_CODE">Kòd parennaj sa a pa egziste. Verifye l.</p>
+  <p data-t="erreur-SELF_REFERRAL">Ou pa ka itilize pwòp kòd parennaj ou.</p>
+  <p data-t="erreur-ALREADY_REFERRED">Gen yon kòd parennaj ki deja anrejistre pou kont ou.</p>
+  <p data-t="erreur-REFERRAL_INACTIVE">Parennaj la pa louvri pou kounye a : yo pa ka itilize kòd sa a.</p>
+  <p data-t="erreur-REFERRAL_TOO_LATE">Li two ta pou ajoute yon kòd parennaj : premye operasyon ou an deja fèt oswa delè a pase.</p>
+  <p data-t="erreur-REFERRAL_CYCLE">Parennaj sa a pa posib.</p>
+  <p data-t="erreur-copie">Kopye a pa mache. Chwazi tèks la epi kopye l alamen.</p>
 </template>
 </main>
 

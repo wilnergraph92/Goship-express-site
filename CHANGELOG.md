@@ -7,6 +7,25 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — programmes : adresse officielle, date de naissance, anniversaires, bienvenue, parrainage, GOPOINTS (19/10/2026)
+
+**Migrations à passer avant de publier le site**, dans cet ordre : `supabase-naissance.sql`,
+`supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql` (19e à 22e de la
+chaîne ; contrôles dans le README). `creer_profil_client` est redéfinie : tester une inscription
+par e-mail et une avec Google. Détail, valeurs à décider et mise en service : `docs/programmes.md`.
+
+- **Adresse de réception en Floride** : `Address 2` devient `ABX-46780` (à confirmer, ancienne
+  valeur `APT-46780`) ; chaque champ se copie à part et l'adresse complète en un geste ; sans nom
+  ou sans code, un message au lieu d'une adresse fausse (site et application).
+- **Date de naissance** obligatoire à l'inscription par e-mail, gardée dans une table fermée,
+  jamais dans le journal ; les comptes existants sont invités à la compléter, jamais bloqués.
+- **Programmes** (tous éteints ou en brouillon, aucune valeur commerciale dans le code) :
+  anniversaires en quatre langues, GOship APP Welcome, GOship Refer, GOPOINTS, onglet
+  « Programmes » du tableau de bord, section « Mes avantages » du site et de l'application,
+  code de parrainage à l'inscription, paragraphes de confidentialité en quatre langues.
+- Outils de production : sonde, contrôle de sécurité et listes de la documentation connaissent
+  les quatre nouvelles migrations.
+
 ## Non publié — quatre corrections du tableau de bord (12/10/2026)
 
 **Migration à passer avant de publier le site** : `outils/supabase-corrections.sql` (18e de la

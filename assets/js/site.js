@@ -17,6 +17,9 @@
       menuOuvrir: 'Ouvrir le menu',
       menuFermer: 'Fermer le menu',
       copie: 'Adresse copiée ✓',
+      copieChamp: 'Copié ✓',
+      copierChamp: 'Copier',
+      adresseManquante: 'Complétez votre profil (nom et code client) pour obtenir votre adresse complète : nous ne pouvons pas la composer sans eux.',
       copieEchec: 'Copie impossible : sélectionnez l’adresse à la main',
       suivi: 'Bonjour Goship Express, je souhaite connaître le statut de mon colis. Référence : ',
       devis: 'Bonjour Goship Express, je souhaite un devis.',
@@ -35,6 +38,9 @@
       menuOuvrir: 'Open menu',
       menuFermer: 'Close menu',
       copie: 'Address copied ✓',
+      copieChamp: 'Copied ✓',
+      copierChamp: 'Copy',
+      adresseManquante: 'Complete your profile (name and customer code) to get your full address: we cannot build it without them.',
       copieEchec: 'Copy failed: please select the address manually',
       suivi: 'Hello Goship Express, I would like to know the status of my package. Reference: ',
       devis: 'Hello Goship Express, I would like a quote.',
@@ -53,6 +59,9 @@
       menuOuvrir: 'Abrir el menú',
       menuFermer: 'Cerrar el menú',
       copie: 'Dirección copiada ✓',
+      copieChamp: 'Copiado ✓',
+      copierChamp: 'Copiar',
+      adresseManquante: 'Complete su perfil (nombre y código de cliente) para obtener su dirección completa: no podemos componerla sin ellos.',
       copieEchec: 'No se pudo copiar: seleccione la dirección manualmente',
       suivi: 'Hola Goship Express, quisiera saber el estado de mi paquete. Referencia: ',
       devis: 'Hola Goship Express, quisiera una cotización.',
@@ -71,6 +80,9 @@
       menuOuvrir: 'Louvri meni an',
       menuFermer: 'Fèmen meni an',
       copie: 'Adrès la kopye ✓',
+      copieChamp: 'Kopye ✓',
+      copierChamp: 'Kopye',
+      adresseManquante: 'Ranpli pwofil ou (non ak kòd kliyan) pou w jwenn adrès konplè ou a : nou pa ka konpoze l san yo.',
       copieEchec: 'Nou pa rive kopye l : seleksyone adrès la ak men ou',
       suivi: 'Bonjou Goship Express, mwen ta renmen konnen ki kote koli mwen an ye. Referans : ',
       devis: 'Bonjou Goship Express, mwen ta renmen yon devi.',
@@ -176,6 +188,8 @@
   });
 
   /* ---- Copier l'adresse de réception USA --------------------------------- */
+  // Une ligne vide dans le tableau (le nom et le code d'un client dont le profil est incomplet)
+  // ne doit jamais produire une adresse fausse : le tableau porte alors data-incomplet.
   function addressText(table) {
     var v = {};
     Array.prototype.forEach.call(table.children, function (row) {
@@ -216,23 +230,42 @@
   }
 
   document.querySelectorAll('[data-action="copy-address"]').forEach(function (btn) {
-    var scope = btn.closest('section') || document;
+    var scope = btn.closest('section, aside') || document;
     var table = scope.querySelector('[data-address-table]');
     var feedback = scope.querySelector('[data-copy-feedback]');
     if (!table) return;
     var timer;
-    btn.addEventListener('click', function () {
-      copyText(addressText(table)).then(function () {
-        if (!feedback) return;
-        feedback.textContent = T.copie;
-        feedback.hidden = false;
-        clearTimeout(timer);
-        timer = setTimeout(function () { feedback.hidden = true; }, 2600);
-      }, function () {
-        if (!feedback) return;
-        feedback.textContent = T.copieEchec;
-        feedback.hidden = false;
+    function dire(texte, erreur) {
+      if (!feedback) return;
+      feedback.textContent = texte;
+      feedback.hidden = false;
+      feedback.classList.toggle('gs-copie-ok--erreur', !!erreur);
+      clearTimeout(timer);
+      if (!erreur) timer = setTimeout(function () { feedback.hidden = true; }, 2600);
+    }
+    // Un bouton par ligne du tableau : le nom, l'adresse, la ville, le code postal, le téléphone…
+    // se copient séparément, pour les formulaires des magasins qui les demandent champ par champ.
+    Array.prototype.forEach.call(table.querySelectorAll('[data-copier-champ]'), function (b) {
+      var rang = b.parentNode;
+      var libelle = rang.children[0].textContent.trim();
+      b.setAttribute('aria-label', T.copierChamp + ' ' + libelle);
+      b.setAttribute('title', T.copierChamp + ' ' + libelle);
+      b.addEventListener('click', function () {
+        if (table.hasAttribute('data-incomplet') && rang.children[1].hasAttribute('data-nom-adresse')) {
+          dire(T.adresseManquante, true);
+          return;
+        }
+        var valeur = rang.children[1].textContent.trim();
+        if (!valeur) { dire(T.adresseManquante, true); return; }
+        copyText(valeur).then(function () { dire(T.copieChamp + ' ' + libelle); },
+                              function () { dire(T.copieEchec, true); });
       });
+    });
+    btn.addEventListener('click', function () {
+      // Sans nom ni code client, l'adresse ne serait pas celle du client : on n'en compose pas.
+      if (table.hasAttribute('data-incomplet')) { dire(T.adresseManquante, true); return; }
+      copyText(addressText(table)).then(function () { dire(T.copie); },
+                                        function () { dire(T.copieEchec, true); });
     });
   });
 
