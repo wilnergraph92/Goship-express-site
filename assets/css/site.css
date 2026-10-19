@@ -445,11 +445,17 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-panneau--aide .gs-bouton{margin-top:16px;min-height:46px;font-size:15px}
 .gs-panneau--aide .gs-ico{width:18px;height:18px}
 .gs-adresse{margin-top:16px;border:1px solid var(--accent);border-radius:10px;overflow:hidden}
-.gs-adresse>div{display:grid;grid-template-columns:104px minmax(0,1fr);border-bottom:1px solid #eef2f9}
+.gs-adresse>div{display:grid;grid-template-columns:104px minmax(0,1fr) auto;align-items:center;border-bottom:1px solid #eef2f9}
 .gs-adresse>div:last-child{border-bottom:0}
 .gs-adresse span{padding:10px 14px;font-size:14.5px;line-height:1.45;color:#3a4660;overflow-wrap:anywhere}
 .gs-adresse span:first-child{border-right:1px solid #eef2f9;font-weight:800;color:var(--accent)}
 .gs-adresse [data-nom-adresse]{font-weight:700;color:var(--ink)}
+.gs-adresse__copier{appearance:none;border:0;background:none;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0}
+.gs-adresse__copier:hover{background:#eef2f9}
+.gs-adresse__copier:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.gs-adresse__copier .gs-ico{width:17px;height:17px}
+.gs-adresse[data-incomplet] [data-nom-adresse]:empty::before{content:'—';color:#8a95ad}
+.gs-copie-ok--erreur{color:#b42318;text-transform:none;letter-spacing:0;font-family:inherit;font-size:13px;flex-basis:100%}
 .gs-infos{display:grid;gap:12px;margin:16px 0 0}
 .gs-infos div{display:grid;gap:1px}
 .gs-infos dt{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#8a93ac}

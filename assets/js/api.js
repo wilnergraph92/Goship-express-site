@@ -522,6 +522,10 @@
     try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
   }
 
+  // Les erreurs métier de la date de naissance (supabase-naissance.sql) ont un nom de page
+  var CODES_NAISSANCE = { BIRTHDATE_REQUIRED: 'naissance-requise', INVALID_BIRTHDATE: 'naissance-invalide',
+                          BIRTHDATE_LOCKED: 'naissance-verrouillee' };
+
   function erreurSupabase(e) {
     if (!e) return Erreur('inconnu');
     if (e.code && /^(identifiants|email-existe|reseau|non-autorise)$/.test(e.code)) return e;
@@ -529,7 +533,7 @@
     // message, la phrase est le détail, l'indice « goship » les signe. Le refus
     // de permission garde le nom que les pages connaissent déjà.
     if (e.hint === 'goship' && /^[A-Z_]+$/.test(String(e.message || ''))) {
-      return Erreur(e.message === 'PERMISSION_DENIED' ? 'non-autorise' : e.message, e.details || '');
+      return Erreur(e.message === 'PERMISSION_DENIED' ? 'non-autorise' : (CODES_NAISSANCE[e.message] || e.message), e.details || '');
     }
     var code = String(e.code || ''), msg = String(e.message || '').toLowerCase(), statut = e.status;
     if (code === 'invalid_credentials' || msg.indexOf('invalid login') >= 0) return Erreur('identifiants');
@@ -539,6 +543,10 @@
     if (code === 'email_address_invalid' || code === 'validation_failed' || msg.indexOf('invalid format') >= 0) return Erreur('email-invalide');
     if (code === 'email_not_confirmed' || msg.indexOf('not confirmed') >= 0) return Erreur('non-confirme');
     if (code === 'signup_disabled' || code === 'email_provider_disabled') return Erreur('inscriptions-fermees');
+    // La base a refusé la création du profil (supabase-naissance.sql : date de naissance absente
+    // ou invalide). GoTrue ne rend pas son motif : la page vérifie la date avant d'envoyer, ceci
+    // n'arrive que si quelqu'un contourne le formulaire.
+    if (msg.indexOf('database error saving new user') >= 0) return Erreur('inscription-refusee');
     if (statut === 429 || code.indexOf('rate_limit') >= 0) return Erreur('trop-de-tentatives');
     if (code === 'otp_expired' || code === 'session_not_found' || code === 'session_expired') return Erreur('lien-invalide');
     if (code === '42501' || code === 'PGRST301' || statut === 401 || statut === 403) return Erreur('non-autorise');
@@ -584,7 +592,10 @@
           options: {
             data: {
               nom_complet: d.nom_complet, pays: d.pays, region: d.region, ville: d.ville,
-              adresse: d.adresse, telephone: d.telephone, langue: LANGUE
+              adresse: d.adresse, telephone: d.telephone, langue: LANGUE,
+              // Jour civil « AAAA-MM-JJ », tel que le champ date de la page le donne : la base
+              // le vérifie (obligatoire pour une inscription par e-mail) et le garde à part
+              date_naissance: d.date_naissance
             },
             emailRedirectTo: urlPage('mon-compte.html')
           }
@@ -599,6 +610,19 @@
           return { profil: p, confirmation: false };
         });
       });
+    },
+
+    // Ma date de naissance (« AAAA-MM-JJ »), ou null : seule la personne connectée la lit, par
+    // une fonction de la base (la table n'a aucun accès direct). Une base sans cette fonction
+    // répond « absent » : la page ne demande rien.
+    naissance: function () {
+      return sb().then(function (c) { return c.rpc('ma_naissance'); }).then(resultat).then(function (v) { return v || null; });
+    },
+
+    // La déclarer une fois : la base valide (futur, 30 février…) et refuse une autre date ensuite
+    definirNaissance: function (texte) {
+      return sb().then(function (c) { return c.rpc('definir_ma_naissance', { p_date: String(texte == null ? '' : texte) }); })
+        .then(resultat);
     },
 
     connecter: function (email, motDePasse) {
@@ -1420,6 +1444,22 @@
   }
   function echec(code) {
     return new Promise(function (ok, ko) { setTimeout(function () { ko(Erreur(code)); }, 220); });
+  }
+
+  // La copie démo de valider_date_naissance (supabase-naissance.sql) : mêmes refus, mêmes phrases.
+  // Le jour d'« aujourd'hui » est celui de Santo Domingo, comme dans la base.
+  function validerNaissanceDemo(texte) {
+    var v = String(texte == null ? '' : texte).trim();
+    if (!v) throw Erreur('naissance-requise', 'Indiquez votre date de naissance.');
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m) throw Erreur('naissance-invalide', 'La date de naissance n\'est pas valide. Écrivez-la sous la forme jour / mois / année.');
+    var a = +m[1], mo = +m[2], j = +m[3], u = new Date(Date.UTC(a, mo - 1, j));
+    if (u.getUTCFullYear() !== a || u.getUTCMonth() !== mo - 1 || u.getUTCDate() !== j) {
+      throw Erreur('naissance-invalide', 'Cette date n\'existe pas. Vérifiez le jour, le mois et l\'année.');
+    }
+    if (v > jourSD(maintenant())) throw Erreur('naissance-invalide', 'La date de naissance ne peut pas être dans le futur.');
+    if (v < '1900-01-01') throw Erreur('naissance-invalide', 'Cette date de naissance est trop ancienne. Vérifiez l\'année.');
+    return v;
   }
 
   function publicProfil(compte) {
@@ -3494,15 +3534,40 @@
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return echec('email-invalide');
       if (trouverCompte(d, email)) return echec('email-existe');
       if (String(x.motDePasse || '').length < MDP_MINIMUM) return echec('mot-de-passe-faible');
+      // Comme la base : e-mail et mot de passe, donc date de naissance obligatoire et vérifiée
+      var naissance;
+      try { naissance = validerNaissanceDemo(x.date_naissance); } catch (e) { return echec(e.code); }
       var compte = {
         id: identifiant(), email: email, mdp: empreinte(x.motDePasse), role: 'client', code: nouveauCode(d.comptes),
         nom_complet: x.nom_complet, pays: x.pays, region: x.region, ville: x.ville, adresse: x.adresse,
         telephone: x.telephone, langue: LANGUE, cree_le: maintenant()
       };
       d.comptes.push(compte);
+      // À part des comptes, comme la table profils_naissance : publicProfil ne la montre jamais
+      d.naissances = d.naissances || {};
+      d.naissances[compte.id] = naissance;
       ecrireDonnees(d);
       stockage('ecrire', CLE_SESSION, compte.id);
       return plusTard({ profil: publicProfil(compte), confirmation: false });
+    },
+
+    naissance: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      return plusTard(moi && d.naissances && d.naissances[moi.id] ? d.naissances[moi.id] : null);
+    },
+
+    definirNaissance: function (texte) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var v;
+      try { v = validerNaissanceDemo(texte); } catch (e) { return echec(e.code); }
+      d.naissances = d.naissances || {};
+      if (d.naissances[moi.id] && d.naissances[moi.id] !== v) return echec('naissance-verrouillee');
+      d.naissances[moi.id] = v;
+      ecrireDonnees(d);
+      return plusTard(v);
     },
 
     connecter: function (email, motDePasse) {
@@ -5071,7 +5136,7 @@
   var offAPI = {
     session: function () { return Promise.resolve(null); },
     profil: function () { return Promise.resolve(null); },
-    inscrire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    inscrire: ferme, naissance: ferme, definirNaissance: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
     surSessionPerdue: function () { return function () {}; },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
     fournisseursConnexion: function () { return Promise.resolve([]); }, connecterAvec: ferme,

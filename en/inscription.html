@@ -164,6 +164,11 @@
               <input id="ins-nom" name="nom_complet" autocomplete="name" required minlength="3" maxlength="120" placeholder="Enter your full name">
             </div>
             <div class="gs-champ">
+              <label for="ins-naissance">Date of birth<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance aria-describedby="ins-naissance-aide">
+              <p class="gs-champ__aide" id="ins-naissance-aide">We use it to wish you a happy birthday. Only authorized Goship Express managers can see it.</p>
+            </div>
+            <div class="gs-champ">
               <label for="ins-pays">Country<span class="gs-requis" aria-hidden="true">*</span></label>
               <select id="ins-pays" name="pays" required data-pays>
                 <option value="">Select a country</option>
@@ -266,6 +271,14 @@
   <p data-t="erreur-reseau">Unable to connect. Check your internet connection, then try again.</p>
   <p data-t="erreur-inconnu">Something went wrong. Please try again in a moment.</p>
   <p data-t="champ-requis">This field is required.</p>
+  <p data-t="champ-naissance">Enter a valid date of birth (day, month, year).</p>
+  <p data-t="champ-naissance-futur">The date of birth cannot be in the future.</p>
+  <p data-t="erreur-naissance-requise">Enter your date of birth.</p>
+  <p data-t="erreur-naissance-invalide">This date of birth is not valid. Check the day, the month and the year.</p>
+  <p data-t="erreur-naissance-verrouillee">Your date of birth is already saved. To correct it, write to us: our team will take care of it.</p>
+  <p data-t="erreur-inscription-refusee">Your registration could not be saved. Check your details, especially your date of birth, then try again.</p>
+  <p data-t="naissance-ok">Date of birth saved ✓</p>
+  <p data-t="adresse-manquante">Complete your profile (name and customer code) to get your full address: we cannot build it without them.</p>
   <p data-t="champ-email">Enter a valid email address.</p>
   <p data-t="champ-mdp">At least 6 characters.</p>
   <p data-t="champ-tel">Enter a valid phone number.</p>

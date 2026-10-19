@@ -1090,7 +1090,8 @@ def page_specific(body, src, page):
         # Adresse de réception : valeurs exactes fournies par Goship Express (20/09/2026)
         body = body.replace(VALEUR_ADRESSE + '8140 NW 74th Ave, Unit 3</span>',
                             VALEUR_ADRESSE + '8140 NW 74th Ave Unit 3</span>')
-        body = body.replace(VALEUR_ADRESSE + 'ABX 46780</span>', VALEUR_ADRESSE + 'APT-46780</span>')
+        # Address 2 : « ABX-46780 », avec le tiret, exactement comme Goship Express l'a fourni (19/10/2026)
+        body = body.replace(VALEUR_ADRESSE + 'ABX 46780</span>', VALEUR_ADRESSE + 'ABX-46780</span>')
         body = body.replace(VALEUR_ADRESSE + 'Medley (Miami)</span>', VALEUR_ADRESSE + 'Medley</span>')
         body = body.replace(VALEUR_ADRESSE + 'Florida (FL)</span>', VALEUR_ADRESSE + 'Florida</span>')
         # Ligne « Country » ajoutée après le code postal

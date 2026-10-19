@@ -127,6 +127,36 @@
     }
   }
 
+  /* ---- Date de naissance : un jour civil « AAAA-MM-JJ », sans fuseau ------------------ */
+  // Le jour d'aujourd'hui de l'appareil, écrit à la main : toISOString() donnerait celui d'UTC.
+  function aujourdhuiLocal() {
+    var n = new Date();
+    return n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2);
+  }
+
+  // Vide si la date est bonne, sinon la clé du message. La base refait toujours ce contrôle.
+  function messageNaissance(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m) return 'champ-naissance';
+    var a = +m[1], mo = +m[2], j = +m[3], u = new Date(Date.UTC(a, mo - 1, j));
+    if (u.getUTCFullYear() !== a || u.getUTCMonth() !== mo - 1 || u.getUTCDate() !== j || a < 1900) return 'champ-naissance';
+    if (v > aujourdhuiLocal()) return 'champ-naissance-futur';
+    return '';
+  }
+
+  // Un jour civil lisible dans la langue de la page, sans jamais passer par le fuseau de l'appareil
+  function jourCivil(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+    if (!m) return '';
+    try {
+      return new Intl.DateTimeFormat(API.langue || 'fr', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' })
+        .format(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])));
+    } catch (e) { return v; }
+  }
+
+  // Le champ date ne laisse pas choisir demain : l'attribut max est le jour de l'appareil
+  $$('input[data-naissance]').forEach(function (c) { c.max = aujourdhuiLocal(); });
+
   function verifierChamp(champ) {
     if (champ.disabled || champ.hidden || champ.classList.contains('gs-hp')) return true;
     var v = String(champ.value || '').trim();
@@ -136,6 +166,7 @@
     else if (/^mot_de_passe$/.test(champ.name) && champ.minLength > 0 && champ.value.length < champ.minLength) message = t('champ-mdp');
     else if (champ.type === 'tel' && v.replace(/\D/g, '').length < 7) message = t('champ-tel');
     else if (champ.name === 'nom_complet' && v.split(/\s+/).length < 2) message = t('champ-nom');
+    else if (champ.name === 'date_naissance' && v && messageNaissance(v)) message = t(messageNaissance(v));
     erreurChamp(champ, message);
     return !message;
   }
@@ -326,6 +357,7 @@
         pays: lieu.pays, region: lieu.region, ville: lieu.ville,
         adresse: f.adresse.value.trim(),
         telephone: f.telephone.value.trim(),
+        date_naissance: f.date_naissance.value,
         email: f.email.value.trim().toLowerCase(),
         motDePasse: f.mot_de_passe.value
       };
@@ -346,7 +378,8 @@
       }).catch(function (err) {
         attente(formInscription);
         montrerErreur(formInscription, err);
-        if (err.code === 'email-existe' || err.code === 'email-invalide') f.email.focus();
+        if (/^naissance-/.test(err.code) || err.code === 'inscription-refusee') f.date_naissance.focus();
+        else if (err.code === 'email-existe' || err.code === 'email-invalide') f.email.focus();
         else if (err.code === 'mot-de-passe-faible') f.mot_de_passe.focus();
       });
     });
@@ -476,7 +509,16 @@
       var prenom = (profil.nom_complet || '').trim().split(/\s+/)[0] || '';
       $('[data-prenom]').textContent = prenom ? ', ' + prenom : '';
       $$('[data-code]').forEach(function (el) { el.textContent = profil.code || '—'; });
-      $('[data-nom-adresse]').textContent = ((profil.nom_complet || '') + ' ' + (profil.code || '')).trim();
+      // Le nom et le code viennent du compte connecté, jamais d'ailleurs. Sans l'un des deux,
+      // l'adresse serait fausse (les colis ne seraient pas reconnus) : on n'en compose pas, on le dit.
+      var nomPropre = (profil.nom_complet || '').trim();
+      var adresseComplete = !!nomPropre && !!profil.code;
+      var tableAdresse = $('[data-address-table]');
+      $('[data-nom-adresse]').textContent = adresseComplete ? nomPropre + ' ' + profil.code : '';
+      if (adresseComplete) tableAdresse.removeAttribute('data-incomplet'); else tableAdresse.setAttribute('data-incomplet', '');
+      var noteAdresse = $('[data-adresse-manquante]');
+      noteAdresse.hidden = adresseComplete;
+      noteAdresse.textContent = adresseComplete ? '' : t('adresse-manquante');
       var infos = {
         nom_complet: profil.nom_complet, email: profil.email, telephone: profil.telephone, adresse: profil.adresse,
         lieu: [profil.ville, profil.region, nomPays(profil.pays)].filter(Boolean).join(', ')
@@ -863,6 +905,38 @@
       });
     });
 
+    // La date de naissance : demandée une fois aux comptes qui n'en ont pas (comptes d'avant,
+    // Google, Apple), jamais imposée : tout le reste du compte fonctionne sans.
+    var formNaissance = $('form[data-form="naissance"]');
+    var chargerNaissance = function () {
+      var banniere = $('[data-completer-naissance]');
+      if (!formNaissance || !banniere || !profil || API.regles.rolesEquipe.indexOf(profil.role) >= 0) return;
+      API.naissance().then(function (v) {
+        banniere.hidden = !!v;
+        $('[data-ligne-naissance]').hidden = !v;
+        $('[data-info="naissance"]').textContent = v ? jourCivil(v) : '';
+      }, function () { banniere.hidden = true; }); // base sans la fonction : aucune demande
+    };
+    if (formNaissance) {
+      formNaissance.addEventListener('submit', function (e) {
+        e.preventDefault();
+        cacherErreur(formNaissance);
+        if (!verifierFormulaire(formNaissance)) return;
+        attente(formNaissance, 'attente-enregistrement');
+        API.definirNaissance(formNaissance.elements.date_naissance.value).then(function () {
+          attente(formNaissance);
+          chargerNaissance();
+          var ok = $('[data-profil-ok]');
+          ok.textContent = t('naissance-ok');
+          ok.hidden = false;
+          setTimeout(function () { ok.hidden = true; }, 2600);
+        }).catch(function (err) {
+          attente(formNaissance);
+          montrerErreur(formNaissance, err);
+        });
+      });
+    }
+
     // Déconnexion
     $('[data-action="deconnexion"]').addEventListener('click', function () {
       API.deconnecter().then(function () {
@@ -885,6 +959,7 @@
         bienvenue.hidden = false;
         history.replaceState(null, '', location.pathname);
       }
+      chargerNaissance();
       chargerColis();
       chargerFactures();
       chargerResume();
