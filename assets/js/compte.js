@@ -163,8 +163,53 @@
     } catch (e) { return v; }
   }
 
-  // Le champ date ne laisse pas choisir demain : l'attribut max est le jour de l'appareil
-  $$('input[data-naissance]').forEach(function (c) { c.max = aujourdhuiLocal(); });
+  // La date se tape « jj/mm/aaaa » dans un champ texte (le champ date du navigateur suit la langue de
+  // l'appareil : « mm/jj/aaaa » chez certains). Le champ pose les barres tout seul ; vers la base,
+  // la date part toujours en « AAAA-MM-JJ ».
+  function formaterNaissance(texte) {
+    var v = String(texte || '').trim();
+    var iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); // un remplissage automatique du navigateur
+    if (iso) return iso[3] + '/' + iso[2] + '/' + iso[1];
+    var c = v.replace(/\D/g, '').slice(0, 8);
+    if (c.length > 4) return c.slice(0, 2) + '/' + c.slice(2, 4) + '/' + c.slice(4);
+    if (c.length > 2) return c.slice(0, 2) + '/' + c.slice(2);
+    return c;
+  }
+  // « jj/mm/aaaa » -> « AAAA-MM-JJ », ou « » si ce n'est pas écrit comme il faut
+  function naissanceVersIso(texte) {
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(texte || '').trim());
+    return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+  }
+  $$('input[data-naissance]').forEach(function (c) {
+    c.addEventListener('input', function () { c.value = formaterNaissance(c.value); });
+  });
+
+  /* ---- Le numéro du document : celui du passeport ou de la cédula choisi ---------------- */
+  // Les mêmes règles que lire_numero_document (supabase-identite.sql) : lettres et chiffres, sans
+  // espaces ni tirets ; un passeport de 5 à 20 signes, une cédula de 6 à 15 chiffres. Vide si illisible.
+  function numeroDocumentNormalise(type, texte) {
+    var n = String(texte || '').replace(/[\s.\-]/g, '').toUpperCase();
+    if (type === 'passeport') return /^[A-Z0-9]{5,20}$/.test(n) ? n : '';
+    if (type === 'cedula') return /^[0-9]{6,15}$/.test(n) ? n : '';
+    return '';
+  }
+
+  // Le champ du numéro suit le choix du document : son libellé, son exemple, et il reste fermé
+  // tant qu'aucun document n'est choisi
+  var champDocument = $('select[name="type_document"]');
+  var champNumero = $('input[data-numero-document]');
+  if (champDocument && champNumero) {
+    var libelleNumero = $('[data-libelle-document]');
+    var suffixe = { passeport: 'passeport', cedula: 'cedula' };
+    champDocument.addEventListener('change', function () {
+      var cle = suffixe[champDocument.value] || 'aucun';
+      if (libelleNumero && libelleNumero.firstChild) libelleNumero.firstChild.nodeValue = t('numero-' + cle);
+      champNumero.placeholder = t('numero-' + cle + '-ex');
+      champNumero.disabled = cle === 'aucun';
+      champNumero.value = '';
+      erreurChamp(champNumero, '');
+    });
+  }
 
   function verifierChamp(champ) {
     if (champ.disabled || champ.hidden || champ.classList.contains('gs-hp')) return true;
@@ -175,7 +220,13 @@
     else if (/^mot_de_passe$/.test(champ.name) && champ.minLength > 0 && champ.value.length < champ.minLength) message = t('champ-mdp');
     else if (champ.type === 'tel' && v.replace(/\D/g, '').length < 7) message = t('champ-tel');
     else if (champ.name === 'nom_complet' && v.split(/\s+/).length < 2) message = t('champ-nom');
-    else if (champ.name === 'date_naissance' && v && messageNaissance(v)) message = t(messageNaissance(v));
+    else if (champ.name === 'numero_document' && v && !numeroDocumentNormalise(champDocument && champDocument.value, v)) {
+      message = t(champDocument && champDocument.value === 'cedula' ? 'champ-numero-cedula' : 'champ-numero-passeport');
+    }
+    else if (champ.name === 'date_naissance' && v) {
+      var jourIso = naissanceVersIso(v);
+      message = jourIso ? (messageNaissance(jourIso) ? t(messageNaissance(jourIso)) : '') : t('champ-naissance');
+    }
     erreurChamp(champ, message);
     return !message;
   }
@@ -373,7 +424,10 @@
         pays: lieu.pays, region: lieu.region, ville: lieu.ville,
         adresse: f.adresse.value.trim(),
         telephone: f.telephone.value.trim(),
-        date_naissance: f.date_naissance.value,
+        date_naissance: naissanceVersIso(f.date_naissance.value),
+        sexe: f.sexe.value,
+        type_document: f.type_document.value,
+        numero_document: numeroDocumentNormalise(f.type_document.value, f.numero_document.value),
         code_parrainage: f.code_parrainage ? f.code_parrainage.value.trim().toUpperCase() : '',
         email: f.email.value.trim().toLowerCase(),
         motDePasse: f.mot_de_passe.value
@@ -942,7 +996,7 @@
         cacherErreur(formNaissance);
         if (!verifierFormulaire(formNaissance)) return;
         attente(formNaissance, 'attente-enregistrement');
-        API.definirNaissance(formNaissance.elements.date_naissance.value).then(function () {
+        API.definirNaissance(naissanceVersIso(formNaissance.elements.date_naissance.value)).then(function () {
           attente(formNaissance);
           chargerNaissance();
           var ok = $('[data-profil-ok]');

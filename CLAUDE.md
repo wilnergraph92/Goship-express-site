@@ -409,6 +409,17 @@ Instagram, TikTok, WhatsApp : `outils/supabase-courriel-reseaux.sql`, `courriel_
 du site (`assets/img/email/*.png`) lues à l'adresse du réglage `courriel_icones_url` (à défaut `site_url`) ; sans adresse https, quatre liens de texte.
 Une icône ajoutée : son PNG ici, sa ligne dans `courriel_reseaux`, et une migration de plus (le pied est dans la base).
 
+Le formulaire d'inscription demande aussi le **sexe** (M, F), le **document** (`passeport`, `cedula`) et son **numéro**
+(`outils/supabase-identite.sql`). Le sexe et le type sont des colonnes de `clients` (lus par `lire_sexe` et
+`lire_type_document`, visibles avec la fiche du client : `API.admin.identiteClient`) ; le numéro, donnée sensible, vit dans
+la table fermée `profils_document` (aucune règle de lecture, jamais dans `journal_audit`), normalisé par
+`lire_numero_document` (lettres et chiffres, passeport 5 à 20 signes, cédula 6 à 15 chiffres) et lu par `document_client`,
+réservée à `clients.edit` (administration, gérance : `API.admin.numeroDocument`). Facultatifs côté base — l'application mobile
+déjà installée n'envoie rien de tout cela — et rendus obligatoires par le formulaire du site seulement ; une valeur
+inconnue ou illisible est ignorée ; le client ne les modifie pas ; la suppression du compte les efface tous les trois. La **date de naissance**
+se tape `jj/mm/aaaa` dans un champ texte (`compte.js` : barres posées toutes seules, `naissanceVersIso`) ; vers la base, elle
+part toujours en `AAAA-MM-JJ`.
+
 ### Supprimer mon compte (`outils/supabase-compte.sql`)
 
 `supprimer_mon_compte('SUPPRIMER')`, appelée par l'application mobile pour le compte
@@ -488,7 +499,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

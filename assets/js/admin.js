@@ -6301,6 +6301,22 @@
     champFiche('Adresse', client.adresse, true);
     champFiche('Ville', [client.ville, client.region].filter(Boolean).join(', '));
     champFiche('Pays', PAYS[client.pays] || client.pays);
+    // Le sexe et le type de document, donnés à l'inscription : lus à l'ouverture, un champ que la
+    // base ne connaît pas (ou que le client n'a pas donné) n'est pas affiché
+    if (client.id && API.admin.identiteClient) {
+      listeFiche(sectionFiche('Identité'), function () {
+        return API.admin.identiteClient(client.id).then(function (v) {
+          var lignes = [];
+          if (v.sexe) lignes.push(ligneListe('Sexe', v.sexe === 'F' ? 'Féminin' : 'Masculin', null, null));
+          if (v.type_document) lignes.push(ligneListe('Document', v.type_document === 'cedula' ? 'Cédula' : 'Passeport', null, null));
+          // Le numéro : seulement pour qui a clients.edit (la base le refuse aux autres) ; refusé, rien
+          return API.admin.numeroDocument(client.id).then(function (n) {
+            if (n) lignes.push(ligneListe('Numéro', n, null, null));
+            return lignes;
+          }, function () { return lignes; });
+        });
+      }, 'Non renseigné.');
+    }
     sectionFiche('Situation');
     champFiche('Colis en cours', client.colis_en_cours != null ? String(client.colis_en_cours) : '');
     champFiche('Poids en cours', Number(client.poids_en_cours) ? O.nombre(Number(client.poids_en_cours)) + ' lb' : '');

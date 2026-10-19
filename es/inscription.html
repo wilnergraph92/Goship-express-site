@@ -165,8 +165,27 @@
             </div>
             <div class="gs-champ">
               <label for="ins-naissance">Fecha de nacimiento<span class="gs-requis" aria-hidden="true">*</span></label>
-              <input id="ins-naissance" name="date_naissance" type="date" autocomplete="bday" required min="1900-01-01" data-naissance aria-describedby="ins-naissance-aide">
-              <p class="gs-champ__aide" id="ins-naissance-aide">La usamos para felicitarle en su cumpleaños. Solo los responsables autorizados de Goship Express pueden consultarla.</p>
+              <input id="ins-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="dd/mm/aaaa" data-naissance>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-sexe">Sexo<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-sexe" name="sexe" required>
+                <option value="">Seleccione su sexo</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-document">Documento<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-document" name="type_document" required>
+                <option value="">Seleccione un documento</option>
+                <option value="passeport">Pasaporte</option>
+                <option value="cedula">Cédula</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-numero-document" data-libelle-document>Número del documento<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-numero-document" name="numero_document" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="24" disabled placeholder="Elija primero un documento" data-numero-document>
             </div>
             <div class="gs-champ">
               <label for="ins-parrain">Código de patrocinio (opcional)</label>
@@ -276,7 +295,15 @@
   <p data-t="erreur-reseau">No se pudo conectar. Verifique su conexión a Internet e inténtelo de nuevo.</p>
   <p data-t="erreur-inconnu">Se produjo un error. Inténtelo de nuevo en un momento.</p>
   <p data-t="champ-requis">Este campo es obligatorio.</p>
-  <p data-t="champ-naissance">Escriba una fecha de nacimiento válida (día, mes, año).</p>
+  <p data-t="champ-naissance">Escriba una fecha de nacimiento válida, con el formato dd/mm/aaaa (día, mes, año).</p>
+  <p data-t="numero-passeport">Número del pasaporte</p>
+  <p data-t="numero-cedula">Número de la cédula</p>
+  <p data-t="numero-passeport-ex">Ej. AB1234567</p>
+  <p data-t="numero-cedula-ex">Ej. 001-1234567-8</p>
+  <p data-t="numero-aucun">Número del documento</p>
+  <p data-t="numero-aucun-ex">Elija primero un documento</p>
+  <p data-t="champ-numero-passeport">Escriba el número de su pasaporte (letras y números, de 5 a 20 caracteres).</p>
+  <p data-t="champ-numero-cedula">Escriba el número de su cédula (solo dígitos, de 6 a 15).</p>
   <p data-t="champ-naissance-futur">La fecha de nacimiento no puede estar en el futuro.</p>
   <p data-t="erreur-naissance-requise">Indique su fecha de nacimiento.</p>
   <p data-t="erreur-naissance-invalide">Esta fecha de nacimiento no es válida. Compruebe el día, el mes y el año.</p>

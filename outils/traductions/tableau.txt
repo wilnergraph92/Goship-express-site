@@ -386,6 +386,7 @@ Créée le
 Créée par
 Cumulable avec l'offre de bienvenue
 Cumulable avec le parrainage
+Cédula
 Dans 7 jours
 Dans la fenêtre qui s’ouvre, choisissez « Enregistrer au format PDF ».
 Date
@@ -418,6 +419,7 @@ Disponible
 Disponible → Livré (retrait)
 Disponibles
 Disposition par défaut rétablie.
+Document
 Donner ce rôle
 Donner un rôle
 Donnez un nom au rapport.
@@ -582,6 +584,7 @@ Frais de service ajoutés
 Frais de service retirés
 Français
 Fuseau horaire de l'entreprise
+Féminin
 GOPOINTS
 GOPOINTS éteint
 GSE-1001-HT, QR de l'étiquette ou suivi du vendeur
@@ -606,6 +609,7 @@ Historique des modifications
 Historique interne
 Identifiant
 Identifiant GSE, nom ou e-mail
+Identité
 Ignoré
 Ignorés
 Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.
@@ -709,6 +713,7 @@ Localisation
 Là où se trouve le colis : USA = au dépôt de Miami (reçu, emballé) ; Haïti, Santo Domingo = arrivé dans le pays (centre de distribution, succursale, disponible)
 Maj
 Maritime
+Masculin
 Maximum
 Maximum de parrainages récompensés au total
 Maximum de parrainages récompensés par parrain
@@ -802,6 +807,7 @@ Nombre de jours sans mouvement
 Non
 Non disponible
 Non renseigné
+Non renseigné.
 Non échues
 Note
 Note interne
@@ -818,6 +824,7 @@ Nouvelle campagne
 Nouvelle facture
 Nouvelle offre
 Nouvelle valeur
+Numéro
 Numéro, contenu, magasin, suivi du vendeur, destination…
 N°
 N° colis
@@ -897,6 +904,7 @@ Parrainage — GOship Refer
 Parrainages
 Parrains
 Part
+Passeport
 Passés en action requise
 Pays
 Pays / ville
@@ -1099,6 +1107,7 @@ Ses factures
 Session expirée
 Seuls les colis de ce client apparaissent : une facture ne peut pas mélanger deux clients.
 Seuls les colis de ce client qui peuvent rejoindre la facture apparaissent : sans facture, ou sur une facture à payer sans aucun paiement — celle-ci entre alors avec eux. Un colis déjà dans la fenêtre n'y figure pas.
+Sexe
 Situation
 Solde
 Solde (maintenant)
