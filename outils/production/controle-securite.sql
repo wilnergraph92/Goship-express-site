@@ -122,7 +122,8 @@ migrations(ordre, fichier, present) as (values
   (22, 'supabase-campagnes.sql',       exists (select 1 from pg_proc where proname = 'mon_parrainage')),
   (23, 'supabase-courriel-colis.sql',  exists (select 1 from pg_proc where proname = 'courriel_colis')),
   (24, 'supabase-courriel-pied.sql',   exists (select 1 from pg_proc where proname = 'courriel_boutiques')),
-  (25, 'supabase-lieu-reception.sql',  exists (select 1 from pg_proc where proname = 'lieu_reception_phrase'))),
+  (25, 'supabase-lieu-reception.sql',  exists (select 1 from pg_proc where proname = 'lieu_reception_phrase')),
+  (26, 'supabase-courriel-reseaux.sql', exists (select 1 from pg_proc where proname = 'courriel_reseaux'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,

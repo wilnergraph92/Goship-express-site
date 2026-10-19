@@ -100,6 +100,13 @@ depuis le tableau de bord, onglet **Notifications** ; chaque changement est
 journalisé (`journal_audit`, action `notification.regle`). Relancer la
 migration ne remet pas les règles à leur valeur de départ.
 
+### Les icônes des réseaux sociaux dans le pied
+
+`outils/supabase-courriel-reseaux.sql` : entre les boutons Google Play / App Store et la phrase « Vous
+recevez ce message… », une ligne « Suivez-nous » avec quatre icônes rondes cliquables (Facebook, Instagram,
+TikTok, WhatsApp). Ce sont les images `assets/img/email/*.png` du site, à l'adresse du réglage `site_url`
+(en https) ; sans `site_url`, quatre liens de texte. Les adresses des comptes sont dans `courriel_reseaux`.
+
 ### Le lieu de réception dans l'e-mail « Colis reçu »
 
 `outils/supabase-lieu-reception.sql` : le lieu de réception est obligatoire à l'enregistrement d'un colis

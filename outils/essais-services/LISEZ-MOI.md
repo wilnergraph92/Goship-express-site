@@ -342,6 +342,7 @@ Il demande `age` et `age-keygen` (paquet `age`) en plus de pgserver.
     python3 outils/essais-services/essai-programmes.py            # SQL, base jetable (374 vérifications)
     python3 outils/essais-services/essai-courriel-colis.py        # SQL : l'e-mail d'un colis reçu / disponible (58)
     python3 outils/essais-services/essai-lieu-reception.py        # SQL : lieu de réception obligatoire, « Colis reçu à Miami »
+    python3 outils/essais-services/essai-courriel-reseaux.py      # SQL : icônes des réseaux sociaux dans le pied des e-mails
     python3 outils/essais-services/essai-courriel-pied.py         # SQL : pied des e-mails (boutiques), plus d'e-mail de facture
     node outils/essais-services/essai-programmes.js               # copie démo d'api.js (106)
     CHROMIUM=… node outils/essais-services/essai-programmes-tableau.mjs      # onglet Programmes, navigateur
