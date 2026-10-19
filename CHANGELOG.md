@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — l'e-mail « Colis reçu » et « Colis disponible » donne les détails du colis (19/10/2026)
+
+**Migration à passer avant de publier**, après les 22 premières : `supabase-courriel-colis.sql` (23e ; contrôle attendu `3 | false | true`). Elle remplace `expedier_envoi` : ne pas relancer `supabase-notifications.sql` après elle. L'e-mail garde la phrase et ajoute un tableau (statut, code client, n° de colis, expéditeur, service, contenu, suivi du vendeur masqué sauf les 4 derniers signes, poids), dans la langue du compte. Seulement pour « Colis reçu » et « Colis disponible », les deux seuls messages de colis qui ont un e-mail ; rien ne change pour le téléphone, l'espace client, WhatsApp, ni pour les e-mails de facture. Aucun e-mail déjà parti n'est rejoué.
+
 ## Non publié — la date de naissance d'un client se saisit dans le tableau de bord, et s'affiche le bon jour (19/10/2026)
 
 Onglet Programmes > Anniversaires : un bloc « Date de naissance d'un client » (code du client, date, motif obligatoire) appelle `corriger_naissance`, qui existait en base sans écran. Réservé à `birthdays.manage`. Les jours civils des listes (un anniversaire, la fin d'une campagne) s'affichaient la veille à Miami (« 2026-10-19 » lu comme minuit UTC) : ils sont maintenant lus à midi, heure de l'appareil. En mode démo, la correction d'une date ne s'enregistrait pas : corrigé. Aucune migration.

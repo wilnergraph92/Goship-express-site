@@ -119,7 +119,8 @@ migrations(ordre, fichier, present) as (values
   (19, 'supabase-naissance.sql',       exists (select 1 from pg_proc where proname = 'ma_naissance')),
   (20, 'supabase-fidelite.sql',        exists (select 1 from pg_proc where proname = 'mon_portefeuille')),
   (21, 'supabase-anniversaires.sql',   exists (select 1 from pg_proc where proname = 'anniversaires_executer')),
-  (22, 'supabase-campagnes.sql',       exists (select 1 from pg_proc where proname = 'mon_parrainage'))),
+  (22, 'supabase-campagnes.sql',       exists (select 1 from pg_proc where proname = 'mon_parrainage')),
+  (23, 'supabase-courriel-colis.sql',  exists (select 1 from pg_proc where proname = 'courriel_colis'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,
