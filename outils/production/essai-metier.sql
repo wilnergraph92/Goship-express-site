@@ -28,12 +28,14 @@ begin;
 set local statement_timeout = '120s';
 
 -- ---- Comptes (adresses d'essai ; annulés avec le reste) -----------------------
-insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values
-  ('0e55a100-0000-4000-8000-0000000000c1', 'client.essai@goship.test',  now(), '{"nom_complet":"Client Essai","pays":"HT","ville":"Pétion-Ville"}'),
-  ('0e55a100-0000-4000-8000-0000000000c2', 'client2.essai@goship.test', now(), '{"nom_complet":"Second Essai","pays":"HT","ville":"Jacmel"}'),
-  ('0e55a100-0000-4000-8000-0000000000e1', 'employe.essai@goship.test', now(), '{"nom_complet":"Employé Essai","pays":"HT"}'),
-  ('0e55a100-0000-4000-8000-0000000000f1', 'gerant.essai@goship.test',  now(), '{"nom_complet":"Gérant Essai","pays":"HT"}'),
-  ('0e55a100-0000-4000-8000-0000000000a1', 'admin.essai@goship.test',   now(), '{"nom_complet":"Admin Essai","pays":"HT"}');
+-- Fournisseur « test » : ces comptes sont créés sans formulaire, donc sans date de naissance
+-- (supabase-naissance.sql ne l'exige que d'une inscription par e-mail et mot de passe).
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data, raw_app_meta_data) values
+  ('0e55a100-0000-4000-8000-0000000000c1', 'client.essai@goship.test',  now(), '{"nom_complet":"Client Essai","pays":"HT","ville":"Pétion-Ville"}', '{"provider":"test"}'),
+  ('0e55a100-0000-4000-8000-0000000000c2', 'client2.essai@goship.test', now(), '{"nom_complet":"Second Essai","pays":"HT","ville":"Jacmel"}', '{"provider":"test"}'),
+  ('0e55a100-0000-4000-8000-0000000000e1', 'employe.essai@goship.test', now(), '{"nom_complet":"Employé Essai","pays":"HT"}', '{"provider":"test"}'),
+  ('0e55a100-0000-4000-8000-0000000000f1', 'gerant.essai@goship.test',  now(), '{"nom_complet":"Gérant Essai","pays":"HT"}', '{"provider":"test"}'),
+  ('0e55a100-0000-4000-8000-0000000000a1', 'admin.essai@goship.test',   now(), '{"nom_complet":"Admin Essai","pays":"HT"}', '{"provider":"test"}');
 
 do $$ begin
   if (select count(*) from public.clients where id::text like '0e55a100-%') <> 5 then

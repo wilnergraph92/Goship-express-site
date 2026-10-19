@@ -25,3 +25,4 @@ supabase-connexion.sql
 supabase-profil-complet.sql
 supabase-frais-service.sql
 supabase-corrections.sql
+supabase-naissance.sql
