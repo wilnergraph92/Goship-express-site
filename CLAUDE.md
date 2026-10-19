@@ -429,6 +429,21 @@ l'écriture directe des anciennes versions de l'application) refuse avec
 ville non vides — les mêmes champs que le bandeau du site et la carte de l'application.
 Les pré-alertes déjà enregistrées ne sont pas touchées. `essai-mobile.py` (section M).
 
+### Les programmes (anniversaires, Welcome, Refer, GOPOINTS — `docs/programmes.md`)
+
+Quatre migrations (`supabase-naissance`, `-fidelite`, `-anniversaires`, `-campagnes`). Tout se
+décide dans la base ; un programme naît éteint ou en brouillon et **aucune valeur commerciale
+n'est écrite dans le code** (ni dans `api.js`, ni dans l'application). La date de naissance vit
+dans `profils_naissance` (table fermée, jamais dans `journal_audit`). Le solde de points est un
+registre immuable (`points_mouvements`, `points_ecrire` verrouille le solde) ; les avantages hors
+points sont enregistrés (`recompenses`) et appliqués à la main : la facturation n'est pas touchée.
+Les événements qui déclenchent les programmes sont des déclencheurs (`COLIS_RECU`, `FACTURE_PAYEE`,
+annulations) qui ne bloquent jamais l'opération (`programmes_erreurs`). Copie démo : `programmesDemo`
+et suivants dans `api.js`, comparée par `essai-programmes.js`. Permissions : `birthdays.*`,
+`programs.*`, `points.adjust` (un employé n'a aucune donnée de naissance). Interface : onglet
+Programmes (`programmes.js`, textes dans `tableau.txt`), « Mes avantages » (`compte.js`). Une page
+générée (`admin.html`, `mon-compte.html`…) se modifie dans `outils/generateur/pages/`, jamais seule.
+
 ### L'application mobile (dépôt `goship-express-app`)
 
 L'espace client sur téléphone (Expo), cloné dans `application-mobile/` (ignoré ici).

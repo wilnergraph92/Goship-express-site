@@ -2637,5 +2637,7 @@
   "Code de parrainage (facultatif)": "Referral code (optional)",
   "Un ami vous a invité ? Entrez son code : il est déjà rempli si vous êtes arrivé par son lien.": "Did a friend invite you? Enter their code: it is already filled in if you came through their link.",
   "GOship Refer": "GOship Refer",
-  "GoShip Express": "GoShip Express"
+  "GoShip Express": "GoShip Express",
+  "{1}Date de naissance :{/1} demandée à l'inscription pour vous souhaiter votre anniversaire. Elle est gardée à part de votre profil, visible seulement des responsables autorisés, et ne peut pas être modifiée sans une demande à notre équipe. Vous pouvez désactiver le message d'anniversaire dans votre compte.": "{1}Date of birth:{/1} asked at sign-up so we can wish you a happy birthday. It is kept apart from your profile, visible only to authorized managers, and cannot be changed without asking our team. You can turn off the birthday message in your account.",
+  "{1}Programmes de fidélité :{/1} si vous participez à GOPOINTS, à l'offre de bienvenue ou au parrainage, nous gardons vos points, vos avantages et, pour un parrainage, le code utilisé. Un parrain ne voit jamais l'identité ni les opérations de ses filleuls.": "{1}Loyalty programs:{/1} if you take part in GOPOINTS, the welcome offer or referrals, we keep your points, your benefits and, for a referral, the code used. A referrer never sees the identity or operations of the friends they referred."
 }

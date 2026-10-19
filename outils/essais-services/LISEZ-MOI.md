@@ -335,3 +335,15 @@ vrai PostgREST.
 Il demande `age` et `age-keygen` (paquet `age`) en plus de pgserver.
 
     python3 outils/essais-services/essai-production.py
+
+
+## Programmes (anniversaires, bienvenue, parrainage, GOPOINTS)
+
+    python3 outils/essais-services/essai-programmes.py            # SQL, base jetable (374 vérifications)
+    node outils/essais-services/essai-programmes.js               # copie démo d'api.js (106)
+    CHROMIUM=… node outils/essais-services/essai-programmes-tableau.mjs      # onglet Programmes, navigateur
+    CHROMIUM=… node outils/essais-services/essai-programmes-navigateur.mjs   # espace client, navigateur
+
+Les deux derniers demandent un serveur statique (`python3 -m http.server 8765` à la racine du site)
+et Playwright (celui de l'application mobile). Les montants et les points des essais sont des
+valeurs d'essai, jamais celles de GoShip.
