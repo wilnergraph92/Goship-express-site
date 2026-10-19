@@ -213,6 +213,24 @@ def main():
              un(db, "select count(*) from profils_naissance where client_id = 'a1a1a1a1-0000-0000-0000-000000000002';"),
              '0')
 
+    print("\nA. L'adresse de réception et les permissions de la série")
+    verifier("l'adresse des e-mails : Address 2 = ABX-46780, comme sur le site et dans l'application",
+             un(db, "select public.adresse_miami() ->> 'ligne2';"), 'ABX-46780')
+    verifier("… et le reste de l'adresse est celui fourni par Goship Express",
+             json.loads(un(db, "select (public.adresse_miami() - 'ligne2')::text;")),
+             {'ligne1': '8140 NW 74th Ave Unit 3', 'ville': 'Medley', 'etat': 'Florida', 'zip': '33166',
+              'pays': 'United States', 'telephone': '786 525-2944'})
+
+    def definition(fichier, repere, fin):
+        texte = open(os.path.join(OUTILS, fichier), encoding='utf-8').read()
+        debut = texte.index('create or replace function public.' + repere)
+        return ' '.join(texte[debut:texte.index(fin, debut) + len(fin)].split())
+    verifier('permissions_du_role : la copie de supabase-naissance.sql est celle de supabase.sql',
+             definition('supabase-naissance.sql', 'permissions_du_role(p_role text)', '$$;'),
+             definition('supabase.sql', 'permissions_du_role(p_role text)', '$$;'))
+    verifier('adresse_miami : la copie de supabase-naissance.sql est celle de supabase.sql',
+             definition('supabase-naissance.sql', 'adresse_miami()', '$fn$;'), definition('supabase.sql', 'adresse_miami()', '$fn$;'))
+
     # D'autres sections suivent (anniversaires, points, campagnes, permissions)
     reussis = sum(S.RESULTATS)
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), reussis))

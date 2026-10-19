@@ -45,14 +45,15 @@
 --
 -- Contenu :
 --    1. garde : la chaîne est-elle à jour ?
---    2. le réglage : fuseau horaire de l'entreprise
---    3. la table profils_naissance
---    4. valider_date_naissance
---    5. ma_naissance, definir_ma_naissance
---    6. le profil d'un nouveau compte (REMPLACE creer_profil_client)
---    7. effacement à la suppression du compte
---    8. droits
---    9. contrôle
+--    2. les permissions et l'adresse de la série (copie de supabase.sql)
+--    3. le réglage : fuseau horaire de l'entreprise
+--    4. la table profils_naissance
+--    5. valider_date_naissance
+--    6. ma_naissance, definir_ma_naissance
+--    7. le profil d'un nouveau compte (REMPLACE creer_profil_client)
+--    8. effacement à la suppression du compte
+--    9. droits
+--   10. contrôle
 -- =============================================================================
 
 
@@ -71,7 +72,68 @@ end;
 $garde$;
 
 
--- 2. Le fuseau horaire de l'entreprise ----------------------------------------------------
+-- 2. Les permissions et l'adresse de cette série ------------------------------------------------
+-- Les permissions birthdays.*, programs.* et points.adjust (anniversaires, fidélité, campagnes) et
+-- l'adresse de réception « ABX-46780 » sont écrites dans supabase.sql, qui fait foi. Ces deux
+-- fonctions sont répétées ici, mot pour mot, pour qu'on n'ait à installer QUE les fichiers de
+-- cette série (et non toute la chaîne) sur une base déjà à jour : essai-programmes.py vérifie
+-- que les deux copies sont identiques.
+create or replace function public.permissions_du_role(p_role text)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_role
+    when 'admin' then array[
+      'clients.view', 'clients.create', 'clients.edit',
+      'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
+      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+      'payments.view', 'payments.create', 'payments.cancel',
+      'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
+      'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
+      'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust']
+    when 'gerant' then array[
+      'clients.view', 'clients.create', 'clients.edit',
+      'shipments.view', 'shipments.create', 'shipments.edit',
+      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+      'payments.view', 'payments.create', 'payments.cancel',
+      'reports.view', 'reports.create',
+      'users.view',
+      'birthdays.view', 'programs.view']
+    when 'employe' then array[
+      'clients.view', 'clients.create',
+      'shipments.view', 'shipments.create', 'shipments.edit',
+      'shipments.scan', 'shipments.change_status', 'shipments.view_history',
+      'invoices.view', 'payments.view']
+    when 'client' then array[
+      'clients.view:own', 'clients.edit:own',
+      'shipments.view:own', 'shipments.view_history:own',
+      'invoices.view:own', 'payments.view:own']
+    else array[]::text[]
+  end
+$$;
+
+create or replace function public.adresse_miami()
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $fn$
+  select jsonb_build_object(
+    'ligne1', '8140 NW 74th Ave Unit 3',
+    'ligne2', 'ABX-46780',
+    'ville', 'Medley',
+    'etat', 'Florida',
+    'zip', '33166',
+    'pays', 'United States',
+    'telephone', '786 525-2944')
+$fn$;
+
+
+-- 3. Le fuseau horaire de l'entreprise ----------------------------------------------------
 -- Une seule ligne, lue par tout ce qui compte en « jours » pour les programmes :
 -- « aujourd'hui », l'heure d'un message d'anniversaire. Les fichiers suivants
 -- (anniversaires, fidélité) y ajoutent leurs colonnes. Le fuseau se change par
@@ -108,7 +170,7 @@ end;
 $$;
 
 
--- 3. La table ------------------------------------------------------------------------------
+-- 4. La table ------------------------------------------------------------------------------
 create table if not exists public.profils_naissance (
   client_id       uuid primary key references public.clients (id) on delete cascade,
   date_naissance  date not null,
@@ -122,7 +184,7 @@ alter table public.profils_naissance enable row level security;
 revoke all on public.profils_naissance from anon, authenticated;
 
 
--- 4. Valider une date de naissance --------------------------------------------------------
+-- 5. Valider une date de naissance --------------------------------------------------------
 -- Texte « AAAA-MM-JJ » strict (le format d'un champ <input type="date">). Rend la
 -- date, ou refuse avec un code et une phrase que les pages affichent telle quelle.
 create or replace function public.valider_date_naissance(p_texte text)
@@ -157,7 +219,7 @@ end;
 $$;
 
 
--- 5. Le client et sa propre date --------------------------------------------------------------
+-- 6. Le client et sa propre date --------------------------------------------------------------
 -- Le compte connecté, et lui seul : aucun paramètre ne désigne un autre compte.
 create or replace function public.ma_naissance()
 returns date
@@ -203,7 +265,7 @@ end;
 $$;
 
 
--- 6. Le profil d'un nouveau compte --------------------------------------------------------------
+-- 7. Le profil d'un nouveau compte --------------------------------------------------------------
 -- Le même que celui de supabase-connexion.sql, plus la date de naissance :
 --   · e-mail et mot de passe (le formulaire du site, de l'application) : la date est
 --     OBLIGATOIRE et vérifiée ici. Sans elle, l'inscription échoue et aucun compte
@@ -262,7 +324,7 @@ create trigger creer_profil_client
   for each row execute function public.creer_profil_client();
 
 
--- 7. Effacement à la suppression du compte ----------------------------------------------------
+-- 8. Effacement à la suppression du compte ----------------------------------------------------
 -- supprimer_mon_compte garde la ligne « clients » (rendue anonyme) pour les colis et les
 -- factures : la date de naissance, elle, n'a plus de raison d'être gardée.
 create or replace function public.effacer_naissance_compte_supprime()
@@ -284,7 +346,7 @@ create trigger effacer_naissance
   execute function public.effacer_naissance_compte_supprime();
 
 
--- 8. Droits ---------------------------------------------------------------------------------------
+-- 9. Droits ---------------------------------------------------------------------------------------
 revoke execute on function public.aujourdhui_entreprise() from public, anon, authenticated;
 revoke execute on function public.valider_date_naissance(text) from public, anon, authenticated;
 revoke execute on function public.creer_profil_client() from public, anon, authenticated;
@@ -295,7 +357,7 @@ grant execute on function public.ma_naissance() to authenticated;
 grant execute on function public.definir_ma_naissance(text) to authenticated;
 
 
--- 9. Contrôle ---------------------------------------------------------------------------------------
+-- 10. Contrôle ---------------------------------------------------------------------------------------
 -- tables : 2 ; ouvertes_aux_visiteurs : false ; table_fermee : true ; declencheurs : 2.
 select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = 'public' and c.relname in ('profils_naissance', 'programme_reglages')) as tables,

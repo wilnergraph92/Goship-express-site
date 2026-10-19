@@ -1520,7 +1520,7 @@ set search_path = ''
 as $fn$
   select jsonb_build_object(
     'ligne1', '8140 NW 74th Ave Unit 3',
-    'ligne2', 'APT-46780',
+    'ligne2', 'ABX-46780',
     'ville', 'Medley',
     'etat', 'Florida',
     'zip', '33166',
