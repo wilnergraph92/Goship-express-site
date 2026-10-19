@@ -6,8 +6,9 @@ chaîne de outils/migrations.txt. On installe d'abord la chaîne SANS ce fichier
 « Colis reçu » (pied d'avant), puis on installe le fichier DEUX fois. Ensuite :
   A. le pied porte « Suivez-nous » et quatre icônes cliquables (Facebook, Instagram, TikTok, WhatsApp),
      entre les boutons des boutiques et la phrase « Vous recevez ce message… », dans les quatre langues ;
-  B. les icônes sont les images du site (assets/img/email/*.png) lues à l'adresse de site_url ;
-     sans site_url, les quatre noms s'écrivent en liens de texte ;
+  B. les icônes sont les images du site (assets/img/email/*.png) lues à l'adresse du réglage
+     courriel_icones_url (posé par le fichier à l'adresse où le site est publié), à défaut site_url ;
+     sans aucune adresse https sûre, les quatre noms s'écrivent en liens de texte ;
   C. les quatre fichiers PNG existent, sont carrés et transparents aux coins ;
   D. rien d'autre ne bouge : le tableau du colis, les boutiques, l'absence d'adresse et de numéro ;
   E. rien n'est ouvert aux comptes ni aux visiteurs.
@@ -43,6 +44,7 @@ RESEAUX = (('Facebook', 'facebook', 'https://www.facebook.com/goshipexpress'),
            ('TikTok', 'tiktok', 'https://www.tiktok.com/@goshipexpress.net'),
            ('WhatsApp', 'whatsapp', 'https://wa.me/18495386262'))
 SITE = 'https://goshipexpress.net'
+PAGES = 'https://wilnergraph92.github.io/Goship-express-site'
 
 
 def js(d):
@@ -103,6 +105,8 @@ def main():
     for _ in range(2):
         db.fichier(os.path.join(OUTILS, NOUVEAU))
     verifier('installé deux fois : aucune erreur', 'oui', 'oui')
+    verifier("le fichier pose l'adresse des icônes (là où le site est publié), une seule fois",
+             un(db, "select public.lire_reglage('courriel_icones_url');"), PAGES + '/')
     verifier('le contrôle du fichier : 2 fonctions, fermées, gabarit à jour',
              un(db, "select (select count(*) from pg_proc where proname in ('courriel_reseaux_textes', 'courriel_reseaux'))::text || '|' || "
                     "(select coalesce(bool_or(has_function_privilege('anon', p.oid, 'execute') or has_function_privilege('authenticated', p.oid, 'execute')), false) "
@@ -118,7 +122,7 @@ def main():
     verifier('« Suivez-nous » (français)', 'Suivez-nous' in h, True)
     for nom, fichier, url in RESEAUX:
         verifier('%s : un lien vers le compte' % nom, 'href="%s"' % url in h, True)
-        verifier('%s : l\'image du site, à l\'adresse de site_url' % nom, 'src="%s/assets/img/email/%s.png"' % (SITE, fichier) in h, True)
+        verifier('%s : l\'image du site, à l\'adresse courriel_icones_url (avant site_url)' % nom, 'src="%s/assets/img/email/%s.png"' % (PAGES, fichier) in h, True)
         verifier('%s : un texte alternatif' % nom, 'alt="%s"' % nom in h, True)
     verifier('quatre icônes, de 36 px', (h.count('/assets/img/email/'), h.count('width="36" height="36"')), (4, 4))
     verifier("l'ordre : les boutiques, puis « Suivez-nous », puis la phrase « Vous recevez ce message »",
@@ -130,17 +134,30 @@ def main():
     for langue, titre in (('es', 'Síganos'), ('ht', 'Swiv nou'), ('fr', 'Suivez-nous'), ('zz', 'Suivez-nous')):
         verifier('courriel_reseaux(%s) : « %s »' % (langue, titre), titre in un(db, "select public.courriel_reseaux('%s');" % langue), True)
 
-    print("\nB. Sans adresse de site officielle, les noms en liens de texte")
+    print("\nB. Les adresses : courriel_icones_url, puis site_url, puis des liens de texte")
+    reglage = lambda nom, valeur: db.sql("select public.definir_reglage('%s', '%s');" % (nom, valeur.replace("'", "''")))
+    reseaux = lambda: un(db, "select public.courriel_reseaux('fr');")
+    reglage('courriel_icones_url', 'https://exemple.org/dossier/')
+    verifier("courriel_icones_url passe avant site_url (dossier compris)",
+             'src="https://exemple.org/dossier/assets/img/email/facebook.png"' in reseaux(), True)
+    for valeur, titre in (('', 'courriel_icones_url vide'), ('-', 'courriel_icones_url retiré'), ('http://exemple.org', 'courriel_icones_url en http'),
+                          ('https://x.com"><script>', 'courriel_icones_url piégé')):
+        reglage('courriel_icones_url', valeur)
+        verifier('%s : on prend site_url' % titre, 'src="%s/assets/img/email/facebook.png"' % SITE in reseaux(), True)
+    reglage('courriel_icones_url', '-')
     for valeur, titre in (('', 'site_url vide'), ('-', 'site_url illisible'), ('http://goshipexpress.net', 'site_url en http'),
                           ("https://x.com\"><script>", 'site_url piégé')):
-        db.sql("select public.definir_reglage('site_url', '%s');" % valeur.replace("'", "''"))
-        r = un(db, "select public.courriel_reseaux('fr');")
-        verifier('%s : aucune image' % titre, '<img' in r, False)
+        reglage('site_url', valeur)
+        r = reseaux()
+        verifier('%s (et pas d\'adresse d\'icônes) : aucune image' % titre, '<img' in r, False)
         verifier('%s : les quatre noms en liens' % titre,
                  [('>%s</a>' % nom in r and 'href="%s"' % url in r) for nom, _, url in RESEAUX], [True] * 4)
-    db.sql("select public.definir_reglage('site_url', 'https://goshipexpress.net/sous-dossier/');")
-    verifier("site_url avec un dossier : l'image suit", 'src="https://goshipexpress.net/sous-dossier/assets/img/email/facebook.png"' in un(db, "select public.courriel_reseaux('fr');"), True)
-    db.sql("select public.definir_reglage('site_url', '%s');" % SITE)
+    reglage('site_url', 'https://goshipexpress.net/sous-dossier/')
+    verifier("site_url avec un dossier : l'image suit", 'src="https://goshipexpress.net/sous-dossier/assets/img/email/facebook.png"' in reseaux(), True)
+    reglage('site_url', SITE)
+    reglage('courriel_icones_url', PAGES + '/')
+    db.fichier(os.path.join(OUTILS, NOUVEAU))
+    verifier("relancer le fichier ne remplace pas l'adresse posée", un(db, "select public.lire_reglage('courriel_icones_url');"), PAGES + '/')
 
     print('\nC. Les quatre images existent')
     for nom, fichier, _ in RESEAUX:
