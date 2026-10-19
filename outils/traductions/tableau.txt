@@ -7,6 +7,7 @@
 (facultatif, gardé au journal)
 (interne, obligatoire)
 (obligatoire pour corriger le montant, gardé au journal)
+(obligatoire)
 (obligatoire, gardé au journal)
 + Colis
 0 : accordé aussitôt. Sinon l'avantage attend, et s'annule si l'opération est annulée.
@@ -71,6 +72,7 @@ Ajouter la sélection
 Ajouter le frais de service
 Ajouter le frais de service ?
 Ajouter un colis
+Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.
 Ajout…
 Alertes
 Aller au contenu
@@ -388,6 +390,9 @@ Dans 7 jours
 Dans la fenêtre qui s’ouvre, choisissez « Enregistrer au format PDF ».
 Date
 Date de création
+Date de naissance
+Date de naissance d'un client
+Date de naissance enregistrée.
 Date de réception
 Date début
 Date et heure affichées
@@ -493,6 +498,7 @@ Enregistrer
 Enregistrer ce rapport
 Enregistrer cette règle
 Enregistrer en brouillon
+Enregistrer la date
 Enregistrer le colis
 Enregistrer le paiement
 Enregistrer les modifications
@@ -516,6 +522,7 @@ Ex. 4,5
 Ex. Amazon, SHEIN, Temu…
 Ex. Ciudad Juan Bosch
 Ex. Miami (Medley), FL
+Ex. Miami, Santo Domingo
 Ex. Port-au-Prince
 Ex. Retrait possible à partir de demain 10 h
 Ex. TBA304918577000
@@ -615,6 +622,8 @@ Inactifs
 Indicateur
 Indicateurs de qualité
 Indiquez la ville de livraison du colis.
+Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.
+Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).
 Indiquez le motif.
 Indiquez le poids du colis, en livres (ex. 4,5) : le prix se calcule poids × tarif. Sans poids, cochez « Fixer le prix à la main ».
 Indiquez le poids du colis, en livres (ex. 4,5).
@@ -656,6 +665,7 @@ Le colis sorti, sur sa facture
 Le compte
 Le frais de service sera ajouté à la facture en même temps que le paiement.
 Le jour
+Le lieu de réception est trop long (80 signes au plus).
 Le motif est gardé au journal.
 Le plus de colis en cours
 Le poids est un nombre de livres supérieur à zéro (ex. 4,5).
@@ -847,6 +857,7 @@ Ouvrir la fiche
 Ouvrir la fiche du colis
 Ouvrir le menu
 Ouvrir le poste de scan
+Où le colis est reçu. Le client le lit dans son e-mail : « Colis reçu à Miami », « Colis reçu à Port-au-Prince »…
 PDF
 PDF du rapport
 Page
@@ -1300,6 +1311,7 @@ dont en retard
 dont regroupées
 du facturé déjà payé
 dû aujourd’hui
+e-mail coupé dans les règles
 emballé
 emballés
 embarqué
@@ -1424,9 +1436,3 @@ transférés à la succursale
 ✓ COLIS TROUVÉ
 ✓ trouvé
 ✕ COLIS INTROUVABLE
-Date de naissance
-Date de naissance d'un client
-Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.
-Enregistrer la date
-Date de naissance enregistrée.
-e-mail coupé dans les règles

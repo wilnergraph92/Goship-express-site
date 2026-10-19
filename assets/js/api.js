@@ -4595,14 +4595,21 @@
             var dejaFacture = factureActiveDu(d, existant.id);
             return plusTard({ colis: detailsColis(d, existant), facture: factureComplete(d, dejaFacture), deja: true });
           }
+          // Le lieu de réception est obligatoire, sans défaut : c'est lui que lit l'e-mail
+          // « Colis reçu à… ». Un colis reçu à Santo Domingo ne doit pas être rangé à Miami.
+          var lieuRecu = String(x.lieu == null ? '' : x.lieu).trim();
+          if (!lieuRecu) {
+            throw Erreur('LOCATION_REQUIRED', 'Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).');
+          }
+          if (lieuRecu.length > 80) throw Erreur('INVALID_INPUT', 'Le lieu de réception est trop long (80 signes au plus).');
           var c = choisir(x, CHAMPS_CREATION);
           c.id = identifiant();
+          c.lieu = lieuRecu;
           c.poids_lb = lireNombre(x.poids_lb, 'INVALID_WEIGHT', 'Poids illisible.');
           c.tarif_lb_usd = lireNombre(x.tarif_lb_usd, 'INVALID_RATE', 'Tarif illisible.');
           c.prix_fixe_usd = lireNombre(x.prix_fixe_usd, 'INVALID_PRICE', 'Prix du colis illisible.');
           c.service = c.service || 'aerien';
           c.pays_destination = c.pays_destination || 'HT';
-          c.lieu = c.lieu || 'Miami (Medley), FL';
           c.statut = 'recu';
           c.cle_idempotence = cle || null;
           c.cree_le = c.maj_le = maintenant();

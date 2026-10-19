@@ -57,7 +57,7 @@ function resume(f) { return [f.montant_usd, f.paye_usd, f.solde_usd, f.etat_paie
   var clients = {};
   (await A.clients({ parPage: 50 })).lignes.forEach(function (c) { clients[c.email] = c.id; });
   var marie = clients['marie-ange@exemple.com'], jean = clients['jean-robert@exemple.com'];
-  var base = { client_id: marie, description: 'Chaussures', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
+  var base = { client_id: marie, description: 'Chaussures', lieu: 'Miami (Medley), FL', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
                destination: 'Pétion-Ville' };
   function avec(x) { return Object.assign({}, base, x); }
   // Un colis et sa facture, frais de service ajoutés comme à l'encaissement

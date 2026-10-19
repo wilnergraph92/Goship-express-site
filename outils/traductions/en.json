@@ -2644,5 +2644,11 @@
   "Ajoutez la date d'un client qui ne l'a pas donnée, ou corrigez-la. Un motif est obligatoire ; le journal garde qu'elle a été changée, jamais la date elle-même.": "Add the date of a customer who has not given it, or correct it. A reason is required; the log records that it was changed, never the date itself.",
   "Enregistrer la date": "Save the date",
   "Date de naissance enregistrée.": "Date of birth saved.",
-  "e-mail coupé dans les règles": "email turned off in the rules"
+  "e-mail coupé dans les règles": "email turned off in the rules",
+  "(obligatoire)": "(required)",
+  "Ex. Miami, Santo Domingo": "E.g. Miami, Santo Domingo",
+  "Où le colis est reçu. Le client le lit dans son e-mail : « Colis reçu à Miami », « Colis reçu à Port-au-Prince »…": "Where the package is received. The customer reads it in their e-mail: “Package received in Miami”, “Package received in Port-au-Prince”…",
+  "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.": "Enter where the package was received (Miami, Santo Domingo, Port-au-Prince…): the customer reads it in their e-mail.",
+  "Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).": "Enter where the package was received (Miami, Santo Domingo, Port-au-Prince…).",
+  "Le lieu de réception est trop long (80 signes au plus).": "The reception place is too long (80 characters at most)."
 }

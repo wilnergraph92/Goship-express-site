@@ -75,7 +75,7 @@ def poser_colis(db, reception, statuts, client=MARIE, description='Colis'):
     étapes datées d'une minute en une minute après la réception, sa création au journal
     à la même heure."""
     c = S.creer(db, ADMIN, {'client_id': client, 'description': description, 'poids_lb': 2, 'service': 'aerien',
-                            'pays_destination': 'HT', 'destination': 'Jacmel'}, facturer=False)['colis']
+                            'pays_destination': 'HT', 'destination': 'Jacmel', 'lieu': 'Miami'}, facturer=False)['colis']
     for st in statuts:
         S.statut(db, ADMIN, [c['id']], st, 'Pétion-Ville' if st == 'disponible' else 'Miami')
     db.sql(("alter table colis disable trigger user; alter table colis_historique disable trigger user;"
@@ -126,7 +126,7 @@ def main():
         db.fichier(fichier_git(f))
     A.comptes(db)
     S.creer(db, ADMIN, {'client_id': MARIE, 'description': 'Avant les rapports', 'poids_lb': 3, 'service': 'aerien',
-                        'pays_destination': 'HT', 'destination': 'Jacmel'})
+                        'pays_destination': 'HT', 'destination': 'Jacmel', 'lieu': 'Miami'})
     avant = un(db, PHOTO)
     sortie = db._psql(db.su, S.BASE, open(os.path.join(OUTILS, 'supabase-rapports.sql'), encoding='utf-8').read(),
                       echec_permis=True)

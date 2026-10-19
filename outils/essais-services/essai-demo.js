@@ -101,7 +101,7 @@ function code(promesse) {
   var marie = clients.filter(function (c) { return c.email === 'marie-ange@exemple.com'; })[0].id;
   var jean = clients.filter(function (c) { return c.email === 'jean-robert@exemple.com'; })[0].id;
   var base = { client_id: marie, description: 'Chaussures Nike', expediteur: 'Amazon', poids_lb: 4.2,
-               service: 'aerien', pays_destination: 'HT', destination: 'Pétion-Ville' };
+               service: 'aerien', pays_destination: 'HT', destination: 'Pétion-Ville', lieu: 'Miami (Medley), FL' };
   function avec(m) { return Object.assign({}, base, m); }
 
   console.log('\n1. Création d\'un colis');
@@ -131,8 +131,15 @@ function code(promesse) {
              ['compte de l\'équipe', { client_id: 'admin-demo' }, 'CLIENT_NOT_FOUND'],
              ['service inconnu', { service: 'fusee' }, 'INVALID_SERVICE'],
              ['destination inconnue', { pays_destination: 'FR' }, 'INVALID_DESTINATION'],
-             ['réception dans le futur', { recu_le: '2099-01-01T00:00:00Z' }, 'INVALID_DATE']];
+             ['réception dans le futur', { recu_le: '2099-01-01T00:00:00Z' }, 'INVALID_DATE'],
+             ['lieu de réception vide', { lieu: '' }, 'LOCATION_REQUIRED'], ['lieu de réception en espaces', { lieu: '   ' }, 'LOCATION_REQUIRED'],
+             ['lieu de réception null', { lieu: null }, 'LOCATION_REQUIRED'],
+             ['lieu de réception de 81 signes', { lieu: new Array(82).join('x') }, 'INVALID_INPUT']];
   for (var i = 0; i < cas.length; i++) verifier(cas[i][0], await code(A.creerColis(avec(cas[i][1]))), cas[i][2]);
+  var sansLieu = avec({}); delete sansLieu.lieu;
+  verifier('lieu de réception absent : refusé, sans lieu par défaut', await code(A.creerColis(sansLieu)), 'LOCATION_REQUIRED');
+  verifier('le lieu de réception est gardé sans les espaces autour',
+           (await A.creerColis(avec({ lieu: '  Port-au-Prince  ' }))).colis.lieu, 'Port-au-Prince');
   verifier('poids « 4,5 » avec une virgule accepté', (await A.creerColis(avec({ poids_lb: '4,5' }))).colis.prix_usd, 22.5);
   verifier('arrondi au cent : 2,25 × 1,5 → 3,38',
            (await A.creerColis(avec({ poids_lb: 2.25, tarif_lb_usd: 1.5 }))).colis.prix_usd, 3.38);

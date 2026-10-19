@@ -60,7 +60,7 @@ function comme(role) {
   var clients = (await A.clients({ parPage: 50 })).lignes;
   var marie = clients.filter(function (c) { return c.email === 'marie-ange@exemple.com'; })[0].id;
   var jean = clients.filter(function (c) { return c.email === 'jean-robert@exemple.com'; })[0].id;
-  var base = { client_id: marie, description: 'Chaussures', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
+  var base = { client_id: marie, description: 'Chaussures', lieu: 'Miami (Medley), FL', poids_lb: 4, service: 'aerien', pays_destination: 'HT',
                destination: 'Jacmel' };
 
   console.log('A. Qui a quoi');

@@ -50,7 +50,7 @@ function etat(f) { return [f.montant_usd, f.frais_service_usd, f.paye_usd, f.sol
   var marie = clients['marie-ange@exemple.com'], jean = clients['jean-robert@exemple.com'];
   async function colis(poids, x, sansFacture) {
     var champs = Object.assign({ client_id: marie, description: 'Colis', poids_lb: poids, service: 'aerien',
-                                 pays_destination: 'HT', destination: 'Jacmel' }, x || {});
+                                 pays_destination: 'HT', destination: 'Jacmel', lieu: 'Miami' }, x || {});
     var r = await A.creerColis(champs);
     // Un colis sans facture : on annule celle que le tableau de bord crée avec lui
     if (sansFacture) { await A.annulerFacture(r.facture.id, 'Colis sans facture (essai)'); r.facture = null; }

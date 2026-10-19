@@ -100,6 +100,16 @@ depuis le tableau de bord, onglet **Notifications** ; chaque changement est
 journalisé (`journal_audit`, action `notification.regle`). Relancer la
 migration ne remet pas les règles à leur valeur de départ.
 
+### Le lieu de réception dans l'e-mail « Colis reçu »
+
+`outils/supabase-lieu-reception.sql` : le lieu de réception est obligatoire à l'enregistrement d'un colis
+(`creer_colis`, `LOCATION_REQUIRED`) et c'est lui que dit l'e-mail « Colis reçu » : « Colis reçu à Miami »,
+« … à Port-au-Prince », « … en République dominicaine » (sujet, titre, phrase d'ouverture, ligne Statut),
+en français, anglais, espagnol et créole. Le lieu est celui de l'**événement de réception**
+(`notifications.historique_id`), pas le lieu actuel du colis. « Miami (Medley), FL » et « Port de Miami »
+se lisent « Miami ». Un colis dont l'événement n'a pas de lieu garde l'ancienne phrase. Le message court de
+l'espace client, du push et de WhatsApp n'est pas concerné.
+
 ### Le pied des e-mails et la fin des e-mails de facturation
 
 `outils/supabase-courriel-pied.sql` : (1) le pied de **tous** les e-mails envoyés par la base

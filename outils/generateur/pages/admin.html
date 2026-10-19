@@ -1052,8 +1052,9 @@
       </div>
       <div class="gs-form__grille" data-bloc-etape>
         <div class="gs-champ">
-          <label for="col-lieu">Lieu de réception</label>
-          <input id="col-lieu" name="lieu" maxlength="80" list="lieux-frequents" value="Miami (Medley), FL">
+          <label for="col-lieu">Lieu de réception <span class="gs-requis">(obligatoire)</span></label>
+          <input id="col-lieu" name="lieu" maxlength="80" list="lieux-frequents" required autocomplete="off" placeholder="Ex. Miami, Santo Domingo">
+          <p class="gs-champ__aide">Où le colis est reçu. Le client le lit dans son e-mail : « Colis reçu à Miami », « Colis reçu à Port-au-Prince »…</p>
         </div>
         <div class="gs-champ gs-champ--large">
           <label for="col-note">Message pour le client <span class="gs-facultatif">(facultatif)</span></label>

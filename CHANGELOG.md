@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — le lieu de réception est obligatoire et figure dans l'e-mail « Colis reçu » (19/10/2026)
+
+**Migration à passer avant de publier**, après les 24 premières : `supabase-lieu-reception.sql` (25e ; contrôle attendu `3 | true | true | false`). Elle remplace `creer_colis`, `courriel_colis` et `expedier_envoi` : ne relancer ni `supabase-corrections.sql`, ni `supabase-courriel-colis.sql`, ni `supabase-notifications.sql` après elle. Enregistrer un colis sans lieu de réception est refusé (`LOCATION_REQUIRED`) : le champ du formulaire n'est plus prérempli « Miami (Medley), FL », la base n'écrit plus Miami en silence, la copie démo non plus. L'e-mail « Colis reçu » dit où le colis a été reçu, dans la langue du compte : « Colis reçu à Miami », « … à Port-au-Prince », « … en République dominicaine » (sujet, titre, phrase, ligne Statut), d'après le lieu de l'événement de réception. « Colis disponible » ne change pas. Les textes courts (espace client, push, WhatsApp) disent encore « entrepôt de Miami » : suite possible. Essai : `essai-lieu-reception.py`.
+
 ## Non publié — le pied des e-mails : boutons Google Play et App Store ; plus d'e-mail de facturation (19/10/2026)
 
 **Migration à passer avant de publier**, après les 23 premières : `supabase-courriel-pied.sql` (24e ; contrôle attendu `2 | false | true | true`). Elle remplace `courriel_gabarit` : ne pas relancer `supabase.sql` après elle. Le pied de tous les e-mails n'a plus l'adresse ni le numéro WhatsApp ; deux boutons les remplacent (réglages `store_android_url`, posé par la migration, et `store_ios_url`, vide tant qu'il n'y a pas de fiche App Store : le bouton dit « Bientôt sur »). Les e-mails « Nouvelle facture », « Paiement enregistré » et « Facture en retard » sont coupés (règles de notification) ; le téléphone et l'espace client les gardent.

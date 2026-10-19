@@ -44,6 +44,7 @@ on revient en arrière par une nouvelle migration ou une restauration
 | `supabase-campagnes.sql` (22, GOship APP Welcome, GOship Refer, avantages ; campagnes en brouillon) | **à exécuter**, après le 21 ; contrôle attendu : `9 \| 12 \| 3 \| false \| true \| true` |
 | `supabase-courriel-colis.sql` (23, l'e-mail « Colis reçu » et « Colis disponible » donne les détails du colis) | **à exécuter**, après le 22 ; il remplace `expedier_envoi` : ne **pas** relancer `supabase-notifications.sql` après lui ; contrôle attendu : `3 \| false \| true` |
 | `supabase-courriel-pied.sql` (24, pied des e-mails : boutons Google Play et App Store à la place de l'adresse ; plus d'e-mail de facturation) | **à exécuter**, après le 23 ; remplace `courriel_gabarit` : ne **pas** relancer `supabase.sql` après lui ; contrôle attendu : `2 \| false \| true \| true` |
+| `supabase-lieu-reception.sql` (25, lieu de réception obligatoire à l'enregistrement d'un colis ; « Colis reçu à Miami » dans l'e-mail) | **à exécuter**, après le 24 ; remplace `creer_colis`, `courriel_colis` et `expedier_envoi` : ne **pas** relancer `supabase-corrections.sql`, `supabase-courriel-colis.sql` ni `supabase-notifications.sql` après lui ; contrôle attendu : `3 \| true \| true \| false` |
 
 Une fonction témoin présente ne dit pas que son fichier est à sa **dernière**
 version : `controles-production.yml` (section « Migrations » de

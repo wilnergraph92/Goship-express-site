@@ -113,7 +113,7 @@ def installer():
 def peupler(db):
     """25 colis pour Marie (plus d'une page), 2 pour Jean, factures, paiements, pré-alertes."""
     base = {'description': 'Chaussures', 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT',
-            'destination': 'Pétion-Ville', 'expediteur': 'Amazon'}
+            'destination': 'Pétion-Ville', 'expediteur': 'Amazon', 'lieu': 'Miami (Medley), FL'}
     d = {'marie': [], 'jean': []}
     for i in range(25):
         r = creer(db, ADMIN, dict(base, client_id=MARIE, description='Colis de Marie %02d' % (i + 1),
