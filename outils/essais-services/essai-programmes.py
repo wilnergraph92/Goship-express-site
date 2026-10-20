@@ -458,6 +458,10 @@ def main():
         i = len(ids) + 1
         ids[cle] = 'b%dffffff-0000-0000-0000-0000000000%02d' % (i, i)
         nouveau(ids[cle], '%s@exemple.com' % cle, nom, naissance, langue)
+    # La section A a inscrit un nouveau-né « né aujourd'hui », c'est-à-dire le vrai jour où l'essai tourne. Les
+    # chiffres de cette section sont ceux d'un nouveau-né du 19 octobre (la veille de l'ancre) : on lui rend cette
+    # date, sinon l'essai ne passe plus le jour où l'on est le 20 octobre (le nouveau-né recevrait un message de plus).
+    db.sql("update profils_naissance set date_naissance = date '2026-10-19' where client_id = 'a0a0a0a0-0000-0000-0000-000000000001';")
     # Un compte de l'équipe et un compte supprimé : jamais de message
     db.sql("update clients set role = 'gerant' where id = '%s';" % ids['sans_nom'] if False else "select 1;")
     db.sql("update clients set supprime_le = now() where id = '%s';" % ids['supprime'])
