@@ -1272,7 +1272,7 @@ def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(),
     if uses_icons:
         lines.append(f'<link rel="stylesheet" href="{ICON_FONT}">')
     lines.append(f'<link rel="stylesheet" href="{prefix}assets/css/site.css">')
-    for nom in ('config', 'site') + tuple(scripts):
+    for nom in ('config', 'site', 'fond') + tuple(scripts):
         lines.append(f'<script src="{prefix}assets/js/{nom}.js" defer></script>')
     if jsonld:
         lines.append('<script type="application/ld+json">' + json.dumps(LOCAL_BUSINESS, ensure_ascii=False) + '</script>')

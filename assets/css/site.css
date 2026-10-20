@@ -17,6 +17,10 @@
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:110px;-webkit-text-size-adjust:100%}
 body{margin:0;background:#fff;color:#061a3f;font-family:'Manrope',system-ui,sans-serif;font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;text-wrap:pretty}
+/* Grille de points en arrière-plan (assets/js/fond.js) : posée sur toute la fenêtre, sous l'en-tête (60) et les menus (70),
+   jamais cliquable. Imprimée ou en contraste forcé, elle n'apporte rien : on la retire. */
+.gs-fond{position:fixed;inset:0;width:100%;height:100%;z-index:40;pointer-events:none}
+@media print,(forced-colors:active){.gs-fond{display:none}}
 a{color:var(--accent);text-decoration:none}
 a:hover{color:var(--ink2)}
 h1,h2,h3,h4{margin:0;font-family:'Archivo','Manrope',sans-serif;font-stretch:110%;letter-spacing:-0.022em}
