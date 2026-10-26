@@ -1,0 +1,6649 @@
+/* ==========================================================================
+   Goship Express — accès aux comptes clients et aux colis
+   --------------------------------------------------------------------------
+   Une même interface (window.GoshipAPI), trois fonctionnements :
+   - « supabase » : adresse et clé Supabase renseignées dans config.js ;
+                    comptes et colis sont enregistrés en ligne.
+   - « demo »     : sans configuration, sur votre ordinateur (fichier ouvert
+                    directement ou localhost). Les données restent dans ce
+                    navigateur : de quoi essayer le site avant sa mise en ligne.
+   - « off »      : sans configuration, sur un vrai nom de domaine. L'espace
+                    client reste fermé (aucun compte fictif).
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var CFG = window.GOSHIP_CONFIG || {};
+  // Bibliothèque Supabase rangée dans le site lui-même : aucun script extérieur ne
+  // s'exécute dans les pages des clients (voir README, « Sécurité »).
+  // Adresse calculée à partir de ce fichier, pour que /en/, /es/ et /ht/ la trouvent aussi.
+  var SUPABASE_JS = (function () {
+    var moi = document.currentScript;
+    var base = moi && moi.src ? moi.src.replace(/[^/]*$/, '') : 'assets/js/';
+    return base + 'vendor/supabase-2.116.0.js';
+  })();
+  // Ordinateur ou réseau local (fichier ouvert directement, localhost, Wi-Fi de la maison…)
+  var LOCAL = location.protocol === 'file:' ||
+    /^(localhost|127(\.\d+){3}|\[::1\]|10(\.\d+){3}|192\.168(\.\d+){2}|172\.(1[6-9]|2\d|3[01])(\.\d+){2}|[\w-]+\.local)$/.test(location.hostname);
+  var MODE = CFG.supabaseUrl && CFG.supabaseKey ? 'supabase' : (LOCAL ? 'demo' : 'off');
+  var LANGUE = (document.documentElement.lang || 'fr').slice(0, 2).toLowerCase();
+  // L'application GoShip Express pour Windows et macOS (bureau/) ouvre ces mêmes
+  // pages et donne window.GoshipBureau : la session y est chiffrée par le
+  // système plutôt que laissée dans le localStorage, et un scan y dit de quel
+  // poste il vient. Dans un navigateur, BUREAU est null et rien ne change.
+  var BUREAU = window.GoshipBureau && window.GoshipBureau.contrat >= 1 ? window.GoshipBureau : null;
+  // Les précisions d'une opération, avec le poste qui l'a faite (application de bureau)
+  function avecPoste(meta) {
+    var m = Object.assign({}, meta || {});
+    if (BUREAU) { m.poste = 'bureau'; m.plateforme = BUREAU.plateforme; m.version_bureau = BUREAU.version; }
+    return m;
+  }
+
+  var STATUTS = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre', 'incident'];
+  var CHAMPS_PROFIL = ['nom_complet', 'pays', 'region', 'ville', 'adresse', 'telephone', 'langue'];
+  // Ce que la page peut proposer pour un colis. Ni le prix calculé, ni le statut,
+  // ni le numéro : la base les décide (outils/supabase-services.sql, regles_colis).
+  // prix_fixe_usd est un prix saisi à la main, qui remplace poids × tarif ; la
+  // base le réserve à qui peut modifier les factures. adresse_livraison est
+  // l'adresse où va le colis, saisie par l'équipe : jamais celle du profil du
+  // client (outils/supabase-corrections.sql).
+  var CHAMPS_MODIFIABLES = ['client_id', 'suivi_transporteur', 'expediteur', 'description', 'poids_lb', 'service',
+                            'pays_destination', 'destination', 'adresse_livraison', 'recu_le', 'tarif_lb_usd',
+                            'prix_fixe_usd'];
+  // À la création s'ajoutent le lieu et le message de l'événement initial.
+  var CHAMPS_CREATION = CHAMPS_MODIFIABLES.concat(['lieu', 'note']);
+  // Ce qu'une page peut encore changer sur une facture émise. Le payé, le
+  // statut, le moyen et la date de paiement suivent les paiements
+  // (outils/supabase-finances.sql, garde_facture) ; le total ne se change que
+  // sur une facture sans colis.
+  var CHAMPS_FACTURE = ['montant_usd', 'note', 'lien_paiement', 'echeance_le'];
+  // Une nouvelle facture : le client, et ce que la base ne peut pas deviner.
+  // Le montant n'est retenu que pour une facture sans colis.
+  // frais_service : true pour que la facture de colis reçoive les frais de service
+  // (supabase-frais-service.sql) ; sans lui, elle n'en a pas.
+  var CHAMPS_NOUVELLE_FACTURE = ['montant_usd', 'montant_paye_usd', 'echeance_le', 'lien_paiement', 'note', 'frais_service'];
+  // Un paiement : ce que la page saisit. Le client, l'auteur et la date
+  // d'enregistrement sont ceux de la base.
+  var CHAMPS_PAIEMENT = ['montant_usd', 'moyen', 'reference', 'paye_le', 'note'];
+
+  /* ---- Les tarifs ------------------------------------------------------------
+     Le transport est facturé à la livre. Le tarif peut être remplacé colis par
+     colis depuis le tableau de bord (un envoi volumineux, un accord
+     particulier) ; les frais de service, eux, sont fixes et ne sont exposés
+     dans aucun formulaire. Les deux sont gelés ici pour qu'aucune page ne
+     puisse les modifier au passage.
+     -------------------------------------------------------------------------- */
+  var TARIF_LB_DEFAUT = 5;
+  var FRAIS_SERVICE = 10;
+
+  /* ---- Les rôles et leurs permissions ---------------------------------------
+     La copie de public.permissions_du_role (outils/supabase.sql, partie 4),
+     pour le mode démonstration et pour que les pages sachent quels menus
+     montrer. Elle ne protège rien : en ligne, c'est la base qui refuse.
+     outils/essais-services/essai-permissions.py vérifie que les deux listes
+     sont identiques.
+     -------------------------------------------------------------------------- */
+  var PERMISSIONS_DES_ROLES = {
+    admin: ['clients.view', 'clients.create', 'clients.edit',
+            'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
+            'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+            'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+            'payments.view', 'payments.create', 'payments.cancel',
+            'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
+            'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
+            'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust'],
+    gerant: ['clients.view', 'clients.create', 'clients.edit',
+             'shipments.view', 'shipments.create', 'shipments.edit',
+             'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+             'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+             'payments.view', 'payments.create', 'payments.cancel',
+             'reports.view', 'reports.create',
+             'users.view',
+             'birthdays.view', 'programs.view'],
+    employe: ['clients.view', 'clients.create',
+              'shipments.view', 'shipments.create', 'shipments.edit',
+              'shipments.scan', 'shipments.change_status', 'shipments.view_history',
+              'invoices.view', 'payments.view'],
+    client: ['clients.view:own', 'clients.edit:own',
+             'shipments.view:own', 'shipments.view_history:own',
+             'invoices.view:own', 'payments.view:own']
+  };
+  Object.keys(PERMISSIONS_DES_ROLES).forEach(function (r) { Object.freeze(PERMISSIONS_DES_ROLES[r]); });
+  var ROLES_EQUIPE = ['employe', 'gerant', 'admin'];
+
+  // peut() de la base : la permission, ou sa forme « :own » sur ses propres données
+  function peutCompte(compte, action, proprietaire) {
+    if (!compte) return false;
+    var liste = PERMISSIONS_DES_ROLES[compte.role] || [];
+    return liste.indexOf(action) >= 0 ||
+           (proprietaire != null && proprietaire === compte.id && liste.indexOf(action + ':own') >= 0);
+  }
+
+  // Les moyens de paiement acceptés : même liste que public.moyens_paiement()
+  // dans la base (outils/supabase-finances.sql), qui refuse tout autre.
+  var MOYENS_PAIEMENT = ['paypal', 'banque', 'azul', 'moncash', 'natcash', 'especes', 'transfert', 'autre'];
+
+  // Au cent près, 0,005 montant — comme round() dans la base. Le détour par
+  // toFixed corrige les nombres à virgule du navigateur : 2,25 × 1,5 y vaut
+  // 3,3749999…, qui s'arrondirait à 3,37 là où la facture dit 3,38.
+  function arrondi(n) { return Math.round(Number(((Number(n) || 0) * 100).toFixed(6))) / 100; }
+
+  // Tarif réellement appliqué à un colis : le sien s'il en porte un (zéro
+  // compris, pour un envoi offert), sinon celui de la maison.
+  function tarifDe(colis) {
+    var brut = (colis || {}).tarif_lb_usd;
+    if (brut == null || brut === '') return TARIF_LB_DEFAUT;
+    var t = Number(brut);
+    return isFinite(t) && t >= 0 ? t : TARIF_LB_DEFAUT;
+  }
+
+  // Poids × tarif. Même calcul que public.prix_transport dans la base, qui
+  // seule fait foi : ici, ce n'est qu'un aperçu (et le mode démonstration).
+  function prixTransport(poids, tarif) {
+    return arrondi((Number(poids) || 0) * (Number(tarif) || 0));
+  }
+
+  // Prix du transport d'un colis. Un colis déjà facturé garde le prix inscrit
+  // sur lui : changer le tarif demain ne doit pas changer une facture d'hier.
+  function prixColis(colis) {
+    var c = colis || {};
+    if (c.prix_usd != null && c.prix_usd !== '') return arrondi(c.prix_usd);
+    if (prixFixe(c)) return arrondi(c.prix_fixe_usd);
+    return prixTransport(c.poids_lb, tarifDe(c));
+  }
+
+  // Un prix fixé à la main (prix_fixe_usd) remplace poids × tarif
+  function prixFixe(colis) {
+    var p = (colis || {}).prix_fixe_usd;
+    return p != null && p !== '';
+  }
+
+  // Le tarif recopié sur une ligne de facture : aucun pour un prix fixé à la
+  // main (la facture n'affiche alors pas de « $/lb »), comme dans la base
+  function tarifLigne(colis) {
+    return prixFixe(colis) ? null : tarifDe(colis);
+  }
+
+  /* ---- Les transitions de statut ----------------------------------------------
+     Elles font foi dans la base (outils/supabase-services.sql, partie 5), qui
+     refuse toute transition hors de cette matrice, quel que soit le chemin.
+     La même matrice vit ici pour une seule raison : que le mode démonstration
+     refuse exactement ce que la vraie base refuserait. outils/essais-services/
+     vérifie, cas par cas, que les deux répondent pareil.
+     -------------------------------------------------------------------------- */
+  var TRANSITIONS = {
+    recu: ['emballe', 'embarque', 'incident'],
+    emballe: ['embarque', 'incident'],
+    embarque: ['distribution', 'succursale', 'disponible', 'incident'],
+    distribution: ['succursale', 'disponible', 'incident'],
+    succursale: ['disponible', 'incident'],
+    disponible: ['livre', 'incident'],
+    livre: [],
+    incident: []
+  };
+  Object.keys(TRANSITIONS).forEach(function (k) { Object.freeze(TRANSITIONS[k]); });
+  Object.freeze(TRANSITIONS);
+
+  // precedent : l'étape d'avant dans l'historique du colis (statutPrecedent)
+  function transitionPermise(de, vers, precedent) {
+    if (!vers || !TRANSITIONS[vers]) return false;
+    if (de === vers) return true;                        // lieu ou message corrigé
+    if (!de || !TRANSITIONS[de]) return true;            // ancien statut à convertir
+    if (precedent && vers === precedent) return true;    // retour à l'étape précédente
+    if (de === 'incident') {
+      var avant = precedent || 'recu';
+      return vers === avant || (vers !== 'incident' && TRANSITIONS[avant].indexOf(vers) >= 0);
+    }
+    return TRANSITIONS[de].indexOf(vers) >= 0;
+  }
+
+  // Le dernier statut de l'historique (dans l'ordre d'écriture) qui n'est ni
+  // l'actuel, ni un incident, ni une étape annulée par une correction.
+  function statutPrecedent(historique, actuel) {
+    var h = historique || [];
+    var corriges = h.map(function (e) { return e.corrige_id; }).filter(function (x) { return x != null; });
+    for (var i = h.length - 1; i >= 0; i--) {
+      if (h[i].statut !== actuel && h[i].statut !== 'incident' && corriges.indexOf(h[i].id) < 0) return h[i].statut;
+    }
+    return null;
+  }
+
+  /* ---- Les événements (Phase 3) ----------------------------------------------
+     Comme les transitions : ils font foi dans la base
+     (outils/supabase-evenements.sql), et sont copiés ici pour le mode
+     démonstration. outils/essais-services/essai-evenements.py compare le
+     catalogue, la nature de chaque transition et chaque validation, cas par
+     cas.
+     -------------------------------------------------------------------------- */
+  var LIBELLES = {
+    recu: 'Reçu', emballe: 'Emballé', embarque: 'Embarqué', distribution: 'Centre de distribution',
+    succursale: 'Transféré à la succursale', disponible: 'Disponible', livre: 'Livré', incident: 'Action requise'
+  };
+
+  var TYPES_EVENEMENT = (function () {
+    function t(libelle, statut, depuis, visibilite, permission, special, lieuRequis) {
+      return { libelle: libelle, statut: statut, depuis: depuis, visibilite: visibilite, permission: permission,
+               special: special, lieu_requis: lieuRequis };
+    }
+    var maj = 'shipments.change_status', scan = 'shipments.scan', entrepot = ['recu', 'emballe'];
+    return {
+      COLIS_RECU: t("Reçu à l'entrepôt", 'recu', null, 'publique', 'shipments.create', null, false),
+      COLIS_INSPECTE: t('Inspecté', null, entrepot, 'interne', scan, null, false),
+      COLIS_EMBALLE: t('Emballé', 'emballe', null, 'publique', maj, null, false),
+      COLIS_CONSOLIDE: t('Consolidé', null, entrepot, 'interne', scan, null, false),
+      COLIS_CHARGE: t('Chargé', null, entrepot, 'interne', scan, null, false),
+      COLIS_EXPEDIE: t('Expédié', 'embarque', null, 'publique', maj, null, false),
+      COLIS_ARRIVE: t('Arrivé au centre de distribution', 'distribution', null, 'publique', maj, null, false),
+      COLIS_TRANSFERE: t('Transféré à la succursale', 'succursale', null, 'publique', maj, null, false),
+      COLIS_DISPONIBLE: t('Disponible', 'disponible', null, 'publique', maj, null, true),
+      COLIS_LIVRE: t('Livré', 'livre', null, 'publique', maj, null, false),
+      ACTION_REQUISE: t('Action requise', 'incident', null, 'publique', maj, null, false),
+      ACTION_RESOLUE: t('Action résolue', null, ['incident'], 'publique', maj, 'sortie', false),
+      CORRECTION: t('Correction', null, null, 'interne', 'shipments.correct', 'correction', false),
+      MISE_A_JOUR: t('Étape mise à jour', null, null, 'publique', maj, 'mise_a_jour', false)
+    };
+  })();
+  Object.keys(TYPES_EVENEMENT).forEach(function (k) {
+    if (TYPES_EVENEMENT[k].depuis) Object.freeze(TYPES_EVENEMENT[k].depuis);
+    Object.freeze(TYPES_EVENEMENT[k]);
+  });
+  Object.freeze(TYPES_EVENEMENT);
+  var TYPE_DU_STATUT = {
+    recu: 'COLIS_RECU', emballe: 'COLIS_EMBALLE', embarque: 'COLIS_EXPEDIE', distribution: 'COLIS_ARRIVE',
+    succursale: 'COLIS_TRANSFERE', disponible: 'COLIS_DISPONIBLE', livre: 'COLIS_LIVRE', incident: 'ACTION_REQUISE'
+  };
+
+  // nature_transition : identique, normale, sortie_incident, correction, ou null
+  function natureTransition(de, vers, precedent) {
+    if (!vers || !TRANSITIONS[vers]) return null;
+    if (de === vers) return 'identique';
+    if (!de || !TRANSITIONS[de]) return 'normale';
+    if (de === 'incident') {
+      var avant = precedent || 'recu';
+      return vers === avant || (vers !== 'incident' && (TRANSITIONS[avant] || []).indexOf(vers) >= 0)
+        ? 'sortie_incident' : null;
+    }
+    if (TRANSITIONS[de].indexOf(vers) >= 0) return 'normale';
+    if (precedent && vers === precedent) return 'correction';
+    return null;
+  }
+
+  // type_pour_statut : l'événement qui mène au statut coché
+  function typePourStatut(de, vers, precedent) {
+    switch (natureTransition(de, vers, precedent)) {
+      case 'identique': return 'MISE_A_JOUR';
+      case 'correction': return 'CORRECTION';
+      case 'sortie_incident': return 'ACTION_RESOLUE';
+      case 'normale': return TYPE_DU_STATUT[vers] || null;
+      default: return null;
+    }
+  }
+
+  // valider_operation : { code (null si permis), detail, cible, nature }
+  function validerOperation(actuel, precedent, type, cible) {
+    var t = TYPES_EVENEMENT[type];
+    function non(code, detail, c, n) { return { code: code, detail: detail, cible: c, nature: n || null }; }
+    function lib(s) { return LIBELLES[s] || s; }
+    if (!t) return non('EVENT_TYPE_INVALID', 'Type d’événement inconnu : ' + (type || '(vide)') + '.', null);
+    var c, n;
+    if (t.special === 'correction') {
+      c = cible || precedent;
+      n = natureTransition(actuel, c, precedent);
+      if (!precedent || c !== precedent || n !== 'correction') {
+        return non('INVALID_STATUS_TRANSITION', 'Correction impossible : on ne revient qu’à l’étape précédente du colis.', c, n);
+      }
+    } else if (t.special === 'sortie') {
+      c = cible || precedent || 'recu';
+      n = natureTransition(actuel, c, precedent);
+      if (actuel !== 'incident' || n !== 'sortie_incident') {
+        return non('INVALID_STATUS_TRANSITION', 'Action résolue : le colis doit être en « Action requise » et reprendre son étape, ou une suivante.', c, n);
+      }
+    } else if (t.special === 'mise_a_jour') {
+      c = actuel;
+      n = 'identique';
+      if (cible && cible !== actuel) return non('INVALID_EVENT_DATA', 'Une mise à jour ne change pas le statut.', cible);
+    } else if (!t.statut) {
+      c = actuel;
+      n = 'identique';
+      if (cible && cible !== actuel) return non('INVALID_EVENT_DATA', t.libelle + ' ne change pas le statut du colis.', cible);
+      if (t.depuis && t.depuis.indexOf(actuel) < 0) {
+        return non('INVALID_STATUS_TRANSITION', t.libelle + ' : impossible au statut « ' + lib(actuel) + ' ».', c);
+      }
+    } else {
+      c = t.statut;
+      if (cible && cible !== c) {
+        return non('INVALID_EVENT_DATA', t.libelle + ' mène au statut « ' + lib(c) + ' », pas ailleurs.', cible);
+      }
+      if (c === actuel) return non('STATUS_ALREADY_SET', 'Le colis est déjà au statut « ' + lib(c) + ' ».', c, 'identique');
+      n = natureTransition(actuel, c, precedent);
+      if (n !== 'normale' && n !== 'sortie_incident') {
+        return non('INVALID_STATUS_TRANSITION', lib(actuel) + ' → ' + lib(c) + ' : transition interdite.', c, n);
+      }
+    }
+    return { code: null, detail: null, cible: c, nature: n };
+  }
+
+  /* ---- Payé, solde, état d'une facture ------------------------------------
+     La base les calcule (outils/supabase-finances.sql : paye_usd, solde_usd,
+     etat_paiement) et les renvoie avec chaque facture ; les pages les
+     affichent tels quels. Les fonctions ci-dessous ne recalculent que ce que
+     la réponse ne porte pas : une facture du mode démonstration, ou une
+     réponse d'avant la Phase 5. Même règle que la base, au mot près.
+     -------------------------------------------------------------------------- */
+  // « Aujourd'hui » à Santo Domingo, comme public.aujourdhui()
+  function aujourdhui() {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo', year: 'numeric',
+                                                month: '2-digit', day: '2-digit' }).format(new Date());
+    } catch (e) {
+      return new Date(Date.now() - 4 * 36e5).toISOString().slice(0, 10);
+    }
+  }
+
+  function paiementsValides(f) {
+    return ((f || {}).paiements || []).filter(function (p) { return !p.annule_le; });
+  }
+
+  // Le payé : la somme des paiements valides
+  function payeDe(f) {
+    f = f || {};
+    if (f.paye_usd != null) return arrondi(f.paye_usd);
+    if (f.paiements) return arrondi(paiementsValides(f).reduce(function (s, p) { return s + (Number(p.montant_usd) || 0); }, 0));
+    return arrondi(f.montant_paye_usd);
+  }
+
+  // Le solde : ce qui reste dû ; rien sur une facture annulée
+  function soldeDe(f) {
+    f = f || {};
+    if (f.solde_usd != null) return arrondi(f.solde_usd);
+    if (f.statut === 'annulee') return 0;
+    return arrondi(Math.max((Number(f.montant_usd) || 0) - payeDe(f), 0));
+  }
+
+  // annulee, payee, en_retard (échue, solde > 0), partielle, a_payer
+  function etatFacture(f) {
+    f = f || {};
+    if (f.etat_paiement) return f.etat_paiement;
+    if (f.etat) return f.etat;
+    if (f.statut === 'annulee') return 'annulee';
+    if (soldeDe(f) <= 0) return 'payee';
+    if (f.echeance_le && String(f.echeance_le).slice(0, 10) < aujourdhui()) return 'en_retard';
+    return payeDe(f) > 0 ? 'partielle' : 'a_payer';
+  }
+
+  // Les montants d'une facture, pour l'écran et le papier. Le grand total est
+  // « montant_usd », arrêté à la création : on ne le refait pas à partir des
+  // lignes. Les colis valent le total moins les frais de service.
+  function totauxFacture(facture) {
+    var f = facture || {};
+    var frais = arrondi(f.frais_service_usd);
+    var grandTotal = arrondi(f.montant_usd);
+    return {
+      colis: arrondi(Math.max(grandTotal - frais, 0)),
+      frais: frais,
+      grandTotal: grandTotal,
+      paye: payeDe(f),
+      balance: soldeDe(f),
+      etat: etatFacture(f)
+    };
+  }
+
+  // Les montants d'une facture si on lui ajoute les frais de service (« Encaisser →
+  // Oui »), pour les montrer AVANT de confirmer : c'est la base qui les ajoutera
+  // (encaisser_facture). Des frais déjà appliqués ne s'ajoutent pas : on rend les
+  // montants tels quels.
+  function totauxAvecFrais(facture) {
+    var f = facture || {};
+    if (arrondi(f.frais_service_usd) > 0) return totauxFacture(f);
+    var paye = payeDe(f);
+    var montant = arrondi((Number(f.montant_usd) || 0) + FRAIS_SERVICE);
+    return totauxFacture({ frais_service_usd: FRAIS_SERVICE, montant_usd: montant, paye_usd: paye,
+                           solde_usd: arrondi(Math.max(montant - paye, 0)),
+                           etat_paiement: montant - paye > 0 ? (paye > 0 ? 'partielle' : 'a_payer') : 'payee' });
+  }
+
+  // Les paiements d'une facture, dans l'ordre où ils ont été reçus
+  function trierPaiements(f) {
+    if (f && f.paiements) {
+      f.paiements.sort(function (a, b) {
+        return new Date(a.paye_le) - new Date(b.paye_le) || new Date(a.cree_le) - new Date(b.cree_le);
+      });
+    }
+    return f;
+  }
+
+  // code : « reseau », « identifiants »… ou un code métier de la base
+  // (INVALID_WEIGHT, INVALID_STATUS_TRANSITION…). detail : pour un code
+  // métier, la phrase de la base, écrite pour l'équipe et affichable telle
+  // quelle ; pour les autres, un message technique à ne pas montrer.
+  function Erreur(code, detail) {
+    var e = new Error(detail || code);
+    e.code = code;
+    e.detail = detail || '';
+    e.metier = /^[A-Z_]+$/.test(code);
+    return e;
+  }
+
+  function choisir(source, champs) {
+    var out = {};
+    champs.forEach(function (k) { if (source[k] !== undefined) out[k] = source[k]; });
+    return out;
+  }
+
+  // Adresse d'une page du site dans la langue courante (même dossier)
+  function urlPage(nom) {
+    return new URL(nom, location.href).href.split('#')[0];
+  }
+
+  // Se connecter avec un compte d'ailleurs (Supabase > Authentication > Providers).
+  // Un fournisseur de plus : son nom ici, son bouton dans connexion et inscription.
+  var FOURNISSEURS = ['google'];
+
+  // Longueur minimale du mot de passe. 6 est le plancher de Supabase : sa
+  // console ne descend pas plus bas, et accepter moins ici ne servirait qu'à
+  // laisser passer un mot de passe que le serveur refuserait ensuite.
+  // À changer aussi dans les formulaires (minlength) et dans l'application
+  // (application-mobile/lib/session.js).
+  var MDP_MINIMUM = 6;
+
+  // Code client : « GSE- » suivi de 4 chiffres (gse 4323 -> GSE-4323). Les codes
+  // plus longs des versions précédentes restent reconnus tels quels : un ancien
+  // client garde le sien. En dessous de 4 chiffres, c'est une saisie incomplète.
+  function normaliserCode(code) {
+    var n = String(code || '').replace(/\D/g, '');
+    if (n.length < 4) return '';
+    return 'GSE-' + n;
+  }
+
+  // Code tiré au hasard, jamais deux fois le même (comptes de démonstration)
+  function nouveauCode(comptes) {
+    var code;
+    do {
+      code = 'GSE-' + (1000 + Math.floor(Math.random() * 9000));
+    } while (comptes.some(function (c) { return c.code === code; }));
+    return code;
+  }
+
+  // Texte de recherche sûr pour les filtres (virgules et parenthèses retirées)
+  function nettoyer(texte) {
+    return String(texte || '').replace(/[,()*%\\:"']/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  }
+
+  // Dans l'ordre où les événements ont été écrits (leur identifiant), comme
+  // la base les rend ; à défaut d'identifiant, par date.
+  function trierHistorique(colis) {
+    colis.historique = (colis.historique || colis.colis_historique || []).slice().sort(function (a, b) {
+      if (a.id != null && b.id != null) return a.id - b.id;
+      return new Date(a.cree_le) - new Date(b.cree_le);
+    });
+    delete colis.colis_historique;
+    return colis;
+  }
+
+  /* ======================================================================
+     Supabase
+     ====================================================================== */
+  var promesseClient = null;
+
+  function chargerScript(src) {
+    return new Promise(function (ok, ko) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.async = true;
+      s.onload = ok;
+      s.onerror = function () { s.remove(); ko(Erreur('reseau')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function sb() {
+    if (!promesseClient) {
+      promesseClient = (window.supabase && window.supabase.createClient ? Promise.resolve() : chargerScript(SUPABASE_JS))
+        .then(function () {
+          if (!window.supabase || !window.supabase.createClient) throw Erreur('reseau');
+          // flowType « implicit » : le lien reçu par e-mail fonctionne même ouvert sur
+          // un autre appareil que celui qui l'a demandé (téléphone → ordinateur).
+          // Les jetons qu'il dépose dans l'adresse sont effacés aussitôt (nettoyerAdresse).
+          var auth = { flowType: 'implicit', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true };
+          if (BUREAU && BUREAU.stockageSession) auth.storage = BUREAU.stockageSession;
+          return window.supabase.createClient(String(CFG.supabaseUrl).replace(/\/+$/, ''), CFG.supabaseKey, { auth: auth });
+        });
+      promesseClient.catch(function () { promesseClient = null; });
+    }
+    return promesseClient;
+  }
+
+  // Les liens reçus par e-mail (confirmation, nouveau mot de passe) déposent les
+  // jetons de session dans l'adresse de la page (#access_token=…). Une fois la
+  // session enregistrée, ils n'ont plus rien à y faire : on les efface de la barre
+  // d'adresse et de l'historique du navigateur.
+  function nettoyerAdresse() {
+    if (!/(access_token|refresh_token|provider_token)=/.test(location.hash)) return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+
+  // Les erreurs métier de la date de naissance (supabase-naissance.sql) ont un nom de page
+  var CODES_NAISSANCE = { BIRTHDATE_REQUIRED: 'naissance-requise', INVALID_BIRTHDATE: 'naissance-invalide',
+                          BIRTHDATE_LOCKED: 'naissance-verrouillee' };
+
+  function erreurSupabase(e) {
+    if (!e) return Erreur('inconnu');
+    if (e.code && /^(identifiants|email-existe|reseau|non-autorise)$/.test(e.code)) return e;
+    // Erreur métier levée par la base (public.erreur_metier) : le code est le
+    // message, la phrase est le détail, l'indice « goship » les signe. Le refus
+    // de permission garde le nom que les pages connaissent déjà.
+    if (e.hint === 'goship' && /^[A-Z_]+$/.test(String(e.message || ''))) {
+      return Erreur(e.message === 'PERMISSION_DENIED' ? 'non-autorise' : (CODES_NAISSANCE[e.message] || e.message), e.details || '');
+    }
+    var code = String(e.code || ''), msg = String(e.message || '').toLowerCase(), statut = e.status;
+    if (code === 'invalid_credentials' || msg.indexOf('invalid login') >= 0) return Erreur('identifiants');
+    if (code === 'user_already_exists' || code === 'email_exists' || msg.indexOf('already registered') >= 0) return Erreur('email-existe');
+    if (code === 'same_password' || msg.indexOf('different from the old') >= 0) return Erreur('meme-mot-de-passe');
+    if (code === 'weak_password' || msg.indexOf('password should') >= 0) return Erreur('mot-de-passe-faible');
+    if (code === 'email_address_invalid' || code === 'validation_failed' || msg.indexOf('invalid format') >= 0) return Erreur('email-invalide');
+    if (code === 'email_not_confirmed' || msg.indexOf('not confirmed') >= 0) return Erreur('non-confirme');
+    if (code === 'signup_disabled' || code === 'email_provider_disabled') return Erreur('inscriptions-fermees');
+    // La base a refusé la création du profil (supabase-naissance.sql : date de naissance absente
+    // ou invalide). GoTrue ne rend pas son motif : la page vérifie la date avant d'envoyer, ceci
+    // n'arrive que si quelqu'un contourne le formulaire.
+    if (msg.indexOf('database error saving new user') >= 0) return Erreur('inscription-refusee');
+    if (statut === 429 || code.indexOf('rate_limit') >= 0) return Erreur('trop-de-tentatives');
+    if (code === 'otp_expired' || code === 'session_not_found' || code === 'session_expired') return Erreur('lien-invalide');
+    if (code === '42501' || code === 'PGRST301' || statut === 401 || statut === 403) return Erreur('non-autorise');
+    // La fonction n'existe pas encore : le script SQL correspondant n'a pas été
+    // lancé dans Supabase. Ce n'est pas une panne — la partie du site qui s'en
+    // sert se contente de ne pas s'afficher.
+    if (code === 'PGRST202' || code === '42883' || code === '42703') return Erreur('absent', e.message);
+    if (e.name === 'TypeError' || msg.indexOf('failed to fetch') >= 0 || msg.indexOf('network') >= 0 ||
+        msg.indexOf('load failed') >= 0) return Erreur('reseau');
+    return Erreur('inconnu', e.message);
+  }
+
+  function resultat(res) {
+    if (res.error) throw erreurSupabase(res.error);
+    return res.data;
+  }
+
+  // Une fonction de la base, ses paramètres, sa réponse : les programmes n'en font pas d'autre usage
+  function appelBase(nom, params) {
+    return sb().then(function (c) { return c.rpc(nom, params || {}); }).then(resultat);
+  }
+
+  var supabaseAPI = {
+    session: function () {
+      return sb().then(function (c) { return c.auth.getSession(); }).then(function (res) {
+        nettoyerAdresse();
+        var s = res.data && res.data.session;
+        return s ? { id: s.user.id, email: s.user.email } : null;
+      });
+    },
+
+    profil: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) return null;
+        return sb().then(function (c) {
+          return c.from('clients').select('*').eq('id', s.id).maybeSingle();
+        }).then(resultat);
+      });
+    },
+
+    inscrire: function (d) {
+      var client;
+      return sb().then(function (c) {
+        client = c;
+        return c.auth.signUp({
+          email: d.email,
+          password: d.motDePasse,
+          options: {
+            data: {
+              nom_complet: d.nom_complet, pays: d.pays, region: d.region, ville: d.ville,
+              adresse: d.adresse, telephone: d.telephone, langue: LANGUE,
+              // Jour civil « AAAA-MM-JJ », tel que le champ date de la page le donne : la base
+              // le vérifie (obligatoire pour une inscription par e-mail) et le garde à part
+              date_naissance: d.date_naissance,
+              // Sexe (« M », « F ») et type de document (« passeport », « cedula ») : la base les lit
+              // et les garde dans le profil ; une valeur inconnue y est ignorée
+              sexe: d.sexe, type_document: d.type_document,
+              // Le numéro du passeport ou de la cédula : la base le garde à part (table fermée), lisible
+              // seulement par l'administration et la gérance
+              numero_document: d.numero_document,
+              // Le code d'un parrain (lien « inscription.html?parrain=… ») : la base le rattache si
+              // il est valable, et ignore un code inconnu sans bloquer l'inscription
+              code_parrainage: d.code_parrainage ? String(d.code_parrainage).trim().slice(0, 24) : undefined
+            },
+            emailRedirectTo: urlPage('mon-compte.html')
+          }
+        });
+      }).then(function (res) {
+        if (res.error) throw erreurSupabase(res.error);
+        var u = res.data.user;
+        // Adresse déjà inscrite (réponse volontairement neutre de Supabase)
+        if (u && Array.isArray(u.identities) && u.identities.length === 0) throw Erreur('email-existe');
+        if (!res.data.session) return { profil: null, confirmation: true };
+        return client.from('clients').select('*').eq('id', u.id).maybeSingle().then(resultat).then(function (p) {
+          return { profil: p, confirmation: false };
+        });
+      });
+    },
+
+    // Ma date de naissance (« AAAA-MM-JJ »), ou null : seule la personne connectée la lit, par
+    // une fonction de la base (la table n'a aucun accès direct). Une base sans cette fonction
+    // répond « absent » : la page ne demande rien.
+    naissance: function () {
+      return sb().then(function (c) { return c.rpc('ma_naissance'); }).then(resultat).then(function (v) { return v || null; });
+    },
+
+    // La déclarer une fois : la base valide (futur, 30 février…) et refuse une autre date ensuite
+    definirNaissance: function (texte) {
+      return sb().then(function (c) { return c.rpc('definir_ma_naissance', { p_date: String(texte == null ? '' : texte) }); })
+        .then(resultat);
+    },
+
+    /* ---- Les programmes du client (GOPOINTS, Welcome, Refer, anniversaire) --------
+       Rien n'est calculé ici : le solde, les offres, le code et les avantages viennent de la
+       base (outils/supabase-fidelite.sql, supabase-campagnes.sql, supabase-anniversaires.sql).
+       Une base qui n'a pas encore ces fichiers répond « absent » : la page n'affiche rien. */
+    portefeuille: function (page) { return appelBase('mon_portefeuille', { p_page: page || 0, p_par_page: 20 }); },
+    // cle : tirée une fois par appui (un double clic ne dépense qu'une fois)
+    utiliserPoints: function (offre, cle) { return appelBase('utiliser_points', { p_offre: offre, p_cle: cle }); },
+    mesAvantages: function () { return appelBase('mes_recompenses'); },
+    maBienvenue: function () { return appelBase('ma_bienvenue'); },
+    monParrainage: function () { return appelBase('mon_parrainage'); },
+    noterInvitation: function (canal) { return appelBase('noter_invitation', { p_canal: canal || '' }); },
+    utiliserCodeParrainage: function (code) { return appelBase('utiliser_code_parrainage', { p_code: String(code || '') }); },
+    preferencesProgrammes: function () { return appelBase('mes_preferences_programmes'); },
+    reglerAnniversaire: function (actif) { return appelBase('regler_ma_preference_anniversaire', { p_actif: !!actif }); },
+
+    connecter: function (email, motDePasse) {
+      return sb().then(function (c) {
+        return c.auth.signInWithPassword({ email: email, password: motDePasse });
+      }).then(function (res) {
+        if (res.error) throw erreurSupabase(res.error);
+        return supabaseAPI.profil();
+      });
+    },
+
+    deconnecter: function () {
+      return sb().then(function (c) { return c.auth.signOut({ scope: 'local' }); });
+    },
+
+    // rappel() quand la session se termine sans que la page l'ait demandé :
+    // jeton de renouvellement expiré ou révoqué. Rend de quoi arrêter d'écouter.
+    surSessionPerdue: function (rappel) {
+      var abonnement = null, arrete = false;
+      sb().then(function (c) {
+        if (arrete) return;
+        abonnement = c.auth.onAuthStateChange(function (evenement) {
+          if (evenement === 'SIGNED_OUT') rappel();
+        }).data.subscription;
+      }).catch(function () { /* sans client, pas de session à perdre */ });
+      return function () { arrete = true; if (abonnement) abonnement.unsubscribe(); };
+    },
+
+    // Les fournisseurs que Supabase a vraiment activés (Authentication > Providers),
+    // d'après ses réglages publics. Un bouton dont le fournisseur n'est pas activé
+    // mènerait à une page d'erreur de Supabase : il reste caché.
+    fournisseursConnexion: function () {
+      return fetch(String(CFG.supabaseUrl).replace(/\/+$/, '') + '/auth/v1/settings', {
+        headers: { apikey: CFG.supabaseKey }
+      }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {
+        var actifs = (d && d.external) || {};
+        return FOURNISSEURS.filter(function (f) { return actifs[f] === true; });
+      }).catch(function () { return []; });
+    },
+
+    // Quitte la page pour celle du fournisseur ; il renvoie ensuite sur « retour »,
+    // avec la session dans l'adresse (lue par detectSessionInUrl) ou une erreur.
+    connecterAvec: function (fournisseur, retour) {
+      if (FOURNISSEURS.indexOf(fournisseur) < 0) return Promise.reject(Erreur('inconnu'));
+      return sb().then(function (c) {
+        return c.auth.signInWithOAuth({ provider: fournisseur, options: { redirectTo: urlPage(retour) } });
+      }).then(function (res) {
+        if (res.error) throw erreurSupabase(res.error);
+        return {};
+      });
+    },
+
+    envoyerLienMotDePasse: function (email) {
+      return sb().then(function (c) {
+        return c.auth.resetPasswordForEmail(email, { redirectTo: urlPage('nouveau-mot-de-passe.html') });
+      }).then(resultat).then(function () { return {}; });
+    },
+
+    // Page « Nouveau mot de passe » : vrai si le lien reçu par e-mail est valide
+    attendreRecuperation: function () {
+      var h = location.hash + location.search;
+      if (/error_code=|error=/.test(h)) return Promise.resolve(false);
+      return supabaseAPI.session().then(function (s) { return !!s; });
+    },
+
+    changerMotDePasse: function (motDePasse) {
+      return sb().then(function (c) {
+        return c.auth.updateUser({ password: motDePasse });
+      }).then(resultat).then(function () { return true; });
+    },
+
+    modifierProfil: function (champs) {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return sb().then(function (c) {
+          return c.from('clients').update(choisir(champs, CHAMPS_PROFIL)).eq('id', s.id).select().single();
+        }).then(resultat);
+      });
+    },
+
+    mesColis: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return sb().then(function (c) {
+          return c.from('colis')
+            .select('id, numero, suivi_transporteur, expediteur, description, poids_lb, service, pays_destination, ' +
+                    'destination, statut, lieu, note, recu_le, cree_le, maj_le, ' +
+                    'colis_historique(id, type_evenement, statut, lieu, note, cree_le)')
+            .eq('client_id', s.id)
+            .order('maj_le', { ascending: false });
+        }).then(resultat).then(function (lignes) { return lignes.map(trierHistorique); });
+      });
+    },
+
+    // Les factures du client, avec leurs lignes et le numéro du colis facturé.
+    // Passe par une fonction de la base (mes_factures) : elle sait joindre les
+    // colis aux lignes, et elle ne montre que les factures du compte connecté.
+    mesFactures: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return sb().then(function (c) { return c.rpc('mes_factures'); });
+      }).then(resultat).then(function (lignes) { return lignes || []; });
+    },
+
+    // Le résumé de l'espace client (mon_resume) : ses colis comptés par état,
+    // ses factures (facturé, payé, solde, en retard) et ses derniers messages
+    monResume: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return sb().then(function (c) { return c.rpc('mon_resume'); });
+      }).then(resultat);
+    },
+
+    // Mises à jour en direct. options.tout : tous les colis et clients (administrateur)
+    surveiller: function (rappel, options) {
+      options = options || {};
+      var canal = null, arrete = false;
+      Promise.all([sb(), supabaseAPI.session()]).then(function (r) {
+        var c = r[0], s = r[1];
+        if (arrete || !s) return;
+        var filtre = { event: '*', schema: 'public', table: 'colis' };
+        var filtreFactures = { event: '*', schema: 'public', table: 'factures' };
+        if (!options.tout) {
+          filtre.filter = 'client_id=eq.' + s.id;
+          filtreFactures.filter = 'client_id=eq.' + s.id;
+        }
+        canal = c.channel('gse-' + Math.random().toString(36).slice(2))
+          .on('postgres_changes', filtre, function () { rappel('colis'); })
+          .on('postgres_changes', filtreFactures, function () { rappel('factures'); });
+        if (options.tout) {
+          canal.on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, function () { rappel('clients'); });
+        }
+        canal.subscribe(function (etat) {
+          if (options.etat) options.etat(etat === 'SUBSCRIBED');
+        });
+      }).catch(function () { if (options.etat) options.etat(false); });
+      return function () {
+        arrete = true;
+        if (canal) sb().then(function (c) { c.removeChannel(canal); });
+      };
+    },
+
+    suivre: function (numero) {
+      return sb().then(function (c) {
+        return c.rpc('suivre_colis', { p_numero: String(numero || '').trim() });
+      }).then(resultat).then(function (d) { return d ? trierHistorique(d) : null; });
+    },
+
+    estAdmin: function () {
+      return sb().then(function (c) { return c.rpc('est_admin'); }).then(resultat).then(Boolean);
+    },
+
+    // { role, equipe, permissions } du compte connecté, lus dans la base
+    // (mes_permissions) : de quoi montrer les bons menus. Chaque action reste
+    // revérifiée par la base.
+    permissions: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) return { role: null, equipe: false, permissions: [] };
+        return sb().then(function (c) { return c.rpc('mes_permissions'); }).then(resultat);
+      });
+    },
+
+    admin: {
+      statistiques: function () {
+        return sb().then(function (c) { return c.rpc('statistiques_admin'); }).then(resultat);
+      },
+
+      // L'équipe et ses rôles (users.view)
+      equipe: function () {
+        return sb().then(function (c) { return c.rpc('equipe'); }).then(resultat).then(function (r) { return r || []; });
+      },
+
+      // Donner un rôle à un compte, retrouvé par son e-mail (roles.manage)
+      changerRole: function (compte, role) {
+        return sb().then(function (c) { return c.rpc('changer_role', { p_compte: compte, p_role: role }); })
+          .then(resultat);
+      },
+
+      colis: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50, page = o.page || 0;
+        return sb().then(function (c) {
+          var q = c.from('colis_details').select('*', { count: 'exact' })
+            .order('maj_le', { ascending: false })
+            .range(page * parPage, page * parPage + parPage - 1);
+          if (o.statut === 'actifs') q = q.neq('statut', 'livre');
+          else if (o.statut) q = q.eq('statut', o.statut);
+          if (o.clientId) q = q.eq('client_id', o.clientId);
+          // Filtres prêts pour les écrans à venir (scanner, rapports) : une
+          // seule requête, paginée, quel que soit le nombre de critères.
+          if (o.pays) q = q.eq('pays_destination', o.pays);
+          if (o.service) q = q.eq('service', o.service);
+          if (o.depuis) q = q.gte('recu_le', o.depuis);
+          if (o.jusqua) q = q.lt('recu_le', o.jusqua);
+          var t = nettoyer(o.recherche);
+          if (t) {
+            q = q.or(['numero', 'suivi_transporteur', 'code_client', 'nom_client', 'telephone_client', 'description', 'destination']
+              .map(function (k) { return k + '.ilike."*' + t + '*"'; }).join(','));
+          }
+          return q;
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return { lignes: res.data, total: res.count || 0 };
+        });
+      },
+
+      // Tous les événements du colis, dans l'ordre où ils ont été écrits :
+      // type, statut avant et après, auteur, lieu, précisions, corrections.
+      historique: function (id) {
+        return sb().then(function (c) { return c.rpc('historique_colis', { p_colis: id }); }).then(resultat);
+      },
+
+      chercherClient: function (code) {
+        var n = normaliserCode(code);
+        if (!n) return Promise.resolve(null);
+        return sb().then(function (c) {
+          return c.from('clients').select('id, code, nom_complet, pays, region, ville, telephone, email, langue')
+            .eq('code', n).maybeSingle();
+        }).then(resultat);
+      },
+
+      // Le sexe et le type de document d'un client (supabase-identite.sql), lus avec sa fiche :
+      // la base ne les rend qu'à qui peut voir les clients. Une base sans ces colonnes : rien.
+      identiteClient: function (id) {
+        return sb().then(function (c) {
+          return c.from('clients').select('sexe, type_document').eq('id', id).maybeSingle();
+        }).then(function (r) {
+          if (r.error && /sexe|type_document|column/i.test(r.error.message || '')) return { sexe: null, type_document: null };
+          return resultat(r);
+        }).then(function (v) { return v || { sexe: null, type_document: null }; });
+      },
+
+      // Le numéro du passeport ou de la cédula d'un client (document_client, supabase-identite.sql) :
+      // réservé à clients.edit, la table n'a aucune règle de lecture. null si le client n'en a pas donné.
+      numeroDocument: function (id) { return appelBase('document_client', { p_client: id }).then(function (v) { return v || null; }); },
+
+      clients: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50, page = o.page || 0;
+        return sb().then(function (c) {
+          var q = c.from('clients').select('*', { count: 'exact' }).eq('role', 'client')
+            .order('cree_le', { ascending: false })
+            .range(page * parPage, page * parPage + parPage - 1);
+          var t = nettoyer(o.recherche);
+          if (t) {
+            q = q.or(['code', 'nom_complet', 'telephone', 'email', 'ville', 'region']
+              .map(function (k) { return k + '.ilike."*' + t + '*"'; }).join(','));
+          }
+          return q;
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return { lignes: res.data, total: res.count || 0 };
+        });
+      },
+
+      /* ---- Colis : tout passe par les fonctions de service de la base ----
+         (outils/supabase-services.sql). Elles vérifient la permission,
+         valident, calculent le prix, contrôlent le statut et écrivent
+         l'historique et le journal dans une seule transaction. */
+
+      // Réponse : { colis, facture, deja }. « cle » identifie cette demande
+      // d'enregistrement : renvoyée après une coupure, elle retrouve le colis
+      // déjà créé au lieu d'en créer un second (deja: true).
+      creerColis: function (d, cle) {
+        return sb().then(function (c) {
+          return c.rpc('creer_colis', { p_colis: choisir(d, CHAMPS_CREATION), p_cle: cle || null, p_facturer: true });
+        }).then(resultat);
+      },
+
+      // majLe : la date de dernière modification que la page avait sous les
+      // yeux ; si quelqu'un a modifié le colis entre-temps, la base refuse
+      // (CONCURRENT_MODIFICATION) au lieu d'écraser son travail.
+      // champs.motif (facultatif) accompagne la ligne du journal des modifications.
+      modifierColis: function (id, champs, majLe) {
+        return sb().then(function (c) {
+          return c.rpc('modifier_colis', { p_id: id, p_champs: choisir(champs, CHAMPS_MODIFIABLES.concat(['motif'])),
+                                           p_maj_le: majLe || null });
+        }).then(resultat);
+      },
+
+      // Chaque statut coché devient l'événement qui y mène, écrit par le
+      // moteur (outils/supabase-evenements.sql). Tout ou rien. Réponse :
+      // { modifies, inchanges, ids, evenements, refus: [{ id, numero, code,
+      // detail }] }. attendus : { id: statut affiché } pour repérer un colis
+      // changé par quelqu'un d'autre entre-temps. motif : obligatoire pour un
+      // retour à l'étape d'avant (correction). cle : la même demande renvoyée
+      // ne refait rien.
+      changerStatut: function (ids, etape, attendus, motif, cle) {
+        return sb().then(function (c) {
+          return c.rpc('changer_statut_colis', {
+            p_ids: ids, p_statut: etape.statut, p_lieu: etape.lieu || '', p_note: etape.note || '',
+            p_attendus: attendus || null, p_motif: motif || null, p_cle: cle || null
+          });
+        }).then(resultat);
+      },
+
+      // Les statuts que ce colis peut prendre maintenant : { actuel, precedent, possibles }
+      statutsPossibles: function (id) {
+        return sb().then(function (c) { return c.rpc('statuts_possibles', { p_colis: id }); }).then(resultat);
+      },
+
+      // Suivi interne : un colis par son numéro GSE ou le suivi du vendeur,
+      // avec son historique complet (notes comprises). null s'il n'existe pas.
+      /* ---- Le poste de scan (outils/supabase-scanner.sql) ----------------
+         Deux appels, une requête chacun. Aucune règle ici : la base cherche,
+         valide et écrit ; la page affiche ce qu'elle répond. */
+
+      // Le code lu → la fiche du colis (client, dernier événement, livraison
+      // ou action requise, historique, opérations permises), ou null.
+      scannerColis: function (reference) {
+        return sb().then(function (c) { return c.rpc('scanner_colis', { p_reference: String(reference || '') }); })
+          .then(resultat);
+      },
+
+      // Le code lu + une opération → le moteur d'événements → { code
+      // (« OK » ou « ALREADY_IN_TARGET_STATE »), message, resultat, fiche }.
+      // o : { lieu, note, metadonnees, cle, attendu, cible }
+      operationScanner: function (reference, type, o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('scanner_operation', {
+            p_reference: String(reference || ''), p_type: type, p_lieu: o.lieu == null ? null : o.lieu,
+            p_note: o.note == null ? null : o.note, p_metadonnees: avecPoste(o.metadonnees), p_cle: o.cle || null,
+            p_statut_attendu: o.attendu || null, p_cible: o.cible || null
+          });
+        }).then(resultat);
+      },
+
+      trouverColis: function (reference) {
+        return sb().then(function (c) { return c.rpc('trouver_colis', { p_reference: String(reference || '') }); })
+          .then(resultat);
+      },
+
+      // Journal d'audit, du plus récent au plus ancien (équipe uniquement)
+      journal: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50, page = o.page || 0;
+        return sb().then(function (c) {
+          var q = c.from('journal_audit').select('*', { count: 'exact' })
+            .order('cree_le', { ascending: false })
+            .range(page * parPage, page * parPage + parPage - 1);
+          if (o.entite) q = q.eq('entite', o.entite);
+          if (o.entiteId) q = q.eq('entite_id', String(o.entiteId));
+          return q;
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return { lignes: res.data, total: res.count || 0 };
+        });
+      },
+
+      supprimerColis: function (id) {
+        return sb().then(function (c) { return c.from('colis').delete().eq('id', id); }).then(resultat);
+      },
+
+      // Notifications : la base envoie le message au client du colis avec les
+      // clés enregistrées dans Supabase ; réponse « envoye », « non-configure »…
+      envoyerEmail: function (id, evenement, message) {
+        return sb().then(function (c) {
+          return c.rpc('envoyer_email_client', {
+            p_colis: id, p_evenement: evenement, p_sujet: message.sujet, p_html: message.html, p_texte: message.texte
+          });
+        }).then(resultat);
+      },
+
+      envoyerWhatsApp: function (id, evenement, modele) {
+        return sb().then(function (c) {
+          return c.rpc('envoyer_whatsapp_client', {
+            p_colis: id, p_evenement: evenement, p_modele: modele.nom, p_langue: modele.langue, p_parametres: modele.parametres
+          });
+        }).then(resultat);
+      },
+
+      notifications: function (id) {
+        return sb().then(function (c) { return c.rpc('notifications_colis', { p_colis: id }); }).then(resultat);
+      },
+
+      // Ce que la base a fait des messages d'un colis (outils/supabase-notifications.sql) :
+      // une ligne par envoi — canal, statut (attente, envoye, livre, echec, annule) et,
+      // s'il n'est pas parti, pourquoi (NON_CONFIGURE, SANS_DESTINATAIRE…). Aucune page
+      // n'envoie elle-même : la base crée les envois avec l'étape du colis.
+      envoisColis: function (id) {
+        return sb().then(function (c) { return c.rpc('envois_colis', { p_colis: id }); }).then(resultat);
+      },
+
+      // L'historique des modifications des colis et des factures (audit_logs.view) :
+      // o : { debut, fin (ISO, fin exclue), recherche, auteur, entite, page, parPage }.
+      // Réponse : { total, lignes, auteurs }.
+      historiqueModifications: function (o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('historique_modifications', {
+            p_debut: o.debut || null, p_fin: o.fin || null, p_recherche: o.recherche || '',
+            p_auteur: o.auteur || null, p_entite: o.entite || '', p_page: o.page || 0, p_par_page: o.parPage || 50
+          });
+        }).then(resultat);
+      },
+
+      /* ---- Factures ---------------------------------------------------- */
+
+      // Les factures, avec leur payé, leur solde et leur état calculés par la
+      // base (colonnes calculées de outils/supabase-finances.sql), leurs lignes
+      // et tous leurs paiements. o.etat : « a_payer » (tout ce qui reste dû),
+      // « partielle », « en_retard », « payee », « annulee », ou rien.
+      factures: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50, page = o.page || 0;
+        return sb().then(function (c) {
+          var q = c.from('factures')
+            .select('*, paye_usd, solde_usd, etat_paiement, ' +
+                    'clients(code, nom_complet, telephone, email, adresse, region, ville, pays, langue), ' +
+                    'facture_lignes(id, colis_id, libelle, montant_usd, quantite, poids_lb, tarif_lb_usd, ' +
+                    'colis(numero, description, poids_lb)), paiements(*)',
+                    { count: 'exact' })
+            .order('cree_le', { ascending: false })
+            .range(page * parPage, page * parPage + parPage - 1);
+          var etat = o.etat || o.statut;
+          if (etat === 'payee' || etat === 'annulee' || etat === 'a_payer') q = q.eq('statut', etat);
+          if (etat === 'partielle') q = q.eq('statut', 'a_payer').gt('montant_paye_usd', 0);
+          if (etat === 'en_retard') q = q.eq('statut', 'a_payer').lt('echeance_le', aujourdhui());
+          if (o.client_id) q = q.eq('client_id', o.client_id);
+          if (o.id) q = q.eq('id', o.id);
+          return q;
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          (res.data || []).forEach(trierPaiements);
+          return { lignes: res.data, total: res.count || 0 };
+        });
+      },
+
+      // Une facture pour des colis d'un même client (leurs prix + les frais de
+      // service, calculés par la base), ou d'un montant libre sans colis.
+      // Réponse : { facture, deja }. La facture et ses lignes sont écrites
+      // ensemble : plus de facture sans lignes si la connexion coupe entre les deux.
+      creerFacture: function (d, colisIds, cle) {
+        return sb().then(function (c) {
+          return c.rpc('creer_facture', {
+            p_client: d.client_id,
+            p_colis: colisIds && colisIds.length ? colisIds : null,
+            p_champs: choisir(d, CHAMPS_NOUVELLE_FACTURE),
+            p_cle: cle || null
+          });
+        }).then(resultat);
+      },
+
+      // La facture d'un colis, créée s'il n'en a pas encore : { facture, deja }
+      facturerColis: function (colisId) {
+        return sb().then(function (c) { return c.rpc('facturer_colis', { p_colis: colisId }); }).then(resultat);
+      },
+
+      // La facture d'un colis, pour le bouton « Voir la facture » de sa fiche.
+      // La plus récente si le colis a été refacturé.
+      factureDuColis: function (colisId) {
+        return sb().then(function (c) {
+          return c.from('facture_lignes')
+            .select('facture_id, factures!inner(*, paye_usd, solde_usd, etat_paiement, ' +
+                    'clients(code, nom_complet, telephone, email, adresse, ville, region, pays, langue), ' +
+                    'facture_lignes(*, colis(numero, description, poids_lb)), paiements(*))')
+            .eq('colis_id', colisId);
+        }).then(resultat).then(function (lignes) {
+          var factures = (lignes || []).map(function (l) { return l.factures; }).filter(Boolean);
+          factures.sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
+          return trierPaiements(factures[0]) || null;
+        });
+      },
+
+      // Échéance, note, lien de paiement ; le total d'une facture sans colis.
+      // Le reste suit les paiements : la base refuse qu'on l'écrive ici. Le motif
+      // est obligatoire pour corriger un montant, et gardé au journal
+      // (modifier_facture, outils/supabase-corrections.sql). Réponse : la facture
+      // complète, telle que la base l'a enregistrée.
+      modifierFacture: function (id, champs, motif) {
+        return sb().then(function (c) {
+          return c.rpc('modifier_facture', { p_facture: id, p_champs: choisir(champs, CHAMPS_FACTURE),
+                                             p_motif: motif || null });
+        }).then(resultat).then(function (f) { return trierPaiements(f); });
+      },
+
+      /* ---- Paiements (outils/supabase-finances.sql) -------------------- */
+
+      // Un encaissement : { montant_usd, moyen, reference, paye_le, note }.
+      // « cle » identifie la demande : renvoyée après une coupure, elle rend
+      // le paiement déjà enregistré. Réponse : { paiement, facture, deja }.
+      enregistrerPaiement: function (factureId, d, cle) {
+        return sb().then(function (c) {
+          return c.rpc('enregistrer_paiement', {
+            p_facture: factureId, p_paiement: choisir(d || {}, CHAMPS_PAIEMENT), p_cle: cle || null
+          });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Le lien de paiement d'une facture : invoices.edit, ou le premier lien
+      // d'une facture neuve pour qui enregistre les colis
+      poserLienPaiement: function (id, lien) {
+        return sb().then(function (c) { return c.rpc('definir_lien_paiement', { p_facture: id, p_lien: lien }); })
+          .then(resultat);
+      },
+
+      // Un paiement saisi par erreur, un chèque rejeté : il reste, barré, avec son motif
+      annulerPaiement: function (id, motif) {
+        return sb().then(function (c) {
+          return c.rpc('annuler_paiement', { p_paiement: id, p_motif: motif || '' });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Une facture ne se supprime plus : elle s'annule, avec son motif.
+      // Réponse : { facture, deja }.
+      annulerFacture: function (id, motif) {
+        return sb().then(function (c) {
+          return c.rpc('annuler_facture', { p_facture: id, p_motif: motif || '' });
+        }).then(resultat);
+      },
+
+      // Plusieurs factures d'un client en une : { facture, annulees, deja }
+      regrouperFactures: function (ids, cle) {
+        return sb().then(function (c) {
+          return c.rpc('regrouper_factures', { p_factures: ids, p_cle: cle || null });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Le chemin inverse (outils/supabase-regroupement.sql) : les colis choisis
+      // quittent la facture regroupée pour leur propre facture, les autres passent
+      // sur une seconde. Réponse : { facture, reste, annulee, deja }. Une base
+      // sans ce fichier répond « absent ».
+      sortirDuRegroupement: function (factureId, colisIds, cle) {
+        return sb().then(function (c) {
+          return c.rpc('sortir_du_regroupement', { p_facture: factureId, p_colis: colisIds || [], p_cle: cle || null });
+        }).then(resultat).then(function (r) {
+          if (r && r.facture) trierPaiements(r.facture);
+          if (r && r.reste) trierPaiements(r.reste);
+          return r;
+        });
+      },
+
+      // Ce que la base facturerait pour ces colis, sans rien créer :
+      // { lignes, sous_total, frais_service, total }. frais_service est celui de la
+      // maison ; total le compte. Sans les frais, la facture vaudrait sous_total.
+      calculerFacture: function (colisIds) {
+        return sb().then(function (c) { return c.rpc('calculer_facture', { p_colis: colisIds || [] }); })
+          .then(resultat);
+      },
+
+      /* ---- Frais de service (outils/supabase-frais-service.sql) ---------- */
+
+      // Réunir des factures et des colis d'un même client en une facture ; frais :
+      // elle reçoit les frais de service (une fois) ou non. Un colis déjà sur une
+      // facture regroupable la fait entrer entière. Réponse : { facture, annulees, deja }.
+      regrouper: function (factureIds, colisIds, frais, cle) {
+        return sb().then(function (c) {
+          return c.rpc('regrouper', { p_factures: factureIds || [], p_colis: colisIds || [], p_frais: !!frais,
+                                      p_cle: cle || null });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Les colis d'un client qu'on peut ajouter à un regroupement (sans facture, ou
+      // sur une facture regroupable), sauf « exclure ». Au plus 50.
+      colisARegrouper: function (clientId, recherche, exclure) {
+        return sb().then(function (c) {
+          return c.rpc('colis_a_regrouper', { p_client: clientId, p_recherche: recherche || '',
+                                              p_exclure: exclure || [] });
+        }).then(resultat);
+      },
+
+      // Ajouter (appliquer = true) ou retirer les frais d'une facture à payer.
+      // Déjà dans l'état demandé : rien ne change. Réponse : { facture, deja }.
+      changerFraisService: function (id, appliquer) {
+        return sb().then(function (c) {
+          return c.rpc('changer_frais_service', { p_facture: id, p_appliquer: !!appliquer });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // « Encaisser » : les frais (oui / non) et le paiement, dans la même
+      // transaction. Des frais déjà appliqués ne s'ajoutent jamais une seconde fois.
+      // Réponse : { paiement, facture, deja, frais_ajoutes }.
+      encaisserFacture: function (id, d, frais, cle) {
+        return sb().then(function (c) {
+          return c.rpc('encaisser_facture', { p_facture: id, p_paiement: choisir(d || {}, CHAMPS_PAIEMENT),
+                                              p_frais: !!frais, p_cle: cle || null });
+        }).then(resultat).then(function (r) { if (r && r.facture) trierPaiements(r.facture); return r; });
+      },
+
+      // Les chiffres du haut de l'onglet Factures
+      resumeFacturation: function () {
+        return sb().then(function (c) { return c.rpc('resume_facturation'); }).then(resultat);
+      },
+
+      // Le rapport d'anomalies : [{ type, gravite, facture_id, numero, detail }]
+      anomaliesFacturation: function () {
+        return sb().then(function (c) { return c.rpc('rapport_anomalies_facturation'); }).then(resultat)
+          .then(function (r) { return r || []; });
+      },
+
+      /* ---- Analytics (outils/supabase-analytics.sql) ---------------------
+         Ce qui s'est passé et comment cela évolue, période contre période
+         précédente. Tout est compté par la base (reports.view) ; la page
+         n'agrège rien. module : synthese, serie, operations, clients,
+         finances, routes, scanner, qualite. o : { periode, debut, fin,
+         granularite (jour, semaine, mois), tri, page, parPage }. */
+      analytics: function (module, o) {
+        o = o || {};
+        var RPC = { synthese: 'analytics_synthese', serie: 'analytics_serie', operations: 'analytics_operations',
+                    clients: 'analytics_clients', finances: 'analytics_finances', routes: 'analytics_routes',
+                    scanner: 'analytics_scanner', qualite: 'analytics_qualite' };
+        if (!RPC[module]) return Promise.reject(Erreur('INVALID_INPUT', 'Module inconnu : ' + module + '.'));
+        var params = {};
+        if (module !== 'qualite') {
+          params = { p_periode: o.periode || '30j', p_debut: o.debut || null, p_fin: o.fin || null };
+        }
+        if (module === 'serie') params.p_granularite = o.granularite || 'jour';
+        if (module === 'clients') {
+          var parPage = o.parPage || 25;
+          params.p_tri = o.tri || 'colis';
+          params.p_limite = parPage;
+          params.p_decalage = (o.page || 0) * parPage;
+        }
+        return sb().then(function (c) { return c.rpc(RPC[module], params); }).then(resultat);
+      },
+
+      /* ---- Rapports (outils/supabase-rapports.sql) ---------------------------
+         Un rapport enregistré n'est qu'une définition (nom, période, filtres,
+         données à inclure) ; ses chiffres et ses lignes se relisent dans la base
+         à chaque ouverture (rapport_donnees), qui compte tout. Lire demande
+         reports.view, enregistrer reports.create, modifier reports.edit,
+         supprimer reports.delete : la base refuse d'elle-même. Une base qui n'a
+         pas encore ce fichier répond « absent ». */
+      // o : { recherche, page, parPage } → { total, lignes }
+      rapports: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50;
+        return sb().then(function (c) {
+          return c.rpc('liste_rapports', { p_recherche: o.recherche || null, p_limite: parPage,
+                                           p_decalage: (o.page || 0) * parPage });
+        }).then(resultat);
+      },
+      // r : { nom, type, periode, debut, fin, filtres, sections }
+      creerRapport: function (r) {
+        return sb().then(function (c) { return c.rpc('creer_rapport', { p_rapport: r }); }).then(resultat);
+      },
+      modifierRapport: function (id, r) {
+        return sb().then(function (c) { return c.rpc('modifier_rapport', { p_id: id, p_rapport: r }); }).then(resultat);
+      },
+      // N'efface que le rapport enregistré, jamais les colis, factures ou paiements
+      supprimerRapport: function (id) {
+        return sb().then(function (c) { return c.rpc('supprimer_rapport', { p_id: id }); }).then(resultat);
+      },
+      // p : { periode, debut, fin, type, filtres, sections, limite, decalage, section }
+      donneesRapport: function (p) {
+        return sb().then(function (c) { return c.rpc('rapport_donnees', { p_parametres: p || {} }); }).then(resultat);
+      },
+
+      /* ---- Les programmes (outils/supabase-fidelite.sql, -anniversaires, -campagnes) ---
+         Lire demande programs.view (anniversaires : birthdays.view), régler programs.manage
+         (birthdays.manage), corriger un solde ou accorder un avantage points.adjust : la base
+         refuse d'elle-même, et ne rend la date de naissance qu'à qui peut voir les
+         anniversaires. Rien ne s'additionne dans la page. */
+      programmes: {
+        // GOPOINTS
+        pointsRegles: function () { return appelBase('points_regles_liste'); },
+        pointsReglages: function (d) { return appelBase('points_reglages_modifier', { p_donnees: d || {} }); },
+        pointsRegle: function (evenement, d) { return appelBase('points_regle_modifier', { p_evenement: evenement, p_donnees: d || {} }); },
+        pointsOffre: function (id, d) { return appelBase('points_offre_enregistrer', { p_id: id || null, p_donnees: d || {} }); },
+        pointsCorriger: function (client, points, motif) { return appelBase('points_corriger', { p_client: client, p_points: points, p_motif: motif || '' }); },
+        pointsAnnuler: function (id, motif) { return appelBase('points_annuler_mouvement', { p_id: id, p_motif: motif || '' }); },
+        pointsApercu: function (o) { o = o || {}; return appelBase('points_apercu', { p_debut: o.debut || null, p_fin: o.fin || null }); },
+        // o : { recherche, type, debut, fin, page }
+        pointsMouvements: function (o) {
+          o = o || {};
+          return appelBase('points_mouvements_liste', { p_recherche: o.recherche || '', p_type: o.type || '', p_debut: o.debut || null,
+                                                       p_fin: o.fin || null, p_page: o.page || 0, p_par_page: 50 });
+        },
+        // Anniversaires
+        anniversaires: function (o) {
+          o = o || {};
+          return appelBase('anniversaires_liste', { p_debut: o.debut || null, p_fin: o.fin || null, p_page: o.page || 0, p_par_page: 50 });
+        },
+        anniversairesMessages: function (o) {
+          o = o || {};
+          return appelBase('anniversaires_messages', { p_statut: o.statut || '', p_debut: o.debut || null, p_fin: o.fin || null,
+                                                      p_page: o.page || 0, p_par_page: 50 });
+        },
+        anniversairesErreurs: function (o) { return appelBase('anniversaires_erreurs', { p_page: (o && o.page) || 0, p_par_page: 50 }); },
+        anniversairesRappels: function (o) { return appelBase('anniversaires_rappels_liste', { p_page: (o && o.page) || 0, p_par_page: 50 }); },
+        anniversaireReglages: function () { return appelBase('anniversaire_reglages_lire'); },
+        anniversaireReglagesModifier: function (d) { return appelBase('anniversaire_reglages_modifier', { p_donnees: d || {} }); },
+        anniversaireModeles: function () { return appelBase('anniversaire_modeles_liste'); },
+        anniversaireModele: function (type, langue, titre, message) {
+          return appelBase('anniversaire_modele_modifier', { p_type: type, p_langue: langue, p_titre: titre, p_message: message });
+        },
+        anniversaireModeleRestaurer: function (type, langue) { return appelBase('anniversaire_modele_restaurer', { p_type: type, p_langue: langue }); },
+        corrigerNaissance: function (client, date, motif) { return appelBase('corriger_naissance', { p_client: client, p_date: date, p_motif: motif || '' }); },
+        // GOship APP Welcome
+        bienvenueListe: function () { return appelBase('bienvenue_liste'); },
+        bienvenueEnregistrer: function (id, d) { return appelBase('bienvenue_enregistrer', { p_id: id || null, p_donnees: d || {} }); },
+        bienvenuePublier: function (id) { return appelBase('bienvenue_publier', { p_id: id }); },
+        // action : suspendre, terminer, reprendre
+        bienvenueStatut: function (id, action) { return appelBase('bienvenue_statut', { p_id: id, p_action: action }); },
+        // GOship Refer
+        parrainageConfig: function () { return appelBase('parrainage_config_lire'); },
+        parrainageConfigModifier: function (d) { return appelBase('parrainage_config_modifier', { p_donnees: d || {} }); },
+        // action : publier, reprendre, suspendre, terminer
+        parrainageStatut: function (action) { return appelBase('parrainage_statut', { p_action: action }); },
+        parrainageApercu: function (o) { o = o || {}; return appelBase('parrainage_apercu', { p_debut: o.debut || null, p_fin: o.fin || null }); },
+        parrainages: function (o) {
+          o = o || {};
+          return appelBase('parrainages_liste', { p_statut: o.statut || '', p_debut: o.debut || null, p_fin: o.fin || null,
+                                                 p_page: o.page || 0, p_par_page: 50 });
+        },
+        // decision : valider, refuser ; un motif est obligatoire
+        parrainageExaminer: function (id, decision, motif) { return appelBase('parrainage_examiner', { p_id: id, p_decision: decision, p_motif: motif || '' }); },
+        // Les avantages de tous les programmes
+        recompenses: function (o) {
+          o = o || {};
+          return appelBase('recompenses_liste', { p_programme: o.programme || '', p_statut: o.statut || '', p_page: o.page || 0, p_par_page: 50 });
+        },
+        recompenseAccorder: function (client, type, valeur, motif) {
+          return appelBase('recompense_accorder', { p_client: client, p_type: type, p_valeur: valeur, p_motif: motif || '' });
+        },
+        recompenseAnnuler: function (id, motif) { return appelBase('recompense_annuler', { p_id: id, p_motif: motif || '' }); },
+        erreurs: function (o) { return appelBase('programmes_erreurs_liste', { p_page: (o && o.page) || 0, p_par_page: 50 }); }
+      },
+
+      /* ---- Tableau de bord (outils/supabase-tableau-de-bord.sql) -------
+         Chaque chiffre est compté par la base, sur les vraies tables et avec
+         leurs règles : la page n'additionne rien. Une partie que le rôle ne
+         peut pas voir n'est tout simplement pas dans la réponse. */
+
+      // o : { periode (aujourdhui, 7j, 30j, mois, mois_precedent, annee,
+      // personnalise), debut, fin (AAAA-MM-JJ, pour « personnalise »), jours
+      // (sans mouvement au-delà de, 7 par défaut) }
+      vueGenerale: function (o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('vue_generale', {
+            p_periode: o.periode || '30j', p_debut: o.debut || null, p_fin: o.fin || null, p_jours: o.jours || 7
+          });
+        }).then(resultat);
+      },
+
+      // La même, ses colis découpés par filtres ({ pays, ville, service, statut,
+      // lieu } dans o.filtres) : vue_generale_filtree, outils/supabase-analytics.sql.
+      // Une base qui ne l'a pas encore répond « absent » ; la page garde alors
+      // vue_generale, sans les filtres.
+      vueGeneraleFiltree: function (o) {
+        o = o || {};
+        return sb().then(function (c) {
+          return c.rpc('vue_generale_filtree', {
+            p_periode: o.periode || '30j', p_debut: o.debut || null, p_fin: o.fin || null, p_jours: o.jours || 7,
+            p_filtres: o.filtres || {}
+          });
+        }).then(resultat);
+      },
+
+      // liste : « action_requise » ou « sans_mouvement ». Réponse : { liste,
+      // jours, total, lignes }, les plus anciens d'abord.
+      colisATraiter: function (liste, o) {
+        o = o || {};
+        var parPage = o.parPage || 25, page = o.page || 0;
+        return sb().then(function (c) {
+          return c.rpc('colis_a_traiter', {
+            p_liste: liste, p_jours: o.jours || 7, p_limite: parPage, p_decalage: page * parPage
+          });
+        }).then(resultat);
+      },
+
+      // Un n° de colis, de suivi, de facture, un code-barres ou le QR d'une
+      // étiquette, un nom, un téléphone, un e-mail : { colis, clients, factures }
+      rechercheRapide: function (texte) {
+        return sb().then(function (c) { return c.rpc('recherche_rapide', { p_texte: String(texte || '') }); })
+          .then(resultat);
+      },
+
+      // L'onglet Clients : o = { recherche, tri (recent, nom, solde, activite,
+      // colis), filtre (tous, avec_solde, avec_colis), page, parPage }.
+      // Réponse : { lignes, total, finances }
+      clientsSoldes: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50, page = o.page || 0;
+        return sb().then(function (c) {
+          return c.rpc('clients_soldes', {
+            p_recherche: nettoyer(o.recherche) || null, p_tri: o.tri || 'recent', p_filtre: o.filtre || 'tous',
+            p_limite: parPage, p_decalage: page * parPage
+          });
+        }).then(resultat);
+      },
+
+      // Copie le logo des e-mails dans le dossier public de Supabase s'il n'y est pas encore
+      preparerLogo: function (logo) {
+        var publique = String(CFG.supabaseUrl).replace(/\/+$/, '') + '/storage/v1/object/public/' +
+          logo.dossier + '/' + logo.fichier;
+        return fetch(publique, { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+          if (r.ok) return 'present';
+          return fetch(logo.source).then(function (image) {
+            if (!image.ok) throw Erreur('inconnu', 'fichier ' + logo.source + ' introuvable');
+            return image.blob();
+          }).then(function (image) {
+            return sb().then(function (c) {
+              return c.storage.from(logo.dossier).upload(logo.fichier, image,
+                { upsert: true, contentType: 'image/png', cacheControl: '604800' });
+            });
+          }).then(function (res) {
+            if (res.error) throw Erreur('inconnu', res.error.message);
+            return 'envoye';
+          });
+        });
+      }
+    }
+  };
+
+  /* ======================================================================
+     Démonstration (données dans ce navigateur uniquement)
+     ====================================================================== */
+  var CLE_DONNEES = 'gse-demo-donnees';
+  var CLE_SESSION = 'gse-demo-session';
+  var CLE_RECUP = 'gse-demo-recuperation';
+  var ADMIN_DEMO = { email: 'admin@goship.demo', motDePasse: 'demo1234' };
+  // Un compte de démonstration par rôle de l'équipe, même mot de passe
+  var EQUIPE_DEMO = [
+    { id: 'admin-demo', email: ADMIN_DEMO.email, role: 'admin', nom: 'Équipe Goship Express' },
+    { id: 'gerant-demo', email: 'gerant@goship.demo', role: 'gerant', nom: 'Gérant (démonstration)' },
+    { id: 'employe-demo', email: 'employe@goship.demo', role: 'employe', nom: 'Employé (démonstration)' }
+  ];
+  var abonnes = [];
+
+  // Stockage du navigateur ; s'il est bloqué (fichier ouvert directement dans Safari,
+  // navigation privée…), les données restent dans la mémoire de la page.
+  var memoire = {};
+  var stockageBloque = false;
+  function stockage(action, cle, valeur) {
+    if (!stockageBloque) {
+      try {
+        if (action === 'lire') return localStorage.getItem(cle);
+        if (action === 'ecrire') localStorage.setItem(cle, valeur);
+        if (action === 'effacer') localStorage.removeItem(cle);
+        return null;
+      } catch (e) {
+        stockageBloque = true;
+      }
+    }
+    if (action === 'lire') return Object.prototype.hasOwnProperty.call(memoire, cle) ? memoire[cle] : null;
+    if (action === 'ecrire') memoire[cle] = String(valeur);
+    if (action === 'effacer') delete memoire[cle];
+    return null;
+  }
+
+  function empreinte(texte) {
+    // Démonstration uniquement : les vrais mots de passe sont gérés par Supabase.
+    var h = 2166136261;
+    var s = 'goship-demo:' + texte;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(16);
+  }
+
+  function identifiant() {
+    return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+
+  function maintenant() { return new Date().toISOString(); }
+
+  function compteEquipeDemo(e) {
+    return {
+      id: e.id, email: e.email, mdp: empreinte(ADMIN_DEMO.motDePasse), role: e.role, code: null,
+      nom_complet: e.nom, pays: 'US', region: 'Florida', ville: 'Medley',
+      adresse: '8140 NW 74th Ave, Unit 3', telephone: '+1 849 538-6262', langue: 'fr', cree_le: maintenant()
+    };
+  }
+
+  function nouvellesDonnees() {
+    return { v: 1, seqColis: 1000, comptes: EQUIPE_DEMO.map(compteEquipeDemo), colis: [], historique: [] };
+  }
+
+  function lireDonnees() {
+    try {
+      var d = JSON.parse(stockage('lire', CLE_DONNEES));
+      if (d && d.v === 1) {
+        // Données d'avant la Phase 6 : on ajoute le gérant et l'employé de démonstration
+        EQUIPE_DEMO.forEach(function (e) {
+          if (!d.comptes.some(function (c) { return c.id === e.id; })) d.comptes.push(compteEquipeDemo(e));
+        });
+        return d;
+      }
+    } catch (e) { /* données illisibles : on repart de zéro */ }
+    return nouvellesDonnees();
+  }
+
+  // « quoi » dit ce qui a changé, comme le fait le temps réel de Supabase :
+  // les pages ne rechargent ainsi que la liste concernée.
+  function ecrireDonnees(d, quoi) {
+    stockage('ecrire', CLE_DONNEES, JSON.stringify(d));
+    prevenir(quoi || 'colis');
+  }
+
+  function prevenir(quoi) {
+    abonnes.slice().forEach(function (a) { a(quoi); });
+  }
+
+  window.addEventListener('storage', function (e) {
+    if (e.key === CLE_DONNEES) prevenir('colis');
+  });
+
+  // Délai d'un vrai serveur, pour voir les états de chargement
+  function plusTard(valeur) {
+    return new Promise(function (ok) { setTimeout(function () { ok(valeur); }, 180 + Math.random() * 220); });
+  }
+  function echec(code) {
+    return new Promise(function (ok, ko) { setTimeout(function () { ko(Erreur(code)); }, 220); });
+  }
+
+  // La copie démo de lire_numero_document (supabase-identite.sql) : mêmes règles, vide si illisible
+  function numeroDocumentDemo(type, texte) {
+    var n = String(texte == null ? '' : texte).replace(/[\s.\-]/g, '').toUpperCase();
+    if (type === 'passeport') return /^[A-Z0-9]{5,20}$/.test(n) ? n : '';
+    if (type === 'cedula') return /^[0-9]{6,15}$/.test(n) ? n : '';
+    return '';
+  }
+
+  // La copie démo de valider_date_naissance (supabase-naissance.sql) : mêmes refus, mêmes phrases.
+  // Le jour d'« aujourd'hui » est celui de Santo Domingo, comme dans la base.
+  function validerNaissanceDemo(texte) {
+    var v = String(texte == null ? '' : texte).trim();
+    if (!v) throw Erreur('naissance-requise', 'Indiquez votre date de naissance.');
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (!m) throw Erreur('naissance-invalide', 'La date de naissance n\'est pas valide. Écrivez-la sous la forme jour / mois / année.');
+    var a = +m[1], mo = +m[2], j = +m[3], u = new Date(Date.UTC(a, mo - 1, j));
+    if (u.getUTCFullYear() !== a || u.getUTCMonth() !== mo - 1 || u.getUTCDate() !== j) {
+      throw Erreur('naissance-invalide', 'Cette date n\'existe pas. Vérifiez le jour, le mois et l\'année.');
+    }
+    if (v > jourSD(maintenant())) throw Erreur('naissance-invalide', 'La date de naissance ne peut pas être dans le futur.');
+    if (v < '1900-01-01') throw Erreur('naissance-invalide', 'Cette date de naissance est trop ancienne. Vérifiez l\'année.');
+    return v;
+  }
+
+  function publicProfil(compte) {
+    if (!compte) return null;
+    var p = {};
+    Object.keys(compte).forEach(function (k) { if (k !== 'mdp') p[k] = compte[k]; });
+    return p;
+  }
+
+  function compteConnecte(d) {
+    var id = stockage('lire', CLE_SESSION);
+    if (!id) return null;
+    for (var i = 0; i < d.comptes.length; i++) if (d.comptes[i].id === id) return d.comptes[i];
+    return null;
+  }
+
+  function trouverCompte(d, email) {
+    email = String(email || '').trim().toLowerCase();
+    for (var i = 0; i < d.comptes.length; i++) if (d.comptes[i].email === email) return d.comptes[i];
+    return null;
+  }
+
+  // Ce que voient le client et le suivi public : ni les opérations internes,
+  // ni une étape annulée par une correction (règle historique_lecture et
+  // suivre_colis dans outils/supabase.sql). tout : la vue de l'équipe.
+  function evenementVisible(h, liste) {
+    if (h.visibilite === 'interne') return false;
+    return h.id == null || !liste.some(function (x) { return x.corrige_id === h.id; });
+  }
+
+  function avecHistorique(d, c, tout) {
+    var x = JSON.parse(JSON.stringify(c));
+    var liste = historiqueDe(d, c.id);
+    x.historique = liste.filter(function (h) { return tout || evenementVisible(h, liste); })
+      .map(function (h) {
+        return { statut: h.statut, lieu: h.lieu, note: h.note, cree_le: h.cree_le, type_evenement: h.type_evenement || null };
+      });
+    return x;
+  }
+
+  // Un événement tel que le rend la base (evenement_json)
+  function evenementJson(d, h) {
+    var auteur = d.comptes.filter(function (c) { return c.id === h.auteur_id; })[0];
+    return {
+      id: h.id, colis_id: h.colis_id, type_evenement: h.type_evenement || null,
+      statut_precedent: h.statut_precedent == null ? null : h.statut_precedent, statut: h.statut,
+      lieu: h.lieu || '', note: h.note || '', metadonnees: h.metadonnees || {},
+      auteur_id: h.auteur_id || null, auteur_role: h.auteur_role || null,
+      auteur: auteur ? (auteur.nom_complet || auteur.email) : null,
+      visibilite: h.visibilite || 'publique', corrige_id: h.corrige_id == null ? null : h.corrige_id,
+      corrige: h.id != null && d.historique.some(function (x) { return x.corrige_id === h.id; }),
+      cree_le: h.cree_le
+    };
+  }
+
+  function detailsColis(d, c) {
+    var x = JSON.parse(JSON.stringify(c));
+    var cl = null;
+    for (var i = 0; i < d.comptes.length; i++) if (d.comptes[i].id === c.client_id) cl = d.comptes[i];
+    x.code_client = cl ? cl.code : null;
+    x.nom_client = cl ? cl.nom_complet : null;
+    x.telephone_client = cl ? cl.telephone : null;
+    x.email_client = cl ? cl.email : null;
+    // Adresse et région : l'étiquette d'expédition s'en sert (voir la vue
+    // colis_details dans outils/supabase.sql, partie 4)
+    x.adresse_client = cl ? cl.adresse : null;
+    x.region_client = cl ? cl.region : null;
+    x.ville_client = cl ? cl.ville : null;
+    x.pays_client = cl ? cl.pays : null;
+    x.langue_client = cl ? cl.langue : null;
+    return x;
+  }
+
+  // L'événement écrit quand un colis naît (completer_evenement, chemin de la
+  // création) : COLIS_RECU, sans statut précédent, par le compte connecté.
+  function historiser(d, c, date) {
+    var h = historiqueDe(d, c.id);
+    var avant = h.length ? h[h.length - 1].statut : null;
+    var moi = compteConnecte(d);
+    d.seqEvenement = (d.seqEvenement || 0) + 1;
+    d.historique.push({
+      id: d.seqEvenement, colis_id: c.id, statut: c.statut, lieu: c.lieu || '', note: c.note || '',
+      type_evenement: !avant ? 'COLIS_RECU'
+        : (avant === c.statut ? 'MISE_A_JOUR' : (typePourStatut(avant, c.statut, null) || 'MISE_A_JOUR')),
+      statut_precedent: avant, auteur_id: moi ? moi.id : null, auteur_role: moi ? moi.role : null,
+      metadonnees: avant ? {} : { source: 'creation' }, cle_idempotence: null, visibilite: 'publique',
+      corrige_id: null, cree_le: date || maintenant()
+    });    // Le colis vient d'arriver à l'entrepôt : une opération qualifiante pour les programmes (jamais bloquante)
+    if (!avant) programmesOperationDemo(d, c.client_id, 'colis_recu', 'colis:' + c.id);
+  }
+
+  // Les opérations du poste de scan, et la fiche qu'il affiche : même
+  // contenu que operations_du_scanner et fiche_scanner (supabase-scanner.sql).
+  var OPERATIONS_SCANNER = ['COLIS_INSPECTE', 'COLIS_EMBALLE', 'COLIS_CONSOLIDE', 'COLIS_CHARGE', 'COLIS_EXPEDIE',
+                            'COLIS_ARRIVE', 'COLIS_TRANSFERE', 'COLIS_DISPONIBLE', 'COLIS_LIVRE', 'ACTION_REQUISE',
+                            'ACTION_RESOLUE'];
+
+  function colisParReference(d, reference) {
+    var r = String(reference || '').trim().toUpperCase();
+    return d.colis.filter(function (x) { return x.numero === r; })[0] ||
+      d.colis.filter(function (x) { return x.suivi_transporteur && x.suivi_transporteur === r; })
+        .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })[0] || null;
+  }
+
+  function ficheScanner(d, c) {
+    var liste = historiqueDe(d, c.id);
+    var precedent = statutPrecedent(liste, c.statut);
+    var cl = d.comptes.filter(function (x) { return x.id === c.client_id; })[0];
+    function derniere(statut) {
+      var e = liste.filter(function (h) { return h.statut === statut && h.id != null && evenementVisible(h, liste); }).pop();
+      return e ? evenementJson(d, e) : null;
+    }
+    return {
+      colis: {
+        id: c.id, numero: c.numero, suivi_transporteur: c.suivi_transporteur || '', description: c.description || '',
+        expediteur: c.expediteur || '', poids_lb: c.poids_lb, service: c.service, pays_destination: c.pays_destination,
+        destination: c.destination || '', statut: c.statut, lieu: c.lieu || '', note: c.note || '',
+        recu_le: c.recu_le, maj_le: c.maj_le, prix_usd: prixColis(c)
+      },
+      client: cl ? { code: cl.code, nom_complet: cl.nom_complet, ville: cl.ville, pays: cl.pays } : null,
+      origine: 'Miami (Medley), FL',
+      precedent: precedent,
+      dernier_evenement: liste.length ? evenementJson(d, liste[liste.length - 1]) : null,
+      livraison: c.statut === 'livre' ? derniere('livre') : null,
+      action_requise: c.statut === 'incident' ? derniere('incident') : null,
+      operations: OPERATIONS_SCANNER.filter(function (k) {
+        return !validerOperation(c.statut, precedent, k, null).code;
+      }).map(function (k) {
+        var cible = validerOperation(c.statut, precedent, k, null).cible;
+        return { type: k, libelle: TYPES_EVENEMENT[k].libelle, statut: cible, change_statut: cible !== c.statut,
+                 lieu_requis: TYPES_EVENEMENT[k].lieu_requis };
+      }),
+      historique: liste.map(function (h) { return evenementJson(d, h); })
+    };
+  }
+
+  function resultatOperation(d, colisId, e, deja) {
+    var c = trouverColisDemo(d, colisId);
+    return {
+      deja: deja,
+      change_statut: !deja && !!e && e.statut_precedent !== e.statut,
+      colis: c ? { id: c.id, numero: c.numero, statut: c.statut, lieu: c.lieu || '', note: c.note || '', maj_le: c.maj_le } : null,
+      evenement: e ? evenementJson(d, e) : null
+    };
+  }
+
+  // executer_operation, version démonstration : mêmes étapes, mêmes refus.
+  // o : { lieu, note, metadonnees, cle, attendu, cible, motif }
+  function operationDemo(d, moi, colisId, type, o) {
+    o = o || {};
+    var v = String(type || '').trim().toUpperCase();
+    var t = TYPES_EVENEMENT[v];
+    if (!t) throw Erreur('EVENT_TYPE_INVALID', 'Type d\u2019événement inconnu : ' + (type || '(vide)') + '.');
+    // Chaque type a sa permission : scanner, changer le statut, corriger
+    if (!peutCompte(moi, t.permission)) {
+      throw Erreur('non-autorise', 'Action « ' + t.permission + ' » réservée : reconnectez-vous avec un compte autorisé.');
+    }
+    var meta = o.metadonnees == null ? {} : o.metadonnees;
+    if (typeof meta !== 'object' || Array.isArray(meta)) {
+      throw Erreur('INVALID_EVENT_DATA', 'Les précisions d\u2019un événement sont un objet JSON.');
+    }
+    var texteMeta = JSON.stringify(meta);
+    if (texteMeta.length > 4000) throw Erreur('INVALID_EVENT_DATA', 'Précisions trop longues (4 000 caractères au plus).');
+    if (/"[^"]*(pass|mot_de_passe|secret|token|jeton|api_?key|cle_api|service_role)[^"]*"\s*:/i.test(texteMeta)) {
+      throw Erreur('INVALID_EVENT_DATA', 'Aucun mot de passe, jeton ni clé dans les précisions d\u2019un événement.');
+    }
+    var motif = String(o.motif || '').trim().slice(0, 300);
+    if (t.special === 'correction') {
+      if (!motif) throw Erreur('INVALID_EVENT_DATA', 'Une correction exige son motif.');
+      meta = Object.assign({}, meta, { motif: motif });
+    }
+    if (o.lieu != null && String(o.lieu).length > 80) throw Erreur('INVALID_LOCATION', 'Lieu trop long (80 caractères au plus).');
+    if (o.note != null && String(o.note).length > 300) {
+      throw Erreur('INVALID_EVENT_DATA', 'Message trop long (300 caractères au plus).');
+    }
+    var cle = o.cle ? String(o.cle).trim() : null;
+    if (cle) {
+      var connu = d.historique.filter(function (h) { return h.cle_idempotence === cle; })[0];
+      if (connu) {
+        if (connu.colis_id !== colisId || connu.type_evenement !== v) {
+          throw Erreur('DUPLICATE_OPERATION', 'Cette clé de requête a déjà servi pour une autre opération.');
+        }
+        return resultatOperation(d, colisId, connu, true);
+      }
+    }
+    var c = trouverColisDemo(d, colisId);
+    if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
+    var liste = historiqueDe(d, c.id);
+    var precedent = statutPrecedent(liste, c.statut);
+    var dernier = liste[liste.length - 1] || null;
+
+    if (o.attendu && o.attendu !== c.statut) {
+      if (dernier && dernier.type_evenement === v && (!t.statut || t.statut === c.statut)) {
+        return resultatOperation(d, c.id, dernier, true);
+      }
+      throw Erreur('STATUS_CONFLICT', c.numero + ' est passé à « ' + LIBELLES[c.statut] + ' » entre-temps : rechargez-le.');
+    }
+    var r = validerOperation(c.statut, precedent, v, o.cible || null);
+    if (r.code === 'STATUS_ALREADY_SET' && dernier && dernier.type_evenement === v) {
+      return resultatOperation(d, c.id, dernier, true);
+    }
+    if (r.code) throw Erreur(r.code, c.numero + ' — ' + r.detail);
+    var cible = r.cible, lieu, note;
+
+    if (!t.statut && (!t.special || t.special === 'mise_a_jour')) {
+      lieu = String(o.lieu != null ? o.lieu : (c.lieu || '')).trim();
+      note = String(o.note != null ? o.note : (t.special === 'mise_a_jour' ? (c.note || '') : '')).trim();
+    } else if (t.special === 'correction' || t.special === 'sortie') {
+      var etape = liste.filter(function (h) {
+        return h.statut === cible && h.visibilite !== 'interne' && evenementVisible(h, liste);
+      }).pop();
+      lieu = String(o.lieu != null ? o.lieu : (etape ? etape.lieu || '' : '')).trim();
+      note = String(o.note != null ? o.note : (etape ? etape.note || '' : '')).trim();
+    } else {
+      lieu = String(o.lieu || '').trim();
+      note = String(o.note || '').trim();
+    }
+    if (t.lieu_requis && !lieu) throw Erreur('LOCATION_REQUIRED', 'Indiquez l\u2019agence où le client peut retirer son colis.');
+    if (t.special === 'mise_a_jour' && (c.lieu || '') === lieu && (c.note || '') === note) {
+      return resultatOperation(d, c.id, dernier, true);
+    }
+    if (!t.statut && !t.special && dernier && dernier.type_evenement === v && dernier.lieu === lieu &&
+        (dernier.note || '') === note && Date.now() - new Date(dernier.cree_le).getTime() < 120e3) {
+      return resultatOperation(d, c.id, dernier, true);
+    }
+    var corrige = null;
+    if (t.special === 'correction') {
+      var annule = liste.filter(function (h) {
+        return h.statut === c.statut && h.visibilite !== 'interne' && evenementVisible(h, liste);
+      }).pop();
+      corrige = annule ? annule.id : null;
+    }
+
+    d.seqEvenement = (d.seqEvenement || 0) + 1;
+    var e = {
+      id: d.seqEvenement, colis_id: c.id, type_evenement: v, statut_precedent: c.statut, statut: cible,
+      lieu: lieu, note: note, metadonnees: meta, auteur_id: moi ? moi.id : null, auteur_role: moi ? moi.role : null,
+      cle_idempotence: cle, visibilite: t.visibilite, corrige_id: corrige, cree_le: maintenant()
+    };
+    d.historique.push(e);
+    if (v === 'COLIS_RECU' && t.visibilite === 'publique') programmesOperationDemo(d, c.client_id, 'colis_recu', 'colis:' + c.id);
+    if (cible !== c.statut || t.special === 'mise_a_jour') {
+      var avant = { statut: c.statut, lieu: c.lieu || '', note: c.note || '' };
+      c.statut = cible;
+      c.lieu = lieu;
+      c.note = note;
+      c.maj_le = maintenant();
+      var diff = difference(avant, c, ['statut', 'lieu', 'note']);
+      if (diff) {
+        journaliser(d, moi, avant.statut !== cible ? 'colis.statut' : 'colis.modification', 'colis', c.id,
+                    diff.avant, diff.apres);
+      }
+    }
+    if (t.special === 'correction') {
+      journaliser(d, moi, 'colis.correction', 'colis', c.id, { statut: e.statut_precedent, evenement: corrige },
+                  { statut: cible, evenement: e.id, motif: motif });
+    }
+    return resultatOperation(d, c.id, e, false);
+  }
+
+  // exiger_permission de la base : le compte connecté a-t-il cette permission ?
+  // Le refus a le code que le site reçoit en ligne (« non-autorise »).
+  function exiger(d, action) {
+    var moi = compteConnecte(d);
+    if (!peutCompte(moi, action)) throw Erreur('non-autorise');
+    return moi;
+  }
+
+  /* ---- Les règles métier, version démonstration ---------------------------
+     La copie, dans le navigateur, de regles_colis et des fonctions de service
+     de outils/supabase-services.sql : mêmes contrôles, mêmes codes d'erreur,
+     mêmes phrases. Toute règle changée là-bas se change ici, et
+     outils/essais-services/essai-demo.js rejoue les mêmes cas des deux côtés.
+     Aucune écriture n'a lieu tant que tout n'est pas validé : une erreur au
+     milieu laisse les données telles qu'elles étaient, comme une transaction.
+     -------------------------------------------------------------------------- */
+  function rejeter(e) {
+    return new Promise(function (ok, ko) { setTimeout(function () { ko(e); }, 220); });
+  }
+
+  // « 4,5 », 4.5 ou « » : un nombre, null, ou l'erreur métier demandée
+  function lireNombre(valeur, code, detail) {
+    if (valeur == null || String(valeur).trim() === '') return null;
+    var n = Number(String(valeur).replace(',', '.').trim());
+    if (!isFinite(n)) throw Erreur(code, detail);
+    return n;
+  }
+
+  function historiqueDe(d, id) {
+    return d.historique.filter(function (h) { return h.colis_id === id; });
+  }
+
+  function trouverColisDemo(d, id) {
+    return d.colis.filter(function (x) { return x.id === id; })[0] || null;
+  }
+
+  // Les règles de départ des notifications d'un colis (notification_regles,
+  // supabase-notifications.sql) : l'étape, le type et ses canaux extérieurs.
+  var REGLES_ENVOI_DEMO = {
+    COLIS_RECU: { type: 'shipment_received', canaux: ['push', 'email', 'whatsapp'] },
+    COLIS_EMBALLE: { type: 'shipment_packed', canaux: ['push'] },
+    COLIS_EXPEDIE: { type: 'shipment_shipped', canaux: ['push'] },
+    COLIS_ARRIVE: { type: 'shipment_arrived', canaux: ['push'] },
+    COLIS_TRANSFERE: { type: 'shipment_transferred', canaux: ['push'] },
+    COLIS_DISPONIBLE: { type: 'shipment_available', canaux: ['push', 'email', 'whatsapp'] },
+    COLIS_LIVRE: { type: 'shipment_delivered', canaux: ['push'] },
+    ACTION_REQUISE: { type: 'action_required', canaux: ['push', 'email'] },
+    ACTION_RESOLUE: { type: 'action_resolved', canaux: ['push'] }
+  };
+
+  // Le journal d'audit : ce qui a changé, par qui, et pourquoi (le motif, quand la
+  // fonction de service en a reçu un — supabase-corrections.sql)
+  function journaliser(d, moi, action, entite, id, avant, apres, motif) {
+    d.journal = d.journal || [];
+    d.journal.push({ id: d.journal.length + 1, auteur_id: moi ? moi.id : null, action: action, entite: entite,
+                     entite_id: String(id), avant: avant || null, apres: apres || null,
+                     motif: String(motif || '').trim().slice(0, 300), cree_le: maintenant() });
+  }
+
+  // Un champ absent d'un ancien colis de démonstration (adresse_livraison, prix_fixe_usd…)
+  // vaut le champ vide qui le remplace : ce n'est pas une modification. La base, elle,
+  // a la colonne sur toutes ses lignes.
+  function vide(v) { return v === undefined || v === null || v === ''; }
+  function difference(avant, apres, champs) {
+    var a = {}, b = {}, n = 0;
+    champs.forEach(function (k) {
+      if (vide(avant[k]) && vide(apres[k])) return;
+      if (JSON.stringify(avant[k]) !== JSON.stringify(apres[k])) { a[k] = avant[k]; b[k] = apres[k]; n++; }
+    });
+    return n ? { avant: a, apres: b } : null;
+  }
+
+  // Les 10 premiers : ceux que la base journalise à la création (journaliser_colis)
+  var RESUME_COLIS = ['numero', 'client_id', 'statut', 'poids_lb', 'tarif_lb_usd', 'prix_usd', 'prix_fixe_usd',
+                      'service', 'pays_destination', 'suivi_transporteur', 'description', 'expediteur',
+                      'destination', 'adresse_livraison', 'recu_le', 'lieu', 'note'];
+  var RESUME_CREATION = 10;
+
+  // regles_colis : c est le colis tel qu'il sera écrit, avant la version
+  // précédente (null à la création). Complète c (tarif, prix, textes bornés)
+  // ou lève l'erreur métier.
+  function reglesColis(d, c, avant) {
+    var nouveau = !avant;
+    function change(k) { return nouveau || c[k] !== avant[k]; }
+    c.description = String(c.description || '').trim().slice(0, 300);
+    c.expediteur = String(c.expediteur || '').trim().slice(0, 80);
+    c.destination = String(c.destination || '').trim().slice(0, 80);
+    c.adresse_livraison = String(c.adresse_livraison || '').trim().slice(0, 160);
+    c.lieu = String(c.lieu || '').trim().slice(0, 80);
+    c.note = String(c.note || '').trim().slice(0, 300);
+    c.suivi_transporteur = String(c.suivi_transporteur || '').trim().toUpperCase().slice(0, 60);
+
+    if (change('client_id')) {
+      if (nouveau && !c.client_id) throw Erreur('CLIENT_NOT_FOUND', 'Choisissez le client à qui appartient ce colis.');
+      if (c.client_id && !d.comptes.some(function (x) { return x.id === c.client_id && x.role === 'client'; })) {
+        throw Erreur('CLIENT_NOT_FOUND', 'Aucun client avec cet identifiant.');
+      }
+    }
+    if (change('description') && !c.description) throw Erreur('INVALID_DESCRIPTION', 'Décrivez le contenu du colis.');
+    // Un poids saisi est toujours > 0 ; absent, il n'est permis qu'au prix fixé à la
+    // main (voir le calcul du prix, plus bas) — supabase-corrections.sql.
+    if (c.poids_lb != null && change('poids_lb')) {
+      if (!(c.poids_lb > 0)) throw Erreur('INVALID_WEIGHT', 'Le poids doit être supérieur à zéro, en livres.');
+      if (c.poids_lb > 10000) throw Erreur('INVALID_WEIGHT', 'Poids supérieur à 10 000 lb : vérifiez la saisie.');
+    }
+    if (change('service') && ['aerien', 'maritime', 'terrestre'].indexOf(c.service) < 0) {
+      throw Erreur('INVALID_SERVICE', 'Service inconnu : aérien, maritime ou terrestre.');
+    }
+    if (change('pays_destination') && ['HT', 'DO', 'US'].indexOf(c.pays_destination) < 0) {
+      throw Erreur('INVALID_DESTINATION', 'Destination inconnue : HT, DO ou US.');
+    }
+    // La ville de livraison, dès que la destination se décide ou change
+    if ((change('destination') || change('pays_destination')) && !c.destination) {
+      throw Erreur('CITY_REQUIRED', 'Indiquez la ville de livraison du colis.');
+    }
+    if (change('recu_le') && new Date(c.recu_le).getTime() > Date.now() + 36e5) {
+      throw Erreur('INVALID_DATE', 'La date de réception ne peut pas être dans le futur.');
+    }
+    if (c.suivi_transporteur && change('suivi_transporteur')) {
+      var autre = d.colis.filter(function (x) {
+        return x.id !== c.id && x.suivi_transporteur === c.suivi_transporteur;
+      })[0];
+      if (autre) {
+        throw Erreur('TRACKING_ALREADY_EXISTS', 'Le numéro de suivi ' + c.suivi_transporteur +
+                     ' est déjà celui du colis ' + autre.numero + '.');
+      }
+    }
+
+    var auteur = compteConnecte(d);
+    var factureur = !auteur || peutCompte(auteur, 'invoices.edit');
+    var etaitFixe = !nouveau && prixFixe(avant);
+    if (prixFixe(c)) {
+      // Prix fixé à la main : il remplace poids × tarif, sans tarif à la livre
+      c.prix_fixe_usd = Number(c.prix_fixe_usd);
+      var fixeChange = nouveau || !etaitFixe || arrondi(c.prix_fixe_usd) !== arrondi(avant.prix_fixe_usd);
+      if (fixeChange && !(c.prix_fixe_usd >= 0 && c.prix_fixe_usd <= 100000)) {
+        throw Erreur('INVALID_PRICE', 'Le prix du colis doit être compris entre 0 et 100 000 $.');
+      }
+      if (fixeChange && !factureur) {
+        throw Erreur('non-autorise', 'Un prix fixé à la main est réservé à qui peut modifier les factures.');
+      }
+      c.prix_fixe_usd = arrondi(c.prix_fixe_usd);
+      c.tarif_lb_usd = null;
+      c.prix_usd = c.prix_fixe_usd;
+    } else {
+      c.prix_fixe_usd = null;
+      // Revenir au prix calculé est aussi un geste de facturation
+      if (etaitFixe && !factureur) {
+        throw Erreur('non-autorise', 'Un prix fixé à la main est réservé à qui peut modifier les factures.');
+      }
+      if (c.tarif_lb_usd == null) c.tarif_lb_usd = nouveau || avant.tarif_lb_usd == null ? TARIF_LB_DEFAUT : avant.tarif_lb_usd;
+      if (change('tarif_lb_usd') && (c.tarif_lb_usd < 0 || c.tarif_lb_usd > 1000)) {
+        throw Erreur('INVALID_RATE', 'Le tarif doit être compris entre 0 et 1 000 $ la livre.');
+      }
+      // Un tarif autre que celui de la maison est un geste de facturation
+      if (!factureur &&
+          ((nouveau && c.tarif_lb_usd !== TARIF_LB_DEFAUT) ||
+           (!nouveau && !etaitFixe && c.tarif_lb_usd !== avant.tarif_lb_usd))) {
+        throw Erreur('non-autorise', 'Un tarif particulier est réservé à qui peut modifier les factures.');
+      }
+      // Le prix se recalcule aussi quand on quitte un prix fixé. Jamais sans poids :
+      // un ancien colis qui n'en a jamais eu garde son prix tel quel.
+      if (nouveau || change('poids_lb') || change('tarif_lb_usd') || avant.prix_usd == null || etaitFixe) {
+        if (c.poids_lb == null) {
+          if (nouveau || avant.poids_lb != null || change('tarif_lb_usd') || etaitFixe) {
+            throw Erreur('INVALID_WEIGHT',
+                         'Indiquez le poids, en livres : le prix se calcule poids × tarif. Sans poids, fixez le prix à la main.');
+          }
+          c.prix_usd = avant.prix_usd;
+        } else {
+          c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
+        }
+      } else {
+        c.prix_usd = avant.prix_usd;
+      }
+    }
+
+    if (nouveau) {
+      if ((c.statut || 'recu') !== 'recu') {
+        throw Erreur('INVALID_STATUS', 'Un colis est enregistré au statut « Reçu » ; changez ensuite son statut.');
+      }
+      c.statut = 'recu';
+    } else if (c.statut !== avant.statut) {
+      if (!TRANSITIONS[c.statut]) throw Erreur('INVALID_STATUS', 'Statut inconnu : ' + (c.statut || '(vide)') + '.');
+      if (!transitionPermise(avant.statut, c.statut, statutPrecedent(historiqueDe(d, c.id), avant.statut))) {
+        throw Erreur('INVALID_STATUS_TRANSITION', LIBELLES[avant.statut] + ' → ' + LIBELLES[c.statut] +
+                     ' : transition interdite pour le colis ' + c.numero + '.');
+      }
+    }
+    if (c.statut === 'disponible' && !c.lieu && (nouveau || change('statut') || change('lieu'))) {
+      throw Erreur('LOCATION_REQUIRED', 'Indiquez l’agence où le client peut retirer son colis.');
+    }
+    if (!nouveau) c.cle_idempotence = avant.cle_idempotence;
+    return c;
+  }
+
+  /* ---- Les finances, version démonstration ---------------------------------
+     La copie de outils/supabase-finances.sql : paiements, recalcul du payé et
+     du statut, annulations, regroupement. Mêmes contrôles, dans le même
+     ordre, mêmes codes et mêmes phrases ; outils/essais-services/
+     essai-finances.js rejoue les cas de essai-finances.py.
+     -------------------------------------------------------------------------- */
+  function montantTexte(n) { return (Number(n) || 0).toFixed(2); }
+
+  // La file des événements de facturation (evenements_facturation)
+  function noterEvenementDemo(d, type, f, p, donnees) {
+    d.evenementsFacturation = d.evenementsFacturation || [];
+    d.evenementsFacturation.push({ id: d.evenementsFacturation.length + 1, type: type, facture_id: f ? f.id : null,
+                                   paiement_id: p ? p.id : null, client_id: f ? f.client_id : null,
+                                   donnees: donnees || {}, cree_le: maintenant(), traite_le: null });
+    // programmes_evenement_facturation : une facture payée est une opération qualifiante ; une facture
+    // ou un paiement annulé annule les avantages encore en attente
+    if (type === 'FACTURE_PAYEE' && f && f.client_id) programmesOperationDemo(d, f.client_id, 'facture_payee', 'facture:' + f.id);
+    else if ((type === 'FACTURE_ANNULEE' || type === 'PAIEMENT_ANNULE') && f) operationAnnuleeDemo(d, 'facture:' + f.id);
+  }
+
+  // recalculer_facture : payé, statut, date et moyen suivent les paiements valides
+  function recalculerFactureDemo(d, f) {
+    var valides = paiementsValides(f).sort(function (a, b) {
+      return new Date(a.paye_le) - new Date(b.paye_le) || new Date(a.cree_le) - new Date(b.cree_le);
+    });
+    var paye = arrondi(valides.reduce(function (s, p) { return s + p.montant_usd; }, 0));
+    var dernier = valides[valides.length - 1];
+    var avant = f.statut;
+    f.montant_paye_usd = paye;
+    if (f.statut !== 'annulee') f.statut = f.montant_usd > 0 && paye >= f.montant_usd ? 'payee' : 'a_payer';
+    f.payee_le = f.statut === 'payee' ? (dernier ? dernier.paye_le : maintenant()) : null;
+    f.moyen = paye > 0 && dernier && dernier.moyen !== 'autre' ? dernier.moyen : '';
+    if (f.statut === 'payee' && avant !== 'payee') {
+      noterEvenementDemo(d, 'FACTURE_PAYEE', f, null, { numero: f.numero, montant_usd: f.montant_usd });
+    }
+  }
+
+  // La facture telle que la renvoie la base (facture_complete) : client,
+  // lignes, payé, solde, état et paiements
+  function factureComplete(d, f) {
+    if (!f) return null;
+    var client = d.comptes.filter(function (c) { return c.id === f.client_id; })[0];
+    var sortie = Object.assign({}, f, {
+      clients: client ? {
+        code: client.code, nom_complet: client.nom_complet, telephone: client.telephone,
+        email: client.email, adresse: client.adresse, region: client.region,
+        ville: client.ville, pays: client.pays, langue: client.langue
+      } : null,
+      facture_lignes: (f.facture_lignes || []).map(function (l) {
+        var colis = trouverColisDemo(d, l.colis_id);
+        return Object.assign({}, l, {
+          colis: colis ? { numero: colis.numero, description: colis.description, poids_lb: colis.poids_lb } : null
+        });
+      }),
+      paiements: (f.paiements || []).map(function (p) { return Object.assign({}, p); })
+    });
+    sortie.paye_usd = payeDe({ paiements: f.paiements || [] });
+    sortie.solde_usd = soldeDe({ statut: f.statut, montant_usd: f.montant_usd, paye_usd: sortie.paye_usd });
+    sortie.etat_paiement = etatFacture({ statut: f.statut, montant_usd: f.montant_usd, echeance_le: f.echeance_le,
+                                         paye_usd: sortie.paye_usd, solde_usd: sortie.solde_usd });
+    return trierPaiements(sortie);
+  }
+
+  // La facture active (non annulée) qui porte ce colis, s'il y en a une
+  function factureActiveDu(d, colisId, sauf) {
+    return (d.factures || []).filter(function (f) {
+      return f.statut !== 'annulee' && f.id !== sauf &&
+        (f.facture_lignes || []).some(function (l) { return l.colis_id === colisId; });
+    }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })[0] || null;
+  }
+
+  // Un numéro jamais attribué (preparer_facture + reserver_numero_facture)
+  function numeroFactureDemo(d) {
+    d.numerosFactures = d.numerosFactures || [];
+    var mois = new Date(), numero;
+    do {
+      numero = mois.getFullYear() + '-' + String(mois.getMonth() + 1).padStart(2, '0') + '-' +
+               String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    } while (d.numerosFactures.indexOf(numero) >= 0 ||
+             (d.factures || []).some(function (f) { return f.numero === numero; }));
+    d.numerosFactures.push(numero);
+    return numero;
+  }
+
+  // Une facture neuve (garde_facture à l'insertion, puis suivre_facture) : elle
+  // naît à payer ; ce qui est payé à sa création devient un paiement.
+  function nouvelleFacture(d, moi, champs, colis) {
+    d.factures = d.factures || [];
+    d.numeroFacture = (d.numeroFacture || 0) + 1;
+    var paye = arrondi(champs.montant_paye_usd || 0);
+    var f = Object.assign({
+      id: 'fac-' + d.numeroFacture,
+      statut: 'a_payer', note: '', lien_paiement: '', moyen: '', echeance_le: null,
+      frais_service_usd: 0, cle_idempotence: null, cree_le: maintenant(), payee_le: null,
+      annulee_le: null, annulee_par: null, motif_annulation: '', remplacee_par: null
+    }, choisir(champs, ['client_id', 'montant_usd', 'frais_service_usd', 'echeance_le', 'lien_paiement', 'note',
+                        'cle_idempotence']));
+    f.numero = numeroFactureDemo(d);
+    f.montant_paye_usd = 0;
+    if (f.montant_usd > 0 && paye >= f.montant_usd) f.statut = 'payee';
+    f.paiements = [];
+    f.facture_lignes = (colis || []).map(function (c, i) {
+      return { id: i + 1, facture_id: f.id, colis_id: c.id, libelle: c.description || 'Transport',
+               montant_usd: prixColis(c), quantite: 1, poids_lb: c.poids_lb != null ? c.poids_lb : null,
+               tarif_lb_usd: tarifLigne(c) };
+    });
+    d.factures.push(f);
+    journaliser(d, moi, 'facture.creation', 'facture', f.id, null,
+                choisir(f, ['numero', 'client_id', 'montant_usd', 'frais_service_usd', 'montant_paye_usd', 'statut']));
+    noterEvenementDemo(d, 'FACTURE_CREEE', f, null, { numero: f.numero, montant_usd: f.montant_usd });
+    if (paye > 0) {
+      ajouterPaiementDemo(d, moi, f, { montant_usd: paye, moyen: 'autre', note: 'Payé à la création de la facture.',
+                                       paye_le: maintenant() }, 'creation', null);
+    }
+    return f;
+  }
+
+  // regles_paiement, puis l'écriture et suivre_paiement. Rien n'est écrit si
+  // une règle refuse.
+  function ajouterPaiementDemo(d, moi, f, v, origine, cle) {
+    var montant = arrondi(v.montant_usd);
+    var moyen = String(v.moyen || '').trim().toLowerCase();
+    if (!(montant > 0)) throw Erreur('INVALID_AMOUNT', 'Le montant du paiement doit être supérieur à zéro.');
+    if (MOYENS_PAIEMENT.indexOf(moyen) < 0) {
+      throw Erreur('INVALID_PAYMENT_METHOD', 'Moyen de paiement inconnu : ' + (moyen || '(vide)') + '.');
+    }
+    var date = v.paye_le ? new Date(v.paye_le) : new Date();
+    if (date.getTime() > Date.now() + 36e5) {
+      throw Erreur('INVALID_DATE', 'La date du paiement ne peut pas être dans le futur.');
+    }
+    if (f.statut === 'annulee') {
+      throw Erreur('INVOICE_CANCELLED', 'La facture ' + f.numero + ' est annulée : elle ne reçoit plus de paiement.');
+    }
+    var paye = payeDe({ paiements: f.paiements || [] });
+    if (paye >= f.montant_usd) throw Erreur('INVOICE_ALREADY_PAID', 'La facture ' + f.numero + ' est déjà entièrement payée.');
+    if (montant > arrondi(f.montant_usd - paye)) {
+      throw Erreur('OVERPAYMENT', 'Le paiement de ' + montantTexte(montant) + ' $ dépasse le solde de ' +
+                   montantTexte(f.montant_usd - paye) + ' $ de la facture ' + f.numero + '.');
+    }
+    var reference = String(v.reference || '').trim().slice(0, 100);
+    if (reference && paiementsValides(f).some(function (p) {
+      return p.moyen === moyen && p.reference.toLowerCase() === reference.toLowerCase();
+    })) {
+      throw Erreur('DUPLICATE_PAYMENT', 'Ce paiement (référence ' + reference + ') est déjà enregistré sur la facture ' +
+                   f.numero + '.');
+    }
+    d.numeroPaiement = (d.numeroPaiement || 0) + 1;
+    var p = {
+      id: 'pai-' + d.numeroPaiement, facture_id: f.id, client_id: f.client_id, montant_usd: montant, moyen: moyen,
+      reference: reference, paye_le: date.toISOString(), note: String(v.note || '').trim().slice(0, 300),
+      origine: origine || 'saisie', cle_idempotence: cle || null, cree_par: moi ? moi.id : null,
+      cree_le: maintenant(), annule_le: null, annule_par: null, motif_annulation: ''
+    };
+    f.paiements = f.paiements || [];
+    f.paiements.push(p);
+    recalculerFactureDemo(d, f);
+    var resume = { facture: f.numero, montant_usd: p.montant_usd, moyen: p.moyen, reference: p.reference,
+                   paye_le: p.paye_le, origine: p.origine };
+    journaliser(d, moi, 'paiement.enregistrement', 'paiement', p.id, null, resume);
+    noterEvenementDemo(d, 'PAIEMENT_ENREGISTRE', f, p, resume);
+    return p;
+  }
+
+  // Une facture de colis qui peut se regrouper, ou la raison du refus
+  function refusRegroupement(f) {
+    if (f.statut !== 'a_payer') {
+      return Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' est ' +
+                    (f.statut === 'payee' ? 'payée' : 'annulée') + ' : elle ne se regroupe pas.');
+    }
+    if (paiementsValides(f).length) {
+      return Erreur('INVOICE_HAS_PAYMENTS', 'La facture ' + f.numero + ' a déjà reçu un paiement : elle ne se regroupe pas.');
+    }
+    var lignes = f.facture_lignes || [];
+    if (!lignes.length || lignes.some(function (l) { return !l.colis_id; })) {
+      return Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' n’est pas une facture de colis : elle ne se regroupe pas.');
+    }
+    return null;
+  }
+
+  // facturer_colis : sa facture, ou celle qu'il a déjà. Sans frais de service
+  // (supabase-frais-service.sql) : ils viennent au regroupement ou à l'encaissement.
+  function facturerColisDemo(d, moi, c) {
+    if (!c.client_id) throw Erreur('CLIENT_NOT_FOUND', 'Ce colis n’a plus de client : impossible de le facturer.');
+    var existante = factureActiveDu(d, c.id);
+    if (existante) return { facture: factureComplete(d, existante), deja: true };
+    var f = nouvelleFacture(d, moi, { client_id: c.client_id, montant_usd: prixColis(c), frais_service_usd: 0 }, [c]);
+    return { facture: factureComplete(d, f), deja: false };
+  }
+
+  // frais_service_interne : appliquer ou retirer les frais d'une facture, jamais deux fois
+  function fraisServiceDemo(d, moi, f, appliquer) {
+    if (typeof appliquer !== 'boolean') {
+      throw Erreur('INVALID_INPUT', 'Indiquez s’il faut ajouter ou retirer les frais de service.');
+    }
+    if ((appliquer && f.frais_service_usd > 0) || (!appliquer && !(f.frais_service_usd > 0))) {
+      return { facture: factureComplete(d, f), deja: true };
+    }
+    if (f.statut === 'annulee') {
+      throw Erreur('INVOICE_CANCELLED', 'La facture ' + f.numero + ' est annulée : ses frais de service ne changent plus.');
+    }
+    if (f.statut === 'payee') {
+      throw Erreur('INVOICE_ALREADY_PAID', 'La facture ' + f.numero +
+                   ' est déjà entièrement payée : ses frais de service ne changent plus.');
+    }
+    var avant = { numero: f.numero, frais_service_usd: f.frais_service_usd, montant_usd: f.montant_usd };
+    var frais = appliquer ? FRAIS_SERVICE : 0;
+    var nouveau = arrondi(appliquer ? f.montant_usd + FRAIS_SERVICE : f.montant_usd - f.frais_service_usd);
+    var paye = payeDe({ paiements: f.paiements || [] });
+    if (!appliquer && nouveau < paye) {
+      throw Erreur('INVALID_AMOUNT', 'La facture ' + f.numero + ' a déjà reçu ' + montantTexte(paye) +
+                   ' $ : sans les frais, son total serait inférieur à ce qui est payé.');
+    }
+    f.frais_service_usd = frais;
+    f.montant_usd = nouveau;
+    recalculerFactureDemo(d, f);
+    journaliser(d, moi, appliquer ? 'facture.frais_appliques' : 'facture.frais_retires', 'facture', f.id, avant,
+                { frais_service_usd: frais, montant_usd: nouveau });
+    return { facture: factureComplete(d, f), deja: false };
+  }
+
+  // regrouper : des factures et des colis d'un client, avec ou sans frais (mêmes
+  // refus, même ordre que la base)
+  function regrouperDemo(d, moi, factureIds, colisIds, frais, cle) {
+    if (typeof frais !== 'boolean') throw Erreur('INVALID_INPUT', 'Indiquez si la facture reçoit les frais de service.');
+    if (cle) {
+      var existante = (d.factures || []).filter(function (f) { return f.cle_idempotence === cle; })[0];
+      if (existante) {
+        return {
+          facture: factureComplete(d, existante),
+          annulees: (d.factures || []).filter(function (f) { return f.remplacee_par === existante.id; })
+            .map(function (f) { return f.numero; }).sort(),
+          deja: true
+        };
+      }
+    }
+    var uniques = function (t) { return (t || []).filter(function (i, k, a) { return i && a.indexOf(i) === k; }).sort(); };
+    var fids = uniques(factureIds);
+    var choisies = fids.map(function (i) { return (d.factures || []).filter(function (f) { return f.id === i; })[0]; });
+    if (choisies.some(function (f) { return !f; })) throw Erreur('INVOICE_NOT_FOUND', 'Une des factures choisies n’existe plus.');
+    var cids = uniques(colisIds);
+    if (cids.length > 200) throw Erreur('INVALID_INPUT', 'Au plus 200 colis par facture.');
+    var libres = [];
+    cids.forEach(function (i) {
+      var c = trouverColisDemo(d, i);
+      if (!c) return;
+      var fa = factureActiveDu(d, c.id);
+      if (!fa) { libres.push(c); return; }
+      if (fids.indexOf(fa.id) >= 0) return;
+      if (fa.statut !== 'a_payer' || paiementsValides(fa).length) {
+        throw Erreur('INVOICE_ALREADY_EXISTS', 'Le colis ' + c.numero + ' est sur la facture ' + fa.numero +
+                     (fa.statut === 'payee' ? ', déjà payée' : ', qui a déjà reçu un paiement') + ' : il ne peut pas être ajouté.');
+      }
+      fids.push(fa.id);
+      choisies.push(fa);
+    });
+    if (cids.some(function (i) { return !trouverColisDemo(d, i); })) {
+      throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
+    }
+    if (choisies.length + libres.length < 2) {
+      throw Erreur('INVALID_INPUT', 'Choisissez au moins deux factures, ou une facture et un colis à ajouter.');
+    }
+    if (choisies.length > 50) throw Erreur('INVALID_INPUT', 'Au plus 50 factures par regroupement.');
+    choisies.sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    var client = null, colis = [], echeance = null, numeros = [];
+    choisies.forEach(function (f) {
+      if (client === null) client = f.client_id;
+      else if (f.client_id !== client) {
+        throw Erreur('INVOICE_CLIENT_MISMATCH',
+                     'Les factures choisies appartiennent à plusieurs clients : on ne regroupe que celles d’un seul.');
+      }
+      var refus = refusRegroupement(f);
+      if (refus) throw refus;
+      (f.facture_lignes || []).forEach(function (l) { colis.push(trouverColisDemo(d, l.colis_id)); });
+      if (f.echeance_le && (!echeance || f.echeance_le < echeance)) echeance = f.echeance_le;
+      numeros.push(f.numero);
+    });
+    libres.forEach(function (c) {
+      if (client === null) client = c.client_id;
+      else if (c.client_id !== client) {
+        throw Erreur('INVOICE_CLIENT_MISMATCH', 'Le colis ' + c.numero +
+                     ' appartient à un autre client : une facture n’en regroupe qu’un seul.');
+      }
+    });
+    if (!client) throw Erreur('CLIENT_NOT_FOUND', 'Ce colis n’a plus de client : impossible de le facturer.');
+    if (colis.some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
+    colis = colis.concat(libres).filter(function (c, k, t) { return t.indexOf(c) === k; });
+    if (numeros.length) {
+      var motif = 'Regroupement des factures ' + numeros.join(', ');
+      choisies.forEach(function (f) {
+        Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
+        noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+      });
+    }
+    var fs = frais ? FRAIS_SERVICE : 0;
+    var n = nouvelleFacture(d, moi, {
+      client_id: client, montant_usd: arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0) + fs),
+      frais_service_usd: fs, echeance_le: echeance, cle_idempotence: cle || null
+    }, colis.sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); }));
+    choisies.forEach(function (f) { f.remplacee_par = n.id; });
+    journaliser(d, moi, 'facture.regroupement', 'facture', n.id,
+                { factures: numeros, colis_ajoutes: libres.map(function (c) { return c.numero; }).sort() },
+                { numero: n.numero, montant_usd: n.montant_usd, frais_service_usd: n.frais_service_usd });
+    return { facture: factureComplete(d, n), annulees: numeros, deja: false };
+  }
+
+  function contient(valeurs, texte) {
+    texte = texte.toLowerCase();
+    return valeurs.some(function (v) { return v && String(v).toLowerCase().indexOf(texte) >= 0; });
+  }
+
+  function page(lignes, o) {
+    var parPage = o.parPage || 50, p = o.page || 0;
+    return { lignes: lignes.slice(p * parPage, p * parPage + parPage), total: lignes.length };
+  }
+
+
+  /* ---- Tableau de bord : la copie démo de outils/supabase-tableau-de-bord.sql
+     Mêmes périodes (jours de Santo Domingo), mêmes règles, même forme de
+     réponse : essai-tableau.py compare les deux. ---- */
+
+  // Le jour de Santo Domingo d'un instant (AAAA-MM-JJ)
+  function jourSD(iso) {
+    var t = new Date(iso);
+    if (isNaN(t.getTime())) return '';
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santo_Domingo', year: 'numeric',
+                                                month: '2-digit', day: '2-digit' }).format(t);
+    } catch (e) {
+      return new Date(t.getTime() - 4 * 36e5).toISOString().slice(0, 10);
+    }
+  }
+
+  function decalerJour(jour, n) {
+    var t = new Date(jour + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() + n);
+    return t.toISOString().slice(0, 10);
+  }
+
+  function joursEntre(debut, fin) {
+    var liste = [];
+    for (var j = debut; j <= fin; j = decalerJour(j, 1)) liste.push(j);
+    return liste;
+  }
+
+  // bornes_periode : { code, debut, fin }, jours inclus
+  function bornesPeriode(code, debut, fin) {
+    var c = String(code || '').trim().toLowerCase() || '30j';
+    var j = aujourdhui();
+    var jourValide = /^\d{4}-\d{2}-\d{2}$/;
+    if (c === 'aujourdhui') return { code: c, debut: j, fin: j };
+    if (c === '7j') return { code: c, debut: decalerJour(j, -6), fin: j };
+    if (c === '30j') return { code: c, debut: decalerJour(j, -29), fin: j };
+    if (c === 'mois') return { code: c, debut: j.slice(0, 8) + '01', fin: j };
+    if (c === 'mois_precedent') {
+      var veille = decalerJour(j.slice(0, 8) + '01', -1);
+      return { code: c, debut: veille.slice(0, 8) + '01', fin: veille };
+    }
+    if (c === 'annee') return { code: c, debut: j.slice(0, 5) + '01-01', fin: j };
+    if (c === 'personnalise') {
+      debut = String(debut || '').slice(0, 10);
+      fin = String(fin || '').slice(0, 10);
+      if (!jourValide.test(debut) || !jourValide.test(fin)) {
+        throw Erreur('INVALID_PERIOD', 'Choisissez une date de début et une date de fin.');
+      }
+      if (fin < debut) throw Erreur('INVALID_PERIOD', 'La date de fin est avant la date de début.');
+      if ((new Date(fin + 'T00:00:00Z') - new Date(debut + 'T00:00:00Z')) / 864e5 > 366) {
+        throw Erreur('INVALID_PERIOD', 'Une période de 367 jours au plus.');
+      }
+      return { code: c, debut: debut, fin: fin };
+    }
+    throw Erreur('INVALID_PERIOD', 'Période inconnue : ' + c.slice(0, 30) + '.');
+  }
+
+  function joursSansMouvement(valeur) {
+    var n = valeur == null || valeur === '' ? 7 : Number(valeur);
+    if (!(n >= 1 && n <= 365) || Math.floor(n) !== n) {
+      throw Erreur('INVALID_INPUT', 'Le nombre de jours sans mouvement va de 1 à 365.');
+    }
+    return n;
+  }
+
+  // Le dernier événement d'un colis (le plus récent, puis le dernier écrit)
+  function dernierEvenementDemo(d, colisId) {
+    return historiqueDe(d, colisId).slice().sort(function (a, b) {
+      return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id;
+    })[0] || null;
+  }
+
+  function corrigeDemo(d, h) {
+    return d.historique.some(function (x) { return x.corrige_id === h.id; });
+  }
+
+  function trancheDemo(limite, defaut, maximum) {
+    var n = Math.floor(Number(limite) || defaut);
+    return Math.min(Math.max(n, 1), maximum);
+  }
+
+  // La facture active la plus récente d'un colis, en résumé
+  function factureResumeDemo(d, colisId) {
+    var f = (d.factures || []).filter(function (x) {
+      return x.statut !== 'annulee' && (x.facture_lignes || []).some(function (l) { return l.colis_id === colisId; });
+    }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })[0];
+    if (!f) return null;
+    var c = factureComplete(d, f);
+    return { id: f.id, numero: f.numero, montant_usd: f.montant_usd, paye_usd: c.paye_usd, solde_usd: c.solde_usd,
+             etat: c.etat_paiement };
+  }
+
+  function clientResumeDemo(d, id, avecTelephone) {
+    var cl = d.comptes.filter(function (c) { return c.id === id; })[0];
+    if (!cl) return null;
+    var r = { id: cl.id, code: cl.code, nom_complet: cl.nom_complet };
+    if (avecTelephone) r.telephone = cl.telephone || '';
+    return r;
+  }
+
+
+  /* ---- Analytics : la copie démo de outils/supabase-analytics.sql ----
+     Mêmes périodes et même période précédente, mêmes définitions, même
+     forme de réponse : essai-analytics.py compare les deux. ---- */
+
+  // AAAA-MM-JJ − n mois, comme PostgreSQL : le 31 mars − 1 mois = le 28 février
+  function moinsMois(jour, n) {
+    var y = Number(jour.slice(0, 4)), m = Number(jour.slice(5, 7)) - 1 - n, j = Number(jour.slice(8, 10));
+    y += Math.floor(m / 12);
+    m = ((m % 12) + 12) % 12;
+    var dernier = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, m, Math.min(j, dernier))).toISOString().slice(0, 10);
+  }
+  function ecartJours(d1, d2) { return Math.round((new Date(d2 + 'T00:00:00Z') - new Date(d1 + 'T00:00:00Z')) / 864e5); }
+
+  // bornes_analytics : { code, debut, fin, precDebut, precFin } (jours inclus)
+  function bornesAnalytics(code, debut, fin) {
+    var c = String(code || '').trim().toLowerCase() || '30j';
+    var j = aujourdhui(), b;
+    if (c === '3m' || c === '6m' || c === '12m') {
+      b = { code: c, debut: decalerJour(moinsMois(j, parseInt(c, 10)), 1), fin: j };
+    } else if (c === 'personnalise') {
+      debut = String(debut || '').slice(0, 10);
+      fin = String(fin || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(debut) || !/^\d{4}-\d{2}-\d{2}$/.test(fin)) {
+        throw Erreur('INVALID_PERIOD', 'Choisissez une date de début et une date de fin.');
+      }
+      if (fin < debut) throw Erreur('INVALID_PERIOD', 'La date de fin est avant la date de début.');
+      if (ecartJours(debut, fin) > 1095) throw Erreur('INVALID_PERIOD', 'Une période de trois ans au plus.');
+      b = { code: c, debut: debut, fin: fin };
+    } else {
+      b = bornesPeriode(c);
+    }
+    if (b.code === 'mois') {
+      b.precDebut = moinsMois(b.debut, 1);
+      b.precFin = moinsMois(b.fin, 1) < b.debut ? moinsMois(b.fin, 1) : decalerJour(b.debut, -1);
+    } else if (b.code === 'mois_precedent') {
+      b.precDebut = moinsMois(b.debut, 1);
+      b.precFin = decalerJour(b.debut, -1);
+    } else if (b.code === 'annee') {
+      b.precDebut = moinsMois(b.debut, 12);
+      b.precFin = moinsMois(b.fin, 12);
+    } else {
+      b.precDebut = decalerJour(b.debut, -(ecartJours(b.debut, b.fin) + 1));
+      b.precFin = decalerJour(b.debut, -1);
+    }
+    return b;
+  }
+
+  // comparer_valeurs
+  function comparerValeurs(a, b) {
+    a = Number(a) || 0;
+    b = Number(b) || 0;
+    return { actuel: a, precedent: b, ecart: arrondi(a - b),
+             variation_pct: b === 0 ? null : Math.round((a - b) / Math.abs(b) * 1000) / 10,
+             tendance: a > b ? 'hausse' : (a < b ? 'baisse' : 'stable') };
+  }
+
+  function entreJours(iso, d1, d2) {
+    if (!iso) return false;
+    var j = jourSD(iso);
+    return (!d1 || j >= d1) && (!d2 || j <= d2);
+  }
+
+  // evenements_de_statut : venus d'un autre statut, sans correction qui les annule
+  function evenementsDeStatut(d, d1, d2) {
+    return d.historique.filter(function (h) {
+      return h.statut_precedent !== h.statut && entreJours(h.cree_le, d1, d2) && !corrigeDemo(d, h);
+    }).map(function (h) {
+      return { id: h.id, colis_id: h.colis_id, de: h.statut_precedent == null ? null : h.statut_precedent, vers: h.statut,
+               type_evenement: h.type_evenement || null, auteur_id: h.auteur_id || null, lieu: h.lieu || '',
+               note: h.note || '', cree_le: h.cree_le };
+    });
+  }
+
+  function nbColisDistincts(liste) {
+    var vus = {};
+    liste.forEach(function (e) { vus[e.colis_id] = true; });
+    return Object.keys(vus).length;
+  }
+
+  // analytics_mesures : les définitions d'une période
+  function mesuresAnalytics(d, d1, d2) {
+    var ev = evenementsDeStatut(d, d1, d2);
+    function vers(s) { return nbColisDistincts(ev.filter(function (e) { return e.vers === s; })); }
+    var colis = d.colis.filter(function (c) { return entreJours(c.recu_le, d1, d2); });
+    var pesees = colis.filter(function (c) { return c.poids_lb != null; });
+    var prixes = colis.filter(function (c) { return c.prix_usd != null; });
+    var poids = arrondi(pesees.reduce(function (t, c) { return t + Number(c.poids_lb); }, 0));
+    var prix = arrondi(prixes.reduce(function (t, c) { return t + Number(c.prix_usd); }, 0));
+    var factures = (d.factures || []).filter(function (f) { return f.statut !== 'annulee' && entreJours(f.cree_le, d1, d2); });
+    var montant = 0, reste = 0;
+    factures.forEach(function (f) {
+      var c = factureComplete(d, f);
+      montant = arrondi(montant + f.montant_usd);
+      reste = arrondi(reste + c.solde_usd);
+    });
+    var paiements = [];
+    (d.factures || []).forEach(function (f) {
+      paiementsValides(f).forEach(function (p) { if (entreJours(p.paye_le, d1, d2)) paiements.push(p); });
+    });
+    return {
+      recus: colis.length, poids: poids,
+      poids_moyen: pesees.length ? arrondi(poids / pesees.length) : null,
+      prix_moyen: prixes.length ? arrondi(prix / prixes.length) : null,
+      expedies: vers('embarque'), disponibles: vers('disponible'), livres: vers('livre'), actions_requises: vers('incident'),
+      nouveaux_clients: d.comptes.filter(function (c) { return c.role === 'client' && entreJours(c.cree_le, d1, d2); }).length,
+      factures_emises: factures.length, facture: montant, reste: reste,
+      revenu_moyen_facture: factures.length ? arrondi(montant / factures.length) : null,
+      paiements: paiements.length,
+      encaisse: arrondi(paiements.reduce(function (t, p) { return t + p.montant_usd; }, 0)),
+      scans: d.historique.filter(function (h) { return (h.metadonnees || {}).source === 'scanner' && entreJours(h.cree_le, d1, d2); }).length
+    };
+  }
+
+  // creances_au : ce qui restait dû à la fin du jour « jusqua » (inclus)
+  function creancesAu(d, jusqua) {
+    var du = 0, maintenantMs = Date.now();
+    function avant(iso) { return iso && jourSD(iso) <= jusqua && new Date(iso).getTime() <= maintenantMs; }
+    (d.factures || []).forEach(function (f) {
+      if (avant(f.cree_le)) du += f.montant_usd;
+      if (f.statut === 'annulee' && avant(f.annulee_le || f.cree_le)) du -= f.montant_usd;
+      (f.paiements || []).forEach(function (p) {
+        if (avant(p.paye_le)) du -= p.montant_usd;
+        if (p.annule_le && avant(p.annule_le) && avant(p.paye_le)) du += p.montant_usd;
+      });
+    });
+    return arrondi(du);
+  }
+
+  // statistiques_durees : heures ; percentile continu, comme PostgreSQL
+  function statistiquesDurees(liste) {
+    var ok = liste.filter(function (x) { return x >= 0; }).sort(function (a, b) { return a - b; });
+    function rang(p) {
+      if (!ok.length) return null;
+      var i = p * (ok.length - 1), bas = Math.floor(i), haut = Math.ceil(i);
+      return ok[bas] + (ok[haut] - ok[bas]) * (i - bas);
+    }
+    function un(x) { return x == null ? null : Math.round(x * 10) / 10; }
+    var q1 = rang(0.25), q3 = rang(0.75);
+    return {
+      nombre: ok.length,
+      moyenne_h: ok.length ? un(ok.reduce(function (t, x) { return t + x; }, 0) / ok.length) : null,
+      mediane_h: un(rang(0.5)), minimum_h: ok.length ? un(ok[0]) : null, maximum_h: ok.length ? un(ok[ok.length - 1]) : null,
+      p90_h: un(rang(0.9)),
+      extremes: ok.length >= 4 ? ok.filter(function (x) { return x > q3 + 1.5 * (q3 - q1); }).length : 0,
+      negatives: liste.filter(function (x) { return x < 0; }).length
+    };
+  }
+
+  function heuresEntre(a, b) { return (new Date(b).getTime() - new Date(a).getTime()) / 36e5; }
+
+  var MODULES_ANALYTICS = ['synthese', 'serie', 'operations', 'clients', 'finances', 'routes', 'scanner', 'qualite'];
+
+  // Les filtres de la vue générale (filtres_colis, colis_filtre, options_filtres) :
+  // mêmes clés, mêmes valeurs, mêmes refus que la base
+  var SERVICES_COLIS = ['aerien', 'maritime', 'terrestre'];
+  function filtresColisDemo(f) {
+    var r = {};
+    if (f == null) return r;
+    if (typeof f !== 'object' || Array.isArray(f)) throw Erreur('INVALID_INPUT', 'Les filtres forment un objet.');
+    Object.keys(f).forEach(function (k) {
+      if (['pays', 'ville', 'service', 'statut', 'lieu', 'agence'].indexOf(k) < 0) {
+        throw Erreur('INVALID_INPUT', 'Filtre inconnu : ' + k.slice(0, 20) + '.');
+      }
+      if (f[k] != null && typeof f[k] !== 'string') throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » est un texte.');
+      var v = String(f[k] == null ? '' : f[k]).trim().toLowerCase();
+      if (!v) return;
+      if (k === 'pays' || k === 'agence') {
+        v = v.toUpperCase();
+        if (['HT', 'DO', 'US'].indexOf(v) < 0) throw Erreur('INVALID_INPUT', 'Pays inconnu : ' + v.slice(0, 10) + '.');
+      } else if (k === 'service' && SERVICES_COLIS.indexOf(v) < 0) {
+        throw Erreur('INVALID_INPUT', 'Mode de transport inconnu : ' + v.slice(0, 20) + '.');
+      } else if (k === 'statut' && v !== 'actifs' && STATUTS.indexOf(v) < 0) {
+        throw Erreur('INVALID_INPUT', 'Statut inconnu : ' + v.slice(0, 20) + '.');
+      } else if ((k === 'ville' || k === 'lieu') && v.length > 120) {
+        throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » fait 120 caractères au plus.');
+      }
+      r[k] = v;
+    });
+    return r;
+  }
+  function colisFiltreDemo(c, f) {
+    return (!f.pays || c.pays_destination === f.pays) && (!f.service || c.service === f.service) &&
+           (!f.statut || c.statut === f.statut || (f.statut === 'actifs' && c.statut !== 'livre')) &&
+           (!f.ville || String(c.destination || '').trim().toLowerCase() === f.ville) &&
+           (!f.lieu || String(c.lieu || '').trim().toLowerCase() === f.lieu) &&
+           (!f.agence || agenceDuColis(c) === f.agence);
+  }
+  // L'agence où se trouve un colis (colis_filtre) : US au dépôt de Miami, HT ou DO une
+  // fois arrivé dans le pays ; aucune en route, livré ou en action requise
+  function agenceDuColis(c) {
+    if (c.statut === 'recu' || c.statut === 'emballe') return 'US';
+    if (['distribution', 'succursale', 'disponible'].indexOf(c.statut) >= 0 &&
+        (c.pays_destination === 'HT' || c.pays_destination === 'DO')) return c.pays_destination;
+    return null;
+  }
+  function optionsFiltresDemo(d) {
+    // parPays : les villes se comptent par ville et par pays (une même ville peut
+    // exister dans deux pays), jusqu'à 300 ; les lieux jusqu'à 60
+    function compter(cle, texte, parPays) {
+      var t = {};
+      d.colis.forEach(function (c) {
+        var brut = String(c[cle] == null ? '' : c[cle]).trim(), v = texte ? brut.toLowerCase() : brut;
+        if (!v) return;
+        var k = parPays ? v + '\u0000' + c.pays_destination : v;
+        var x = t[k] || (t[k] = { valeur: v, pays: c.pays_destination, colis: 0, ecritures: {} });
+        x.colis++;
+        if (texte) x.ecritures[brut] = (x.ecritures[brut] || 0) + 1;
+      });
+      var liste = Object.keys(t).map(function (k) { return t[k]; })
+        .sort(function (a, b) {
+          return b.colis - a.colis || (a.valeur < b.valeur ? -1 : a.valeur > b.valeur ? 1 : 0) ||
+                 (parPays ? (a.pays < b.pays ? -1 : a.pays > b.pays ? 1 : 0) : 0);
+        });
+      if (!texte) return liste.map(function (x) { return { valeur: x.valeur, colis: x.colis }; });
+      // L'écriture la plus fréquente (à égalité, la première dans l'ordre), comme mode() dans la base
+      return liste.slice(0, parPays ? 300 : 60).map(function (x) {
+        var libelle = Object.keys(x.ecritures).sort(function (a, b) {
+          return x.ecritures[b] - x.ecritures[a] || (a < b ? -1 : 1);
+        })[0];
+        var r = { valeur: x.valeur, libelle: libelle, colis: x.colis };
+        if (parPays) r.pays = x.pays;
+        return r;
+      });
+    }
+    var agences = { US: 0, HT: 0, DO: 0 };
+    d.colis.forEach(function (c) { var a = agenceDuColis(c); if (a) agences[a]++; });
+    return { pays: compter('pays_destination'), services: compter('service'), statuts: compter('statut'),
+             villes: compter('destination', true, true), lieux: compter('lieu', true),
+             agences: ['US', 'HT', 'DO'].map(function (a) { return { valeur: a, colis: agences[a] }; }) };
+  }
+
+  // vue_generale, calculée sur les données d : une période → ce que le rôle a le droit
+  // de voir (la copie démo de outils/supabase-tableau-de-bord.sql)
+  function vueGeneraleDemo(d, o) {
+    o = o || {};
+    var moi = exiger(d, 'shipments.view');
+    var jours = joursSansMouvement(o.jours);
+    var p = bornesPeriode(o.periode, o.debut, o.fin);
+    var serie = joursEntre(p.debut, p.fin);
+    function dans(iso) { var j = jourSD(iso); return j >= p.debut && j <= p.fin; }
+    function parJour(liste, cle, valeur) {
+      var t = {};
+      liste.forEach(function (x) { t[x.jour] = arrondi((t[x.jour] || 0) + (valeur ? valeur(x) : 1)); });
+      return t;
+    }
+
+    // Les colis : le stock maintenant, les reçus et livrés de la période
+    var statuts = {};
+    STATUTS.forEach(function (st) { statuts[st] = 0; });
+    d.colis.forEach(function (c) { statuts[c.statut] = (statuts[c.statut] || 0) + 1; });
+    var recus = d.colis.filter(function (c) { return dans(c.recu_le); });
+    var livraisons = {};
+    d.historique.forEach(function (h) {
+      if (h.statut !== 'livre' || h.statut_precedent === 'livre' || !dans(h.cree_le) || corrigeDemo(d, h)) return;
+      var j = jourSD(h.cree_le);
+      if (!livraisons[h.colis_id] || j < livraisons[h.colis_id]) livraisons[h.colis_id] = j;
+    });
+    var limite = Date.now() - jours * 864e5;
+    var immobiles = d.colis.filter(function (c) {
+      if (c.statut === 'livre') return false;
+      var dernier = dernierEvenementDemo(d, c.id);
+      return new Date(dernier ? dernier.cree_le : c.recu_le).getTime() < limite;
+    }).length;
+    var parRecu = parJour(recus.map(function (c) { return { jour: jourSD(c.recu_le) }; }));
+    var parLivre = parJour(Object.keys(livraisons).map(function (k) { return { jour: livraisons[k] }; }));
+    var colis = {
+      total: d.colis.length,
+      actifs: d.colis.length - statuts.livre,
+      statuts: statuts,
+      action_requise: statuts.incident,
+      sans_mouvement: immobiles,
+      recus_periode: recus.length,
+      poids_periode: arrondi(recus.reduce(function (t, c) { return t + (Number(c.poids_lb) || 0); }, 0)),
+      livres_periode: Object.keys(livraisons).length,
+      par_jour: serie.map(function (j) { return { jour: j, recus: parRecu[j] || 0, livres: parLivre[j] || 0 }; })
+    };
+    var r = {
+      periode: { code: p.code, debut: p.debut, fin: p.fin, jours: serie.length, fuseau: 'America/Santo_Domingo' },
+      jours_sans_mouvement: jours,
+      genere_le: maintenant(),
+      colis: colis
+    };
+
+    if (peutCompte(moi, 'clients.view')) {
+      var clients = d.comptes.filter(function (c) { return c.role === 'client'; });
+      var idsClients = clients.map(function (c) { return c.id; });
+      var actifs = {};
+      d.colis.forEach(function (c) {
+        if (c.statut !== 'livre' && idsClients.indexOf(c.client_id) >= 0) actifs[c.client_id] = true;
+      });
+      r.clients = {
+        total: clients.length,
+        nouveaux_periode: clients.filter(function (c) { return dans(c.cree_le); }).length,
+        avec_colis_en_cours: Object.keys(actifs).length
+      };
+    }
+
+    var facturation = null;
+    if (peutCompte(moi, 'reports.view')) {
+      var f = { emises_periode: 0, facture_periode: 0, paye_sur_periode: 0, solde_sur_periode: 0, annulees_periode: 0,
+                encaisse_periode: 0, paiements_periode: 0, a_encaisser: 0, ouvertes: 0, montant_en_retard: 0,
+                clients_avec_solde: 0, etats: { a_payer: 0, partielle: 0, en_retard: 0, payee: 0, annulee: 0 } };
+      var avecSolde = {}, emissions = [], encaissements = [];
+      (d.factures || []).forEach(function (x) {
+        var c = factureComplete(d, x);
+        f.etats[c.etat_paiement] += 1;
+        if (x.statut !== 'annulee' && dans(x.cree_le)) {
+          f.emises_periode++;
+          f.facture_periode = arrondi(f.facture_periode + x.montant_usd);
+          f.paye_sur_periode = arrondi(f.paye_sur_periode + c.paye_usd);
+          f.solde_sur_periode = arrondi(f.solde_sur_periode + c.solde_usd);
+          emissions.push({ jour: jourSD(x.cree_le), montant: x.montant_usd });
+        }
+        if (x.statut === 'annulee' && dans(x.cree_le)) f.annulees_periode++;
+        f.a_encaisser = arrondi(f.a_encaisser + c.solde_usd);
+        if (c.solde_usd > 0) { f.ouvertes++; avecSolde[x.client_id] = true; }
+        if (c.etat_paiement === 'en_retard') f.montant_en_retard = arrondi(f.montant_en_retard + c.solde_usd);
+        paiementsValides(x).forEach(function (pa) {
+          if (dans(pa.paye_le)) encaissements.push({ jour: jourSD(pa.paye_le), montant: pa.montant_usd });
+        });
+      });
+      f.encaisse_periode = arrondi(encaissements.reduce(function (t, x) { return t + x.montant; }, 0));
+      f.paiements_periode = encaissements.length;
+      f.clients_avec_solde = Object.keys(avecSolde).length;
+      var parFacture = parJour(emissions, null, function (x) { return x.montant; });
+      var parEncaisse = parJour(encaissements, null, function (x) { return x.montant; });
+      f.par_jour = serie.map(function (j) { return { jour: j, facture: parFacture[j] || 0, encaisse: parEncaisse[j] || 0 }; });
+      facturation = f;
+      r.facturation = f;
+    }
+
+    if (peutCompte(moi, 'shipments.view_history')) {
+      var tous = d.historique.filter(function (h) { return (h.metadonnees || {}).source === 'scanner'; });
+      var scans = tous.filter(function (h) { return dans(h.cree_le); });
+      var dernier = tous.slice().sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; })[0];
+      var parEmploye = {}, parOperation = {};
+      scans.forEach(function (h) {
+        var k = h.auteur_id || '';
+        parEmploye[k] = (parEmploye[k] || 0) + 1;
+        parOperation[h.type_evenement] = (parOperation[h.type_evenement] || 0) + 1;
+      });
+      var parScan = parJour(scans.map(function (h) { return { jour: jourSD(h.cree_le) }; }));
+      r.scanner = {
+        aujourdhui: tous.filter(function (h) { return jourSD(h.cree_le) === aujourdhui(); }).length,
+        periode: scans.length,
+        echecs_suivis: false,
+        dernier: dernier ? Object.assign(evenementJson(d, dernier), { numero: (trouverColisDemo(d, dernier.colis_id) || {}).numero || null })
+          : null,
+        par_employe: Object.keys(parEmploye).map(function (k) {
+          var cl = d.comptes.filter(function (c) { return c.id === k; })[0];
+          return { auteur_id: k || null, nom: cl ? (cl.nom_complet || cl.email) : 'Compte supprimé',
+                   role: cl ? cl.role : null, nombre: parEmploye[k] };
+        }).sort(function (a, b) { return b.nombre - a.nombre || String(a.nom).localeCompare(String(b.nom)); }),
+        par_operation: Object.keys(parOperation).map(function (k) {
+          return { type: k, libelle: TYPES_EVENEMENT[k] ? TYPES_EVENEMENT[k].libelle : k, nombre: parOperation[k] };
+        }).sort(function (a, b) { return b.nombre - a.nombre || (a.type < b.type ? -1 : 1); }),
+        par_jour: serie.map(function (j) { return { jour: j, nombre: parScan[j] || 0 }; })
+      };
+      r.activite = d.historique.slice().sort(function (a, b) {
+        return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id;
+      }).slice(0, 12).map(function (h) {
+        var c = trouverColisDemo(d, h.colis_id) || {};
+        var cl = d.comptes.filter(function (x) { return x.id === c.client_id; })[0];
+        return Object.assign(evenementJson(d, h), {
+          numero: c.numero || null, client: cl ? cl.code : null,
+          libelle: TYPES_EVENEMENT[h.type_evenement] ? TYPES_EVENEMENT[h.type_evenement].libelle : null,
+          source: (h.metadonnees || {}).source || ''
+        });
+      });
+    }
+
+    if (peutCompte(moi, 'payments.view')) {
+      var tousPaiements = [];
+      (d.factures || []).forEach(function (x) {
+        paiementsValides(x).forEach(function (pa) { tousPaiements.push({ p: pa, f: x }); });
+      });
+      r.paiements_recents = tousPaiements.sort(function (a, b) {
+        return new Date(b.p.paye_le) - new Date(a.p.paye_le) || new Date(b.p.cree_le) - new Date(a.p.cree_le);
+      }).slice(0, 8).map(function (x) {
+        var cl = d.comptes.filter(function (c) { return c.id === x.p.client_id; })[0];
+        return { id: x.p.id, montant_usd: x.p.montant_usd, moyen: x.p.moyen, paye_le: x.p.paye_le,
+                 facture_id: x.f.id, facture: x.f.numero,
+                 client: { code: cl ? cl.code : null, nom_complet: cl ? cl.nom_complet : null } };
+      });
+    }
+
+    // Les alertes : les mêmes règles, les mêmes phrases que la base
+    var alertes = [];
+    if (colis.action_requise > 0) {
+      alertes.push({ code: 'action_requise', gravite: 'critique', nombre: colis.action_requise,
+                     message: colis.action_requise + ' colis en « action requise » : le client ou l’équipe doit agir.' });
+    }
+    if (colis.sans_mouvement > 0) {
+      alertes.push({ code: 'sans_mouvement', gravite: 'attention', nombre: colis.sans_mouvement,
+                     message: colis.sans_mouvement + ' colis en cours sans aucun événement depuis ' + jours + ' jours ou plus.' });
+    }
+    if (facturation && facturation.etats.en_retard > 0) {
+      alertes.push({ code: 'factures_en_retard', gravite: 'attention', nombre: facturation.etats.en_retard,
+                     message: facturation.etats.en_retard + ' facture(s) échue(s) non soldée(s) : ' +
+                              montantTexte(facturation.montant_en_retard).replace('.', ',') + ' $ en retard.' });
+    }
+    if (peutCompte(moi, 'invoices.view')) {
+      var sansFacture = d.colis.filter(function (c) { return c.client_id && !factureActiveDu(d, c.id); }).length;
+      if (sansFacture > 0) {
+        alertes.push({ code: 'colis_sans_facture', gravite: 'info', nombre: sansFacture,
+                       message: sansFacture + ' colis sur aucune facture active.' });
+      }
+    }
+    r.alertes = alertes;
+    return r;
+  }
+
+  function analyticsDemo(d, module, o) {
+    var p = module === 'qualite' ? null : bornesAnalytics(o.periode, o.debut, o.fin);
+    var periode = p ? { code: p.code, debut: p.debut, fin: p.fin } : null;
+    var a, b;
+    if (module === 'synthese') {
+      a = mesuresAnalytics(d, p.debut, p.fin);
+      b = mesuresAnalytics(d, p.precDebut, p.precFin);
+      var mesures = {};
+      ['recus', 'poids', 'expedies', 'disponibles', 'livres', 'actions_requises', 'nouveaux_clients', 'factures_emises',
+       'facture', 'reste', 'paiements', 'encaisse', 'scans'].forEach(function (k) { mesures[k] = comparerValeurs(a[k], b[k]); });
+      var statuts = {};
+      STATUTS.forEach(function (s) { statuts[s] = 0; });
+      d.colis.forEach(function (c) { statuts[c.statut] = (statuts[c.statut] || 0) + 1; });
+      function inscrits(fin) {
+        return d.comptes.filter(function (c) { return c.role === 'client' && entreJours(c.cree_le, null, fin); }).length;
+      }
+      return {
+        periode: { code: p.code, debut: p.debut, fin: p.fin, jours: ecartJours(p.debut, p.fin) + 1,
+                   precedente: { debut: p.precDebut, fin: p.precFin }, fuseau: 'America/Santo_Domingo' },
+        genere_le: maintenant(), mesures: mesures,
+        moyennes: { poids_moyen: a.poids_moyen, prix_moyen: a.prix_moyen, revenu_moyen_facture: a.revenu_moyen_facture },
+        clients_total: comparerValeurs(inscrits(p.fin), inscrits(p.precFin)),
+        creances_fin: comparerValeurs(creancesAu(d, p.fin), creancesAu(d, p.precFin)),
+        maintenant: { total: d.colis.length, actifs: d.colis.length - statuts.livre, statuts: statuts }
+      };
+    }
+    if (module === 'serie') {
+      var g = String(o.granularite || 'jour').toLowerCase();
+      if (['jour', 'semaine', 'mois'].indexOf(g) < 0) throw Erreur('INVALID_INPUT', 'Découpage inconnu : ' + g.slice(0, 20) + '.');
+      var cles = {}, ordre = [];
+      joursEntre(p.debut, p.fin).forEach(function (j) {
+        var cle = j;
+        if (g === 'mois') cle = j.slice(0, 8) + '01';
+        if (g === 'semaine') cle = decalerJour(j, -((new Date(j + 'T00:00:00Z').getUTCDay() + 6) % 7));
+        if (!cles[cle]) { cles[cle] = { jour: cle, debut: j, fin: j }; ordre.push(cle); }
+        cles[cle].fin = j;
+      });
+      function caseDe(iso) {
+        var j = jourSD(iso);
+        for (var k = 0; k < ordre.length; k++) if (j >= cles[ordre[k]].debut && j <= cles[ordre[k]].fin) return cles[ordre[k]];
+        return null;
+      }
+      ordre.forEach(function (k) {
+        Object.assign(cles[k], { recus: 0, poids: 0, expedies: 0, livres: 0, factures: 0, facture: 0, encaisse: 0, scans: 0,
+                                 creances_fin: creancesAu(d, cles[k].fin) });
+      });
+      d.colis.forEach(function (c) {
+        var x = entreJours(c.recu_le, p.debut, p.fin) && caseDe(c.recu_le);
+        if (x) { x.recus++; x.poids = arrondi(x.poids + (Number(c.poids_lb) || 0)); }
+      });
+      var premiers = {};
+      evenementsDeStatut(d, p.debut, p.fin).forEach(function (e) {
+        if (e.vers !== 'embarque' && e.vers !== 'livre') return;
+        var k = e.vers + ':' + e.colis_id;
+        if (!premiers[k] || jourSD(e.cree_le) < jourSD(premiers[k].cree_le)) premiers[k] = e;
+      });
+      Object.keys(premiers).forEach(function (k) {
+        var x = caseDe(premiers[k].cree_le);
+        if (x) x[premiers[k].vers === 'embarque' ? 'expedies' : 'livres']++;
+      });
+      (d.factures || []).forEach(function (f) {
+        var x = f.statut !== 'annulee' && entreJours(f.cree_le, p.debut, p.fin) && caseDe(f.cree_le);
+        if (x) { x.factures++; x.facture = arrondi(x.facture + f.montant_usd); }
+        paiementsValides(f).forEach(function (pa) {
+          var y = entreJours(pa.paye_le, p.debut, p.fin) && caseDe(pa.paye_le);
+          if (y) y.encaisse = arrondi(y.encaisse + pa.montant_usd);
+        });
+      });
+      d.historique.forEach(function (h) {
+        var x = (h.metadonnees || {}).source === 'scanner' && entreJours(h.cree_le, p.debut, p.fin) && caseDe(h.cree_le);
+        if (x) x.scans++;
+      });
+      return { periode: periode, granularite: g, cases: ordre.map(function (k) { return cles[k]; }) };
+    }
+    if (module === 'operations') {
+      var arrivees = {};
+      evenementsDeStatut(d).forEach(function (e) {
+        if (['embarque', 'disponible', 'livre'].indexOf(e.vers) < 0) return;
+        var x = arrivees[e.colis_id] || (arrivees[e.colis_id] = {});
+        if (!x[e.vers] || new Date(e.cree_le) < new Date(x[e.vers])) x[e.vers] = e.cree_le;
+      });
+      var durees = { reception_expedition: [], expedition_disponible: [], disponible_livraison: [], reception_livraison: [] };
+      Object.keys(arrivees).forEach(function (id) {
+        var c = trouverColisDemo(d, id), x = arrivees[id];
+        if (!c) return;
+        [['reception_expedition', c.recu_le, x.embarque], ['expedition_disponible', x.embarque, x.disponible],
+         ['disponible_livraison', x.disponible, x.livre], ['reception_livraison', c.recu_le, x.livre]].forEach(function (t) {
+          if (t[1] && t[2] && entreJours(t[2], p.debut, p.fin)) durees[t[0]].push(heuresEntre(t[1], t[2]));
+        });
+      });
+      // La chaîne des changements de statut, colis par colis
+      var chaine = evenementsDeStatut(d).sort(function (x, y) {
+        return x.colis_id < y.colis_id ? -1 : (x.colis_id > y.colis_id ? 1 : (new Date(x.cree_le) - new Date(y.cree_le) || x.id - y.id));
+      });
+      var parTransition = {}, retours = 0, sorties = [];
+      var ORDRE = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre'];
+      chaine.forEach(function (e, i) {
+        var prec = i > 0 && chaine[i - 1].colis_id === e.colis_id ? chaine[i - 1] : null;
+        if (!entreJours(e.cree_le, p.debut, p.fin)) return;
+        if (e.de === 'incident' && prec) sorties.push(heuresEntre(prec.cree_le, e.cree_le));
+        if (e.de == null || e.type_evenement === 'CORRECTION') return;
+        var c = trouverColisDemo(d, e.colis_id);
+        var depuis = !prec || prec.de == null ? (c ? c.recu_le : e.cree_le) : prec.cree_le;
+        var k = e.de + '>' + e.vers;
+        (parTransition[k] = parTransition[k] || { de: e.de, vers: e.vers, h: [] }).h.push(heuresEntre(depuis, e.cree_le));
+        if (ORDRE.indexOf(e.vers) >= 0 && ORDRE.indexOf(e.de) >= 0 && ORDRE.indexOf(e.vers) < ORDRE.indexOf(e.de)) retours++;
+      });
+      var transitions = Object.keys(parTransition).map(function (k) {
+        var t = parTransition[k], st = statistiquesDurees(t.h);
+        return { de: t.de, vers: t.vers, nombre: t.h.length, moyenne_h: st.moyenne_h, mediane_h: st.mediane_h };
+      }).sort(function (x, y) { return y.nombre - x.nombre || (x.de < y.de ? -1 : 1) || (x.vers < y.vers ? -1 : 1); });
+      var ages = { moins_24h: 0, de_24_a_48h: 0, de_48_a_72h: 0, de_72h_a_7j: 0, plus_de_7j: 0, actifs: 0 };
+      d.colis.forEach(function (c) {
+        if (c.statut === 'livre') return;
+        var dernier = dernierEvenementDemo(d, c.id);
+        var h = heuresEntre(dernier ? dernier.cree_le : c.recu_le, maintenant());
+        ages.actifs++;
+        ages[h < 24 ? 'moins_24h' : (h < 48 ? 'de_24_a_48h' : (h < 72 ? 'de_48_a_72h' : (h < 168 ? 'de_72h_a_7j' : 'plus_de_7j')))]++;
+      });
+      function cohorte(d1, d2) {
+        var l = d.colis.filter(function (c) { return entreJours(c.recu_le, d1, d2); });
+        return { recus: l.length, livres: l.filter(function (c) { return c.statut === 'livre'; }).length };
+      }
+      var co = cohorte(p.debut, p.fin), cp = cohorte(p.precDebut, p.precFin);
+      var incidents = evenementsDeStatut(d, p.debut, p.fin).filter(function (e) { return e.vers === 'incident'; });
+      var parPays = {}, notes = {}, clientsVus = {};
+      incidents.forEach(function (e) {
+        var c = trouverColisDemo(d, e.colis_id) || {};
+        (parPays[c.pays_destination] = parPays[c.pays_destination] || {})[e.colis_id] = true;
+        if (c.client_id) clientsVus[c.client_id] = true;
+        var n = String(e.note || '').trim();
+        if (n) notes[n] = (notes[n] || 0) + 1;
+      });
+      return {
+        periode: periode,
+        durees: { reception_expedition: statistiquesDurees(durees.reception_expedition),
+                  expedition_disponible: statistiquesDurees(durees.expedition_disponible),
+                  disponible_livraison: statistiquesDurees(durees.disponible_livraison),
+                  reception_livraison: statistiquesDurees(durees.reception_livraison) },
+        transitions: transitions,
+        anomalies: { corrections: d.historique.filter(function (h) {
+                       return h.type_evenement === 'CORRECTION' && entreJours(h.cree_le, p.debut, p.fin); }).length,
+                     retours_en_arriere: retours },
+        sans_mouvement: ages,
+        livraison: { livres: mesuresAnalytics(d, p.debut, p.fin).livres, cohorte_recus: co.recus, cohorte_livres: co.livres,
+                     taux_cohorte: co.recus ? Math.round(co.livres * 1000 / co.recus) / 10 : null,
+                     taux_cohorte_precedente: cp.recus ? Math.round(cp.livres * 1000 / cp.recus) / 10 : null },
+        action_requise: {
+          entrees: comparerValeurs(nbColisDistincts(incidents), nbColisDistincts(evenementsDeStatut(d, p.precDebut, p.precFin)
+            .filter(function (e) { return e.vers === 'incident'; }))),
+          en_cours: d.colis.filter(function (c) { return c.statut === 'incident'; }).length,
+          duree_episodes: statistiquesDurees(sorties),
+          clients: Object.keys(clientsVus).length,
+          par_destination: Object.keys(parPays).map(function (k) { return { pays: k, nombre: Object.keys(parPays[k]).length }; })
+            .sort(function (x, y) { return y.nombre - x.nombre || (x.pays < y.pays ? -1 : 1); }),
+          notes: Object.keys(notes).map(function (k) { return { note: k, nombre: notes[k] }; })
+            .sort(function (x, y) { return y.nombre - x.nombre || (x.note < y.note ? -1 : 1); }).slice(0, 5),
+          cause_structuree: false
+        }
+      };
+    }
+    if (module === 'clients') {
+      var tri = String(o.tri || 'colis').toLowerCase();
+      if (['colis', 'poids', 'facture', 'paye', 'solde'].indexOf(tri) < 0) throw Erreur('INVALID_INPUT', 'Tri inconnu : ' + tri.slice(0, 30) + '.');
+      var parPage = trancheDemo(o.parPage, 25, 100), decalage = Math.max(0, (o.page || 0) * parPage);
+      function colisPar(d1, d2) {
+        var r = {};
+        d.colis.forEach(function (c) {
+          if (!c.client_id || !entreJours(c.recu_le, d1, d2)) return;
+          var x = r[c.client_id] || (r[c.client_id] = { n: 0, poids: 0, dernier: null });
+          x.n++;
+          x.poids = arrondi(x.poids + (Number(c.poids_lb) || 0));
+          if (!x.dernier || new Date(c.recu_le) > new Date(x.dernier)) x.dernier = c.recu_le;
+        });
+        return r;
+      }
+      var actifs = colisPar(p.debut, p.fin), actifsPrec = colisPar(p.precDebut, p.precFin);
+      var clients = d.comptes.filter(function (c) { return c.role === 'client'; });
+      var liste = clients.map(function (cl) {
+        var facture = 0, paye = 0, solde = 0, derniere = actifs[cl.id] ? actifs[cl.id].dernier : null, touche = !!actifs[cl.id];
+        (d.factures || []).forEach(function (f) {
+          if (f.client_id !== cl.id || f.statut === 'annulee') return;
+          solde = arrondi(solde + factureComplete(d, f).solde_usd);
+          if (entreJours(f.cree_le, p.debut, p.fin)) { facture = arrondi(facture + f.montant_usd); touche = true; }
+        });
+        (d.factures || []).forEach(function (f) {
+          paiementsValides(f).forEach(function (pa) {
+            if (pa.client_id !== cl.id || !entreJours(pa.paye_le, p.debut, p.fin)) return;
+            paye = arrondi(paye + pa.montant_usd);
+            touche = true;
+            if (!derniere || new Date(pa.paye_le) > new Date(derniere)) derniere = pa.paye_le;
+          });
+        });
+        if (!touche) return null;
+        return { id: cl.id, code: cl.code, nom_complet: cl.nom_complet, ville: cl.ville || '', pays: cl.pays || '',
+                 colis: actifs[cl.id] ? actifs[cl.id].n : 0, poids: actifs[cl.id] ? actifs[cl.id].poids : 0,
+                 facture: facture, paye: paye, solde: solde, derniere_activite: derniere };
+      }).filter(Boolean).sort(function (x, y) {
+        return (y[tri] - x[tri]) || String(x.nom_complet).localeCompare(String(y.nom_complet));
+      });
+      var n = Object.keys(actifs).map(function (k) { return actifs[k].n; });
+      function segment(nom, def, test) {
+        var l = n.filter(test);
+        return { segment: nom, definition: def, clients: l.length, colis: l.reduce(function (t, x) { return t + x; }, 0) };
+      }
+      return {
+        periode: periode,
+        total_fin: clients.filter(function (c) { return entreJours(c.cree_le, null, p.fin) || actifs[c.id]; }).length,
+        nouveaux: comparerValeurs(clients.filter(function (c) { return entreJours(c.cree_le, p.debut, p.fin); }).length,
+                                  clients.filter(function (c) { return entreJours(c.cree_le, p.precDebut, p.precFin); }).length),
+        actifs: comparerValeurs(n.length, Object.keys(actifsPrec).length),
+        inactifs: clients.filter(function (c) { return entreJours(c.cree_le, null, p.fin) && !actifs[c.id]; }).length,
+        colis_par_client_actif: n.length ? arrondi(n.reduce(function (t, x) { return t + x; }, 0) / n.length) : null,
+        segments: [segment('petite', '1 colis sur la période', function (x) { return x === 1; }),
+                   segment('moyenne', '2 à 4 colis sur la période', function (x) { return x >= 2 && x <= 4; }),
+                   segment('forte', '5 colis ou plus sur la période', function (x) { return x >= 5; })],
+        tri: tri, total_liste: liste.length, lignes: liste.slice(decalage, decalage + parPage)
+      };
+    }
+    if (module === 'finances') {
+      a = mesuresAnalytics(d, p.debut, p.fin);
+      b = mesuresAnalytics(d, p.precDebut, p.precFin);
+      var jour = aujourdhui(), frais = 0, transport = 0, moyens = {};
+      var cr = { total: 0, factures: 0, impayees: 0, partielles: 0, en_retard: 0, montant_en_retard: 0, non_echues: 0, sans_echeance: 0 };
+      var tranches = [['0_30', 0, 30], ['31_60', 31, 60], ['61_90', 61, 90], ['90_plus', 91, Infinity]].map(function (t) {
+        return { tranche: t[0], factures: 0, montant: 0, min: t[1], max: t[2] };
+      });
+      (d.factures || []).forEach(function (f) {
+        if (f.statut !== 'annulee' && entreJours(f.cree_le, p.debut, p.fin)) {
+          frais = arrondi(frais + (f.frais_service_usd || 0));
+          transport = arrondi(transport + f.montant_usd - (f.frais_service_usd || 0));
+        }
+        paiementsValides(f).forEach(function (pa) {
+          if (!entreJours(pa.paye_le, p.debut, p.fin)) return;
+          var m = moyens[pa.moyen] || (moyens[pa.moyen] = { moyen: pa.moyen, nombre: 0, montant: 0 });
+          m.nombre++;
+          m.montant = arrondi(m.montant + pa.montant_usd);
+        });
+        if (f.statut === 'annulee') return;
+        var c = factureComplete(d, f);
+        if (!(c.solde_usd > 0)) return;
+        cr.total = arrondi(cr.total + c.solde_usd);
+        cr.factures++;
+        if (c.paye_usd === 0) cr.impayees++; else cr.partielles++;
+        var e = f.echeance_le ? String(f.echeance_le).slice(0, 10) : null;
+        if (!e) cr.sans_echeance++;
+        else if (e < jour) { cr.en_retard++; cr.montant_en_retard = arrondi(cr.montant_en_retard + c.solde_usd); }
+        else cr.non_echues++;
+        var age = ecartJours(jourSD(f.cree_le), jour);
+        tranches.forEach(function (t) {
+          if (age >= t.min && age <= t.max) { t.factures++; t.montant = arrondi(t.montant + c.solde_usd); }
+        });
+      });
+      cr.age = tranches.map(function (t) { return { tranche: t.tranche, factures: t.factures, montant: t.montant }; });
+      return {
+        periode: periode,
+        facture: comparerValeurs(a.facture, b.facture), encaisse: comparerValeurs(a.encaisse, b.encaisse),
+        reste: comparerValeurs(a.reste, b.reste), factures_emises: comparerValeurs(a.factures_emises, b.factures_emises),
+        frais_service: frais, transport: transport,
+        par_moyen: Object.keys(moyens).map(function (k) { return moyens[k]; })
+          .sort(function (x, y) { return y.montant - x.montant || (x.moyen < y.moyen ? -1 : 1); }),
+        creances: cr,
+        creances_fin: comparerValeurs(creancesAu(d, p.fin), creancesAu(d, p.precFin)),
+        depenses: { suivi: false }, dettes: { suivi: false }, resultat: { suivi: false }
+      };
+    }
+    if (module === 'routes') {
+      function ville(c) { var v = String(c.destination || '').trim().toLowerCase(); return v || null; }
+      var co2 = d.colis.filter(function (c) { return entreJours(c.recu_le, p.debut, p.fin); });
+      var prec = d.colis.filter(function (c) { return entreJours(c.recu_le, p.precDebut, p.precFin); });
+      var livraisons = {};
+      evenementsDeStatut(d, p.debut).forEach(function (e) {
+        if (e.vers === 'livre' && (!livraisons[e.colis_id] || new Date(e.cree_le) < new Date(livraisons[e.colis_id]))) livraisons[e.colis_id] = e.cree_le;
+      });
+      var routes = {}, pays = {}, villes = {};
+      co2.forEach(function (c) {
+        var k = c.pays_destination + '|' + c.service;
+        var r = routes[k] || (routes[k] = { pays: c.pays_destination, service: c.service, colis: 0, poids: 0, facture: 0, livres: 0, d: [] });
+        r.colis++;
+        r.poids = arrondi(r.poids + (Number(c.poids_lb) || 0));
+        (d.factures || []).forEach(function (f) {
+          if (f.statut === 'annulee') return;
+          (f.facture_lignes || []).forEach(function (l) { if (l.colis_id === c.id) r.facture = arrondi(r.facture + l.montant_usd); });
+        });
+        if (c.statut === 'livre') r.livres++;
+        if (livraisons[c.id]) { var h = heuresEntre(c.recu_le, livraisons[c.id]); if (h >= 0) r.d.push(h); }
+        pays[c.pays_destination] = pays[c.pays_destination] || { pays: c.pays_destination, colis: 0, colis_precedents: 0 };
+        pays[c.pays_destination].colis++;
+        var v = ville(c);
+        if (v) {
+          var kv = v + '|' + c.pays_destination;
+          var nom = v.replace(/(^|[^a-zà-ÿ])([a-zà-ÿ])/g, function (m0, s0, l0) { return s0 + l0.toUpperCase(); });
+          (villes[kv] = villes[kv] || { ville: nom, pays: c.pays_destination, colis: 0, cle: v }).colis++;
+        }
+      });
+      prec.forEach(function (c) {
+        pays[c.pays_destination] = pays[c.pays_destination] || { pays: c.pays_destination, colis: 0, colis_precedents: 0 };
+        pays[c.pays_destination].colis_precedents++;
+      });
+      return {
+        periode: periode, origine: 'Miami (Medley), FL', origines_distinctes: 1,
+        routes: Object.keys(routes).map(function (k) {
+          var r = routes[k];
+          return { pays: r.pays, service: r.service, colis: r.colis, poids: r.poids, facture: r.facture, livres: r.livres,
+                   taux_livre: Math.round(r.livres * 1000 / r.colis) / 10,
+                   delai_moyen_h: r.d.length ? Math.round(r.d.reduce(function (t, x) { return t + x; }, 0) / r.d.length * 10) / 10 : null,
+                   colis_precedents: prec.filter(function (c) { return c.pays_destination === r.pays && c.service === r.service; }).length };
+        }).sort(function (x, y) { return y.colis - x.colis || (x.pays < y.pays ? -1 : 1) || (x.service < y.service ? -1 : 1); }),
+        pays: Object.keys(pays).map(function (k) { return pays[k]; })
+          .sort(function (x, y) { return y.colis - x.colis || (x.pays < y.pays ? -1 : 1); }),
+        villes: Object.keys(villes).map(function (k) { return villes[k]; })
+          .sort(function (x, y) { return y.colis - x.colis || (x.cle < y.cle ? -1 : 1); }).slice(0, 10)
+          .map(function (v) {
+            return { ville: v.ville, pays: v.pays, colis: v.colis,
+                     colis_precedents: prec.filter(function (c) { return ville(c) === v.cle && c.pays_destination === v.pays; }).length };
+          }),
+        sans_ville: co2.filter(function (c) { return !ville(c); }).length
+      };
+    }
+    if (module === 'scanner') {
+      function scans(d1, d2) {
+        return d.historique.filter(function (h) { return (h.metadonnees || {}).source === 'scanner' && entreJours(h.cree_le, d1, d2); });
+      }
+      var s = scans(p.debut, p.fin);
+      var ops = {}, comptes = {}, lieux = {}, colisVus = {}, joursVus = {}, parJourCompte = {};
+      s.forEach(function (h) {
+        ops[h.type_evenement] = (ops[h.type_evenement] || 0) + 1;
+        var k = h.auteur_id || '';
+        var c = comptes[k] || (comptes[k] = { operations: 0, jours: {} });
+        c.operations++;
+        c.jours[jourSD(h.cree_le)] = true;
+        var l = String(h.lieu || '').trim();
+        lieux[l] = (lieux[l] || 0) + 1;
+        colisVus[h.colis_id] = true;
+        joursVus[jourSD(h.cree_le)] = true;
+        (parJourCompte[k + '|' + jourSD(h.cree_le)] = parJourCompte[k + '|' + jourSD(h.cree_le)] || []).push(h);
+      });
+      var ecarts = [];
+      Object.keys(parJourCompte).forEach(function (k) {
+        var l = parJourCompte[k].sort(function (x, y) { return new Date(x.cree_le) - new Date(y.cree_le) || x.id - y.id; });
+        for (var i = 1; i < l.length; i++) ecarts.push(heuresEntre(l[i - 1].cree_le, l[i].cree_le) * 60);
+      });
+      var st = statistiquesDurees(ecarts);
+      return {
+        periode: periode,
+        total: comparerValeurs(s.length, scans(p.precDebut, p.precFin).length),
+        colis: Object.keys(colisVus).length, jours_actifs: Object.keys(joursVus).length, echecs_suivis: false,
+        par_operation: Object.keys(ops).map(function (k) {
+          return { type: k, libelle: TYPES_EVENEMENT[k] ? TYPES_EVENEMENT[k].libelle : k, nombre: ops[k] };
+        }).sort(function (x, y) { return y.nombre - x.nombre || (x.type < y.type ? -1 : 1); }),
+        par_compte: Object.keys(comptes).map(function (k) {
+          var cl = d.comptes.filter(function (c) { return c.id === k; })[0];
+          return { nom: cl ? (cl.nom_complet || cl.email) : 'Compte supprimé', role: cl ? cl.role : null,
+                   operations: comptes[k].operations, jours: Object.keys(comptes[k].jours).length };
+        }).sort(function (x, y) { return String(x.nom).localeCompare(String(y.nom)); }),
+        par_lieu: Object.keys(lieux).map(function (k) { return { lieu: k, nombre: lieux[k] }; })
+          .sort(function (x, y) { return y.nombre - x.nombre || (x.lieu < y.lieu ? -1 : 1); }),
+        intervalle_minutes: { nombre: st.nombre, mediane: st.mediane_h, moyenne: st.moyenne_h }
+      };
+    }
+    // qualite : toute la base, sans période
+    var dernier = {};
+    d.historique.forEach(function (h) {
+      if (corrigeDemo(d, h)) return;
+      var x = dernier[h.colis_id];
+      if (!x || new Date(h.cree_le) > new Date(x.cree_le) || (h.cree_le === x.cree_le && h.id > x.id)) dernier[h.colis_id] = h;
+    });
+    var avecEv = {}, avecRecu = {};
+    d.historique.forEach(function (h) { avecEv[h.colis_id] = true; if (h.statut === 'recu') avecRecu[h.colis_id] = true; });
+    var ids = d.comptes.map(function (c) { return c.id; });
+    var paiements = [];
+    (d.factures || []).forEach(function (f) { (f.paiements || []).forEach(function (pa) { paiements.push({ p: pa, f: f }); }); });
+    var colisEv = d.colis.filter(function (c) { return avecEv[c.id]; });
+    return {
+      genere_le: maintenant(),
+      indicateurs: [
+        { code: 'colis_historique_complet', libelle: 'Colis avec un événement de réception',
+          ok: d.colis.filter(function (c) { return avecRecu[c.id]; }).length, total: d.colis.length },
+        { code: 'colis_historique_coherent', libelle: 'Colis dont le statut est celui du dernier événement',
+          ok: colisEv.filter(function (c) { return dernier[c.id] && dernier[c.id].statut === c.statut; }).length, total: colisEv.length },
+        { code: 'evenements_attribues', libelle: 'Événements avec le compte qui les a faits',
+          ok: d.historique.filter(function (h) { return h.auteur_id; }).length, total: d.historique.length },
+        { code: 'factures_liees', libelle: 'Factures liées à un client existant',
+          ok: (d.factures || []).filter(function (f) { return ids.indexOf(f.client_id) >= 0; }).length, total: (d.factures || []).length },
+        { code: 'paiements_lies', libelle: 'Paiements liés à une facture du même client',
+          ok: paiements.filter(function (x) { return x.p.client_id === x.f.client_id; }).length, total: paiements.length }
+      ],
+      anomalies: [
+        { code: 'colis_sans_evenement', libelle: 'Colis sans aucun événement', nombre: d.colis.length - colisEv.length },
+        { code: 'colis_statut_incoherent', libelle: 'Colis dont le statut diffère du dernier événement',
+          nombre: colisEv.filter(function (c) { return !dernier[c.id] || dernier[c.id].statut !== c.statut; }).length },
+        { code: 'colis_sans_client', libelle: 'Colis sans client (compte supprimé)',
+          nombre: d.colis.filter(function (c) { return !c.client_id; }).length },
+        { code: 'colis_sans_poids', libelle: 'Colis sans poids (prix non calculable)',
+          nombre: d.colis.filter(function (c) { return c.poids_lb == null; }).length },
+        { code: 'colis_sans_facture', libelle: 'Colis d’un client sur aucune facture active',
+          nombre: d.colis.filter(function (c) { return c.client_id && !factureActiveDu(d, c.id); }).length },
+        { code: 'evenements_sans_auteur', libelle: 'Événements sans compte (antérieurs à la Phase 3)',
+          nombre: d.historique.filter(function (h) { return !h.auteur_id; }).length },
+        { code: 'factures_sans_client', libelle: 'Factures sans client existant',
+          nombre: (d.factures || []).filter(function (f) { return ids.indexOf(f.client_id) < 0; }).length },
+        { code: 'paiements_sans_facture', libelle: 'Paiements sans facture, ou d’un autre client',
+          nombre: paiements.filter(function (x) { return x.p.client_id !== x.f.client_id; }).length }
+      ],
+      facturation: []
+    };
+  }
+
+  /* ---- Les rapports : la copie démo de outils/supabase-rapports.sql ---------------
+     Mêmes périodes (jours de Santo Domingo), mêmes filtres, mêmes définitions, même
+     forme de réponse, mêmes refus : essai-rapports.py compare les deux. Un rapport
+     enregistré n'est qu'une définition (d.rapports) ; ses chiffres se relisent dans
+     les données à chaque ouverture. Le supprimer n'efface que lui. ---- */
+  var TYPES_RAPPORT = ['complet', 'colis', 'factures', 'paiements', 'clients', 'evenements', 'activite'];
+  var SECTIONS_RAPPORT = ['finances', 'colis', 'evenements', 'factures', 'paiements', 'clients', 'activite'];
+  var STATUTS_RAPPORT = { attente: ['recu', 'emballe'], transit: ['embarque', 'distribution', 'succursale'],
+                          disponible: ['disponible'], livre: ['livre'], incident: ['incident'] };
+
+  // rapport_date : AAAA-MM-JJ → la date, ou une erreur lisible
+  function dateRapport(texte) {
+    if (texte == null || String(texte).trim() === '') return null;
+    texte = String(texte);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(texte)) throw Erreur('INVALID_PERIOD', 'Date illisible : ' + texte.slice(0, 20) + '.');
+    var t = new Date(texte + 'T00:00:00Z');
+    if (isNaN(t.getTime()) || t.toISOString().slice(0, 10) !== texte) {
+      throw Erreur('INVALID_PERIOD', 'Date impossible : ' + texte.slice(0, 20) + '.');
+    }
+    return texte;
+  }
+
+  function finDuMois(jour) {
+    var t = new Date(jour.slice(0, 7) + '-01T00:00:00Z');
+    t.setUTCMonth(t.getUTCMonth() + 1);
+    t.setUTCDate(0);
+    return t.toISOString().slice(0, 10);
+  }
+
+  // rapport_bornes : le type de période et sa date de référence → { debut, fin }
+  function bornesRapport(periode, debut, fin) {
+    var ref = debut || aujourdhui();
+    var an = ref.slice(0, 4), mois = Number(ref.slice(5, 7));
+    switch (periode || '') {
+      case 'aujourdhui': return { debut: aujourdhui(), fin: aujourdhui() };
+      case 'journalier': return { debut: ref, fin: ref };
+      case 'hebdomadaire': {
+        var lundi = decalerJour(ref, -((new Date(ref + 'T00:00:00Z').getUTCDay() + 6) % 7));
+        return { debut: lundi, fin: decalerJour(lundi, 6) };
+      }
+      case 'mensuel': return { debut: ref.slice(0, 8) + '01', fin: finDuMois(ref) };
+      case 'trimestriel': {
+        var m1 = Math.floor((mois - 1) / 3) * 3 + 1, d1 = an + '-' + (m1 < 10 ? '0' : '') + m1 + '-01';
+        return { debut: d1, fin: finDuMois(an + '-' + (m1 + 2 < 10 ? '0' : '') + (m1 + 2) + '-01') };
+      }
+      case 'annuel': return { debut: an + '-01-01', fin: an + '-12-31' };
+      case 'personnalise':
+        if (!debut || !fin) throw Erreur('INVALID_PERIOD', 'Choisissez une date de début et une date de fin.');
+        if (debut > fin) throw Erreur('INVALID_PERIOD', 'La date de début doit être antérieure à la date de fin.');
+        if ((new Date(fin + 'T00:00:00Z') - new Date(debut + 'T00:00:00Z')) / 864e5 > 1095) {
+          throw Erreur('INVALID_PERIOD', 'Une période de trois ans au plus.');
+        }
+        return { debut: debut, fin: fin };
+      default:
+        throw Erreur('INVALID_PERIOD', 'Période inconnue : ' + String(periode || '').slice(0, 30) + '.');
+    }
+  }
+
+  // rapport_filtres : vérifiés, une clé vide retirée
+  function filtresRapport(f) {
+    var r = {};
+    if (f == null) return r;
+    if (typeof f !== 'object' || Array.isArray(f)) throw Erreur('INVALID_INPUT', 'Les filtres forment un objet.');
+    Object.keys(f).forEach(function (k) {
+      if (k !== 'statut_colis' && k !== 'etat_facture') throw Erreur('INVALID_INPUT', 'Filtre inconnu : ' + k.slice(0, 20) + '.');
+      if (f[k] != null && typeof f[k] !== 'string') throw Erreur('INVALID_INPUT', 'Le filtre « ' + k + ' » est un texte.');
+      var v = String(f[k] || '').trim().toLowerCase();
+      if (!v) return;
+      if (k === 'statut_colis' && !STATUTS_RAPPORT[v]) throw Erreur('INVALID_INPUT', 'Statut de colis inconnu : ' + v.slice(0, 20) + '.');
+      if (k === 'etat_facture' && ['payee', 'impayee', 'annulee', 'supprimee'].indexOf(v) < 0) {
+        throw Erreur('INVALID_INPUT', 'État de facture inconnu : ' + v.slice(0, 20) + '.');
+      }
+      r[k] = v;
+    });
+    return r;
+  }
+
+  // rapport_sections : celles reçues (dans l'ordre du rapport), ou celles du type
+  function sectionsRapport(liste, type) {
+    if (liste == null || (Array.isArray(liste) && !liste.length)) {
+      return { complet: SECTIONS_RAPPORT.slice(), colis: ['colis', 'evenements'], factures: ['finances', 'factures'],
+               paiements: ['finances', 'paiements'], clients: ['clients'], evenements: ['evenements'],
+               activite: ['activite'] }[type] || SECTIONS_RAPPORT.slice();
+    }
+    if (!Array.isArray(liste)) throw Erreur('INVALID_INPUT', 'Les données à inclure forment une liste.');
+    liste.forEach(function (s) {
+      if (SECTIONS_RAPPORT.indexOf(s) < 0) throw Erreur('INVALID_INPUT', 'Donnée inconnue : ' + String(s).slice(0, 20) + '.');
+    });
+    return SECTIONS_RAPPORT.filter(function (s) { return liste.indexOf(s) >= 0; });
+  }
+
+  function nomCompteDemo(d, id) {
+    var c = d.comptes.filter(function (x) { return x.id === id; })[0];
+    return c ? (c.nom_complet || c.email || '') : '';
+  }
+
+  // rapport_valider : ce que la page envoie → une définition prête
+  function validerRapportDemo(p) {
+    if (!p || typeof p !== 'object') throw Erreur('INVALID_INPUT', 'Rapport illisible.');
+    var nom = String(p.nom || '').trim();
+    if (!nom || nom.length > 120) throw Erreur('INVALID_INPUT', 'Donnez un nom au rapport (120 caractères au plus).');
+    var type = p.type || 'complet';
+    if (TYPES_RAPPORT.indexOf(type) < 0) throw Erreur('INVALID_INPUT', 'Type de rapport inconnu : ' + String(type).slice(0, 20) + '.');
+    var b = bornesRapport(p.periode || '', dateRapport(p.debut), dateRapport(p.fin));
+    return { nom: nom, type: type, periode: p.periode, debut: b.debut, fin: b.fin,
+             filtres: filtresRapport(p.filtres), sections: sectionsRapport(p.sections, type) };
+  }
+
+  function resumeRapportDemo(r) {
+    return { nom: r.nom, type: r.type, periode: r.periode, debut: r.debut, fin: r.fin, filtres: r.filtres,
+             sections: r.sections, cree_par: r.cree_par, role_createur: r.role_createur, cree_le: r.cree_le };
+  }
+
+  // rapport_json : un rapport tel que la page le lit
+  function rapportJsonDemo(d, r) {
+    return { id: r.id, nom: r.nom, type: r.type, periode: r.periode, debut: r.debut, fin: r.fin,
+             filtres: r.filtres, sections: r.sections.slice(), cree_par: r.cree_par,
+             cree_par_nom: nomCompteDemo(d, r.cree_par), role_createur: r.role_createur, cree_le: r.cree_le,
+             modifie_le: r.modifie_le || null, modifie_par_nom: nomCompteDemo(d, r.modifie_par) || null,
+             statut: r.fin >= aujourdhui() ? 'en_cours' : 'clos' };
+  }
+
+  function comparerRapport(cles) {
+    return function (a, b) {
+      for (var i = 0; i < cles.length; i++) {
+        var x = cles[i](a), y = cles[i](b);
+        if (x < y) return -1;
+        if (x > y) return 1;
+      }
+      return 0;
+    };
+  }
+
+  // rapport_donnees : la période, les statistiques et les lignes de chaque partie
+  function donneesRapportDemo(d, moi, p) {
+    p = p || {};
+    if (typeof p !== 'object' || Array.isArray(p)) throw Erreur('INVALID_INPUT', 'Paramètres du rapport illisibles.');
+    var b = bornesRapport(p.periode || 'personnalise', dateRapport(p.debut), dateRapport(p.fin));
+    var d1 = b.debut, d2 = b.fin;
+    var filtres = filtresRapport(p.filtres);
+    var statuts = STATUTS_RAPPORT[filtres.statut_colis] || null;
+    var etat = filtres.etat_facture || null;
+    var sections = sectionsRapport(p.sections, p.type || 'complet');
+    function entier(v, defaut, mini, maxi) {
+      if (v == null) return defaut;
+      if (typeof v !== 'number' || !/^\d+$/.test(String(v))) throw Erreur('INVALID_INPUT', 'Nombre entier attendu.');
+      return Math.min(Math.max(v, mini), maxi);
+    }
+    var limite = entier(p.limite, 50, 1, 2000), decalage = entier(p.decalage, 0, 0, 1000000);
+    var seule = p.section || null;
+    if (seule && sections.indexOf(seule) < 0) {
+      throw Erreur('INVALID_INPUT', 'Cette donnée n\'est pas dans le rapport : ' + String(seule).slice(0, 20) + '.');
+    }
+    function dans(iso) { return entreJours(iso, d1, d2); }
+    function page(liste) { return liste.slice(decalage, decalage + limite); }
+    function statutOk(s) { return !statuts || statuts.indexOf(s) >= 0; }
+    function compte(id) { return d.comptes.filter(function (c) { return c.id === id; })[0] || null; }
+    function premierAuteur(entite, id, action) {
+      var j = (d.journal || []).filter(function (x) { return x.entite === entite && x.entite_id === String(id) && x.action === action; })
+        .sort(comparerRapport([function (x) { return x.cree_le; }]))[0];
+      return j ? (nomCompteDemo(d, j.auteur_id) || null) : null;
+    }
+    var tout = peutCompte(moi, 'audit_logs.view');
+    var lire = { colis: tout || peutCompte(moi, 'shipments.view_history'), facture: tout || peutCompte(moi, 'invoices.view'),
+                 paiement: tout || peutCompte(moi, 'payments.view'), clients: tout || peutCompte(moi, 'clients.view'),
+                 roles: tout || peutCompte(moi, 'users.view') };
+    function journalVisible(j) {
+      var role = j.action === 'client.role' || j.action === 'utilisateur.role';
+      return tout || (j.entite === 'colis' && lire.colis) || (j.entite === 'facture' && lire.facture) ||
+             (j.entite === 'paiement' && lire.paiement) || (j.entite === 'client' && (role ? lire.roles : lire.clients)) ||
+             j.entite === 'rapport';
+    }
+
+    var colis = d.colis.filter(function (c) { return dans(c.recu_le) && statutOk(c.statut); })
+      .sort(comparerRapport([function (c) { return c.recu_le; }, function (c) { return c.numero; }]));
+    var parColis = {};
+    d.colis.forEach(function (c) { parColis[c.id] = c; });
+    var etapes = d.historique.filter(function (h) { return dans(h.cree_le) && parColis[h.colis_id] && statutOk(parColis[h.colis_id].statut); })
+      .sort(comparerRapport([function (h) { return h.cree_le; }, function (h) { return h.id; }]));
+    var factures = (d.factures || []).filter(function (f) { return dans(f.cree_le); }).map(function (f) {
+      var c = factureComplete(d, f);
+      return Object.assign({}, f, { etat: c.etat_paiement, paye: c.paye_usd, solde: c.solde_usd });
+    }).filter(function (f) {
+      return !etat || (etat === 'payee' && f.etat === 'payee') ||
+             (etat === 'impayee' && ['a_payer', 'partielle', 'en_retard'].indexOf(f.etat) >= 0) ||
+             (etat === 'annulee' && f.statut === 'annulee');
+    }).sort(comparerRapport([function (f) { return f.cree_le; }, function (f) { return f.numero; }]));
+    var supprimees = (d.journal || []).filter(function (j) {
+      return j.action === 'facture.suppression' && dans(j.cree_le) && (!etat || etat === 'supprimee');
+    }).sort(comparerRapport([function (j) { return j.cree_le; }, function (j) { return j.id; }]));
+    var paiements = [];
+    (d.factures || []).forEach(function (f) {
+      (f.paiements || []).forEach(function (x) { if (dans(x.paye_le)) paiements.push({ p: x, f: f }); });
+    });
+    paiements.sort(comparerRapport([function (x) { return x.p.paye_le; }, function (x) { return x.p.id; }]));
+    var journal = (d.journal || []).filter(function (j) { return dans(j.cree_le) && journalVisible(j); })
+      .sort(comparerRapport([function (j) { return j.cree_le; }, function (j) { return j.id; }]));
+    function somme(liste, f) { return arrondi(liste.reduce(function (t, x) { return t + (Number(f(x)) || 0); }, 0)); }
+    function actif(c) {
+      return d.colis.some(function (x) { return x.client_id === c.id && dans(x.recu_le); }) ||
+             (d.factures || []).some(function (x) { return x.client_id === c.id && dans(x.cree_le); }) ||
+             paiements.some(function (x) { return x.p.client_id === c.id; });
+    }
+
+    var r = {
+      periode: { debut: d1, fin: d2, jours: Math.round((new Date(d2 + 'T00:00:00Z') - new Date(d1 + 'T00:00:00Z')) / 864e5) + 1,
+                 fuseau: 'America/Santo_Domingo', en_cours: d2 >= aujourdhui() },
+      filtres: filtres, sections: sections, genere_le: maintenant(), genere_par: nomCompteDemo(d, moi.id),
+      limite: limite, decalage: decalage
+    };
+    if (!seule) {
+      var actives = factures.filter(function (f) { return f.statut !== 'annulee'; });
+      var annulees = factures.filter(function (f) { return f.statut === 'annulee'; });
+      var valides = paiements.filter(function (x) { return !x.p.annule_le; });
+      var annules = paiements.filter(function (x) { return x.p.annule_le; });
+      var moyens = {};
+      valides.forEach(function (x) {
+        var m = moyens[x.p.moyen] = moyens[x.p.moyen] || { moyen: x.p.moyen, nombre: 0, montant: 0 };
+        m.nombre++;
+        m.montant = arrondi(m.montant + x.p.montant_usd);
+      });
+      var parEntite = {};
+      journal.forEach(function (j) { parEntite[j.entite] = (parEntite[j.entite] || 0) + 1; });
+      r.statistiques = {
+        colis: {
+          total: colis.length,
+          attente: colis.filter(function (c) { return STATUTS_RAPPORT.attente.indexOf(c.statut) >= 0; }).length,
+          transit: colis.filter(function (c) { return STATUTS_RAPPORT.transit.indexOf(c.statut) >= 0; }).length,
+          disponible: colis.filter(function (c) { return c.statut === 'disponible'; }).length,
+          livre: colis.filter(function (c) { return c.statut === 'livre'; }).length,
+          incident: colis.filter(function (c) { return c.statut === 'incident'; }).length,
+          poids: somme(colis, function (c) { return c.poids_lb; }), valeur: somme(colis, function (c) { return c.prix_usd; }),
+          supprimes: (d.journal || []).filter(function (j) {
+            return j.action === 'colis.suppression' && dans(j.cree_le) && (!statuts || statuts.indexOf((j.avant || {}).statut) >= 0);
+          }).length
+        },
+        evenements: {
+          total: etapes.length,
+          corrections: etapes.filter(function (h) { return h.type_evenement === 'CORRECTION'; }).length,
+          livraisons: etapes.filter(function (h) { return h.statut === 'livre' && h.statut_precedent !== 'livre'; }).length
+        },
+        factures: {
+          total: factures.length,
+          payees: factures.filter(function (f) { return f.etat === 'payee'; }).length,
+          impayees: factures.filter(function (f) { return ['a_payer', 'partielle', 'en_retard'].indexOf(f.etat) >= 0; }).length,
+          partielles: factures.filter(function (f) { return f.etat === 'partielle'; }).length,
+          en_retard: factures.filter(function (f) { return f.etat === 'en_retard'; }).length,
+          annulees: annulees.length,
+          regroupees: annulees.filter(function (f) { return f.remplacee_par; }).length,
+          supprimees: supprimees.length,
+          montant_facture: somme(actives, function (f) { return f.montant_usd; }),
+          montant_paye: somme(actives, function (f) { return f.paye; }),
+          montant_impaye: somme(actives, function (f) { return f.solde; }),
+          montant_annule: somme(annulees, function (f) { return f.montant_usd; }),
+          montant_supprime: somme(supprimees, function (j) { return (j.avant || {}).montant_usd; })
+        },
+        paiements: {
+          nombre: valides.length, encaisse: somme(valides, function (x) { return x.p.montant_usd; }),
+          annules: annules.length, montant_annule: somme(annules, function (x) { return x.p.montant_usd; }),
+          par_moyen: Object.keys(moyens).map(function (k) { return moyens[k]; }).sort(function (a, b) {
+            return b.montant - a.montant || (a.moyen < b.moyen ? -1 : 1);
+          }),
+          creances_fin: creancesAu(d, d2)
+        },
+        clients: {
+          nouveaux: d.comptes.filter(function (c) { return c.role === 'client' && dans(c.cree_le); }).length,
+          actifs: d.comptes.filter(function (c) { return c.role === 'client' && actif(c); }).length
+        },
+        activite: {
+          total: journal.length,
+          suppressions: journal.filter(function (j) { return /\.suppression$/.test(j.action); }).length,
+          par_entite: parEntite
+        }
+      };
+    }
+
+    var s = {};
+    function voulu(nom) { return sections.indexOf(nom) >= 0 && (!seule || seule === nom); }
+    if (voulu('colis')) {
+      s.colis = { total: colis.length, lignes: page(colis).map(function (c) {
+        var cl = compte(c.client_id) || {};
+        var livre = d.historique.filter(function (h) {
+          return h.colis_id === c.id && h.statut === 'livre' && h.statut_precedent !== 'livre' && !corrigeDemo(d, h);
+        }).map(function (h) { return h.cree_le; }).sort().pop() || null;
+        return { id: c.id, numero: c.numero, recu_le: c.recu_le, client_code: cl.code || null, client_nom: cl.nom_complet || null,
+                 expediteur: c.expediteur || '', description: c.description || '', poids_lb: c.poids_lb == null ? null : c.poids_lb,
+                 prix_usd: c.prix_usd == null ? null : c.prix_usd, service: c.service, pays_destination: c.pays_destination,
+                 destination: c.destination || '', statut: c.statut, livre_le: livre,
+                 cree_par: premierAuteur('colis', c.id, 'colis.creation') };
+      }) };
+    }
+    if (voulu('evenements')) {
+      s.evenements = { total: etapes.length, lignes: page(etapes).map(function (h) {
+        return { id: h.id, cree_le: h.cree_le, numero: parColis[h.colis_id].numero, type_evenement: h.type_evenement || null,
+                 statut_precedent: h.statut_precedent == null ? null : h.statut_precedent, statut: h.statut,
+                 lieu: h.lieu || '', note: h.note || '', auteur: nomCompteDemo(d, h.auteur_id) || null,
+                 auteur_role: h.auteur_role || null, visibilite: h.visibilite || 'publique', corrige_id: h.corrige_id || null,
+                 source: (h.metadonnees || {}).source || '', annule: corrigeDemo(d, h) };
+      }) };
+    }
+    if (voulu('factures')) {
+      s.factures = {
+        total: factures.length,
+        lignes: page(factures).map(function (f) {
+          var cl = compte(f.client_id) || {};
+          var nouvelle = f.remplacee_par ? (d.factures || []).filter(function (x) { return x.id === f.remplacee_par; })[0] : null;
+          return { id: f.id, numero: f.numero, cree_le: f.cree_le, client_code: cl.code || null, client_nom: cl.nom_complet || null,
+                   montant_usd: f.montant_usd, frais_service_usd: f.frais_service_usd || 0, paye: f.paye, solde: f.solde,
+                   etat: f.etat, statut: f.statut, moyen: f.moyen || '', echeance_le: f.echeance_le || null,
+                   annulee_le: f.annulee_le || null, motif_annulation: f.motif_annulation || '',
+                   remplacee_par: nouvelle ? nouvelle.numero : null, cree_par: premierAuteur('facture', f.id, 'facture.creation') };
+        }),
+        supprimees: { total: supprimees.length, lignes: supprimees.slice(0, limite).map(function (j) {
+          var a = j.avant || {};
+          return { supprimee_le: j.cree_le, numero: a.numero || null, montant_usd: a.montant_usd == null ? null : a.montant_usd,
+                   statut: a.statut || null, auteur: nomCompteDemo(d, j.auteur_id) || null };
+        }) }
+      };
+    }
+    if (voulu('paiements')) {
+      s.paiements = { total: paiements.length, lignes: page(paiements).map(function (x) {
+        var cl = compte(x.p.client_id) || {};
+        return { id: x.p.id, paye_le: x.p.paye_le, facture_id: x.f.id, facture_numero: x.f.numero, client_code: cl.code || null,
+                 client_nom: cl.nom_complet || null, montant_usd: x.p.montant_usd, moyen: x.p.moyen, reference: x.p.reference || '',
+                 origine: x.p.origine || 'saisie', annule_le: x.p.annule_le || null, motif_annulation: x.p.motif_annulation || '',
+                 saisi_par: nomCompteDemo(d, x.p.cree_par) || null };
+      }) };
+    }
+    if (voulu('clients')) {
+      var clients = d.comptes.filter(function (c) { return c.role === 'client' && (dans(c.cree_le) || actif(c)); })
+        .sort(comparerRapport([function (c) { return String(c.nom_complet || '').toLowerCase(); }, function (c) { return c.code || ''; }]));
+      s.clients = { total: clients.length, lignes: page(clients).map(function (c) {
+        return { id: c.id, code: c.code || null, nom: c.nom_complet || '', pays: c.pays || '', ville: c.ville || '',
+                 cree_le: c.cree_le, nouveau: dans(c.cree_le),
+                 colis: d.colis.filter(function (x) { return x.client_id === c.id && dans(x.recu_le); }).length,
+                 facture: somme((d.factures || []).filter(function (x) {
+                   return x.client_id === c.id && x.statut !== 'annulee' && dans(x.cree_le);
+                 }), function (x) { return x.montant_usd; }),
+                 paye: somme(paiements.filter(function (x) { return x.p.client_id === c.id && !x.p.annule_le; }),
+                             function (x) { return x.p.montant_usd; }),
+                 solde: somme((d.factures || []).filter(function (x) { return x.client_id === c.id; }),
+                              function (x) { return factureComplete(d, x).solde_usd; }) };
+      }) };
+    }
+    if (voulu('activite')) {
+      s.activite = { total: journal.length, lignes: page(journal).map(function (j) {
+        var a = j.avant || {}, n = j.apres || {}, ref = '';
+        if (j.entite === 'colis') ref = n.numero || a.numero || ((parColis[j.entite_id] || {}).numero) || '';
+        else if (j.entite === 'facture') {
+          ref = n.numero || a.numero || (((d.factures || []).filter(function (f) { return f.id === j.entite_id; })[0] || {}).numero) || '';
+        } else if (j.entite === 'paiement') {
+          (d.factures || []).forEach(function (f) {
+            if ((f.paiements || []).some(function (x) { return x.id === j.entite_id; })) ref = f.numero;
+          });
+        } else if (j.entite === 'client') ref = (compte(j.entite_id) || {}).code || a.code || n.code || '';
+        else if (j.entite === 'rapport') {
+          ref = n.nom || a.nom || (((d.rapports || []).filter(function (x) { return x.id === j.entite_id; })[0] || {}).nom) || '';
+        }
+        var auteur = compte(j.auteur_id);
+        return { id: j.id, cree_le: j.cree_le, auteur: auteur ? (auteur.nom_complet || auteur.email) : null,
+                 auteur_role: auteur ? auteur.role : null, action: j.action, entite: j.entite, entite_id: j.entite_id,
+                 reference: ref, avant: j.avant || null, apres: j.apres || null };
+      }) };
+    }
+    r.donnees = s;
+    return r;
+  }
+
+  /* ---- Les programmes, version démonstration -------------------------------
+     La copie, dans le navigateur, de outils/supabase-fidelite.sql (GOPOINTS),
+     supabase-anniversaires.sql et supabase-campagnes.sql (Welcome, Refer, avantages) :
+     mêmes règles, mêmes codes d'erreur, mêmes phrases, mêmes formes de réponse.
+     Toute règle changée là-bas se change ici ; outils/essais-services/essai-programmes.js
+     compare les deux. Deux écarts, voulus : aucun message ne part (la démo n'a ni e-mail
+     ni application : un anniversaire préparé reste « en attente »), et les travaux
+     du jour (expiration des points, rappels) ne tournent pas — la base seule les fait.
+     -------------------------------------------------------------------------- */
+  var TYPES_AVANTAGE = ['credit_expedition', 'reduction_frais', 'bonus_fixe', 'gopoints', 'avantage_colis'];
+  var OPERATIONS_PROGRAMME = ['colis_recu', 'facture_payee'];
+  var EVENEMENTS_POINTS = [
+    ['account_created', 'Création du compte'], ['first_operation', 'Première opération qualifiante'],
+    ['repeat_operation', 'Opérations répétées'], ['referral_validated', 'Parrainage validé'],
+    ['campaign', 'Campagne promotionnelle'], ['birthday', 'Anniversaire du client']
+  ];
+  var MODELES_ANNIVERSAIRE = {
+    'birthday_avantage|en': ['🎉🎂 Happy birthday, {{prenom}}! 💙🧡', 'Today is a special day, and the whole GoShip Express team is sending you lots of love and our very best wishes!\nTo celebrate, here is your gift: {{avantage}}.\nWe hope this new year brings you health, joy, success, prosperity and many lovely surprises. Thank you for trusting GoShip Express to be with you in all your deliveries.\nIt is a pleasure to have you in our community. Have an extraordinary day and keep making your beautiful dreams come true!\nWith all our affection, the GoShip Express team. 💙🧡🚚'],
+    'birthday_avantage|es': ['🎉🎂 ¡Feliz cumpleaños, {{prenom}}! 💙🧡', '¡Hoy es un día especial, y todo el equipo de GoShip Express le envía mucho cariño y sus mejores deseos!\nPara celebrarlo, este es su regalo: {{avantage}}.\nDeseamos que este nuevo año le traiga salud, alegría, éxito, prosperidad y muchas bonitas sorpresas. Gracias por confiar en GoShip Express para acompañarle en todas sus entregas.\nEs un placer contarle entre nuestra comunidad. ¡Pase un día extraordinario y siga cumpliendo sus hermosos sueños!\nCon todo nuestro cariño, el equipo de GoShip Express. 💙🧡🚚'],
+    'birthday_avantage|fr': ['🎉🎂 Joyeux anniversaire, {{prenom}} ! 💙🧡', 'Aujourd\'hui est un jour spécial, et toute l\'équipe GoShip Express vous envoie beaucoup d\'affection et ses plus beaux vœux !\nPour fêter ça, voici votre cadeau : {{avantage}}.\nNous souhaitons que cette nouvelle année vous apporte santé, joie, réussite, prospérité et de belles surprises. Merci de faire confiance à GoShip Express pour vous accompagner dans toutes vos livraisons.\nC\'est un plaisir de vous compter dans notre communauté. Passez une journée extraordinaire et continuez à réaliser vos beaux rêves !\nAvec toute notre affection, l\'équipe GoShip Express. 💙🧡🚚'],
+    'birthday_avantage|ht': ['🎉🎂 Bòn fèt, {{prenom}} ! 💙🧡', 'Jodi a se yon jou espesyal, epi tout ekip GoShip Express ap voye anpil lanmou ak pi bèl swè pou ou!\nPou n selebre sa, men kado ou : {{avantage}}.\nNou swete nouvo ane sa a pote sante, lajwa, siksè, pwosperite ak anpil bèl sipriz nan lavi ou. Mèsi paske ou fè GoShip Express konfyans pou akonpaye w nan tout livrezon ou yo.\nSe yon plezi pou ou fè pati kominote nou an. Pase yon jounen ekstraòdinè epi kontinye reyalize bèl rèv ou yo!\nAvèk anpil afeksyon, ekip GoShip Express. 💙🧡🚚'],
+    'birthday_reminder|en': ['Upcoming birthdays', '{{nombre}} customer(s) will celebrate a birthday in {{jours}} day(s). Open Programs > Birthdays to prepare your offers.'],
+    'birthday_reminder|es': ['Próximos cumpleaños', '{{nombre}} cliente(s) cumplirán años dentro de {{jours}} día(s). Abra Programas > Cumpleaños para preparar sus ofertas.'],
+    'birthday_reminder|fr': ['Anniversaires à venir', '{{nombre}} client(s) fêteront leur anniversaire dans {{jours}} jour(s). Ouvrez Programmes > Anniversaires pour préparer vos offres.'],
+    'birthday_reminder|ht': ['Fèt k ap vini', '{{nombre}} kliyan ap fete fèt yo nan {{jours}} jou. Louvri Pwogram > Fèt pou prepare òf ou yo.'],
+    'birthday_upcoming|en': ['🎂 Your birthday is coming, {{prenom}}!', 'In {{jours}} day(s), the whole GoShip Express team will wish you a happy birthday. 💙🧡'],
+    'birthday_upcoming|es': ['🎂 ¡Se acerca su cumpleaños, {{prenom}}!', 'Dentro de {{jours}} día(s), todo el equipo de GoShip Express le deseará un feliz cumpleaños. 💙🧡'],
+    'birthday_upcoming|fr': ['🎂 Votre anniversaire approche, {{prenom}} !', 'Dans {{jours}} jour(s), toute l\'équipe GoShip Express vous souhaitera un joyeux anniversaire. 💙🧡'],
+    'birthday_upcoming|ht': ['🎂 Fèt ou ap pwoche, {{prenom}} !', 'Nan {{jours}} jou, tout ekip GoShip Express ap swete w bòn fèt. 💙🧡'],
+    'birthday|en': ['🎉🎂 Happy birthday, {{prenom}}! 💙🧡', 'Today is a special day, and the whole GoShip Express team is sending you lots of love and our very best wishes!\nWe hope this new year brings you health, joy, success, prosperity and many lovely surprises. Thank you for trusting GoShip Express to be with you in all your deliveries.\nIt is a pleasure to have you in our community. Have an extraordinary day and keep making your beautiful dreams come true!\nWith all our affection, the GoShip Express team. 💙🧡🚚'],
+    'birthday|es': ['🎉🎂 ¡Feliz cumpleaños, {{prenom}}! 💙🧡', '¡Hoy es un día especial, y todo el equipo de GoShip Express le envía mucho cariño y sus mejores deseos!\nDeseamos que este nuevo año le traiga salud, alegría, éxito, prosperidad y muchas bonitas sorpresas. Gracias por confiar en GoShip Express para acompañarle en todas sus entregas.\nEs un placer contarle entre nuestra comunidad. ¡Pase un día extraordinario y siga cumpliendo sus hermosos sueños!\nCon todo nuestro cariño, el equipo de GoShip Express. 💙🧡🚚'],
+    'birthday|fr': ['🎉🎂 Joyeux anniversaire, {{prenom}} ! 💙🧡', 'Aujourd\'hui est un jour spécial, et toute l\'équipe GoShip Express vous envoie beaucoup d\'affection et ses plus beaux vœux !\nNous souhaitons que cette nouvelle année vous apporte santé, joie, réussite, prospérité et de belles surprises. Merci de faire confiance à GoShip Express pour vous accompagner dans toutes vos livraisons.\nC\'est un plaisir de vous compter dans notre communauté. Passez une journée extraordinaire et continuez à réaliser vos beaux rêves !\nAvec toute notre affection, l\'équipe GoShip Express. 💙🧡🚚'],
+    'birthday|ht': ['🎉🎂 Bòn fèt, {{prenom}} ! 💙🧡', 'Jodi a se yon jou espesyal, epi tout ekip GoShip Express ap voye anpil lanmou ak pi bèl swè pou ou!\nNou swete nouvo ane sa a pote sante, lajwa, siksè, pwosperite ak anpil bèl sipriz nan lavi ou. Mèsi paske ou fè GoShip Express konfyans pou akonpaye w nan tout livrezon ou yo.\nSe yon plezi pou ou fè pati kominote nou an. Pase yon jounen ekstraòdinè epi kontinye reyalize bèl rèv ou yo!\nAvèk anpil afeksyon, ekip GoShip Express. 💙🧡🚚']
+  };
+
+  function aLaCle(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+
+  // lire_entier_programme : un entier dans l'intervalle, null si vide, la phrase de la base sinon
+  function entierProgramme(donnees, cle, min, max) {
+    var v = donnees[cle];
+    if (v === undefined || v === null || String(v).trim() === '') return null;
+    var t = String(v).trim();
+    if (!/^-?[0-9]{1,9}$/.test(t) || +t < min || +t > max) {
+      throw Erreur('INVALID_PROGRAM_VALUE', 'La valeur « ' + cle + ' » doit être un nombre entier entre ' + min + ' et ' + max + '.');
+    }
+    return +t;
+  }
+
+  function programmesDemo(d) {
+    if (!d.prog) {
+      d.prog = {
+        seq: 0,
+        points: {
+          reglages: { actif: false, expiration_jours: null, conditions: '' },
+          regles: EVENEMENTS_POINTS.map(function (e) {
+            return { evenement: e[0], libelle: e[1], points: 0, actif: false, operation: null, limite_jour: null,
+                     limite_mois: null, limite_client: null, expiration_jours: null, conditions: '' };
+          }),
+          offres: [], mouvements: []
+        },
+        anniv: {
+          fuseau: 'America/Santo_Domingo',
+          reglages: { actif: false, actif_depuis: null, heure_envoi: '09:00', regle_29_fevrier: 'fev28', rattrapage_jours: 1,
+                      canaux: ['push', 'email'], rappel_admin_jours: 7, rappel_client_actif: false, rappel_client_jours: 3,
+                      avantage_actif: false, avantage_type: 'aucun', avantage_valeur: null, avantage_libelle: '' },
+          modeles: {}, journal: []
+        },
+        campagnes: [],
+        parrainage: { nom: 'GOship Refer', statut: 'brouillon', debut: null, fin: null, parrain_type: null, parrain_valeur: null,
+                      filleul_type: null, filleul_valeur: null, operation: null, delai_validation_jours: 0, max_recompenses: null,
+                      max_par_parrain: null, cumul_bienvenue: true, expiration_jours: null, conditions: '', annulation: '' },
+        parrainages: [], codes: {}, invitations: [], operations: [], recompenses: [], erreurs: [], prefs: {}
+      };
+    }
+    return d.prog;
+  }
+
+  function clientDemo(d, id) {
+    return d.comptes.filter(function (c) { return c.id === id; })[0] || null;
+  }
+  function clientActifDemo(d, id) {
+    var c = clientDemo(d, id);
+    return c && c.role === 'client' && !c.supprime_le ? c : null;
+  }
+  function prenomDemo(nom) {
+    return String(nom || '').trim().split(' ')[0].replace(/[{}<>]/g, '').slice(0, 40);
+  }
+  function aujourdhuiDemo() { return jourSD(maintenant()); }
+
+  // texte_recompense : la phrase qui décrit un avantage, jamais un montant sans sa nature
+  function texteRecompense(type, valeur, langue) {
+    var n = Number(valeur), m = n.toFixed(2), pts = String(Math.round(n));
+    if (type === 'gopoints') return pts + ' GOPOINTS';
+    if (langue === 'en') {
+      return { credit_expedition: '$' + m + ' shipping credit', reduction_frais: '$' + m + ' off the service fee',
+               bonus_fixe: '$' + m + ' bonus' }[type] || 'a $' + m + ' benefit on your next package';
+    }
+    if (langue === 'es') {
+      return { credit_expedition: 'crédito de envío de $' + m, reduction_frais: '$' + m + ' de descuento en la tarifa de servicio',
+               bonus_fixe: 'bono de $' + m }[type] || 'un beneficio de $' + m + ' en su próximo paquete';
+    }
+    if (langue === 'ht') {
+      return { credit_expedition: 'kredi ekspedisyon $' + m, reduction_frais: '$' + m + ' rabè sou frè sèvis la',
+               bonus_fixe: 'bonis $' + m }[type] || 'yon avantaj $' + m + ' sou pwochen koli ou';
+    }
+    var f = m.replace('.', ',');
+    return { credit_expedition: f + ' $ de crédit d\'expédition', reduction_frais: f + ' $ de réduction sur les frais de service',
+             bonus_fixe: 'un bonus de ' + f + ' $' }[type] || 'un avantage de ' + f + ' $ sur votre prochain colis';
+  }
+
+  function noterErreurProgramme(p, programme, evenement, client, message) {
+    p.erreurs.push({ date: maintenant(), programme: programme, evenement: evenement, client_id: client || null,
+                     message: String(message || '').slice(0, 200) });
+  }
+
+  // campagnes_maj_statuts : une campagne programmée devient active à sa date, terminée le lendemain de sa fin
+  function majStatutsCampagnes(p) {
+    var jour = aujourdhuiDemo();
+    p.campagnes.concat([p.parrainage]).forEach(function (c) {
+      if (c.statut === 'programmee' && c.debut <= jour) c.statut = 'active';
+      if (['active', 'programmee', 'suspendue'].indexOf(c.statut) >= 0 && c.fin && c.fin < jour) c.statut = 'terminee';
+    });
+  }
+
+  /* -- GOPOINTS : le registre et les soldes -- */
+  function soldePoints(p, client) {
+    return p.points.mouvements.filter(function (m) { return m.client_id === client; })
+      .reduce(function (s, m) { return s + m.points; }, 0);
+  }
+
+  // points_ecrire : un mouvement de plus, idempotent par sa clé, jamais un solde négatif
+  function pointsEcrireDemo(d, client, type, points, source, reference, cle, motif, auteur, expire, annule, offre) {
+    var p = programmesDemo(d);
+    if (!clientDemo(d, client)) throw Erreur('CLIENT_NOT_FOUND', 'Client introuvable.');
+    if (p.points.mouvements.some(function (m) { return m.cle === cle; })) return null;
+    if (soldePoints(p, client) + points < 0) throw Erreur('INSUFFICIENT_POINTS', 'Le solde de points ne suffit pas.');
+    p.seq += 1;
+    p.points.mouvements.push({ id: p.seq, client_id: client, type: type, points: points, source: source || '', reference: reference || '',
+                               cle: cle, motif: motif || '', auteur_id: auteur || null, expire_le: expire || null,
+                               annule_id: annule || null, offre_id: offre || null, cree_le: maintenant() });
+    return p.seq;
+  }
+
+  function mouvementAnnule(p, m) {
+    return p.points.mouvements.some(function (a) { return a.annule_id === m.id; });
+  }
+
+  // points_attribuer : les points d'un événement selon sa règle, null si elle n'y a pas droit (jamais une erreur)
+  function pointsAttribuerDemo(d, client, evenement, reference, points) {
+    var p = programmesDemo(d), g = p.points.reglages;
+    var r = p.points.regles.filter(function (x) { return x.evenement === evenement; })[0];
+    if (!r || !g.actif || !r.actif) return null;
+    var v = points == null ? r.points : points;
+    if (!v || v <= 0) return null;
+    var jour = aujourdhuiDemo();
+    var gains = p.points.mouvements.filter(function (m) { return m.client_id === client && m.type === 'gain' && m.source === evenement; });
+    if (r.limite_jour != null && gains.filter(function (m) { return jourSD(m.cree_le) === jour; }).length >= r.limite_jour) return null;
+    if (r.limite_mois != null && gains.filter(function (m) { return jourSD(m.cree_le).slice(0, 7) === jour.slice(0, 7); }).length >= r.limite_mois) return null;
+    if (r.limite_client != null && gains.length >= r.limite_client) return null;
+    var duree = r.expiration_jours != null ? r.expiration_jours : g.expiration_jours;
+    return pointsEcrireDemo(d, client, 'gain', v, evenement, reference || '', 'gain:' + evenement + ':' + (reference || ''),
+                            '', null, duree == null ? null : decalerJour(jour, duree));
+  }
+
+  // points_gain_campagne : le nombre de points est celui de la campagne, pas celui d'une règle
+  function pointsGainCampagneDemo(d, client, source, reference, points) {
+    var g = programmesDemo(d).points.reglages;
+    if (!g.actif || !points || points <= 0) return null;
+    return pointsEcrireDemo(d, client, 'gain', points, source, reference, 'gain:' + source + ':' + reference, '', null,
+                            g.expiration_jours == null ? null : decalerJour(aujourdhuiDemo(), g.expiration_jours));
+  }
+
+  /* -- Les avantages -- */
+  function avantageActif(r) { return ['en_attente', 'obtenue', 'utilisee'].indexOf(r.statut) >= 0; }
+
+  // recompense_finaliser : un avantage devient acquis (les points entrent dans le registre)
+  function recompenseFinaliserDemo(d, r) {
+    var p = programmesDemo(d);
+    if (r.statut !== 'en_attente' && r.statut !== 'obtenue') return false;
+    if (r.type === 'gopoints') {
+      var ok = pointsGainCampagneDemo(d, r.client_id, 'recompense', r.id, Math.round(r.valeur));
+      if (ok === null && !p.points.mouvements.some(function (m) { return m.cle === 'gain:recompense:' + r.id; })) {
+        r.statut = 'en_attente'; r.motif = 'POINTS_INDISPONIBLES';
+        return false;
+      }
+    }
+    r.statut = 'obtenue'; r.motif = '';
+    return true;
+  }
+
+  // recompense_creer : une clé unique (rien en double), un seul bonus de bienvenue par client, un délai de validation éventuel
+  function recompenseCreerDemo(d, client, programme, type, valeur, cle, campagne, reference, delai, expiration) {
+    var p = programmesDemo(d), jour = aujourdhuiDemo();
+    if (p.recompenses.some(function (r) { return r.cle === cle; })) return null;
+    if (programme === 'welcome' && p.recompenses.some(function (r) { return r.client_id === client && r.programme === 'welcome' && avantageActif(r); })) return null;
+    p.seq += 1;
+    var r = { id: 'rec-' + p.seq, client_id: client, programme: programme, type: type, valeur: Number(valeur),
+              statut: delai > 0 ? 'en_attente' : 'obtenue', cle: cle, campagne: campagne || '', reference: reference || '',
+              motif: '', auteur_id: null, cree_le: maintenant(),
+              valide_apres: delai > 0 ? decalerJour(jour, delai) : null,
+              expire_le: expiration == null ? null : decalerJour(jour, (delai || 0) + expiration) };
+    p.recompenses.push(r);
+    if (!(delai > 0)) recompenseFinaliserDemo(d, r);
+    return r.id;
+  }
+
+  // operation_valable : l'opération d'un avantage tient-elle encore ? (« colis:… » ou « facture:… »)
+  function operationValableDemo(d, reference) {
+    if (String(reference).indexOf('facture:') === 0) {
+      var f = (d.factures || []).filter(function (x) { return x.id === reference.slice(8); })[0];
+      if (!f || f.statut === 'annulee') return false;
+      var tous = f.paiements || [];
+      return !(tous.some(function (x) { return x.annule_le; }) && !paiementsValides(f).length);
+    }
+    if (String(reference).indexOf('colis:') === 0) return !!trouverColisDemo(d, reference.slice(6));
+    return true;
+  }
+
+  // parrainage_actualiser : « récompensé » quand plus aucun avantage n'attend, « annulé » si tous sont annulés
+  function parrainageActualiserDemo(p, id) {
+    var cles = ['refer:' + id + ':parrain', 'refer:' + id + ':filleul'];
+    var liste = p.recompenses.filter(function (r) { return cles.indexOf(r.cle) >= 0; });
+    var attente = liste.filter(function (r) { return r.statut === 'en_attente'; }).length;
+    var valides = liste.filter(function (r) { return r.statut === 'obtenue' || r.statut === 'utilisee'; }).length;
+    var pa = p.parrainages.filter(function (x) { return x.id === id; })[0];
+    if (!pa || pa.statut !== 'qualifie') return;
+    if (attente === 0 && valides > 0) pa.statut = 'recompense';
+    else if (attente === 0 && valides === 0) { pa.statut = 'annule'; pa.motif = 'OPERATION_ANNULEE'; }
+    pa.maj_le = maintenant();
+  }
+
+  // programmes_operation_annulee : les avantages seulement « en attente » sont annulés, jamais accordés
+  function operationAnnuleeDemo(d, reference) {
+    var p = programmesDemo(d);
+    p.operations.forEach(function (o) { if (o.reference === reference && !o.annulee_le) o.annulee_le = maintenant(); });
+    p.recompenses.filter(function (r) { return r.reference === reference && r.statut === 'en_attente'; }).forEach(function (r) {
+      r.statut = 'annulee'; r.motif = 'OPERATION_ANNULEE';
+      if (r.cle.indexOf('refer:') === 0) parrainageActualiserDemo(p, +r.cle.split(':')[1]);
+    });
+  }
+
+  // Le travail du jour (campagnes_quotidien), fait à la demande : les avantages dont le délai est passé
+  // sont acquis si leur opération tient encore, annulés sinon
+  function programmesJourDemo(d) {
+    var p = programmesDemo(d), jour = aujourdhuiDemo();
+    majStatutsCampagnes(p);
+    p.recompenses.filter(function (r) { return r.statut === 'en_attente' && r.valide_apres && r.valide_apres <= jour; }).forEach(function (r) {
+      if (operationValableDemo(d, r.reference)) recompenseFinaliserDemo(d, r);
+      else { r.statut = 'annulee'; r.motif = 'OPERATION_ANNULEE'; }
+      if (r.cle.indexOf('refer:') === 0) parrainageActualiserDemo(p, +r.cle.split(':')[1]);
+    });
+  }
+
+  /* -- Le moteur -- */
+  // programmes_operation : une opération qualifiante vue (idempotente : rejouée, elle ne fait rien de plus)
+  function programmesOperationDemo(d, client, operation, reference) {
+    var p = programmesDemo(d);
+    if (!clientActifDemo(d, client)) return;
+    try {
+      majStatutsCampagnes(p);
+      if (p.operations.some(function (o) { return o.client_id === client && o.operation === operation && o.reference === reference; })) return;
+      p.operations.push({ client_id: client, operation: operation, reference: reference, annulee_le: null, cree_le: maintenant() });
+      var rang = p.operations.filter(function (o) { return o.client_id === client && o.operation === operation && !o.annulee_le; }).length;
+      var regle = function (ev) { return p.points.regles.filter(function (r) { return r.evenement === ev; })[0]; };
+      if (rang === 1 && regle('first_operation').operation === operation) pointsAttribuerDemo(d, client, 'first_operation', reference);
+      else if (rang > 1 && regle('repeat_operation').operation === operation) pointsAttribuerDemo(d, client, 'repeat_operation', reference);
+
+      var cl = clientDemo(d, client), cree = jourSD(cl.cree_le);
+      var deja = p.parrainages.some(function (x) { return x.filleul_id === client && ['inscrit', 'qualifie', 'recompense', 'suspect'].indexOf(x.statut) >= 0; });
+      var b = p.campagnes.filter(function (x) { return x.statut === 'active' && x.operation === operation && cree >= x.debut && cree <= x.fin; })
+        .sort(function (x, y) { return x.debut < y.debut ? -1 : x.debut > y.debut ? 1 : (x.id < y.id ? -1 : 1); })[0];
+      if (b && !(!b.cumul_parrainage && deja) &&
+          (b.budget_max == null || p.recompenses.filter(function (r) { return r.programme === 'welcome' && r.campagne === b.id && avantageActif(r); }).length < b.budget_max)) {
+        recompenseCreerDemo(d, client, 'welcome', b.type_recompense, b.valeur_recompense, 'welcome:' + b.id + ':' + client, b.id, reference, b.delai_validation_jours);
+      }
+
+      var c = p.parrainage;
+      var pa = p.parrainages.filter(function (x) { return x.filleul_id === client && x.statut === 'inscrit'; })[0];
+      if (pa && c.statut === 'active' && c.operation === operation) {
+        var comptes = function (filtre) { return p.parrainages.filter(function (x) { return (x.statut === 'qualifie' || x.statut === 'recompense') && filtre(x); }).length; };
+        if (c.max_recompenses != null && comptes(function () { return true; }) >= c.max_recompenses) { pa.statut = 'refuse'; pa.motif = 'PLAFOND_GLOBAL'; }
+        else if (c.max_par_parrain != null && comptes(function (x) { return x.parrain_id === pa.parrain_id; }) >= c.max_par_parrain) { pa.statut = 'refuse'; pa.motif = 'PLAFOND_PARRAIN'; }
+        else {
+          pa.statut = 'qualifie'; pa.qualifie_le = maintenant(); pa.maj_le = maintenant();
+          if (c.cumul_bienvenue || !p.recompenses.some(function (r) { return r.client_id === client && r.programme === 'welcome' && avantageActif(r); })) {
+            recompenseCreerDemo(d, client, 'refer_filleul', c.filleul_type, c.filleul_valeur, 'refer:' + pa.id + ':filleul', 'parrainage', reference, c.delai_validation_jours, c.expiration_jours);
+          }
+          recompenseCreerDemo(d, pa.parrain_id, 'refer_parrain', c.parrain_type, c.parrain_valeur, 'refer:' + pa.id + ':parrain', 'parrainage', reference, c.delai_validation_jours, c.expiration_jours);
+          if (c.parrain_type !== 'gopoints' && c.delai_validation_jours === 0) pointsAttribuerDemo(d, pa.parrain_id, 'referral_validated', 'parrainage:' + pa.id);
+          parrainageActualiserDemo(p, pa.id);
+        }
+      }
+    } catch (e) {
+      // Une erreur dans ces calculs ne bloque jamais l'opération qui les a causés : elle est journalisée
+      noterErreurProgramme(p, 'operation', operation, client, e.code || e.message);
+    }
+  }
+
+  // code_parrainage_de : créé à la première demande, 8 signes sans ambiguïté (ni O, ni 0, ni I, ni 1, ni L)
+  function codeParrainageDe(p, client) {
+    if (p.codes[client]) return p.codes[client];
+    var alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789', code, pris = function (c) {
+      return Object.keys(p.codes).some(function (k) { return p.codes[k] === c; });
+    };
+    do {
+      code = 'GS';
+      for (var i = 0; i < 6; i++) code += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    } while (pris(code));
+    p.codes[client] = code;
+    return code;
+  }
+
+  // parrainage_rattacher : à l'inscription (strict faux) un code invalide est ignoré ; saisi par le client (strict vrai) il est refusé avec sa raison
+  function parrainageRattacherDemo(d, filleul, code, source, strict) {
+    var p = programmesDemo(d), c = p.parrainage;
+    majStatutsCampagnes(p);
+    var refus = function (c2, phrase) { if (strict) throw Erreur(c2, phrase); return null; };
+    var saisi = String(code || '').trim().toUpperCase();
+    var parrain = Object.keys(p.codes).filter(function (k) { return p.codes[k] === saisi; })[0];
+    if (!parrain) return refus('INVALID_REFERRAL_CODE', 'Ce code de parrainage n\'existe pas. Vérifiez-le.');
+    if (parrain === filleul) return refus('SELF_REFERRAL', 'Vous ne pouvez pas utiliser votre propre code de parrainage.');
+    var jour = aujourdhuiDemo();
+    if (c.statut !== 'active' || !(jour >= c.debut && jour <= c.fin)) {
+      return refus('REFERRAL_INACTIVE', 'Le parrainage n\'est pas ouvert pour le moment : ce code ne peut pas être utilisé.');
+    }
+    var f = clientActifDemo(d, filleul), pr = clientActifDemo(d, parrain);
+    if (!f || !pr) return refus('INVALID_REFERRAL_CODE', 'Ce code de parrainage ne peut pas être utilisé.');
+    if (p.parrainages.some(function (x) { return x.filleul_id === filleul; })) return refus('ALREADY_REFERRED', 'Un code de parrainage est déjà enregistré pour votre compte.');
+    if (p.parrainages.some(function (x) { return x.filleul_id === parrain && x.parrain_id === filleul; })) {
+      return refus('REFERRAL_CYCLE', 'Ce parrainage n\'est pas possible : cette personne a été invitée par vous.');
+    }
+    if (p.operations.some(function (o) { return o.client_id === filleul && o.operation === c.operation; })) {
+      return refus('REFERRAL_TOO_LATE', 'Un code de parrainage ne peut plus être ajouté : votre première opération a déjà eu lieu.');
+    }
+    if (source === 'saisie' && Date.now() - new Date(f.cree_le).getTime() > 30 * 864e5) {
+      return refus('REFERRAL_TOO_LATE', 'Un code de parrainage ne s\'ajoute que dans les 30 jours qui suivent l\'ouverture du compte.');
+    }
+    // Les indices d'abus : un seul ne bloque rien, mais le parrainage attend l'examen d'un administrateur
+    var chiffres = function (t) { return String(t || '').replace(/\D/g, ''); }, motif = [];
+    if (chiffres(f.telephone).length >= 7 && chiffres(f.telephone) === chiffres(pr.telephone)) motif.push('MEME_TELEPHONE');
+    if (String(f.adresse || '').trim().length >= 8 && String(f.adresse).trim().toLowerCase() === String(pr.adresse || '').trim().toLowerCase()) motif.push('MEME_ADRESSE');
+    var nomMail = function (e) { return String(e || '').toLowerCase().split('@')[0]; };
+    if (nomMail(f.email) && nomMail(f.email) === nomMail(pr.email)) motif.push('MEME_IDENTIFIANT_EMAIL');
+    if (p.parrainages.filter(function (x) { return x.parrain_id === parrain && Date.now() - new Date(x.cree_le).getTime() < 864e5; }).length >= 5) motif.push('RAFALE_INSCRIPTIONS');
+    p.seq += 1;
+    p.parrainages.push({ id: p.seq, parrain_id: parrain, filleul_id: filleul, code: saisi, statut: motif.length ? 'suspect' : 'inscrit',
+                         motif: motif.join(' '), source: source, cree_le: maintenant(), maj_le: maintenant(), qualifie_le: null });
+    return p.seq;
+  }
+
+  // Un compte créé (programmes_compte_cree) : les points de bienvenue et le rattachement au parrain du formulaire
+  function programmesCompteCreeDemo(d, compte, code) {
+    var p = programmesDemo(d);
+    try {
+      pointsAttribuerDemo(d, compte.id, 'account_created', 'compte:' + compte.id);
+      if (String(code || '').trim()) parrainageRattacherDemo(d, compte.id, code, 'inscription', false);
+    } catch (e) {
+      noterErreurProgramme(p, 'compte', 'cree', compte.id, e.code || e.message);
+    }
+  }
+
+  /* -- Anniversaires -- */
+  // anniversaire_en : le 29 février d'une année non bissextile tombe le 28 février ou le 1er mars, au choix
+  function anniversaireEnDemo(naissance, annee, regle) {
+    var mo = naissance.slice(5, 7), j = naissance.slice(8, 10);
+    var bissextile = (annee % 4 === 0 && annee % 100 !== 0) || annee % 400 === 0;
+    if (mo === '02' && j === '29' && !bissextile) return annee + (regle === 'mars1' ? '-03-01' : '-02-28');
+    return annee + '-' + mo + '-' + j;
+  }
+
+  function modeleAnniversaire(p, type, langue) {
+    var cle = type + '|' + langue, m = p.anniv.modeles[cle], defaut = MODELES_ANNIVERSAIRE[cle];
+    return { type: type, langue: langue, titre: m ? m[0] : defaut[0], message: m ? m[1] : defaut[1],
+             modifie: !!m && (m[0] !== defaut[0] || m[1] !== defaut[1]) };
+  }
+
+  // Les anniversaires du jour sont préparés une fois par client et par année (anniversaires_executer). Aucun envoi
+  // n'a lieu en démonstration : les envois restent « en attente », jamais « envoyé ».
+  function anniversairesPreparerDemo(d) {
+    var p = programmesDemo(d), r = p.anniv.reglages, jour = aujourdhuiDemo();
+    if (!r.actif || !d.naissances) return;
+    var annee = +jour.slice(0, 4);
+    Object.keys(d.naissances).forEach(function (id) {
+      var cl = clientActifDemo(d, id);
+      if (!cl || anniversaireEnDemo(d.naissances[id], annee, r.regle_29_fevrier) !== jour) return;
+      if (r.actif_depuis && jour < r.actif_depuis) return;
+      if (p.anniv.journal.some(function (j) { return j.client_id === id && j.annee === annee; })) return;
+      var refuse = p.prefs[id] && p.prefs[id].anniversaire === false;
+      p.seq += 1;
+      p.anniv.journal.push({ id: p.seq, client_id: id, annee: annee, anniversaire_le: jour, statut: refuse ? 'ignore' : 'prepare',
+                             motif: refuse ? 'DESACTIVE_PAR_LE_CLIENT' : '', cree_le: maintenant(),
+                             envois: refuse ? [] : r.canaux.map(function (c) {
+                               return { canal: c, statut: 'attente', tentative: 0, code_erreur: null, envoye_le: null, livre_le: null };
+                             }) });
+    });
+  }
+
+  function pagePropre(page) { return Math.max(+page || 0, 0); }
+  function tranche(liste, page, par) { return liste.slice(page * par, page * par + par); }
+
+  // Ce qui manque à une campagne ou au parrainage pour être publié (bienvenue_manques, parrainage_manques)
+  function manquesCampagne(p, b) {
+    var m = [], jour = aujourdhuiDemo();
+    if (String(b.nom || '').trim().length < 2) m.push('le nom');
+    if (!b.debut) m.push('la date de début');
+    if (!b.fin) m.push('la date de fin');
+    if (!b.type_recompense) m.push('le type de récompense');
+    if (b.valeur_recompense == null) m.push('la valeur de la récompense');
+    if (!b.operation) m.push('l\'opération qualifiante');
+    if (String(b.conditions || '').trim().length < 10) m.push('les conditions générales (visibles par le client)');
+    if (b.fin && b.fin < jour) m.push('une date de fin qui n\'est pas déjà passée');
+    if (b.type_recompense === 'gopoints' && !p.points.reglages.actif) m.push('le programme GOPOINTS allumé (la récompense est en points)');
+    return m;
+  }
+  function manquesParrainage(p, c) {
+    var m = [], jour = aujourdhuiDemo();
+    if (!c.debut) m.push('la date de début');
+    if (!c.fin) m.push('la date de fin');
+    if (!c.parrain_type || c.parrain_valeur == null) m.push('l\'avantage du parrain (type et valeur)');
+    if (!c.filleul_type || c.filleul_valeur == null) m.push('l\'avantage du filleul (type et valeur)');
+    if (!c.operation) m.push('la transaction qualifiante');
+    if (String(c.conditions || '').trim().length < 10) m.push('les conditions générales (visibles par le client)');
+    if (String(c.annulation || '').trim().length < 10) m.push('les conditions d\'annulation');
+    if (c.fin && c.fin < jour) m.push('une date de fin qui n\'est pas déjà passée');
+    if ((c.parrain_type === 'gopoints' || c.filleul_type === 'gopoints') && !p.points.reglages.actif) m.push('le programme GOPOINTS allumé (un avantage est en points)');
+    return m;
+  }
+
+  // Une valeur de campagne : type connu, nombre, date AAAA-MM-JJ, sinon la phrase de la base
+  function valeurCampagne(champ, v) {
+    if (v === undefined || v === null || String(v).trim() === '') return null;
+    var invalide = function () { throw Erreur('INVALID_CAMPAIGN', 'La campagne contient une valeur qui n\'est pas valable (type, dates, nombres) : vérifiez-la.'); };
+    if (champ === 'date') {
+      var t = String(v).trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(t) || isNaN(new Date(t + 'T00:00:00Z').getTime())) invalide();
+      return t;
+    }
+    if (champ === 'type' && TYPES_AVANTAGE.indexOf(v) < 0) invalide();
+    if (champ === 'operation' && OPERATIONS_PROGRAMME.indexOf(v) < 0) invalide();
+    if (champ === 'nombre') {
+      var n = Number(String(v).replace(',', '.'));
+      if (!isFinite(n) || n <= 0) invalide();
+      return n;
+    }
+    return v;
+  }
+  function verifierPeriodeCampagne(debut, fin) {
+    if (debut && fin && debut > fin) {
+      throw Erreur('INVALID_CAMPAIGN', 'La campagne contient une valeur qui n\'est pas valable (type, dates, nombres) : vérifiez-la.');
+    }
+  }
+
+  // La copie de bienvenue_enregistrer et parrainage_config_modifier : seuls les champs présents changent
+  function appliquerChamps(cible, donnees, champs) {
+    champs.forEach(function (c) {
+      if (!aLaCle(donnees, c[0])) return;
+      var v = donnees[c[0]];
+      if (c[1] === 'texte') cible[c[0]] = String(v == null ? '' : v).trim().slice(0, c[2]);
+      else if (c[1] === 'texte-brut') cible[c[0]] = String(v == null ? '' : v).slice(0, c[2]);
+      else if (c[1] === 'entier') cible[c[0]] = entierProgramme(donnees, c[0], c[2], c[3]);
+      else if (c[1] === 'entier0') cible[c[0]] = entierProgramme(donnees, c[0], c[2], c[3]) || 0;
+      else if (c[1] === 'booleen') cible[c[0]] = v === true || v === 'true';
+      else cible[c[0]] = valeurCampagne(c[1], v);
+    });
+  }
+  var CHAMPS_BIENVENUE = [['nom', 'texte', 80], ['description', 'texte', 500], ['debut', 'date'], ['fin', 'date'], ['type_recompense', 'type'],
+                          ['valeur_recompense', 'nombre'], ['operation', 'operation'], ['budget_max', 'entier', 1, 10000000],
+                          ['delai_validation_jours', 'entier0', 0, 90], ['cumul_parrainage', 'booleen'], ['conditions', 'texte-brut', 4000]];
+  var CHAMPS_PARRAINAGE = [['nom', 'texte', 80], ['debut', 'date'], ['fin', 'date'], ['parrain_type', 'type'], ['parrain_valeur', 'nombre'],
+                           ['filleul_type', 'type'], ['filleul_valeur', 'nombre'], ['operation', 'operation'],
+                           ['delai_validation_jours', 'entier0', 0, 90], ['max_recompenses', 'entier', 1, 10000000],
+                           ['max_par_parrain', 'entier', 1, 100000], ['cumul_bienvenue', 'booleen'], ['expiration_jours', 'entier', 1, 3650],
+                           ['conditions', 'texte-brut', 4000], ['annulation', 'texte-brut', 2000]];
+
+  function copieCampagne(c, extra) { return Object.assign({}, c, extra || {}); }
+
+  // Les réglages des anniversaires, tels que la base les rend (heure « HH:MM », fuseau, canaux)
+  function reglagesAnniversaire(p) {
+    return Object.assign({ id: true }, p.anniv.reglages, { fuseau: p.anniv.fuseau });
+  }
+
+  // Un appel du client ou de l'équipe : la permission, le travail du jour, puis la réponse. On n'écrit que si quelque chose a
+  // changé (une lecture ne doit pas réveiller les écrans qui surveillent les données).
+  function appelProgrammes(permission, faire) {
+    var d = lireDonnees();
+    try {
+      var moi = permission ? exiger(d, permission) : compteConnecte(d);
+      if (!moi) throw Erreur('non-autorise');
+      var p = programmesDemo(d);
+      // Les dates de naissance vivent à côté des programmes (d.naissances) : une correction doit s'enregistrer aussi
+      var avant = JSON.stringify([d.prog, d.naissances]);
+      programmesJourDemo(d);
+      var r = faire(d, p, moi);
+      if (JSON.stringify([d.prog, d.naissances]) !== avant) ecrireDonnees(d, 'programmes');
+      return plusTard(r);
+    } catch (e) { return rejeter(e); }
+  }
+  function clientSeul(moi) {
+    if (!moi || moi.role !== 'client') throw Erreur('non-autorise');
+  }
+
+  function publierCampagneDemo(id) {
+    return appelProgrammes('programs.manage', function (d, p, moi) {
+      var b = p.campagnes.filter(function (x) { return x.id === id; })[0];
+      if (!b) throw Erreur('INVALID_CAMPAIGN', 'Cette campagne n\'existe pas.');
+      if (['brouillon', 'suspendue'].indexOf(b.statut) < 0) throw Erreur('INVALID_CAMPAIGN_STATUS', 'Seul un brouillon ou une campagne suspendue se publie.');
+      var m = manquesCampagne(p, b);
+      if (m.length) throw Erreur('INCOMPLETE_CAMPAIGN', 'La campagne est incomplète : il manque ' + m.join(', ') + '.');
+      b.statut = b.debut > aujourdhuiDemo() ? 'programmee' : 'active'; b.maj_le = maintenant();
+      journaliser(d, moi, 'bienvenue.publication', 'programme', b.id, null, { statut: b.statut });
+      return Object.assign({}, b);
+    });
+  }
+
+  var demoAPI = {
+    identifiantsAdmin: ADMIN_DEMO,
+
+    session: function () {
+      var moi = compteConnecte(lireDonnees());
+      return plusTard(moi ? { id: moi.id, email: moi.email } : null);
+    },
+
+    profil: function () {
+      return plusTard(publicProfil(compteConnecte(lireDonnees())));
+    },
+
+    inscrire: function (x) {
+      var d = lireDonnees();
+      var email = String(x.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return echec('email-invalide');
+      if (trouverCompte(d, email)) return echec('email-existe');
+      if (String(x.motDePasse || '').length < MDP_MINIMUM) return echec('mot-de-passe-faible');
+      // Comme la base : e-mail et mot de passe, donc date de naissance obligatoire et vérifiée
+      var naissance;
+      try { naissance = validerNaissanceDemo(x.date_naissance); } catch (e) { return echec(e.code); }
+      var compte = {
+        id: identifiant(), email: email, mdp: empreinte(x.motDePasse), role: 'client', code: nouveauCode(d.comptes),
+        nom_complet: x.nom_complet, pays: x.pays, region: x.region, ville: x.ville, adresse: x.adresse,
+        telephone: x.telephone, langue: LANGUE, cree_le: maintenant(),
+        // Comme lire_sexe et lire_type_document (supabase-identite.sql) : une valeur inconnue est ignorée
+        sexe: x.sexe === 'M' || x.sexe === 'F' ? x.sexe : null,
+        type_document: x.type_document === 'passeport' || x.type_document === 'cedula' ? x.type_document : null
+      };
+      d.comptes.push(compte);
+      programmesCompteCreeDemo(d, compte, x.code_parrainage);
+      // À part des comptes, comme la table profils_naissance : publicProfil ne la montre jamais
+      d.naissances = d.naissances || {};
+      d.naissances[compte.id] = naissance;
+      // Le numéro du document, lui aussi à part des comptes (publicProfil ne le montre jamais)
+      var numero = numeroDocumentDemo(compte.type_document, x.numero_document);
+      if (numero) { d.documents = d.documents || {}; d.documents[compte.id] = numero; }
+      ecrireDonnees(d);
+      stockage('ecrire', CLE_SESSION, compte.id);
+      return plusTard({ profil: publicProfil(compte), confirmation: false });
+    },
+
+    naissance: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      return plusTard(moi && d.naissances && d.naissances[moi.id] ? d.naissances[moi.id] : null);
+    },
+
+    definirNaissance: function (texte) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var v;
+      try { v = validerNaissanceDemo(texte); } catch (e) { return echec(e.code); }
+      d.naissances = d.naissances || {};
+      if (d.naissances[moi.id] && d.naissances[moi.id] !== v) return echec('naissance-verrouillee');
+      d.naissances[moi.id] = v;
+      ecrireDonnees(d);
+      return plusTard(v);
+    },
+
+    /* ---- Les programmes du client : copie de supabase-fidelite.sql et supabase-campagnes.sql ---- */
+    portefeuille: function (page) {
+      return appelProgrammes(null, function (d, p, moi) {
+        var g = p.points.reglages, jour = aujourdhuiDemo(), pg = pagePropre(page);
+        var mien = p.points.mouvements.filter(function (m) { return m.client_id === moi.id; });
+        var somme = function (f) { return mien.filter(f).reduce(function (s, m) { return s + m.points; }, 0); };
+        var tri = mien.slice().sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : a.cree_le > b.cree_le ? -1 : b.id - a.id; });
+        return {
+          actif: g.actif, conditions: g.actif ? g.conditions : '', solde: soldePoints(p, moi.id),
+          gagnes: somme(function (m) { return m.points > 0; }),
+          utilises: -somme(function (m) { return m.type === 'utilisation'; }),
+          expires: -somme(function (m) { return m.type === 'expiration'; }),
+          total: mien.length,
+          elements: tranche(tri, pg, 20).map(function (m) {
+            return { id: m.id, type: m.type, points: m.points, source: m.source, date: m.cree_le, expire_le: m.expire_le,
+                     statut: mouvementAnnule(p, m) ? 'annule' : 'valide' };
+          }),
+          offres: !g.actif ? [] : p.points.offres.filter(function (o) {
+            return o.actif && (!o.debut || o.debut <= jour) && (!o.fin || o.fin >= jour) && (o.stock == null || o.stock > 0);
+          }).sort(function (a, b) { return a.cout_points - b.cout_points || (a.nom < b.nom ? -1 : 1); }).map(function (o) {
+            return { id: o.id, nom: o.nom, description: o.description, cout_points: o.cout_points, type: o.type,
+                     valeur: o.valeur, fin: o.fin, conditions: o.conditions };
+          })
+        };
+      });
+    },
+
+    utiliserPoints: function (offre, cle) {
+      return appelProgrammes(null, function (d, p, moi) {
+        if (!cle) throw Erreur('INVALID_REQUEST', 'Requête incomplète.');
+        var k = 'use:' + moi.id + ':' + cle, jour = aujourdhuiDemo();
+        var o = p.points.offres.filter(function (x) { return x.id === offre; })[0];
+        var deja = p.recompenses.filter(function (r) { return r.cle === k; })[0];
+        if (deja) return { deja: true, recompense: deja.id, valeur: deja.valeur, type: deja.type };
+        if (!p.points.reglages.actif) throw Erreur('OFFER_UNAVAILABLE', 'Le programme GOPOINTS n\'est pas ouvert pour le moment.');
+        if (!o || !o.actif || (o.debut && o.debut > jour) || (o.fin && o.fin < jour)) throw Erreur('OFFER_UNAVAILABLE', 'Cette offre n\'est pas disponible.');
+        if (o.stock != null && o.stock <= 0) throw Erreur('OFFER_OUT_OF_STOCK', 'Cette offre n\'est plus disponible : le stock est épuisé.');
+        if (o.limite_client != null && p.points.mouvements.filter(function (m) {
+              return m.client_id === moi.id && m.type === 'utilisation' && m.offre_id === o.id && !mouvementAnnule(p, m);
+            }).length >= o.limite_client) {
+          throw Erreur('OFFER_LIMIT_REACHED', 'Vous avez déjà utilisé cette offre le nombre de fois permis.');
+        }
+        var mv = pointsEcrireDemo(d, moi.id, 'utilisation', -o.cout_points, 'offre', o.nom, k, '', null, null, null, o.id);
+        if (mv === null) throw Erreur('DUPLICATE_OPERATION', 'Cet échange a déjà été fait.');
+        if (o.stock != null) o.stock -= 1;
+        p.seq += 1;
+        var r = { id: 'rec-' + p.seq, client_id: moi.id, programme: 'points', type: o.type, valeur: Number(o.valeur), statut: 'obtenue', cle: k,
+                  campagne: o.nom, reference: 'mouvement:' + mv, motif: '', auteur_id: null, cree_le: maintenant(), valide_apres: null, expire_le: null };
+        p.recompenses.push(r);
+        return { deja: false, recompense: r.id, valeur: r.valeur, type: r.type, points: o.cout_points, solde: soldePoints(p, moi.id) };
+      });
+    },
+
+    mesAvantages: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        return p.recompenses.filter(function (r) { return r.client_id === moi.id; })
+          .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; }).map(function (r) {
+            return { id: r.id, programme: r.programme, type: r.type, valeur: r.valeur, statut: r.statut, date: r.cree_le, expire_le: r.expire_le };
+          });
+      });
+    },
+
+    maBienvenue: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        var cree = jourSD(moi.cree_le), b, statut;
+        var r = p.recompenses.filter(function (x) { return x.client_id === moi.id && x.programme === 'welcome'; })
+          .sort(function (x, y) { return x.cree_le < y.cree_le ? 1 : -1; })[0];
+        if (r) {
+          b = p.campagnes.filter(function (x) { return x.id === r.campagne; })[0];
+          statut = r.statut === 'en_attente' ? 'en_attente' : (r.statut === 'obtenue' || r.statut === 'utilisee' ? 'obtenu' : 'expire');
+        } else {
+          b = p.campagnes.filter(function (x) { return (x.statut === 'active' || x.statut === 'terminee') && cree >= x.debut && cree <= x.fin; })
+            .sort(function (x, y) { return (y.statut === 'active') - (x.statut === 'active') || (x.debut < y.debut ? 1 : -1); })[0];
+          if (!b) return null;
+          statut = b.statut === 'active' && (b.budget_max == null || p.recompenses.filter(function (x) {
+            return x.programme === 'welcome' && x.campagne === b.id && avantageActif(x);
+          }).length < b.budget_max) ? 'a_debloquer' : 'expire';
+        }
+        if (!b) return null;
+        return { nom: b.nom, description: b.description, statut: statut, fin: b.fin, operation: b.operation, type: b.type_recompense,
+                 valeur: b.valeur_recompense, avantage: texteRecompense(b.type_recompense, b.valeur_recompense, moi.langue),
+                 delai_validation_jours: b.delai_validation_jours, conditions: b.conditions,
+                 etapes: [{ cle: 'compte', fait: true }, { cle: 'operation', fait: statut === 'en_attente' || statut === 'obtenu' }] };
+      });
+    },
+
+    monParrainage: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        var c = p.parrainage, jour = aujourdhuiDemo(), code = codeParrainageDe(p, moi.id);
+        var miens = p.parrainages.filter(function (x) { return x.parrain_id === moi.id; });
+        var lien = new URL('inscription.html?parrain=' + code, location.href).href;
+        return {
+          actif: c.statut === 'active' && !!c.debut && jour >= c.debut && jour <= c.fin,
+          nom: c.nom, code: code, lien: lien, fin: c.fin, operation: c.operation,
+          avantage_parrain: c.parrain_type ? texteRecompense(c.parrain_type, c.parrain_valeur, moi.langue) : '',
+          avantage_filleul: c.filleul_type ? texteRecompense(c.filleul_type, c.filleul_valeur, moi.langue) : '',
+          delai_validation_jours: c.delai_validation_jours, conditions: c.conditions, annulation: c.annulation,
+          invitations: p.invitations.filter(function (i) { return i.parrain_id === moi.id; }).length,
+          inscrits: miens.filter(function (x) { return x.statut !== 'refuse'; }).length,
+          en_attente_premiere_operation: miens.filter(function (x) { return x.statut === 'inscrit' || x.statut === 'suspect'; }).length,
+          valides: miens.filter(function (x) { return x.statut === 'qualifie' || x.statut === 'recompense'; }).length,
+          recompenses: p.recompenses.filter(function (r) { return r.client_id === moi.id && r.programme === 'refer_parrain'; })
+            .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; }).map(function (r) {
+              return { id: r.id, type: r.type, valeur: r.valeur, statut: r.statut, date: r.cree_le,
+                       avantage: texteRecompense(r.type, r.valeur, moi.langue) };
+            }),
+          mon_parrain: p.parrainages.some(function (x) { return x.filleul_id === moi.id; })
+        };
+      });
+    },
+
+    noterInvitation: function (canal) {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        var recentes = p.invitations.filter(function (i) { return i.parrain_id === moi.id && Date.now() - new Date(i.cree_le).getTime() < 864e5; });
+        if (recentes.length < 50) p.invitations.push({ parrain_id: moi.id, canal: String(canal || '').slice(0, 20), cree_le: maintenant() });
+        return p.invitations.filter(function (i) { return i.parrain_id === moi.id; }).length;
+      });
+    },
+
+    utiliserCodeParrainage: function (code) {
+      return appelProgrammes(null, function (d, p, moi) {
+        clientSeul(moi);
+        if (parrainageRattacherDemo(d, moi.id, code, 'saisie', true) === null) {
+          throw Erreur('ALREADY_REFERRED', 'Un code de parrainage est déjà enregistré pour votre compte.');
+        }
+        return { enregistre: true };
+      });
+    },
+
+    preferencesProgrammes: function () {
+      return appelProgrammes(null, function (d, p, moi) {
+        return { anniversaire: !(p.prefs[moi.id] && p.prefs[moi.id].anniversaire === false) };
+      });
+    },
+
+    reglerAnniversaire: function (actif) {
+      return appelProgrammes(null, function (d, p, moi) {
+        p.prefs[moi.id] = { anniversaire: actif !== false };
+        return { anniversaire: actif !== false };
+      });
+    },
+
+    connecter: function (email, motDePasse) {
+      var compte = trouverCompte(lireDonnees(), email);
+      if (!compte || compte.mdp !== empreinte(motDePasse)) return echec('identifiants');
+      stockage('ecrire', CLE_SESSION, compte.id);
+      return plusTard(publicProfil(compte));
+    },
+
+    deconnecter: function () {
+      stockage('effacer', CLE_SESSION);
+      return plusTard(true);
+    },
+
+    // En démonstration, une session ne se termine que si un autre onglet se
+    // déconnecte : on écoute le stockage du navigateur.
+    surSessionPerdue: function (rappel) {
+      var ecoute = function (e) { if (e.key === CLE_SESSION && !e.newValue) rappel(); };
+      window.addEventListener('storage', ecoute);
+      return function () { window.removeEventListener('storage', ecoute); };
+    },
+
+    // En démonstration, aucun compte Google : les boutons restent cachés.
+    fournisseursConnexion: function () { return plusTard([]); },
+    connecterAvec: function () { return Promise.reject(Erreur('inconnu')); },
+
+    // En démonstration, aucun e-mail n'est envoyé : le lien est affiché à l'écran.
+    envoyerLienMotDePasse: function (email) {
+      var compte = trouverCompte(lireDonnees(), email);
+      if (!compte) return plusTard({});
+      var jeton = Math.random().toString(36).slice(2, 12);
+      stockage('ecrire', CLE_RECUP, JSON.stringify({ id: compte.id, jeton: jeton, expire: Date.now() + 3600e3 }));
+      return plusTard({ lienDemo: 'nouveau-mot-de-passe.html#recuperation=' + jeton });
+    },
+
+    attendreRecuperation: function () {
+      var m = /recuperation=([a-z0-9]+)/.exec(location.hash);
+      var r = null;
+      try { r = JSON.parse(stockage('lire', CLE_RECUP)); } catch (e) { r = null; }
+      if (m && r && r.jeton === m[1] && r.expire > Date.now()) {
+        stockage('ecrire', CLE_SESSION, r.id);
+        stockage('effacer', CLE_RECUP);
+        return plusTard(true);
+      }
+      return plusTard(!!compteConnecte(lireDonnees()));
+    },
+
+    changerMotDePasse: function (motDePasse) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('lien-invalide');
+      if (String(motDePasse).length < MDP_MINIMUM) return echec('mot-de-passe-faible');
+      if (moi.mdp === empreinte(motDePasse)) return echec('meme-mot-de-passe');
+      moi.mdp = empreinte(motDePasse);
+      ecrireDonnees(d);
+      return plusTard(true);
+    },
+
+    modifierProfil: function (champs) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var c = choisir(champs, CHAMPS_PROFIL);
+      Object.keys(c).forEach(function (k) { moi[k] = c[k]; });
+      ecrireDonnees(d);
+      return plusTard(publicProfil(moi));
+    },
+
+    mesColis: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var lignes = d.colis.filter(function (c) { return c.client_id === moi.id; })
+        .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })
+        .map(function (c) { return avecHistorique(d, c); });
+      return plusTard(lignes);
+    },
+
+    mesFactures: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      // Les mêmes champs que public.mes_factures : payé, solde et état, le
+      // tarif de chaque ligne, les paiements reçus (pas ceux annulés)
+      var lignes = (d.factures || []).filter(function (f) { return f.client_id === moi.id; })
+        .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })
+        .map(function (f) {
+          var c = factureComplete(d, f);
+          return {
+            id: f.id, numero: f.numero, montant_usd: f.montant_usd, frais_service_usd: f.frais_service_usd,
+            montant_paye_usd: c.paye_usd, paye_usd: c.paye_usd, solde_usd: c.solde_usd, etat: c.etat_paiement,
+            statut: f.statut, note: f.note, lien_paiement: f.lien_paiement, moyen: f.moyen,
+            echeance_le: f.echeance_le, cree_le: f.cree_le, payee_le: f.payee_le, annulee_le: f.annulee_le || null,
+            lignes: (f.facture_lignes || []).map(function (l) {
+              var colis = trouverColisDemo(d, l.colis_id);
+              return {
+                libelle: l.libelle, montant_usd: l.montant_usd, quantite: l.quantite || 1,
+                poids_lb: l.poids_lb != null ? l.poids_lb : (colis ? colis.poids_lb : null),
+                tarif_lb_usd: l.tarif_lb_usd != null ? l.tarif_lb_usd : null,
+                colis: colis ? colis.numero : null
+              };
+            }),
+            paiements: paiementsValides(c).map(function (p) {
+              return { montant_usd: p.montant_usd, moyen: p.moyen, paye_le: p.paye_le };
+            })
+          };
+        });
+      return plusTard(lignes);
+    },
+
+    // mon_resume : le compte connecté, sur ses propres données
+    monResume: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var colis = d.colis.filter(function (c) { return c.client_id === moi.id; });
+      function nb(test) { return colis.filter(test).length; }
+      var r = {
+        colis: {
+          en_cours: nb(function (c) { return c.statut !== 'livre'; }),
+          livres: nb(function (c) { return c.statut === 'livre'; }),
+          disponibles: nb(function (c) { return c.statut === 'disponible'; }),
+          action_requise: nb(function (c) { return c.statut === 'incident'; })
+        },
+        factures: null,
+        notifications: null
+      };
+      if (peutCompte(moi, 'invoices.view', moi.id)) {
+        var f = { nombre: 0, facture_usd: 0, paye_usd: 0, solde_usd: 0, ouvertes: 0, en_retard: 0, montant_en_retard: 0,
+                  prochaine_echeance: null };
+        var jour = aujourdhui();
+        (d.factures || []).forEach(function (x) {
+          if (x.client_id !== moi.id || x.statut === 'annulee') return;
+          var c = factureComplete(d, x);
+          f.nombre++;
+          f.facture_usd = arrondi(f.facture_usd + x.montant_usd);
+          f.paye_usd = arrondi(f.paye_usd + c.paye_usd);
+          f.solde_usd = arrondi(f.solde_usd + c.solde_usd);
+          if (c.solde_usd > 0) f.ouvertes++;
+          if (c.etat_paiement === 'en_retard') {
+            f.en_retard++;
+            f.montant_en_retard = arrondi(f.montant_en_retard + c.solde_usd);
+          }
+          var e = x.echeance_le ? String(x.echeance_le).slice(0, 10) : null;
+          if (c.solde_usd > 0 && e && e >= jour && (!f.prochaine_echeance || e < f.prochaine_echeance)) f.prochaine_echeance = e;
+        });
+        r.factures = f;
+      }
+      if (peutCompte(moi, 'shipments.view', moi.id)) {
+        var ids = colis.map(function (c) { return c.id; });
+        r.notifications = (d.notifications || []).filter(function (n) {
+          return n.client_id === moi.id || ids.indexOf(n.colis_id) >= 0;
+        }).sort(function (a, b) { return new Date(b.envoye_le) - new Date(a.envoye_le); }).slice(0, 10)
+          .map(function (n) {
+            var c = n.colis_id ? trouverColisDemo(d, n.colis_id) : null;
+            return { canal: n.canal, evenement: n.evenement, envoye_le: n.envoye_le, numero: c ? c.numero : null };
+          });
+      }
+      return plusTard(r);
+    },
+
+    surveiller: function (rappel, options) {
+      options = options || {};
+      abonnes.push(rappel);
+      if (options.etat) setTimeout(function () { options.etat(true); }, 300);
+      return function () { abonnes = abonnes.filter(function (a) { return a !== rappel; }); };
+    },
+
+    suivre: function (numero) {
+      var d = lireDonnees();
+      var n = String(numero || '').trim().toUpperCase();
+      if (n.length < 4) return plusTard(null);
+      var c = d.colis.filter(function (x) { return x.numero === n || (x.suivi_transporteur && x.suivi_transporteur === n); })[0];
+      if (!c) return plusTard(null);
+      var x = avecHistorique(d, c);
+      return plusTard({
+        numero: x.numero, statut: x.statut, service: x.service, pays_destination: x.pays_destination, maj_le: x.maj_le,
+        historique: x.historique.map(function (h) { return { statut: h.statut, lieu: h.lieu, cree_le: h.cree_le }; })
+      });
+    },
+
+    estAdmin: function () {
+      var moi = compteConnecte(lireDonnees());
+      return plusTard(!!(moi && moi.role === 'admin'));
+    },
+
+    // mes_permissions de la base
+    permissions: function () {
+      var moi = compteConnecte(lireDonnees());
+      return plusTard(moi ? { role: moi.role, equipe: moi.role !== 'client',
+                              permissions: (PERMISSIONS_DES_ROLES[moi.role] || []).slice() }
+                          : { role: null, equipe: false, permissions: [] });
+    },
+
+    admin: {
+      statistiques: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var statuts = {}, livres30 = 0, limite = Date.now() - 30 * 864e5;
+        d.colis.forEach(function (c) {
+          statuts[c.statut] = (statuts[c.statut] || 0) + 1;
+          if (c.statut === 'livre' && new Date(c.maj_le).getTime() > limite) livres30 += 1;
+        });
+        var clients = d.comptes.filter(function (c) { return c.role === 'client'; }).length;
+        return plusTard({ clients: clients, statuts: statuts, livres_30j: livres30 });
+      },
+
+      colis: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var t = nettoyer(o.recherche);
+        var lignes = d.colis.map(function (c) { return detailsColis(d, c); }).filter(function (c) {
+          if (o.statut === 'actifs' && c.statut === 'livre') return false;
+          if (o.statut && o.statut !== 'actifs' && c.statut !== o.statut) return false;
+          if (o.clientId && c.client_id !== o.clientId) return false;
+          if (o.pays && c.pays_destination !== o.pays) return false;
+          if (o.service && c.service !== o.service) return false;
+          if (o.depuis && new Date(c.recu_le) < new Date(o.depuis)) return false;
+          if (o.jusqua && new Date(c.recu_le) >= new Date(o.jusqua)) return false;
+          if (t && !contient([c.numero, c.suivi_transporteur, c.code_client, c.nom_client, c.telephone_client,
+                              c.description, c.destination], t)) return false;
+          return true;
+        }).sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); });
+        return plusTard(page(lignes, o));
+      },
+
+      // historique_colis : tous les événements, dans l'ordre d'écriture
+      historique: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view_history'); } catch (e) { return echec(e.code); }
+        return plusTard(historiqueDe(d, id).map(function (h) { return evenementJson(d, h); }));
+      },
+
+      chercherClient: function (code) {
+        var d = lireDonnees();
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
+        var n = normaliserCode(code);
+        var c = d.comptes.filter(function (x) { return n && x.code === n; })[0];
+        return plusTard(c ? choisir(publicProfil(c), ['id', 'code', 'nom_complet', 'pays', 'region', 'ville', 'telephone', 'email', 'langue']) : null);
+      },
+
+      clients: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
+        var t = nettoyer(o.recherche);
+        var lignes = d.comptes.filter(function (c) {
+          return c.role === 'client' && (!t || contient([c.code, c.nom_complet, c.telephone, c.email, c.ville, c.region], t));
+        }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); }).map(publicProfil);
+        return plusTard(page(lignes, o));
+      },
+
+      // Même contrat que document_client : réservé à clients.edit (administration, gérance)
+      numeroDocument: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'clients.edit'); } catch (e) { return echec(e.code); }
+        return plusTard(d.documents && d.documents[id] || null);
+      },
+
+      // Même contrat que la base : le sexe et le type de document, pour qui peut voir les clients
+      identiteClient: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'clients.view'); } catch (e) { return echec(e.code); }
+        var c = d.comptes.filter(function (x) { return x.id === id; })[0];
+        return plusTard({ sexe: c && c.sexe || null, type_document: c && c.type_document || null });
+      },
+
+      // Même contrat que creer_colis : { colis, facture, deja }
+      creerColis: function (x, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.create');
+          var existant = cle ? d.colis.filter(function (c) { return c.cle_idempotence === cle; })[0] : null;
+          if (existant) {
+            if (existant.client_id !== x.client_id) {
+              throw Erreur('DUPLICATE_OPERATION', 'Cette requête a déjà servi à enregistrer le colis ' +
+                           existant.numero + ' pour un autre client.');
+            }
+            var dejaFacture = factureActiveDu(d, existant.id);
+            return plusTard({ colis: detailsColis(d, existant), facture: factureComplete(d, dejaFacture), deja: true });
+          }
+          // Le lieu de réception est obligatoire, sans défaut : c'est lui que lit l'e-mail
+          // « Colis reçu à… ». Un colis reçu à Santo Domingo ne doit pas être rangé à Miami.
+          var lieuRecu = String(x.lieu == null ? '' : x.lieu).trim();
+          if (!lieuRecu) {
+            throw Erreur('LOCATION_REQUIRED', 'Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…).');
+          }
+          if (lieuRecu.length > 80) throw Erreur('INVALID_INPUT', 'Le lieu de réception est trop long (80 signes au plus).');
+          var c = choisir(x, CHAMPS_CREATION);
+          c.id = identifiant();
+          c.lieu = lieuRecu;
+          c.poids_lb = lireNombre(x.poids_lb, 'INVALID_WEIGHT', 'Poids illisible.');
+          c.tarif_lb_usd = lireNombre(x.tarif_lb_usd, 'INVALID_RATE', 'Tarif illisible.');
+          c.prix_fixe_usd = lireNombre(x.prix_fixe_usd, 'INVALID_PRICE', 'Prix du colis illisible.');
+          c.service = c.service || 'aerien';
+          c.pays_destination = c.pays_destination || 'HT';
+          c.statut = 'recu';
+          c.cle_idempotence = cle || null;
+          c.cree_le = c.maj_le = maintenant();
+          c.recu_le = c.recu_le || c.cree_le;
+          reglesColis(d, c, null);
+          d.seqColis += 1;
+          c.numero = 'GSE-' + d.seqColis + '-' + c.pays_destination;
+          d.colis.push(c);
+          historiser(d, c, c.recu_le);
+          journaliser(d, moi, 'colis.creation', 'colis', c.id, null, choisir(c, RESUME_COLIS.slice(0, RESUME_CREATION)));
+          var facture = facturerColisDemo(d, moi, c).facture;
+          ecrireDonnees(d);
+          prevenir('factures');
+          return plusTard({ colis: detailsColis(d, c), facture: facture, deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      modifierColis: function (id, champs, majLe) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.edit');
+          var c = trouverColisDemo(d, id);
+          if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Ce colis n’existe plus.');
+          if (majLe && c.maj_le !== majLe) {
+            throw Erreur('CONCURRENT_MODIFICATION', 'Le colis ' + c.numero +
+                         ' a été modifié par quelqu’un d’autre entre-temps : rechargez-le.');
+          }
+          var nouveau = Object.assign({}, c, choisir(champs, CHAMPS_MODIFIABLES));
+          if ('poids_lb' in champs) nouveau.poids_lb = lireNombre(champs.poids_lb, 'INVALID_WEIGHT', 'Poids illisible.');
+          if ('tarif_lb_usd' in champs) {
+            nouveau.tarif_lb_usd = lireNombre(champs.tarif_lb_usd, 'INVALID_RATE', 'Tarif illisible.');
+          }
+          // null ou vide : revenir au prix calculé ; absent : inchangé
+          if ('prix_fixe_usd' in champs) {
+            nouveau.prix_fixe_usd = lireNombre(champs.prix_fixe_usd, 'INVALID_PRICE', 'Prix du colis illisible.');
+          }
+          reglesColis(d, nouveau, c);
+          var diff = difference(c, nouveau, RESUME_COLIS);
+          Object.assign(c, nouveau, { maj_le: maintenant() });
+          if (diff) journaliser(d, moi, 'colis.modification', 'colis', c.id, diff.avant, diff.apres, champs.motif);
+          ecrireDonnees(d);
+          return plusTard(detailsColis(d, c));
+        } catch (e) { return rejeter(e); }
+      },
+
+      // Même contrat que changer_statut_colis : tout ou rien, et
+      // { modifies, inchanges, ids, evenements, refus }
+      changerStatut: function (ids, etape, attendus, motif, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.change_status');
+          var statut = etape.statut, lieu = String(etape.lieu || '').trim(), note = String(etape.note || '').trim();
+          if (!TRANSITIONS[statut]) throw Erreur('INVALID_STATUS', 'Statut inconnu : ' + (statut || '(vide)') + '.');
+          if (lieu.length > 80) throw Erreur('INVALID_LOCATION', 'Lieu trop long (80 caractères au plus).');
+          if (statut === 'disponible' && !lieu) {
+            throw Erreur('LOCATION_REQUIRED', 'Indiquez l\u2019agence où le client peut retirer son colis.');
+          }
+          var uniques = (ids || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; });
+          if (!uniques.length) throw Erreur('INVALID_INPUT', 'Aucun colis choisi.');
+          if (uniques.length > 500) throw Erreur('INVALID_INPUT', 'Au plus 500 colis à la fois.');
+          var plan = [], inchanges = 0, refus = [];
+          uniques.forEach(function (id) {
+            var c = trouverColisDemo(d, id);
+            var attendu = attendus ? attendus[id] : null;
+            if (!c) {
+              refus.push({ id: id, numero: null, code: 'SHIPMENT_NOT_FOUND', statut: null,
+                           detail: 'Un colis choisi n\u2019existe plus.' });
+            } else if (cle && d.historique.some(function (h) { return h.cle_idempotence === cle + ':' + id; })) {
+              inchanges++;
+            } else if (c.statut === statut) {
+              if ((attendu && attendu !== statut) || ((c.lieu || '') === lieu && (c.note || '') === note)) inchanges++;
+              else plan.push({ c: c, type: 'MISE_A_JOUR' });
+            } else if (attendu && attendu !== c.statut) {
+              refus.push({ id: id, numero: c.numero, code: 'STATUS_CONFLICT', statut: c.statut,
+                           detail: c.numero + ' est passé à « ' + LIBELLES[c.statut] + ' » entre-temps : rechargez la liste.' });
+            } else {
+              var type = typePourStatut(c.statut, statut, statutPrecedent(historiqueDe(d, c.id), c.statut));
+              if (!type) {
+                refus.push({ id: id, numero: c.numero, code: 'INVALID_STATUS_TRANSITION', statut: c.statut,
+                             detail: c.numero + ' : ' + LIBELLES[c.statut] + ' → ' + LIBELLES[statut] + ' interdit.' });
+              } else if (type === 'CORRECTION' && !String(motif || '').trim()) {
+                refus.push({ id: id, numero: c.numero, code: 'INVALID_EVENT_DATA', statut: c.statut,
+                             detail: c.numero + ' : revenir à « ' + LIBELLES[statut] + ' » est une correction, donnez-en le motif.' });
+              } else {
+                plan.push({ c: c, type: type });
+              }
+            }
+          });
+          if (refus.length) return plusTard({ modifies: 0, inchanges: 0, ids: [], evenements: [], refus: refus });
+          var modifies = [], evenements = [];
+          plan.forEach(function (p) {
+            var r = operationDemo(d, moi, p.c.id, p.type, {
+              lieu: lieu, note: note, metadonnees: { source: 'tableau_de_bord' }, cle: cle ? cle + ':' + p.c.id : null,
+              attendu: p.c.statut, cible: p.type === 'ACTION_RESOLUE' ? statut : null, motif: motif
+            });
+            if (r.deja) inchanges++;
+            else { modifies.push(p.c.id); evenements.push(r.evenement); }
+          });
+          if (modifies.length) ecrireDonnees(d);
+          return plusTard({ modifies: modifies.length, inchanges: inchanges, ids: modifies, evenements: evenements,
+                            refus: [] });
+        } catch (e) { return rejeter(e); }
+      },
+
+      statutsPossibles: function (id) {
+        var d = lireDonnees();
+        try {
+          exiger(d, 'shipments.change_status');
+          var c = trouverColisDemo(d, id);
+          if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
+          var precedent = statutPrecedent(historiqueDe(d, id), c.statut);
+          return plusTard({
+            actuel: c.statut, precedent: precedent,
+            possibles: STATUTS.filter(function (s) {
+              return ['identique', 'normale', 'sortie_incident'].indexOf(natureTransition(c.statut, s, precedent)) >= 0;
+            }),
+            correction: natureTransition(c.statut, precedent, precedent) === 'correction' ? precedent : null
+          });
+        } catch (e) { return rejeter(e); }
+      },
+
+      scannerColis: function (reference) {
+        var d = lireDonnees();
+        try {
+          exiger(d, 'shipments.scan');
+          var r = String(reference || '').trim();
+          if (r.length < 4 || r.length > 60) throw Erreur('INVALID_SCAN_FORMAT', 'Code illisible : ' + r.slice(0, 60) + '.');
+          var c = colisParReference(d, r);
+          return plusTard(c ? ficheScanner(d, c) : null);
+        } catch (e) { return rejeter(e); }
+      },
+
+      operationScanner: function (reference, type, o) {
+        o = o || {};
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.scan');
+          var v = String(type || '').trim().toUpperCase();
+          if (OPERATIONS_SCANNER.indexOf(v) < 0) {
+            throw Erreur('EVENT_TYPE_INVALID', 'Opération impossible depuis le scanner : ' + (type || '(vide)') + '.');
+          }
+          var r = String(reference || '').trim();
+          if (r.length < 4 || r.length > 60) throw Erreur('INVALID_SCAN_FORMAT', 'Code illisible : ' + r.slice(0, 60) + '.');
+          var c = colisParReference(d, r);
+          if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis ne porte le numéro ' + r.toUpperCase() + '.');
+          var res = operationDemo(d, moi, c.id, v, {
+            lieu: o.lieu, note: o.note, metadonnees: Object.assign(avecPoste(o.metadonnees), { source: 'scanner' }),
+            cle: o.cle, attendu: o.attendu, cible: o.cible
+          });
+          if (!res.deja) ecrireDonnees(d);
+          return plusTard({
+            code: res.deja ? 'ALREADY_IN_TARGET_STATE' : 'OK',
+            message: (res.deja ? 'Déjà fait : ' : '') + TYPES_EVENEMENT[v].libelle,
+            resultat: res,
+            fiche: ficheScanner(d, trouverColisDemo(d, c.id))
+          });
+        } catch (e) { return rejeter(e); }
+      },
+
+      trouverColis: function (reference) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return rejeter(e); }
+        var n = String(reference || '').trim().toUpperCase();
+        if (n.length < 4) return plusTard(null);
+        var c = d.colis.filter(function (x) { return x.numero === n || (x.suivi_transporteur && x.suivi_transporteur === n); })
+          .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })[0];
+        if (!c) return plusTard(null);
+        return plusTard(Object.assign(detailsColis(d, c), { historique: avecHistorique(d, c, true).historique }));
+      },
+
+      journal: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'audit_logs.view'); } catch (e) { return rejeter(e); }
+        var lignes = (d.journal || []).filter(function (j) {
+          return (!o.entite || j.entite === o.entite) && (!o.entiteId || j.entite_id === String(o.entiteId));
+        }).slice().reverse();
+        return plusTard(page(lignes, o));
+      },
+
+      supprimerColis: function (id) {
+        var d = lireDonnees();
+        var moi;
+        try { moi = exiger(d, 'shipments.delete'); } catch (e) { return echec(e.code); }
+        var parti = trouverColisDemo(d, id);
+        if (parti) journaliser(d, moi, 'colis.suppression', 'colis', id, choisir(parti, RESUME_COLIS.slice(0, RESUME_CREATION)), null);
+        d.colis = d.colis.filter(function (c) { return c.id !== id; });
+        d.historique = d.historique.filter(function (h) { return h.colis_id !== id; });
+        d.notifications = (d.notifications || []).filter(function (n) { return n.colis_id !== id; });
+        ecrireDonnees(d);
+        return plusTard(true);
+      },
+
+      // En démonstration, rien n'est envoyé : l'e-mail est seulement noté (aperçu
+      // dans le tableau de bord) et WhatsApp passe par l'envoi en un clic.
+      envoyerEmail: function (id, evenement) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.change_status'); } catch (e) { return echec(e.code); }
+        var c = detailsColis(d, d.colis.filter(function (x) { return x.id === id; })[0] || {});
+        d.notifications = d.notifications || [];
+        d.notifications.push({ colis_id: id, canal: 'email', evenement: evenement, destinataire: c.email_client || '',
+                               envoye_le: maintenant(), code_http: null, erreur: null });
+        ecrireDonnees(d);
+        return plusTard('demo');
+      },
+
+      envoyerWhatsApp: function () {
+        try { exiger(lireDonnees(), 'shipments.change_status'); } catch (e) { return echec(e.code); }
+        return plusTard('non-configure');
+      },
+
+      // envois_colis (supabase-notifications.sql) : une notification par étape publique
+      // du colis, et ses envois selon les règles de départ. En démonstration, aucun
+      // fournisseur n'est configuré et aucun téléphone enregistré : rien ne part, et
+      // chaque envoi dit pourquoi, comme le ferait la base.
+      envoisColis: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var lignes = [];
+        historiqueDe(d, id).filter(function (h) {
+          return h.visibilite === 'publique' && !h.corrige_id && REGLES_ENVOI_DEMO[h.type_evenement];
+        }).reverse().forEach(function (h) {
+          var regle = REGLES_ENVOI_DEMO[h.type_evenement];
+          regle.canaux.forEach(function (canal) {
+            lignes.push({ notification_id: h.id, type: regle.type, cree_le: h.cree_le, canal: canal, statut: 'annule',
+                          code_erreur: canal === 'push' ? 'SANS_APPAREIL' : 'NON_CONFIGURE', tentative: 0 });
+          });
+        });
+        return plusTard(lignes);
+      },
+
+      // historique_modifications (supabase-corrections.sql) : même forme, mêmes filtres
+      historiqueModifications: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'audit_logs.view'); } catch (e) { return echec(e.code); }
+        var entite = o.entite || '';
+        if (['', 'colis', 'facture'].indexOf(entite) < 0) return rejeter(Erreur('INVALID_INPUT', 'Objet inconnu : colis ou facture.'));
+        var ref = String(o.recherche || '').trim().toUpperCase();
+        var debut = o.debut ? new Date(o.debut).getTime() : null, fin = o.fin ? new Date(o.fin).getTime() : null;
+        var parPage = Math.min(Math.max(Number(o.parPage) || 50, 1), 200), page = Math.max(Number(o.page) || 0, 0);
+        function compte(id) { return d.comptes.filter(function (x) { return x.id === id; })[0] || null; }
+        function reference(j) {
+          var objet = j.entite === 'colis' ? d.colis.filter(function (x) { return x.id === j.entite_id; })[0]
+            : (d.factures || []).filter(function (x) { return x.id === j.entite_id; })[0];
+          return (objet && objet.numero) || (j.avant && j.avant.numero) || (j.apres && j.apres.numero) || '';
+        }
+        var tous = (d.journal || []).filter(function (j) { return j.entite === 'colis' || j.entite === 'facture'; });
+        var lignes = tous.filter(function (j) {
+          var t = new Date(j.cree_le).getTime();
+          return (!entite || j.entite === entite) && (debut == null || t >= debut) && (fin == null || t < fin) &&
+                 (!o.auteur || j.auteur_id === o.auteur);
+        }).map(function (j) {
+          var c = compte(j.auteur_id);
+          return { id: j.id, cree_le: j.cree_le, action: j.action, entite: j.entite, entite_id: j.entite_id,
+                   reference: reference(j), auteur_id: j.auteur_id,
+                   auteur: c ? (c.nom_complet || c.email || '') : (j.auteur_id ? '' : 'Système'),
+                   role_auteur: c ? c.role : null, avant: j.avant, apres: j.apres, motif: j.motif || '' };
+        }).filter(function (j) { return !ref || j.reference.toUpperCase().indexOf(ref) >= 0; })
+          .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le) || b.id - a.id; });
+        var auteurs = [];
+        tous.forEach(function (j) {
+          if (j.auteur_id && !auteurs.some(function (a) { return a.id === j.auteur_id; })) {
+            var c = compte(j.auteur_id);
+            auteurs.push({ id: j.auteur_id, nom: c ? (c.nom_complet || c.email || '') : '', role: c ? c.role : null });
+          }
+        });
+        auteurs.sort(function (a, b) { return String(a.nom).localeCompare(String(b.nom)); });
+        return plusTard({ total: lignes.length, lignes: lignes.slice(page * parPage, page * parPage + parPage),
+                          auteurs: auteurs });
+      },
+
+      // L'équipe et ses rôles (equipe() de la base)
+      equipe: function () {
+        var d = lireDonnees();
+        var moi;
+        try { moi = exiger(d, 'users.view'); } catch (e) { return echec(e.code); }
+        var ordre = ['admin', 'gerant', 'employe'];
+        return plusTard(d.comptes.filter(function (c) { return ROLES_EQUIPE.indexOf(c.role) >= 0; })
+          .sort(function (a, b) {
+            return ordre.indexOf(a.role) - ordre.indexOf(b.role) || String(a.nom_complet).localeCompare(String(b.nom_complet));
+          })
+          .map(function (c) {
+            return { id: c.id, nom_complet: c.nom_complet, email: c.email, role: c.role, cree_le: c.cree_le, moi: c.id === moi.id };
+          }));
+      },
+
+      // changer_role de la base : mêmes refus, même journal
+      changerRole: function (compte, role) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'roles.manage');
+          role = String(role || '').trim().toLowerCase();
+          if (ROLES_EQUIPE.concat(['client']).indexOf(role) < 0) {
+            throw Erreur('INVALID_ROLE', 'Rôle inconnu : ' + (role || '(vide)') + '. Choisissez client, employe, gerant ou admin.');
+          }
+          var ref = String(compte || '').trim().toLowerCase();
+          var c = d.comptes.filter(function (x) { return x.id === compte || (ref && x.email === ref); })[0];
+          if (!c) {
+            throw Erreur('USER_NOT_FOUND', 'Aucun compte avec l\u2019adresse ' + compte +
+                         '. La personne doit d\u2019abord créer son compte sur le site.');
+          }
+          if (c.id === moi.id) {
+            throw Erreur('SELF_ROLE_CHANGE', 'On ne change pas son propre rôle : demandez-le à un autre administrateur.');
+          }
+          var resume = { id: c.id, email: c.email, nom_complet: c.nom_complet };
+          if (c.role === role) return plusTard({ compte: resume, ancien_role: c.role, nouveau_role: role, deja: true });
+          if (c.role === 'admin' && d.comptes.filter(function (x) { return x.role === 'admin'; }).length <= 1) {
+            throw Erreur('LAST_ADMIN', 'C\u2019est le dernier administrateur : nommez-en un autre d\u2019abord.');
+          }
+          var ancien = c.role;
+          c.role = role;
+          if (role === 'client' && !c.code) c.code = nouveauCode(d.comptes);
+          journaliser(d, moi, 'utilisateur.role', 'client', c.id, { role: ancien, email: c.email }, { role: role, email: c.email });
+          ecrireDonnees(d, 'clients');
+          return plusTard({ compte: resume, ancien_role: ancien, nouveau_role: role, deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // definir_lien_paiement de la base
+      poserLienPaiement: function (id, lien) {
+        var d = lireDonnees();
+        try {
+          var moi = compteConnecte(d);
+          var modifie = peutCompte(moi, 'invoices.edit');
+          if (!modifie && !peutCompte(moi, 'shipments.create')) throw Erreur('non-autorise');
+          lien = String(lien || '').trim();
+          if (!/^https:\/\/\S+$/i.test(lien) || lien.length > 500) {
+            throw Erreur('INVALID_INPUT', 'Le lien de paiement doit être une adresse https://.');
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          if (!modifie && f.lien_paiement) throw Erreur('non-autorise');
+          if (f.statut === 'annulee') throw Erreur('INVOICE_LOCKED', 'Une facture annulée ne se modifie plus.');
+          f.lien_paiement = lien;
+          ecrireDonnees(d, 'factures');
+          return plusTard({ id: f.id, numero: f.numero, lien_paiement: lien });
+        } catch (e) { return rejeter(e); }
+      },
+
+      preparerLogo: function () {
+        return plusTard('demo');
+      },
+
+      /* ---- Factures (démonstration) ------------------------------------ */
+
+      factures: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'invoices.view'); } catch (e) { return echec(e.code); }
+        var etat = o.etat || o.statut;
+        var lignes = (d.factures || []).slice().sort(function (a, b) {
+          return new Date(b.cree_le) - new Date(a.cree_le);
+        }).filter(function (f) {
+          if (o.client_id && f.client_id !== o.client_id) return false;
+          if (o.id && f.id !== o.id) return false;
+          if (etat === 'payee' || etat === 'annulee' || etat === 'a_payer') return f.statut === etat;
+          if (etat === 'partielle') return f.statut === 'a_payer' && f.montant_paye_usd > 0;
+          if (etat === 'en_retard') return f.statut === 'a_payer' && f.echeance_le && f.echeance_le < aujourdhui();
+          return true;
+        }).map(function (f) { return factureComplete(d, f); });
+        return plusTard({ lignes: lignes, total: lignes.length });
+      },
+
+      // Même contrat que creer_facture : { facture, deja }
+      creerFacture: function (champs, colisIds, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          var clientId = champs.client_id;
+          if (!d.comptes.some(function (c) { return c.id === clientId && c.role === 'client'; })) {
+            throw Erreur('CLIENT_NOT_FOUND', 'Aucun client avec cet identifiant.');
+          }
+          var existante = cle ? (d.factures || []).filter(function (f) { return f.cle_idempotence === cle; })[0] : null;
+          if (existante) {
+            if (existante.client_id !== clientId) {
+              throw Erreur('DUPLICATE_OPERATION', 'Cette requête a déjà servi pour un autre client.');
+            }
+            return plusTard({ facture: factureComplete(d, existante), deja: true });
+          }
+          var ids = (colisIds || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; });
+          if (ids.length > 200) throw Erreur('INVALID_INPUT', 'Au plus 200 colis par facture.');
+          var colis = ids.map(function (id) { return trouverColisDemo(d, id); });
+          if (colis.some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis choisi n’existe plus.');
+          var montant, frais = 0;
+          if (colis.length) {
+            colis.forEach(function (c) {
+              if (c.client_id !== clientId) {
+                throw Erreur('INVOICE_CLIENT_MISMATCH', 'Le colis ' + c.numero +
+                             ' appartient à un autre client : une facture n’en regroupe qu’un seul.');
+              }
+              var autre = factureActiveDu(d, c.id);
+              if (autre) {
+                throw Erreur('INVOICE_ALREADY_EXISTS', 'Le colis ' + c.numero + ' est déjà sur la facture ' + autre.numero + '.');
+              }
+            });
+            // Les frais seulement si on les demande (supabase-frais-service.sql)
+            frais = champs.frais_service === true ? FRAIS_SERVICE : 0;
+            montant = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0) + frais);
+          } else {
+            montant = lireNombre(champs.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+            if (montant == null || montant < 0) throw Erreur('INVALID_AMOUNT', 'Indiquez le montant de la facture.');
+            montant = arrondi(montant);
+          }
+          var paye = lireNombre(champs.montant_paye_usd, 'INVALID_AMOUNT', 'Montant payé illisible.') || 0;
+          if (paye < 0) throw Erreur('INVALID_AMOUNT', 'Le montant payé ne peut pas être négatif.');
+          paye = Math.min(arrondi(paye), montant);
+          var f = nouvelleFacture(d, moi, {
+            client_id: clientId, montant_usd: montant, frais_service_usd: frais, montant_paye_usd: paye,
+            echeance_le: champs.echeance_le || null,
+            lien_paiement: String(champs.lien_paiement || '').trim().slice(0, 500),
+            note: String(champs.note || '').trim().slice(0, 500),
+            cle_idempotence: cle || null
+          }, colis.sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); }));
+          ecrireDonnees(d, 'factures');
+          return plusTard({ facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      facturerColis: function (colisId) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          var c = trouverColisDemo(d, colisId);
+          if (!c) throw Erreur('SHIPMENT_NOT_FOUND', 'Aucun colis avec cet identifiant.');
+          var r = facturerColisDemo(d, moi, c);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // La facture d'un colis, pour le bouton « Voir la facture » de sa fiche.
+      factureDuColis: function (colisId) {
+        var d = lireDonnees();
+        try { exiger(d, 'invoices.view'); } catch (e) { return echec(e.code); }
+        var trouvees = (d.factures || []).filter(function (f) {
+          return (f.facture_lignes || []).some(function (l) { return l.colis_id === colisId; });
+        }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
+        return plusTard(trouvees[0] ? factureComplete(d, trouvees[0]) : null);
+      },
+
+      // modifier_facture (supabase-corrections.sql), sur garde_facture et
+      // regles_facture : seuls l'échéance, la note, le lien et le total d'une facture
+      // sans colis se changent ; une facture annulée ne se change plus. Corriger un
+      // montant demande un motif, et date la facture « rectifiée ».
+      modifierFacture: function (id, champs, motif) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.edit');
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          champs = champs || {};
+          motif = String(motif || '').trim().slice(0, 300);
+          var n = Object.assign({}, f, choisir(champs, CHAMPS_FACTURE));
+          if ('montant_usd' in champs) n.montant_usd = lireNombre(champs.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+          if (n.montant_usd == null || !(n.montant_usd >= 0) || n.montant_usd > 1000000) {
+            throw Erreur('INVALID_AMOUNT', 'Le montant doit être compris entre 0 et 1 000 000 $.');
+          }
+          n.montant_usd = arrondi(n.montant_usd);
+          // Ce qui ne se corrige pas du tout, avant de demander un motif
+          if (f.statut === 'annulee') throw Erreur('INVOICE_LOCKED', 'Une facture annulée ne se modifie plus.');
+          if (n.montant_usd !== f.montant_usd) {
+            if ((f.facture_lignes || []).some(function (l) { return l.colis_id; })) {
+              throw Erreur('INVOICE_LOCKED', 'Le total d’une facture de colis est celui de ses colis et de ses frais : il ne se modifie pas.');
+            }
+            if (n.montant_usd < f.montant_paye_usd) {
+              throw Erreur('INVALID_AMOUNT', 'Le nouveau total est inférieur à ce qui est déjà payé (' +
+                           montantTexte(f.montant_paye_usd) + ' $).');
+            }
+            if (motif.length < 5) {
+              throw Erreur('REASON_REQUIRED',
+                           'Indiquez le motif de la correction du montant (5 caractères au moins) : il est gardé au journal.');
+            }
+          }
+          n.lien_paiement = String(n.lien_paiement == null ? '' : n.lien_paiement).trim();
+          if (n.lien_paiement !== (f.lien_paiement || '') && n.lien_paiement &&
+              (!/^https:\/\/\S+$/i.test(n.lien_paiement) || n.lien_paiement.length > 500)) {
+            throw Erreur('INVALID_INPUT', 'Le lien de paiement doit être une adresse https://.');
+          }
+          if ('note' in champs) n.note = String(champs.note || '').trim().slice(0, 500);
+          // Le journal d'une facture garde l'échéance et la note, pas le lien de paiement
+          // (journaliser_facture)
+          var diff = difference(f, n, ['montant_usd', 'note', 'echeance_le']);
+          var corrige = n.montant_usd !== f.montant_usd;
+          Object.assign(f, choisir(n, CHAMPS_FACTURE));
+          if (corrige) { f.rectifiee_le = maintenant(); recalculerFactureDemo(d, f); }
+          if (diff) journaliser(d, moi, 'facture.modification', 'facture', f.id, diff.avant, diff.apres, motif);
+          ecrireDonnees(d, 'factures');
+          return plusTard(factureComplete(d, f));
+        } catch (e) { return rejeter(e); }
+      },
+
+      enregistrerPaiement: function (factureId, v, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'payments.create');
+          v = v || {};
+          if (cle) {
+            var deja = null;
+            (d.factures || []).forEach(function (f) {
+              (f.paiements || []).forEach(function (p) { if (p.cle_idempotence === cle) deja = p; });
+            });
+            if (deja) {
+              if (deja.facture_id !== factureId) {
+                throw Erreur('DUPLICATE_OPERATION', 'Cette requête a déjà servi pour une autre facture.');
+              }
+              var fd = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+              return plusTard({ paiement: Object.assign({}, deja), facture: factureComplete(d, fd), deja: true });
+            }
+          }
+          var montant = lireNombre(v.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+          if (montant == null || montant <= 0) {
+            throw Erreur('INVALID_AMOUNT', 'Le montant du paiement doit être supérieur à zéro.');
+          }
+          if (v.paye_le && isNaN(new Date(v.paye_le).getTime())) {
+            throw Erreur('INVALID_DATE', 'Date du paiement illisible.');
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          var p = ajouterPaiementDemo(d, moi, f, Object.assign({}, v, { montant_usd: montant }), 'saisie', cle);
+          ecrireDonnees(d, 'factures');
+          return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      annulerPaiement: function (id, motif) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'payments.cancel');
+          var f = null, p = null;
+          (d.factures || []).forEach(function (x) {
+            (x.paiements || []).forEach(function (y) { if (y.id === id) { f = x; p = y; } });
+          });
+          if (!p) throw Erreur('PAYMENT_NOT_FOUND', 'Aucun paiement avec cet identifiant.');
+          if (p.annule_le) return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: true });
+          motif = String(motif || '').trim().slice(0, 300);
+          if (!motif) throw Erreur('REASON_REQUIRED', 'Indiquez pourquoi ce paiement est annulé.');
+          p.annule_le = maintenant();
+          p.annule_par = moi.id;
+          p.motif_annulation = motif;
+          recalculerFactureDemo(d, f);
+          var resume = { facture: f.numero, montant_usd: p.montant_usd, moyen: p.moyen, reference: p.reference,
+                         paye_le: p.paye_le, origine: p.origine };
+          journaliser(d, moi, 'paiement.annulation', 'paiement', p.id, resume, { motif: motif });
+          noterEvenementDemo(d, 'PAIEMENT_ANNULE', f, p, Object.assign({ motif: motif }, resume));
+          ecrireDonnees(d, 'factures');
+          return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      annulerFacture: function (id, motif) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.cancel');
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          if (f.statut === 'annulee') return plusTard({ facture: factureComplete(d, f), deja: true });
+          motif = String(motif || '').trim().slice(0, 300);
+          if (!motif) throw Erreur('REASON_REQUIRED', 'Indiquez pourquoi cette facture est annulée.');
+          var paye = payeDe({ paiements: f.paiements || [] });
+          if (paye > 0) {
+            throw Erreur('INVOICE_HAS_PAYMENTS', 'La facture ' + f.numero + ' a reçu ' + montantTexte(paye) +
+                         ' $ : annulez d’abord ses paiements, un par un, avec leur motif.');
+          }
+          var avant = f.statut;
+          Object.assign(f, { statut: 'annulee', payee_le: null, annulee_le: maintenant(), annulee_par: moi.id,
+                             motif_annulation: motif });
+          journaliser(d, moi, 'facture.annulation', 'facture', f.id, { statut: avant }, { statut: 'annulee', motif: motif });
+          noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+          ecrireDonnees(d, 'factures');
+          return plusTard({ facture: factureComplete(d, f), deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // L'ancien chemin : le même regroupement, frais une fois
+      regrouperFactures: function (ids, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          exiger(d, 'invoices.cancel');
+          if ((ids || []).length < 2) throw Erreur('INVALID_INPUT', 'Choisissez au moins deux factures à regrouper.');
+          var r = regrouperDemo(d, moi, ids, [], true, cle);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      regrouper: function (factureIds, colisIds, frais, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          exiger(d, 'invoices.cancel');
+          var r = regrouperDemo(d, moi, factureIds, colisIds, frais, cle);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // colis_a_regrouper : sans facture active, ou sur une facture regroupable
+      colisARegrouper: function (clientId, recherche, exclure) {
+        var d = lireDonnees();
+        try {
+          exiger(d, 'invoices.create');
+          exiger(d, 'shipments.view');
+          var texte = String(recherche || '').trim().toLowerCase();
+          var hors = exclure || [];
+          var liste = (d.colis || []).filter(function (c) {
+            return c.client_id === clientId && hors.indexOf(c.id) < 0;
+          }).map(function (c) {
+            return { c: c, f: factureActiveDu(d, c.id) };
+          }).filter(function (x) {
+            return !x.f || !refusRegroupement(x.f);
+          }).filter(function (x) {
+            return !texte || contient([x.c.numero, x.c.description, x.c.expediteur, x.c.suivi_transporteur,
+                                       x.c.destination, x.f && x.f.numero], texte);
+          }).sort(function (a, b) {
+            return new Date(b.c.recu_le) - new Date(a.c.recu_le) || (a.c.id < b.c.id ? -1 : 1);
+          }).slice(0, 50);
+          return plusTard(liste.map(function (x) {
+            return {
+              colis_id: x.c.id, numero: x.c.numero, description: x.c.description, expediteur: x.c.expediteur,
+              suivi_transporteur: x.c.suivi_transporteur, destination: x.c.destination, poids_lb: x.c.poids_lb,
+              prix_usd: prixColis(x.c), statut: x.c.statut, recu_le: x.c.recu_le,
+              facture: x.f ? { id: x.f.id, numero: x.f.numero, montant_usd: x.f.montant_usd,
+                               frais_service_usd: x.f.frais_service_usd, nb_colis: (x.f.facture_lignes || []).length } : null
+            };
+          }));
+        } catch (e) { return rejeter(e); }
+      },
+
+      changerFraisService: function (id, appliquer) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.edit');
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          var r = fraisServiceDemo(d, moi, f, !!appliquer);
+          if (!r.deja) ecrireDonnees(d, 'factures');
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // encaisser_facture : les frais (oui / non) puis le paiement ; si le paiement
+      // est refusé, les frais ne restent pas ajoutés (rien n'est écrit)
+      encaisserFacture: function (id, v, frais, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'payments.create');
+          var dejaPaye = cle && (d.factures || []).some(function (f) {
+            return (f.paiements || []).some(function (p) { return p.cle_idempotence === cle; });
+          });
+          if (dejaPaye) {
+            return demoAPI.admin.enregistrerPaiement(id, v, cle).then(function (r) {
+              return Object.assign(r, { frais_ajoutes: false });
+            });
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === id; })[0];
+          var ajoutes = false;
+          if (frais) {
+            exiger(d, 'invoices.edit');
+            if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+            ajoutes = !fraisServiceDemo(d, moi, f, true).deja;
+          }
+          v = v || {};
+          var montant = lireNombre(v.montant_usd, 'INVALID_AMOUNT', 'Montant illisible.');
+          if (montant == null || montant <= 0) {
+            throw Erreur('INVALID_AMOUNT', 'Le montant du paiement doit être supérieur à zéro.');
+          }
+          if (v.paye_le && isNaN(new Date(v.paye_le).getTime())) {
+            throw Erreur('INVALID_DATE', 'Date du paiement illisible.');
+          }
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          var p = ajouterPaiementDemo(d, moi, f, Object.assign({}, v, { montant_usd: montant }), 'saisie', cle);
+          ecrireDonnees(d, 'factures');
+          return plusTard({ paiement: Object.assign({}, p), facture: factureComplete(d, f), deja: false,
+                            frais_ajoutes: ajoutes });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // sortir_du_regroupement (supabase-regroupement.sql), mêmes refus, même ordre
+      sortirDuRegroupement: function (factureId, colisIds, cle) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'invoices.create');
+          exiger(d, 'invoices.cancel');
+          var parCle = function (c) { return (d.factures || []).filter(function (f) { return c && f.cle_idempotence === c; })[0]; };
+          if (cle && parCle(cle)) {
+            var reprise = parCle(cle + ':reste');
+            var ancienne = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+            return plusTard({ facture: factureComplete(d, parCle(cle)), reste: reprise ? factureComplete(d, reprise) : null,
+                              annulee: ancienne ? ancienne.numero : null, deja: true });
+          }
+          var f = (d.factures || []).filter(function (x) { return x.id === factureId; })[0];
+          if (!f) throw Erreur('INVOICE_NOT_FOUND', 'Aucune facture avec cet identifiant.');
+          if (f.statut !== 'a_payer') {
+            throw Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' est ' +
+                         (f.statut === 'payee' ? 'payée' : 'annulée') + ' : ses colis ne se déplacent plus.');
+          }
+          if (paiementsValides(f).length) {
+            throw Erreur('INVOICE_HAS_PAYMENTS', 'La facture ' + f.numero + ' a déjà reçu un paiement : ses colis ne se déplacent plus.');
+          }
+          var lignes = f.facture_lignes || [];
+          if (!lignes.length || lignes.some(function (l) { return !l.colis_id; })) {
+            throw Erreur('INVOICE_NOT_GROUPABLE', 'La facture ' + f.numero + ' n’est pas une facture de colis.');
+          }
+          var tous = lignes.map(function (l) { return l.colis_id; });
+          var sortis = (colisIds || []).filter(function (i, k, t) { return i && t.indexOf(i) === k; });
+          if (!sortis.length) throw Erreur('INVALID_INPUT', 'Choisissez le colis qui sort de la facture.');
+          if (sortis.some(function (i) { return tous.indexOf(i) < 0; })) {
+            throw Erreur('INVALID_INPUT', 'Un colis choisi n’est pas sur la facture ' + f.numero + '.');
+          }
+          var reste = tous.filter(function (i) { return sortis.indexOf(i) < 0; });
+          if (!reste.length) {
+            throw Erreur('INVALID_INPUT', 'Tous les colis de la facture ' + f.numero + ' sont choisis : il doit en rester au moins un. ' +
+                         'Pour tout défaire, annulez la facture.');
+          }
+          var colisDe = function (ids) {
+            return ids.map(function (i) { return trouverColisDemo(d, i); })
+              .sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); });
+          };
+          if (colisDe(tous).some(function (c) { return !c; })) throw Erreur('SHIPMENT_NOT_FOUND', 'Un colis de la facture n’existe plus.');
+          var numeros = colisDe(sortis).map(function (c) { return c.numero; }).sort().join(', ');
+          var motif = 'Sortie du regroupement : ' + numeros;
+          Object.assign(f, { statut: 'annulee', annulee_le: maintenant(), annulee_par: moi.id, motif_annulation: motif });
+          noterEvenementDemo(d, 'FACTURE_ANNULEE', f, null, { numero: f.numero, motif: motif });
+          // Les frais restent sur la facture qui garde le regroupement, s'il en avait ;
+          // celle des colis sortis naît sans (supabase-frais-service.sql)
+          var nouvelle = function (colis, c, avecFrais) {
+            var fs = avecFrais ? FRAIS_SERVICE : 0;
+            return nouvelleFacture(d, moi, {
+              client_id: f.client_id, montant_usd: arrondi(colis.reduce(function (s, x) { return s + prixColis(x); }, 0) + fs),
+              frais_service_usd: fs, echeance_le: f.echeance_le, note: f.note,
+              cle_idempotence: c || null
+            }, colis);
+          };
+          var s = nouvelle(colisDe(sortis), cle, false);
+          var r = nouvelle(colisDe(reste), cle ? cle + ':reste' : null, f.frais_service_usd > 0);
+          f.remplacee_par = r.id;
+          journaliser(d, moi, 'facture.sortie_regroupement', 'facture', f.id,
+                      { numero: f.numero, montant_usd: f.montant_usd },
+                      { colis: numeros, facture: s.numero, reste: r.numero });
+          ecrireDonnees(d, 'factures');
+          return plusTard({ facture: factureComplete(d, s), reste: factureComplete(d, r), annulee: f.numero, deja: false });
+        } catch (e) { return rejeter(e); }
+      },
+
+      calculerFacture: function (colisIds) {
+        var d = lireDonnees();
+        try { exiger(d, 'invoices.view'); } catch (e) { return echec(e.code); }
+        var colis = (colisIds || []).map(function (i) { return trouverColisDemo(d, i); }).filter(Boolean)
+          .sort(function (a, b) { return new Date(a.recu_le) - new Date(b.recu_le); });
+        var sousTotal = arrondi(colis.reduce(function (s, c) { return s + prixColis(c); }, 0));
+        var frais = colis.length ? FRAIS_SERVICE : 0;
+        return plusTard({
+          lignes: colis.map(function (c) {
+            return { colis_id: c.id, numero: c.numero, description: c.description, poids_lb: c.poids_lb,
+                     tarif_lb_usd: tarifLigne(c), prix_usd: prixColis(c) };
+          }),
+          sous_total: sousTotal, frais_service: frais, total: arrondi(sousTotal + frais)
+        });
+      },
+
+      resumeFacturation: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
+        var r = { a_encaisser: 0, ouvertes: 0, partielles: 0, en_retard: 0, montant_en_retard: 0, encaisse_mois: 0 };
+        var mois = aujourdhui().slice(0, 7);
+        (d.factures || []).forEach(function (f) {
+          (f.paiements || []).forEach(function (p) {
+            if (!p.annule_le && new Date(new Date(p.paye_le).getTime() - 4 * 36e5).toISOString().slice(0, 7) === mois) {
+              r.encaisse_mois = arrondi(r.encaisse_mois + p.montant_usd);
+            }
+          });
+          if (f.statut === 'annulee') return;
+          var c = factureComplete(d, f);
+          r.a_encaisser = arrondi(r.a_encaisser + c.solde_usd);
+          if (c.solde_usd > 0) r.ouvertes++;
+          if (c.solde_usd > 0 && c.paye_usd > 0) r.partielles++;
+          if (c.etat_paiement === 'en_retard') {
+            r.en_retard++;
+            r.montant_en_retard = arrondi(r.montant_en_retard + c.solde_usd);
+          }
+        });
+        return plusTard(r);
+      },
+
+      // Le même rapport que rapport_anomalies_facturation, sur les données du navigateur
+      anomaliesFacturation: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return echec(e.code); }
+        var sortie = [];
+        function signaler(type, gravite, f, detail) {
+          sortie.push({ type: type, gravite: gravite, facture_id: f ? f.id : null, numero: f ? f.numero : null,
+                        detail: detail });
+        }
+        var factures = d.factures || [];
+        factures.forEach(function (f) {
+          var lignes = f.facture_lignes || [];
+          var avecColis = lignes.some(function (l) { return l.colis_id; });
+          var paye = payeDe({ paiements: f.paiements || [] });
+          lignes.forEach(function (l) {
+            var c = l.colis_id ? trouverColisDemo(d, l.colis_id) : null;
+            if (!l.colis_id) {
+              signaler('ligne_sans_colis', 'info', f, 'La ligne « ' + l.libelle + ' » (' + montantTexte(l.montant_usd) +
+                       ' $) n’a plus de colis.');
+              return;
+            }
+            if (!c) return;
+            if (c.client_id !== f.client_id) signaler('client_different', 'erreur', f, 'Le colis ' + c.numero + ' appartient à un autre client.');
+            if (f.statut === 'annulee') return;
+            var autres = factures.filter(function (x) {
+              return x.id !== f.id && x.statut !== 'annulee' &&
+                (x.facture_lignes || []).some(function (m) { return m.colis_id === l.colis_id; });
+            });
+            if (autres.length) {
+              signaler('colis_facture_deux_fois', 'erreur', f, 'Le colis ' + c.numero + ' est aussi sur la facture ' +
+                       autres.map(function (x) { return x.numero; }).join(', ') + '.');
+            }
+            if (c.prix_usd != null && arrondi(c.prix_usd) !== arrondi(l.montant_usd)) {
+              signaler('prix_colis_change', 'info', f, 'Le colis ' + c.numero + ' vaut aujourd’hui ' + montantTexte(c.prix_usd) +
+                       ' $ ; la facture garde ' + montantTexte(l.montant_usd) + ' $.');
+            }
+          });
+          var totalLignes = arrondi(lignes.reduce(function (s, l) { return s + l.montant_usd; }, 0));
+          if (f.statut !== 'annulee' && avecColis && arrondi(totalLignes + f.frais_service_usd) !== arrondi(f.montant_usd)) {
+            signaler('total_incoherent', 'erreur', f, 'Total ' + montantTexte(f.montant_usd) + ' $ ; lignes ' +
+                     montantTexte(totalLignes) + ' $ + frais ' + montantTexte(f.frais_service_usd) + ' $.');
+          }
+          if (paye > f.montant_usd || f.montant_paye_usd > f.montant_usd) {
+            signaler('paye_depasse_total', 'erreur', f, 'Payé ' + montantTexte(paye) + ' $ pour un total de ' +
+                     montantTexte(f.montant_usd) + ' $.');
+          }
+          if (arrondi(f.montant_paye_usd) !== paye) {
+            signaler('paye_different_paiements', 'erreur', f, 'La facture indique ' + montantTexte(f.montant_paye_usd) +
+                     ' $ payés, ses paiements font ' + montantTexte(paye) + ' $.');
+          }
+          if ((f.statut === 'payee' && paye < f.montant_usd) || (f.statut === 'a_payer' && f.montant_usd > 0 && paye >= f.montant_usd)) {
+            signaler('statut_incoherent', 'attention', f, f.statut === 'payee'
+              ? 'Marquée payée, mais il reste ' + montantTexte(f.montant_usd - paye) + ' $ à payer.'
+              : 'Marquée à payer, mais entièrement payée.');
+          }
+          if (f.statut === 'annulee' && paye > 0) {
+            signaler('paiement_sur_facture_annulee', 'attention', f, montantTexte(paye) +
+                     ' $ encaissés sur une facture annulée : à rembourser ou à reporter.');
+          }
+          if (f.statut !== 'annulee' && avecColis && !f.frais_service_usd && f.cree_le >= '2026-09-22T04:00:00.000Z' &&
+              f.cree_le < '2026-09-30T04:00:00.000Z') {
+            signaler('frais_absents', 'info', f, 'Facture de colis sans frais de service.');
+          }
+        });
+        d.colis.forEach(function (c) {
+          if (c.client_id && !factureActiveDu(d, c.id)) {
+            sortie.push({ type: 'colis_sans_facture', gravite: 'info', facture_id: null, numero: c.numero,
+                          detail: 'Le colis ' + c.numero + ' n’est sur aucune facture active.' });
+          }
+        });
+        var rang = { erreur: 0, attention: 1, info: 2 };
+        sortie.sort(function (a, b) {
+          return rang[a.gravite] - rang[b.gravite] || (a.type < b.type ? -1 : a.type > b.type ? 1 : 0) ||
+                 String(a.numero).localeCompare(String(b.numero));
+        });
+        return plusTard(sortie);
+      },
+
+      // vue_generale : une période → ce que le rôle a le droit de voir
+      vueGenerale: function (o) {
+        try {
+          return plusTard(vueGeneraleDemo(lireDonnees(), o));
+        } catch (e) { return rejeter(e); }
+      },
+
+      // vue_generale_filtree : la même, ses colis découpés par pays, ville, mode,
+      // statut ou lieu (outils/supabase-analytics.sql, section 11)
+      vueGeneraleFiltree: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.view');
+          var f = filtresColisDemo(o.filtres);
+          var r = vueGeneraleDemo(d, o);
+          // Les mêmes données, réduites aux colis filtrés et à leurs événements : les
+          // règles de la vue générale et des routes s'y appliquent telles quelles
+          var ids = {};
+          var df = Object.assign({}, d, { colis: d.colis.filter(function (c) {
+            if (!colisFiltreDemo(c, f)) return false;
+            ids[c.id] = true;
+            return true;
+          }) });
+          df.historique = d.historique.filter(function (h) { return ids[h.colis_id]; });
+          var rf = vueGeneraleDemo(df, o), filtrees = ['colis'];
+          r.filtres = f;
+          r.options = optionsFiltresDemo(d);
+          r.colis = rf.colis;
+          if (peutCompte(moi, 'shipments.view_history')) { r.activite = rf.activite; filtrees.push('activite'); }
+          if (peutCompte(moi, 'reports.view')) {
+            var p = bornesAnalytics(o.periode, o.debut, o.fin);
+            var a = mesuresAnalytics(df, p.debut, p.fin), b = mesuresAnalytics(df, p.precDebut, p.precFin);
+            r.comparaison = { recus: comparerValeurs(a.recus, b.recus), poids: comparerValeurs(a.poids, b.poids),
+                              livres: comparerValeurs(a.livres, b.livres),
+                              precedente: { debut: p.precDebut, fin: p.precFin } };
+            r.routes = analyticsDemo(df, 'routes', o);
+            filtrees.push('comparaison', 'routes');
+          }
+          r.filtrees = filtrees;
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // colis_a_traiter : action requise, ou sans mouvement depuis N jours
+      colisATraiter: function (liste, o) {
+        o = o || {};
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.view');
+          var l = String(liste || '').trim().toLowerCase();
+          if (l !== 'action_requise' && l !== 'sans_mouvement') {
+            throw Erreur('INVALID_INPUT', 'Liste inconnue : ' + l.slice(0, 30) + '.');
+          }
+          var jours = joursSansMouvement(o.jours);
+          var parPage = trancheDemo(o.parPage, 25, 100), decalage = Math.max(0, (o.page || 0) * parPage);
+          var historique = peutCompte(moi, 'shipments.view_history');
+          var limite = Date.now() - jours * 864e5;
+          var choisis = d.colis.filter(function (c) {
+            return l === 'action_requise' ? c.statut === 'incident' : c.statut !== 'livre';
+          }).map(function (c) {
+            var dernier = dernierEvenementDemo(d, c.id);
+            var action = null;
+            if (l === 'action_requise') {
+              historiqueDe(d, c.id).forEach(function (h) {
+                if (h.statut === 'incident' && !corrigeDemo(d, h) && (!action || h.id > action.id)) action = h;
+              });
+            }
+            var mouvement = dernier ? dernier.cree_le : c.recu_le;
+            return { c: c, dernier: dernier, action: action, mouvement: mouvement, depuis: action ? action.cree_le : mouvement };
+          }).filter(function (x) {
+            return l === 'action_requise' || new Date(x.mouvement).getTime() < limite;
+          }).sort(function (a, b) {
+            return new Date(a.depuis) - new Date(b.depuis) || (a.c.numero < b.c.numero ? -1 : 1);
+          });
+          return plusTard({
+            liste: l, jours: jours, total: choisis.length,
+            lignes: choisis.slice(decalage, decalage + parPage).map(function (x) {
+              var c = x.c;
+              return {
+                id: c.id, numero: c.numero, statut: c.statut, lieu: c.lieu || '', note: c.note || '',
+                description: c.description || '', destination: c.destination || '',
+                pays_destination: c.pays_destination, poids_lb: c.poids_lb == null ? null : c.poids_lb,
+                recu_le: c.recu_le, maj_le: c.maj_le, depuis: x.depuis, dernier_mouvement: x.mouvement,
+                jours: Math.floor((Date.now() - new Date(x.depuis).getTime()) / 864e5),
+                client: clientResumeDemo(d, c.client_id, true),
+                dernier_evenement: historique && x.dernier ? evenementJson(d, x.dernier) : null,
+                action: historique && x.action ? evenementJson(d, x.action) : null
+              };
+            })
+          });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // recherche_rapide : mêmes critères que la base
+      rechercheRapide: function (texte) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'shipments.view');
+          var brut = String(texte || '').trim().slice(0, 200);
+          var qr = /[?&]suivi=([A-Za-z0-9-]+)/.exec(brut);
+          var ref = (qr ? qr[1] : brut).trim();
+          var finances = peutCompte(moi, 'invoices.view');
+          var voitClients = peutCompte(moi, 'clients.view');
+          var historique = peutCompte(moi, 'shipments.view_history');
+          var r = { texte: brut, reference: ref, colis: [] };
+          if (voitClients) r.clients = [];
+          if (finances) r.factures = [];
+          if (ref.length < 2) return plusTard(r);
+          var maj = ref.toUpperCase();
+          var chiffres = ref.replace(/[^0-9]/g, '');
+          var code = chiffres.length >= 4 && /^(gse)?[\s-]*[0-9]+$/i.test(ref) ? 'GSE-' + chiffres : null;
+          var lettres = /[a-zÀ-ɏ]/i.test(ref);
+          var mots = lettres ? ref.toLowerCase().split(/[^0-9a-zÀ-ɏ]+/).filter(Boolean) : [];
+
+          r.colis = d.colis.map(function (c) {
+            var exact = c.numero === maj || (c.suivi_transporteur && (c.suivi_transporteur === ref || c.suivi_transporteur === maj));
+            var trouve = exact || String(c.numero || '').indexOf(maj) === 0 ||
+                         (code && String(c.numero || '').indexOf(code + '-') === 0);
+            return trouve ? { c: c, exact: !!exact } : null;
+          }).filter(Boolean).sort(function (a, b) {
+            return (b.exact - a.exact) || (new Date(b.c.maj_le) - new Date(a.c.maj_le));
+          }).slice(0, 8).map(function (x) {
+            var c = x.c;
+            var dernier = historique ? dernierEvenementDemo(d, c.id) : null;
+            return {
+              id: c.id, numero: c.numero, suivi_transporteur: c.suivi_transporteur || '', description: c.description || '',
+              statut: c.statut, lieu: c.lieu || '', destination: c.destination || '', pays_destination: c.pays_destination,
+              service: c.service, poids_lb: c.poids_lb == null ? null : c.poids_lb, recu_le: c.recu_le, maj_le: c.maj_le,
+              exact: x.exact, prix_usd: finances ? (c.prix_usd == null ? null : c.prix_usd) : null,
+              client: clientResumeDemo(d, c.client_id, true),
+              dernier_evenement: dernier ? evenementJson(d, dernier) : null,
+              facture: finances ? factureResumeDemo(d, c.id) : null
+            };
+          });
+
+          if (voitClients) {
+            r.clients = d.comptes.filter(function (cl) {
+              if (cl.role !== 'client') return false;
+              if (code && cl.code === code) return true;
+              if (mots.length) {
+                var siens = String(cl.nom_complet || '').toLowerCase().split(/[^0-9a-zÀ-ɏ]+/).filter(Boolean);
+                if (mots.every(function (m) { return siens.some(function (x) { return x.indexOf(m) === 0; }); })) return true;
+              }
+              var tel = String(cl.telephone || '').replace(/[^0-9]/g, '');
+              if (chiffres.length >= 4 && !lettres && tel.length >= chiffres.length &&
+                  tel.slice(tel.length - chiffres.length) === chiffres) return true;
+              return ref.length >= 3 && !/\s/.test(ref) && String(cl.email || '').toLowerCase().indexOf(ref.toLowerCase()) === 0;
+            }).sort(function (a, b) {
+              return ((b.code === code) - (a.code === code)) || String(a.nom_complet).localeCompare(String(b.nom_complet));
+            }).slice(0, 8).map(function (cl) {
+              var solde = 0;
+              (d.factures || []).forEach(function (x) {
+                if (x.client_id === cl.id && x.statut !== 'annulee') solde = arrondi(solde + factureComplete(d, x).solde_usd);
+              });
+              return {
+                id: cl.id, code: cl.code, nom_complet: cl.nom_complet, telephone: cl.telephone || '', email: cl.email,
+                ville: cl.ville || '', pays: cl.pays || '',
+                colis_en_cours: d.colis.filter(function (c) { return c.client_id === cl.id && c.statut !== 'livre'; }).length,
+                solde_usd: finances ? solde : null
+              };
+            });
+          }
+
+          if (finances) {
+            r.factures = !chiffres ? [] : (d.factures || []).filter(function (x) {
+              return x.numero === maj || String(x.numero || '').indexOf(maj) === 0;
+            }).sort(function (a, b) {
+              return ((b.numero === maj) - (a.numero === maj)) || (new Date(b.cree_le) - new Date(a.cree_le));
+            }).slice(0, 8).map(function (x) {
+              var c = factureComplete(d, x);
+              var cl = d.comptes.filter(function (y) { return y.id === x.client_id; })[0];
+              return { id: x.id, numero: x.numero, cree_le: x.cree_le, montant_usd: x.montant_usd, paye_usd: c.paye_usd,
+                       solde_usd: c.solde_usd, etat: c.etat_paiement,
+                       client: { code: cl ? cl.code : null, nom_complet: cl ? cl.nom_complet : null } };
+            });
+          }
+          return plusTard(r);
+        } catch (e) { return rejeter(e); }
+      },
+
+      // clients_soldes : une page de clients, triée et filtrée comme la base le fait
+      clientsSoldes: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'clients.view');
+          var tri = String(o.tri || 'recent').toLowerCase(), filtre = String(o.filtre || 'tous').toLowerCase();
+          if (['recent', 'nom', 'solde', 'activite', 'colis'].indexOf(tri) < 0) {
+            throw Erreur('INVALID_INPUT', 'Tri inconnu : ' + tri.slice(0, 30) + '.');
+          }
+          if (['tous', 'avec_solde', 'avec_colis'].indexOf(filtre) < 0) {
+            throw Erreur('INVALID_INPUT', 'Filtre inconnu : ' + filtre.slice(0, 30) + '.');
+          }
+          var finances = peutCompte(moi, 'invoices.view');
+          if (!finances && (tri === 'solde' || filtre === 'avec_solde')) exiger(d, 'invoices.view');
+          var parPage = trancheDemo(o.parPage, 50, 100), decalage = Math.max(0, (o.page || 0) * parPage);
+          var t = nettoyer(o.recherche);
+          var lignes = d.comptes.filter(function (c) {
+            return c.role === 'client' && (!t || contient([c.code, c.nom_complet, c.telephone, c.email, c.ville, c.region], t));
+          }).map(function (cl) {
+            var e = { id: cl.id, code: cl.code, nom_complet: cl.nom_complet, telephone: cl.telephone || '', email: cl.email,
+                      ville: cl.ville || '', region: cl.region || '', pays: cl.pays || '', cree_le: cl.cree_le,
+                      colis_en_cours: 0, colis_total: 0, poids_en_cours: 0, derniere_activite: null, statuts: {},
+                      facture_usd: 0, paye_usd: 0, solde_usd: 0, factures_ouvertes: 0 };
+            d.colis.forEach(function (c) {
+              if (c.client_id !== cl.id) return;
+              e.colis_total++;
+              if (!e.derniere_activite || new Date(c.maj_le) > new Date(e.derniere_activite)) e.derniere_activite = c.maj_le;
+              if (c.statut === 'livre') return;
+              e.colis_en_cours++;
+              e.poids_en_cours = arrondi(e.poids_en_cours + (Number(c.poids_lb) || 0));
+              e.statuts[c.statut] = (e.statuts[c.statut] || 0) + 1;
+            });
+            (d.factures || []).forEach(function (x) {
+              if (x.client_id !== cl.id || x.statut === 'annulee') return;
+              var c = factureComplete(d, x);
+              e.facture_usd = arrondi(e.facture_usd + x.montant_usd);
+              e.paye_usd = arrondi(e.paye_usd + c.paye_usd);
+              e.solde_usd = arrondi(e.solde_usd + c.solde_usd);
+              if (c.solde_usd > 0) e.factures_ouvertes++;
+            });
+            return e;
+          }).filter(function (e) {
+            return filtre === 'tous' || (filtre === 'avec_solde' && e.solde_usd > 0) ||
+                   (filtre === 'avec_colis' && e.colis_en_cours > 0);
+          });
+          function date(x) { return x ? new Date(x).getTime() : -Infinity; }
+          lignes.sort(function (a, b) {
+            var k = 0;
+            if (tri === 'solde') k = b.solde_usd - a.solde_usd;
+            else if (tri === 'colis') k = b.colis_en_cours - a.colis_en_cours;
+            else if (tri === 'activite') k = date(b.derniere_activite) - date(a.derniere_activite);
+            else if (tri === 'nom') k = String(a.nom_complet || '').toLowerCase() < String(b.nom_complet || '').toLowerCase() ? -1
+              : (String(a.nom_complet || '').toLowerCase() > String(b.nom_complet || '').toLowerCase() ? 1 : 0);
+            return k || (date(b.cree_le) - date(a.cree_le)) || (a.id < b.id ? -1 : 1);
+          });
+          return plusTard({
+            total: lignes.length, finances: finances,
+            lignes: lignes.slice(decalage, decalage + parPage).map(function (e) {
+              if (!finances) e.facture_usd = e.paye_usd = e.solde_usd = e.factures_ouvertes = null;
+              return e;
+            })
+          });
+        } catch (e) { return rejeter(e); }
+      },
+
+      // analytics_* : module = synthese, serie, operations, clients, finances,
+      // routes, scanner ou qualite ; o = { periode, debut, fin, granularite, tri, page, parPage }
+      analytics: function (module, o) {
+        o = o || {};
+        var d = lireDonnees();
+        try {
+          exiger(d, 'reports.view');
+          if (MODULES_ANALYTICS.indexOf(module) < 0) throw Erreur('INVALID_INPUT', 'Module inconnu : ' + module + '.');
+          var r = analyticsDemo(d, module, o);
+          if (module !== 'qualite') return plusTard(r);
+          // Le rapport de facturation de la Phase 5, repris par type (anomaliesFacturation)
+          return demoAPI.admin.anomaliesFacturation().then(function (liste) {
+            var par = {};
+            liste.forEach(function (a) {
+              var k = a.type + '|' + a.gravite;
+              (par[k] = par[k] || { type: a.type, gravite: a.gravite, nombre: 0 }).nombre++;
+            });
+            var rang = { erreur: 0, attention: 1, info: 2 };
+            r.facturation = Object.keys(par).map(function (k) { return par[k]; }).sort(function (x, y) {
+              return rang[x.gravite] - rang[y.gravite] || y.nombre - x.nombre || (x.type < y.type ? -1 : 1);
+            });
+            return r;
+          });
+        } catch (e) { return rejeter(e); }
+      },
+
+      /* ---- Les programmes : copie des fonctions d'équipe de supabase-fidelite.sql,
+         supabase-anniversaires.sql et supabase-campagnes.sql (mêmes permissions, mêmes refus) ---- */
+      programmes: {
+        // GOPOINTS
+        pointsRegles: function () {
+          return appelProgrammes('programs.view', function (d, p) {
+            return { reglages: Object.assign({ id: true }, p.points.reglages), regles: p.points.regles.slice().sort(function (a, b) { return a.evenement < b.evenement ? -1 : 1; }),
+                     offres: p.points.offres.slice().sort(function (a, b) { return a.cree_le < b.cree_le ? -1 : 1; }) };
+          });
+        },
+        pointsReglages: function (donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var g = p.points.reglages, avant = { actif: g.actif, expiration_jours: g.expiration_jours };
+            if (aLaCle(donnees, 'expiration_jours')) g.expiration_jours = entierProgramme(donnees, 'expiration_jours', 1, 3650);
+            if (aLaCle(donnees, 'actif')) g.actif = donnees.actif === true || donnees.actif === 'true';
+            if (aLaCle(donnees, 'conditions')) g.conditions = String(donnees.conditions || '').slice(0, 4000);
+            journaliser(d, moi, 'points.reglages', 'programme', 'gopoints', avant, { actif: g.actif, expiration_jours: g.expiration_jours });
+            return Object.assign({ id: true }, g);
+          });
+        },
+        pointsRegle: function (evenement, donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var r = p.points.regles.filter(function (x) { return x.evenement === evenement; })[0];
+            if (!r) throw Erreur('INVALID_RULE', 'Cet événement n\'existe pas dans le programme.');
+            var avant = Object.assign({}, r);
+            var points = aLaCle(donnees, 'points') ? (entierProgramme(donnees, 'points', 0, 1000000) || 0) : r.points;
+            var actif = aLaCle(donnees, 'actif') ? (donnees.actif === true || donnees.actif === 'true') : r.actif;
+            var operation = aLaCle(donnees, 'operation') ? (donnees.operation || null) : r.operation;
+            if (actif && points <= 0) throw Erreur('INVALID_RULE', 'Une règle allumée doit accorder au moins 1 point : indiquez le nombre de points avant de l\'activer.');
+            if (actif && (evenement === 'first_operation' || evenement === 'repeat_operation') && !operation) {
+              throw Erreur('INVALID_RULE', 'Choisissez l\'opération qualifiante (colis reçu ou facture payée) avant d\'activer cette règle.');
+            }
+            if (operation && OPERATIONS_PROGRAMME.indexOf(operation) < 0) throw Erreur('INVALID_RULE', 'Opération qualifiante inconnue.');
+            var limite = function (cle, max) { return aLaCle(donnees, cle) ? entierProgramme(donnees, cle, 1, max) : r[cle]; };
+            r.limite_jour = limite('limite_jour', 100000); r.limite_mois = limite('limite_mois', 100000);
+            r.limite_client = limite('limite_client', 100000); r.expiration_jours = limite('expiration_jours', 3650);
+            r.points = points; r.actif = actif; r.operation = operation;
+            if (aLaCle(donnees, 'conditions')) r.conditions = String(donnees.conditions || '').slice(0, 2000);
+            journaliser(d, moi, 'points.regle', 'programme', evenement, avant, Object.assign({}, r));
+            return Object.assign({}, r);
+          });
+        },
+        pointsOffre: function (id, donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var o = id ? p.points.offres.filter(function (x) { return x.id === id; })[0] : null, avant = null;
+            if (id && !o) throw Erreur('INVALID_OFFER', 'Cette offre n\'existe pas.');
+            var incomplete = function () { return Erreur('INVALID_OFFER', 'L\'offre est incomplète ou ses valeurs ne sont pas valables (type, dates, nombres).'); };
+            var valeur = aLaCle(donnees, 'valeur') && donnees.valeur !== '' && donnees.valeur != null ? Number(String(donnees.valeur).replace(',', '.')) : (o ? o.valeur : null);
+            if (valeur != null && !isFinite(valeur)) throw Erreur('INVALID_OFFER', 'La valeur de l\'offre n\'est pas un nombre.');
+            if (!o) {
+              if (!String(donnees.nom || '').trim() || donnees.cout_points == null || !donnees.type || donnees.valeur == null) {
+                throw Erreur('INVALID_OFFER', 'Une offre a un nom, un coût en points, un type et une valeur.');
+              }
+              p.seq += 1;
+              o = { id: 'off-' + p.seq + '-' + identifiant().slice(0, 8), nom: '', description: '', cout_points: null, type: null, valeur: null,
+                    actif: false, stock: null, limite_client: null, debut: null, fin: null, conditions: '', cree_le: maintenant() };
+            } else avant = Object.assign({}, o);
+            var copie = Object.assign({}, o);
+            if (aLaCle(donnees, 'nom')) copie.nom = String(donnees.nom || '').trim();
+            if (aLaCle(donnees, 'description')) copie.description = String(donnees.description || '').slice(0, 500);
+            if (aLaCle(donnees, 'cout_points')) copie.cout_points = entierProgramme(donnees, 'cout_points', 1, 10000000);
+            if (aLaCle(donnees, 'type')) copie.type = donnees.type;
+            copie.valeur = valeur;
+            if (aLaCle(donnees, 'actif')) copie.actif = donnees.actif === true || donnees.actif === 'true';
+            if (aLaCle(donnees, 'stock')) copie.stock = entierProgramme(donnees, 'stock', 0, 10000000);
+            if (aLaCle(donnees, 'limite_client')) copie.limite_client = entierProgramme(donnees, 'limite_client', 1, 100000);
+            ['debut', 'fin'].forEach(function (k) {
+              if (aLaCle(donnees, k)) {
+                var t = String(donnees[k] || '').trim();
+                if (t && !/^\d{4}-\d{2}-\d{2}$/.test(t)) throw incomplete();
+                copie[k] = t || null;
+              }
+            });
+            if (aLaCle(donnees, 'conditions')) copie.conditions = String(donnees.conditions || '').slice(0, 2000);
+            if (String(copie.nom).trim().length < 2 || String(copie.nom).trim().length > 80 || !copie.cout_points || ['credit_expedition', 'reduction_frais', 'bonus_fixe', 'avantage_colis'].indexOf(copie.type) < 0 ||
+                copie.valeur == null || copie.valeur < 0 || (copie.debut && copie.fin && copie.debut > copie.fin)) throw incomplete();
+            Object.assign(o, copie, { maj_le: maintenant() });
+            if (!avant) p.points.offres.push(o);
+            journaliser(d, moi, avant ? 'points.offre_modification' : 'points.offre_creation', 'programme', o.id, avant, Object.assign({}, o));
+            return Object.assign({}, o);
+          });
+        },
+        pointsCorriger: function (client, points, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (!points || +points === 0 || Math.abs(+points) > 1000000 || Math.round(+points) !== +points) {
+              throw Erreur('INVALID_POINTS', 'Indiquez un nombre de points non nul (positif pour ajouter, négatif pour retirer).');
+            }
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour corriger un solde.');
+            var id = pointsEcrireDemo(d, client, 'correction', +points, 'admin', '', 'corr:' + identifiant(), String(motif).trim(), moi.id);
+            journaliser(d, moi, 'points.correction', 'client', client, null, { mouvement: id, points: +points, motif: String(motif).trim().slice(0, 200) });
+            return { mouvement: id, solde: soldePoints(p, client) };
+          });
+        },
+        pointsAnnuler: function (id, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour annuler un mouvement.');
+            var m = p.points.mouvements.filter(function (x) { return x.id === id; })[0];
+            if (!m || (m.type !== 'gain' && m.type !== 'utilisation')) throw Erreur('INVALID_MOVEMENT', 'Seul un gain ou une utilisation peut être annulé.');
+            if (mouvementAnnule(p, m)) throw Erreur('MOVEMENT_ALREADY_CANCELLED', 'Ce mouvement est déjà annulé.');
+            var a = pointsEcrireDemo(d, m.client_id, 'annulation', -m.points, 'admin', 'mouvement:' + m.id, 'annul:' + m.id, String(motif).trim(), moi.id, null, m.id);
+            if (a === null) throw Erreur('MOVEMENT_ALREADY_CANCELLED', 'Ce mouvement est déjà annulé.');
+            if (m.type === 'utilisation' && m.offre_id) {
+              p.recompenses.filter(function (r) { return r.reference === 'mouvement:' + m.id && (r.statut === 'obtenue' || r.statut === 'en_attente'); })
+                .forEach(function (r) { r.statut = 'annulee'; r.motif = String(motif).trim().slice(0, 200); });
+              var o = p.points.offres.filter(function (x) { return x.id === m.offre_id; })[0];
+              if (o && o.stock != null) o.stock += 1;
+            }
+            journaliser(d, moi, 'points.annulation', 'client', m.client_id, null, { mouvement: id, annulation: a, motif: String(motif).trim().slice(0, 200) });
+            return { annulation: a, solde: soldePoints(p, m.client_id) };
+          });
+        },
+        pointsApercu: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var dans = function (m) { var j = jourSD(m.cree_le); return (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin); };
+            var somme = function (types, signe) {
+              return p.points.mouvements.filter(function (m) { return types.indexOf(m.type) >= 0 && dans(m); })
+                .reduce(function (s, m) { return s + signe * m.points; }, 0);
+            };
+            var soldes = {};
+            p.points.mouvements.forEach(function (m) { soldes[m.client_id] = (soldes[m.client_id] || 0) + m.points; });
+            var parSource = {};
+            p.points.mouvements.filter(function (m) { return m.type === 'gain' && dans(m); }).forEach(function (m) { parSource[m.source] = (parSource[m.source] || 0) + m.points; });
+            return {
+              actif: p.points.reglages.actif,
+              solde_total: Object.keys(soldes).reduce(function (s, k) { return s + soldes[k]; }, 0),
+              clients_avec_points: Object.keys(soldes).filter(function (k) { return soldes[k] > 0; }).length,
+              gagnes: somme(['gain'], 1), utilises: somme(['utilisation'], -1), expires: somme(['expiration'], -1),
+              corriges: somme(['correction', 'annulation'], 1),
+              recompenses_utilisees: p.recompenses.filter(function (r) { return r.programme === 'points' && dans(r); }).length,
+              par_source: parSource
+            };
+          });
+        },
+        pointsMouvements: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var texte = String(o.recherche || '').trim().toLowerCase(), pg = pagePropre(o.page);
+            var lignes = p.points.mouvements.map(function (m) { return { m: m, c: clientDemo(d, m.client_id) || {} }; }).filter(function (x) {
+              var j = jourSD(x.m.cree_le);
+              return (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin) && (!o.type || x.m.type === o.type) &&
+                (!texte || [x.c.code, x.c.nom_complet, x.m.source, x.m.reference].some(function (t) { return String(t || '').toLowerCase().indexOf(texte) >= 0; }));
+            }).sort(function (a, b) { return a.m.cree_le < b.m.cree_le ? 1 : a.m.cree_le > b.m.cree_le ? -1 : b.m.id - a.m.id; });
+            return { total: lignes.length, elements: tranche(lignes, pg, 50).map(function (x) {
+              return { id: x.m.id, client_id: x.m.client_id, client_code: x.c.code, client_nom: x.c.nom_complet, type: x.m.type, points: x.m.points,
+                       source: x.m.source, reference: x.m.reference, motif: x.m.motif, date: x.m.cree_le, expire_le: x.m.expire_le,
+                       statut: mouvementAnnule(p, x.m) ? 'annule' : 'valide' };
+            }) };
+          });
+        },
+
+        // Anniversaires (birthdays.view pour lire, birthdays.manage pour régler)
+        anniversaires: function (o) {
+          o = o || {};
+          return appelProgrammes('birthdays.view', function (d, p) {
+            anniversairesPreparerDemo(d);
+            var debut = o.debut || aujourdhuiDemo(), fin = o.fin || debut;
+            if (fin < debut || joursEntre(debut, fin).length > 366) throw Erreur('INVALID_PERIOD', 'La période doit aller d\'un jour à un an au plus.');
+            var lignes = [];
+            joursEntre(debut, fin).forEach(function (jour) {
+              Object.keys(d.naissances || {}).forEach(function (id) {
+                var cl = clientActifDemo(d, id), annee = +jour.slice(0, 4);
+                if (!cl || anniversaireEnDemo(d.naissances[id], annee, p.anniv.reglages.regle_29_fevrier) !== jour) return;
+                var j = p.anniv.journal.filter(function (x) { return x.client_id === id && x.annee === annee; })[0];
+                lignes.push({ client_id: id, code: cl.code, nom: cl.nom_complet, date: jour, age: annee - +d.naissances[id].slice(0, 4),
+                              statut: j ? j.statut : 'a_venir', motif: j ? j.motif : null,
+                              envois: j ? j.envois.map(function (e) { return { canal: e.canal, statut: e.statut, code_erreur: e.code_erreur }; }) : [] });
+              });
+            });
+            lignes.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : (String(a.nom) < String(b.nom) ? -1 : 1); });
+            return { du: debut, au: fin, total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50) };
+          });
+        },
+        anniversairesMessages: function (o) {
+          o = o || {};
+          return appelProgrammes('birthdays.view', function (d, p) {
+            if (['', 'prepare', 'ignore', 'erreur'].indexOf(o.statut || '') < 0) throw Erreur('INVALID_FILTER', 'Filtre inconnu.');
+            anniversairesPreparerDemo(d);
+            var lignes = p.anniv.journal.filter(function (j) {
+              return (!o.statut || j.statut === o.statut) && (!o.debut || j.anniversaire_le >= o.debut) && (!o.fin || j.anniversaire_le <= o.fin);
+            }).sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : b.id - a.id; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50).map(function (j) {
+              var cl = clientDemo(d, j.client_id) || {};
+              return { id: j.id, client_id: j.client_id, code: cl.code, nom: cl.nom_complet, date: j.anniversaire_le, statut: j.statut, motif: j.motif,
+                       prepare_le: j.cree_le, envois: j.envois };
+            }) };
+          });
+        },
+        anniversairesErreurs: function (o) {
+          return appelProgrammes('birthdays.view', function (d, p) {
+            var lignes = p.anniv.journal.filter(function (j) { return j.statut === 'erreur'; }).map(function (j) {
+              var cl = clientDemo(d, j.client_id) || {};
+              return { date: j.cree_le, code: cl.code, nom: cl.nom_complet, origine: 'preparation', statut: 'erreur', code_erreur: j.motif, canal: null };
+            });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o && o.page), 50) };
+          });
+        },
+        anniversairesRappels: function () {
+          return appelProgrammes('birthdays.view', function () { return { total: 0, elements: [] }; });
+        },
+        anniversaireReglages: function () {
+          return appelProgrammes('birthdays.view', function (d, p) {
+            var jour = aujourdhuiDemo(), r = p.anniv.reglages, annee = +jour.slice(0, 4);
+            var parJour = function (j) {
+              return Object.keys(d.naissances || {}).filter(function (id) {
+                return clientActifDemo(d, id) && anniversaireEnDemo(d.naissances[id], +j.slice(0, 4), r.regle_29_fevrier) === j;
+              }).length;
+            };
+            var clients = d.comptes.filter(function (c) { return c.role === 'client' && !c.supprime_le; });
+            var avec = clients.filter(function (c) { return d.naissances && d.naissances[c.id]; }).length;
+            return {
+              reglages: reglagesAnniversaire(p),
+              canaux_configures: { push: false, email: false, whatsapp: false },
+              whatsapp_disponible: false,
+              chiffres: { aujourdhui: parJour(jour), sept_jours: parJour(decalerJour(jour, 7)), clients_avec_date: avec, clients_sans_date: clients.length - avec,
+                          messages_annee: p.anniv.journal.filter(function (j) { return j.statut === 'prepare' && j.annee === annee; }).length,
+                          erreurs: p.anniv.journal.filter(function (j) { return j.statut === 'erreur'; }).length }
+            };
+          });
+        },
+        anniversaireReglagesModifier: function (donnees) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var r = p.anniv.reglages, avant = Object.assign({}, r, { fuseau: p.anniv.fuseau });
+            var actif = aLaCle(donnees, 'actif') ? (donnees.actif === true || donnees.actif === 'true') : r.actif;
+            var heure = aLaCle(donnees, 'heure_envoi') ? String(donnees.heure_envoi) : r.heure_envoi;
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(heure)) throw Erreur('INVALID_PROGRAM_VALUE', 'L\'heure d\'envoi doit s\'écrire HH:MM (par exemple 09:00).');
+            if (aLaCle(donnees, 'regle_29_fevrier') && ['fev28', 'mars1'].indexOf(donnees.regle_29_fevrier) < 0) {
+              throw Erreur('INVALID_PROGRAM_VALUE', 'La règle du 29 février est « fev28 » (le 28 février) ou « mars1 » (le 1er mars).');
+            }
+            var canaux = r.canaux;
+            if (aLaCle(donnees, 'canaux')) {
+              canaux = (donnees.canaux || []).filter(function (c, i, a) { return a.indexOf(c) === i; });
+              if (canaux.some(function (c) { return c !== 'push' && c !== 'email'; })) {
+                throw Erreur('INVALID_PROGRAM_VALUE', 'Les canaux possibles sont « push » (application) et « email » : WhatsApp n\'est pas encore disponible pour les anniversaires.');
+              }
+            }
+            var fuseau = p.anniv.fuseau;
+            if (aLaCle(donnees, 'fuseau')) {
+              try { new Intl.DateTimeFormat('en-CA', { timeZone: donnees.fuseau }); } catch (e) {
+                throw Erreur('INVALID_PROGRAM_VALUE', 'Ce fuseau horaire n\'existe pas (par exemple America/Santo_Domingo).');
+              }
+              fuseau = donnees.fuseau;
+            }
+            var type = aLaCle(donnees, 'avantage_type') ? donnees.avantage_type : r.avantage_type;
+            var avActif = aLaCle(donnees, 'avantage_actif') ? (donnees.avantage_actif === true || donnees.avantage_actif === 'true') : r.avantage_actif;
+            var valeur = r.avantage_valeur;
+            if (aLaCle(donnees, 'avantage_valeur')) {
+              valeur = donnees.avantage_valeur === '' || donnees.avantage_valeur == null ? null : Number(String(donnees.avantage_valeur).replace(',', '.'));
+              if (valeur !== null && !isFinite(valeur)) throw Erreur('INVALID_PROGRAM_VALUE', 'La valeur de l\'avantage n\'est pas un nombre.');
+            }
+            var libelle = aLaCle(donnees, 'avantage_libelle') ? String(donnees.avantage_libelle || '').trim().slice(0, 120) : r.avantage_libelle;
+            if (avActif) {
+              if (type === 'aucun') throw Erreur('BENEFIT_INCOMPLETE', 'Choisissez le type d\'avantage avant de l\'activer.');
+              if (type === 'gopoints') {
+                var regle = p.points.regles.filter(function (x) { return x.evenement === 'birthday'; })[0];
+                if (!(regle.actif && p.points.reglages.actif)) {
+                  throw Erreur('BENEFIT_INCOMPLETE', 'Pour un avantage en GOPOINTS, allumez d\'abord le programme GOPOINTS et la règle « Anniversaire du client » (avec son nombre de points).');
+                }
+              } else if (!(valeur > 0) || !libelle.length) {
+                throw Erreur('BENEFIT_INCOMPLETE', 'Un avantage a une valeur et un texte (par exemple « 5 $ de crédit d\'expédition ») : indiquez-les avant de l\'activer.');
+              }
+            }
+            var rap = aLaCle(donnees, 'rappel_admin_jours') ? (entierProgramme(donnees, 'rappel_admin_jours', 0, 60) || 0) : r.rappel_admin_jours;
+            var rapClient = aLaCle(donnees, 'rappel_client_jours') ? (entierProgramme(donnees, 'rappel_client_jours', 1, 30) || 3) : r.rappel_client_jours;
+            var ratt = aLaCle(donnees, 'rattrapage_jours') ? entierProgramme(donnees, 'rattrapage_jours', 0, 7) : r.rattrapage_jours;
+            Object.assign(r, {
+              actif: actif, actif_depuis: actif && !r.actif ? aujourdhuiDemo() : (!actif ? null : r.actif_depuis),
+              heure_envoi: heure, regle_29_fevrier: aLaCle(donnees, 'regle_29_fevrier') ? donnees.regle_29_fevrier : r.regle_29_fevrier,
+              rattrapage_jours: ratt == null ? r.rattrapage_jours : ratt, canaux: canaux, rappel_admin_jours: rap,
+              rappel_client_actif: aLaCle(donnees, 'rappel_client_actif') ? (donnees.rappel_client_actif === true || donnees.rappel_client_actif === 'true') : r.rappel_client_actif,
+              rappel_client_jours: rapClient, avantage_actif: avActif, avantage_type: type, avantage_valeur: valeur, avantage_libelle: libelle
+            });
+            p.anniv.fuseau = fuseau;
+            journaliser(d, moi, 'anniversaire.reglages', 'programme', 'anniversaires', avant, Object.assign({}, r, { fuseau: fuseau }));
+            return reglagesAnniversaire(p);
+          });
+        },
+        anniversaireModeles: function () {
+          return appelProgrammes('birthdays.view', function (d, p) {
+            var liste = [];
+            ['birthday', 'birthday_avantage', 'birthday_reminder', 'birthday_upcoming'].forEach(function (t) {
+              ['en', 'es', 'fr', 'ht'].forEach(function (l) { liste.push(modeleAnniversaire(p, t, l)); });
+            });
+            return liste;
+          });
+        },
+        anniversaireModele: function (type, langue, titre, message) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            if (!MODELES_ANNIVERSAIRE[type + '|' + langue]) throw Erreur('INVALID_TEMPLATE', 'Ce modèle n\'existe pas.');
+            titre = String(titre || '').trim(); message = String(message || '').trim();
+            if (!titre.length || titre.length > 120 || !message.length || message.length > 1200) {
+              throw Erreur('INVALID_TEMPLATE', 'Le titre (120 signes au plus) et le message (1 200 au plus) sont obligatoires.');
+            }
+            var permises = { birthday: ['prenom'], birthday_avantage: ['prenom', 'avantage'], birthday_upcoming: ['prenom', 'jours'], birthday_reminder: ['nombre', 'jours'] }[type] || [];
+            [titre, message].forEach(function (t) {
+              (t.match(/\{\{[^{}]*\}\}/g) || []).forEach(function (v) {
+                var nom = v.slice(2, -2);
+                if (permises.indexOf(nom) < 0) {
+                  throw Erreur('INVALID_TEMPLATE', 'La variable {{' + nom + '}} n\'est pas permise dans ce modèle (permises : ' + (permises.join(', ') || 'aucune') + ').');
+                }
+              });
+              if (/[{}]/.test(t.replace(/\{\{[^{}]*\}\}/g, ''))) throw Erreur('INVALID_TEMPLATE', 'Les accolades { } ne servent qu\'aux variables, par exemple {{prenom}}.');
+            });
+            p.anniv.modeles[type + '|' + langue] = [titre, message];
+            journaliser(d, moi, 'anniversaire.modele', 'programme', type + ':' + langue, null, { titre: titre });
+            return modeleAnniversaire(p, type, langue);
+          });
+        },
+        anniversaireModeleRestaurer: function (type, langue) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            if (!MODELES_ANNIVERSAIRE[type + '|' + langue]) throw Erreur('INVALID_TEMPLATE', 'Ce modèle n\'existe pas.');
+            delete p.anniv.modeles[type + '|' + langue];
+            journaliser(d, moi, 'anniversaire.modele_restaure', 'programme', type + ':' + langue, null, null);
+            return modeleAnniversaire(p, type, langue);
+          });
+        },
+        corrigerNaissance: function (client, date, motif) {
+          return appelProgrammes('birthdays.manage', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour corriger une date de naissance.');
+            if (!clientActifDemo(d, client)) throw Erreur('CLIENT_NOT_FOUND', 'Client introuvable.');
+            var v = validerNaissanceDemo(date);
+            d.naissances = d.naissances || {};
+            // Le journal garde le fait, jamais la date elle-même
+            journaliser(d, moi, 'naissance.correction', 'client', client, null, { motif: String(motif).trim().slice(0, 200) });
+            d.naissances[client] = v;
+            return { corrigee: true };
+          });
+        },
+
+        // GOship APP Welcome
+        bienvenueListe: function () {
+          return appelProgrammes('programs.view', function (d, p) {
+            var clients = d.comptes.filter(function (c) { return c.role === 'client' && !c.supprime_le; });
+            return {
+              campagnes: p.campagnes.slice().sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; }).map(function (b) {
+                var rec = {};
+                p.recompenses.filter(function (r) { return r.programme === 'welcome' && r.campagne === b.id; }).forEach(function (r) { rec[r.statut] = (rec[r.statut] || 0) + 1; });
+                return copieCampagne(b, { manques: manquesCampagne(p, b),
+                  clients_admissibles: !b.debut || !b.fin ? 0 : clients.filter(function (c) { var j = jourSD(c.cree_le); return j >= b.debut && j <= b.fin; }).length,
+                  recompenses: Object.keys(rec).length ? rec : null });
+              }),
+              erreurs: p.erreurs.filter(function (e) { return ['compte', 'operation', 'recompense'].indexOf(e.programme) >= 0; }).length
+            };
+          });
+        },
+        bienvenueEnregistrer: function (id, donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            donnees = donnees || {};
+            var b = id ? p.campagnes.filter(function (x) { return x.id === id; })[0] : null, avant = null;
+            if (id && !b) throw Erreur('INVALID_CAMPAIGN', 'Cette campagne n\'existe pas.');
+            if (b && (b.statut === 'active' || b.statut === 'terminee')) {
+              throw Erreur('CAMPAIGN_LOCKED', 'Une campagne active ou terminée ne se modifie pas : suspendez-la d\'abord (une campagne terminée se duplique).');
+            }
+            var copie = b ? Object.assign({}, b) : { id: null, nom: '', description: '', statut: 'brouillon', debut: null, fin: null, type_recompense: null,
+              valeur_recompense: null, operation: null, budget_max: null, delai_validation_jours: 0, cumul_parrainage: true, conditions: '', cree_le: maintenant() };
+            appliquerChamps(copie, donnees, CHAMPS_BIENVENUE);
+            verifierPeriodeCampagne(copie.debut, copie.fin);
+            if (!b) { p.seq += 1; copie.id = 'camp-' + p.seq + '-' + identifiant().slice(0, 8); p.campagnes.push(copie); b = copie; }
+            else { avant = Object.assign({}, b); Object.assign(b, copie); }
+            b.maj_le = maintenant();
+            journaliser(d, moi, avant ? 'bienvenue.modification' : 'bienvenue.creation', 'programme', b.id, avant, Object.assign({}, b));
+            return Object.assign({}, b);
+          });
+        },
+        bienvenuePublier: function (id) { return publierCampagneDemo(id); },
+        bienvenueStatut: function (id, action) {
+          if (action === 'reprendre') return publierCampagneDemo(id);
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            var b = p.campagnes.filter(function (x) { return x.id === id; })[0];
+            if (!b) throw Erreur('INVALID_CAMPAIGN', 'Cette campagne n\'existe pas.');
+            var nouveau = action === 'suspendre' && ['active', 'programmee'].indexOf(b.statut) >= 0 ? 'suspendue'
+              : (action === 'terminer' && ['active', 'programmee', 'suspendue'].indexOf(b.statut) >= 0 ? 'terminee' : null);
+            if (!nouveau) throw Erreur('INVALID_CAMPAIGN_STATUS', 'Cette action n\'est pas possible dans l\'état actuel de la campagne.');
+            b.statut = nouveau; b.maj_le = maintenant();
+            journaliser(d, moi, 'bienvenue.' + action, 'programme', b.id, null, { statut: b.statut });
+            return Object.assign({}, b);
+          });
+        },
+
+        // GOship Refer
+        parrainageConfig: function () {
+          return appelProgrammes('programs.view', function (d, p) { return copieCampagne(p.parrainage, { id: true, manques: manquesParrainage(p, p.parrainage) }); });
+        },
+        parrainageConfigModifier: function (donnees) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            var c = p.parrainage;
+            if (c.statut === 'active' || c.statut === 'terminee') throw Erreur('CAMPAIGN_LOCKED', 'Le parrainage actif ou terminé ne se modifie pas : suspendez-le d\'abord.');
+            var avant = Object.assign({}, c, { conditions: undefined, annulation: undefined }), copie = Object.assign({}, c);
+            appliquerChamps(copie, donnees || {}, CHAMPS_PARRAINAGE);
+            verifierPeriodeCampagne(copie.debut, copie.fin);
+            Object.assign(c, copie, { maj_le: maintenant() });
+            journaliser(d, moi, 'parrainage.configuration', 'programme', 'parrainage', avant, Object.assign({}, c, { conditions: undefined, annulation: undefined }));
+            return Object.assign({ id: true }, c);
+          });
+        },
+        parrainageStatut: function (action) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            var c = p.parrainage, nouveau;
+            if (action === 'publier' || action === 'reprendre') {
+              if (['brouillon', 'suspendue'].indexOf(c.statut) < 0) throw Erreur('INVALID_CAMPAIGN_STATUS', 'Seul un brouillon ou un parrainage suspendu se publie.');
+              var m = manquesParrainage(p, c);
+              if (m.length) throw Erreur('INCOMPLETE_CAMPAIGN', 'Le parrainage est incomplet : il manque ' + m.join(', ') + '.');
+              nouveau = c.debut > aujourdhuiDemo() ? 'programmee' : 'active';
+            } else if (action === 'suspendre' && ['active', 'programmee'].indexOf(c.statut) >= 0) nouveau = 'suspendue';
+            else if (action === 'terminer' && ['active', 'programmee', 'suspendue'].indexOf(c.statut) >= 0) nouveau = 'terminee';
+            else throw Erreur('INVALID_CAMPAIGN_STATUS', 'Cette action n\'est pas possible dans l\'état actuel du parrainage.');
+            c.statut = nouveau; c.maj_le = maintenant();
+            journaliser(d, moi, 'parrainage.' + action, 'programme', 'parrainage', null, { statut: c.statut });
+            return Object.assign({ id: true }, c);
+          });
+        },
+        parrainageApercu: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var dans = function (iso) { if (!iso) return false; var j = jourSD(iso); return (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin); };
+            var liste = p.parrainages.filter(function (x) { return dans(x.cree_le); }), parStatut = {};
+            liste.forEach(function (x) { parStatut[x.statut] = (parStatut[x.statut] || 0) + 1; });
+            var refer = function (r) { return r.programme === 'refer_parrain' || r.programme === 'refer_filleul'; };
+            return {
+              statut: p.parrainage.statut,
+              parrains: liste.filter(function (x, i, a) { return a.map(function (y) { return y.parrain_id; }).indexOf(x.parrain_id) === i; }).length,
+              filleuls_inscrits: liste.length,
+              transactions_qualifiantes: p.parrainages.filter(function (x) { return dans(x.qualifie_le); }).length,
+              recompenses_accordees: p.recompenses.filter(function (r) { return refer(r) && (r.statut === 'obtenue' || r.statut === 'utilisee') && dans(r.cree_le); }).length,
+              recompenses_en_attente: p.recompenses.filter(function (r) { return refer(r) && r.statut === 'en_attente'; }).length,
+              suspects: p.parrainages.filter(function (x) { return x.statut === 'suspect'; }).length,
+              en_attente_premiere_operation: p.parrainages.filter(function (x) { return x.statut === 'inscrit'; }).length,
+              par_statut: parStatut
+            };
+          });
+        },
+        parrainages: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            if (['', 'inscrit', 'qualifie', 'recompense', 'refuse', 'annule', 'suspect'].indexOf(o.statut || '') < 0) throw Erreur('INVALID_FILTER', 'Filtre inconnu.');
+            var lignes = p.parrainages.filter(function (x) {
+              var j = jourSD(x.cree_le);
+              return (!o.statut || x.statut === o.statut) && (!o.debut || j >= o.debut) && (!o.fin || j <= o.fin);
+            }).sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : a.cree_le > b.cree_le ? -1 : b.id - a.id; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50).map(function (x) {
+              var pa = clientDemo(d, x.parrain_id) || {}, fi = clientDemo(d, x.filleul_id) || {};
+              return { id: x.id, statut: x.statut, motif: x.motif, source: x.source, date: x.cree_le, qualifie_le: x.qualifie_le,
+                       parrain_code: pa.code, parrain_nom: pa.nom_complet, filleul_code: fi.code, filleul_nom: fi.nom_complet };
+            }) };
+          });
+        },
+        parrainageExaminer: function (id, decision, motif) {
+          return appelProgrammes('programs.manage', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour examiner un parrainage.');
+            if (['valider', 'refuser'].indexOf(decision) < 0) throw Erreur('INVALID_DECISION', 'La décision est « valider » ou « refuser ».');
+            var pa = p.parrainages.filter(function (x) { return x.id === id; })[0];
+            if (!pa || pa.statut !== 'suspect') throw Erreur('INVALID_REFERRAL', 'Seul un parrainage suspect peut être examiné.');
+            pa.statut = decision === 'valider' ? 'inscrit' : 'refuse'; pa.motif = String(motif).trim().slice(0, 200); pa.maj_le = maintenant();
+            journaliser(d, moi, 'parrainage.examen', 'programme', id, null, { decision: decision, motif: pa.motif });
+            // Validé : si le filleul a déjà fait l'opération qualifiante, le parrainage reprend où il s'était arrêté
+            var c = p.parrainage;
+            var op = p.operations.filter(function (o) { return o.client_id === pa.filleul_id && o.operation === c.operation && !o.annulee_le; })[0];
+            if (decision === 'valider' && op && c.statut === 'active') {
+              pa.statut = 'qualifie'; pa.qualifie_le = maintenant();
+              if (c.cumul_bienvenue || !p.recompenses.some(function (r) { return r.client_id === pa.filleul_id && r.programme === 'welcome' && avantageActif(r); })) {
+                recompenseCreerDemo(d, pa.filleul_id, 'refer_filleul', c.filleul_type, c.filleul_valeur, 'refer:' + pa.id + ':filleul', 'parrainage', op.reference, c.delai_validation_jours, c.expiration_jours);
+              }
+              recompenseCreerDemo(d, pa.parrain_id, 'refer_parrain', c.parrain_type, c.parrain_valeur, 'refer:' + pa.id + ':parrain', 'parrainage', op.reference, c.delai_validation_jours, c.expiration_jours);
+              parrainageActualiserDemo(p, pa.id);
+            }
+            return { id: pa.id, statut: pa.statut };
+          });
+        },
+
+        // Les avantages de tous les programmes
+        recompenses: function (o) {
+          o = o || {};
+          return appelProgrammes('programs.view', function (d, p) {
+            var lignes = p.recompenses.filter(function (r) { return (!o.programme || r.programme === o.programme) && (!o.statut || r.statut === o.statut); })
+              .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : -1; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o.page), 50).map(function (r) {
+              var cl = clientDemo(d, r.client_id) || {};
+              return { id: r.id, client_code: cl.code, client_nom: cl.nom_complet, programme: r.programme, type: r.type, valeur: r.valeur, statut: r.statut,
+                       motif: r.motif, date: r.cree_le, valide_apres: r.valide_apres, expire_le: r.expire_le, reference: r.reference };
+            }) };
+          });
+        },
+        recompenseAccorder: function (client, type, valeur, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour accorder un avantage à la main.');
+            var v = Number(valeur);
+            if (TYPES_AVANTAGE.indexOf(type) < 0 || !isFinite(v) || v <= 0) throw Erreur('INVALID_REWARD', 'Le type et la valeur de l\'avantage sont obligatoires (valeur positive).');
+            if (!clientActifDemo(d, client)) throw Erreur('CLIENT_NOT_FOUND', 'Client introuvable.');
+            var id = recompenseCreerDemo(d, client, 'manuel', type, v, 'manuel:' + identifiant(), 'manuel', '', 0);
+            var r = p.recompenses.filter(function (x) { return x.id === id; })[0];
+            r.motif = String(motif).trim().slice(0, 200); r.auteur_id = moi.id;
+            journaliser(d, moi, 'recompense.accordee', 'client', client, null, { recompense: id, type: type, valeur: v, motif: r.motif });
+            return { id: id, statut: r.statut };
+          });
+        },
+        recompenseAnnuler: function (id, motif) {
+          return appelProgrammes('points.adjust', function (d, p, moi) {
+            if (String(motif || '').trim().length < 3) throw Erreur('REASON_REQUIRED', 'Un motif est obligatoire pour annuler un avantage.');
+            var r = p.recompenses.filter(function (x) { return x.id === id; })[0];
+            if (!r || ['en_attente', 'obtenue'].indexOf(r.statut) < 0) throw Erreur('INVALID_REWARD', 'Seul un avantage en attente ou obtenu, pas encore utilisé, peut être annulé.');
+            if (r.type === 'gopoints') {
+              var g = p.points.mouvements.filter(function (m) { return m.cle === 'gain:recompense:' + r.id; })[0];
+              if (g && !mouvementAnnule(p, g)) {
+                pointsEcrireDemo(d, r.client_id, 'annulation', -g.points, 'admin', 'recompense:' + r.id, 'annul:' + g.id, String(motif).trim(), moi.id, null, g.id);
+              }
+            }
+            r.statut = 'annulee'; r.motif = String(motif).trim().slice(0, 200); r.auteur_id = moi.id;
+            if (r.cle.indexOf('refer:') === 0) parrainageActualiserDemo(p, +r.cle.split(':')[1]);
+            journaliser(d, moi, 'recompense.annulee', 'client', r.client_id, null, { recompense: id, motif: r.motif });
+            return { id: id, statut: 'annulee' };
+          });
+        },
+        erreurs: function (o) {
+          return appelProgrammes('programs.view', function (d, p) {
+            var lignes = p.erreurs.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+            return { total: lignes.length, elements: tranche(lignes, pagePropre(o && o.page), 50).map(function (e) {
+              var cl = clientDemo(d, e.client_id) || {};
+              return { date: e.date, programme: e.programme, evenement: e.evenement, client_code: cl.code || null, message: e.message };
+            }) };
+          });
+        }
+      },
+
+      // Rapports : liste_rapports, creer_rapport, modifier_rapport, supprimer_rapport,
+      // rapport_donnees (outils/supabase-rapports.sql), mêmes permissions
+      rapports: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'reports.view'); } catch (e) { return rejeter(e); }
+        var texte = String(o.recherche || '').trim().toLowerCase(), parPage = o.parPage || 50, p = o.page || 0;
+        var lignes = (d.rapports || []).filter(function (r) { return !texte || r.nom.toLowerCase().indexOf(texte) >= 0; })
+          .sort(function (a, b) { return a.cree_le < b.cree_le ? 1 : a.cree_le > b.cree_le ? -1 : (a.id < b.id ? -1 : 1); });
+        return plusTard({ total: lignes.length, lignes: lignes.slice(p * parPage, p * parPage + parPage).map(function (r) {
+          return rapportJsonDemo(d, r);
+        }) });
+      },
+      creerRapport: function (r) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.create');
+          var v = validerRapportDemo(r);
+          d.seqRapport = (d.seqRapport || 0) + 1;
+          var nouveau = Object.assign(v, { id: 'rap-' + d.seqRapport + '-' + identifiant().slice(0, 8), cree_par: moi.id,
+                                           role_createur: moi.role, cree_le: maintenant(), modifie_le: null, modifie_par: null });
+          d.rapports = (d.rapports || []).concat([nouveau]);
+          journaliser(d, moi, 'rapport.creation', 'rapport', nouveau.id, null, resumeRapportDemo(nouveau));
+          ecrireDonnees(d, 'rapports');
+          return plusTard(rapportJsonDemo(d, nouveau));
+        } catch (e) { return rejeter(e); }
+      },
+      modifierRapport: function (id, r) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.edit');
+          var v = validerRapportDemo(r);
+          var ancien = (d.rapports || []).filter(function (x) { return x.id === id; })[0];
+          if (!ancien) throw Erreur('NOT_FOUND', 'Ce rapport n\'existe plus.');
+          var avant = resumeRapportDemo(ancien);
+          Object.assign(ancien, v, { modifie_le: maintenant(), modifie_par: moi.id });
+          var diff = difference(avant, resumeRapportDemo(ancien), Object.keys(avant));
+          if (diff) journaliser(d, moi, 'rapport.modification', 'rapport', id, diff.avant, diff.apres);
+          ecrireDonnees(d, 'rapports');
+          return plusTard(rapportJsonDemo(d, ancien));
+        } catch (e) { return rejeter(e); }
+      },
+      supprimerRapport: function (id) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.delete');
+          var ancien = (d.rapports || []).filter(function (x) { return x.id === id; })[0];
+          if (!ancien) throw Erreur('NOT_FOUND', 'Ce rapport n\'existe plus.');
+          d.rapports = d.rapports.filter(function (x) { return x.id !== id; });
+          journaliser(d, moi, 'rapport.suppression', 'rapport', id, resumeRapportDemo(ancien), null);
+          ecrireDonnees(d, 'rapports');
+          return plusTard({ id: id, supprime: true });
+        } catch (e) { return rejeter(e); }
+      },
+      donneesRapport: function (p) {
+        var d = lireDonnees();
+        try {
+          var moi = exiger(d, 'reports.view');
+          return plusTard(donneesRapportDemo(d, moi, p));
+        } catch (e) { return rejeter(e); }
+      },
+
+      notifications: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        return plusTard((d.notifications || []).filter(function (n) { return n.colis_id === id; })
+          .sort(function (a, b) { return new Date(b.envoye_le) - new Date(a.envoye_le); }));
+      },
+
+      // Clients et colis d'exemple, pour découvrir le tableau de bord
+      exemples: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'settings.manage'); } catch (e) { return echec(e.code); }
+        var jour = 864e5, t0 = Date.now();
+        function date(joursAvant, heures) { return new Date(t0 - joursAvant * jour + (heures || 0) * 36e5).toISOString(); }
+        var modeles = [
+          { nom: 'Marie-Ange Dorvil', email: 'marie-ange@exemple.com', pays: 'HT', region: 'Ouest', ville: 'Pétion-Ville',
+            adresse: 'Rue Grégoire #14', tel: '+509 3712 4580' },
+          { nom: 'Jean-Robert Pierre', email: 'jean-robert@exemple.com', pays: 'HT', region: 'Nord', ville: 'Cap-Haïtien',
+            adresse: 'Rue 15 B, Carénage', tel: '+509 4420 1187' },
+          { nom: 'Carolina Méndez', email: 'carolina@exemple.com', pays: 'DO', region: 'Santiago', ville: 'Santiago de los Caballeros',
+            adresse: 'Calle del Sol 58', tel: '+1 809 555 0147' }
+        ];
+        var ids = modeles.map(function (m) {
+          var existant = trouverCompte(d, m.email);
+          if (existant) return existant.id;
+          var c = { id: identifiant(), email: m.email, mdp: empreinte('demo1234'), role: 'client', code: nouveauCode(d.comptes),
+                    nom_complet: m.nom, pays: m.pays, region: m.region, ville: m.ville, adresse: m.adresse, telephone: m.tel,
+                    langue: 'fr', cree_le: date(20) };
+          d.comptes.push(c);
+          return c.id;
+        });
+        var parcours = [
+          { client: 0, desc: 'Chaussures Nike — 2 paires', exp: 'Amazon', suivi: 'TBA304918577000', poids: 4.2, service: 'aerien', etapes: [['recu', 6, 'Miami (Medley), FL'], ['emballe', 5, 'Miami (Medley), FL'], ['embarque', 4, 'Miami → Port-au-Prince'], ['distribution', 2, 'Port-au-Prince'], ['succursale', 1, 'Agence de Pétion-Ville'], ['disponible', 0, 'Agence de Pétion-Ville', 'Retrait possible du lundi au samedi, de 8 h à 18 h.']] },
+          { client: 0, desc: 'Téléphone Samsung Galaxy A55', exp: 'Walmart', suivi: '9400111899223344556677', poids: 1.1, service: 'aerien', etapes: [['recu', 1, 'Miami (Medley), FL']] },
+          { client: 0, desc: 'Vêtements', exp: 'SHEIN', suivi: 'GFUS01072196252801', poids: 2.6, service: 'aerien', etapes: [['recu', 16, 'Miami (Medley), FL'], ['embarque', 14, 'Miami → Port-au-Prince'], ['distribution', 12, 'Port-au-Prince'], ['succursale', 11, 'Agence de Pétion-Ville'], ['disponible', 11, 'Agence de Pétion-Ville'], ['livre', 10, 'Pétion-Ville', 'Remis en main propre.']] },
+          { client: 1, desc: 'Pièces auto (amortisseurs)', exp: 'RockAuto', suivi: '1Z999AA10123456784', poids: 18, service: 'maritime', etapes: [['recu', 9, 'Miami (Medley), FL'], ['embarque', 5, 'Port de Miami → Cap-Haïtien', 'Départ du navire prévu vendredi.']] },
+          { client: 1, desc: 'Ordinateur portable HP', exp: 'Amazon', suivi: 'TBA305112233000', poids: 5.4, service: 'aerien', etapes: [['recu', 3, 'Miami (Medley), FL'], ['embarque', 2, 'Miami → Cap-Haïtien'], ['incident', 1, 'Cap-Haïtien', 'Facture d\'achat demandée par la douane : envoyez-la-nous sur WhatsApp.']] },
+          { client: 2, desc: 'Complément alimentaire (6 flacons)', exp: 'iHerb', suivi: 'TBA306778899000', poids: 3, service: 'aerien', etapes: [['recu', 4, 'Miami (Medley), FL'], ['embarque', 3, 'Miami → Santo Domingo'], ['distribution', 1, 'Santo Domingo']] },
+          { client: 2, desc: 'Téléviseur 55 pouces', exp: 'Best Buy', suivi: '', poids: 38, service: 'maritime', etapes: [['recu', 12, 'Miami (Medley), FL'], ['embarque', 8, 'Port de Miami → Caucedo'], ['distribution', 4, 'Caucedo'], ['succursale', 0, 'Santiago de los Caballeros', 'Retrait possible dès aujourd\'hui.']] }
+        ];
+        parcours.forEach(function (p) {
+          var client = d.comptes.filter(function (c) { return c.id === ids[p.client]; })[0];
+          d.seqColis += 1;
+          var c = {
+            id: identifiant(), numero: 'GSE-' + d.seqColis + '-' + client.pays, client_id: client.id,
+            suivi_transporteur: p.suivi, expediteur: p.exp, description: p.desc, poids_lb: p.poids, service: p.service,
+            pays_destination: client.pays, destination: client.ville, statut: 'recu', lieu: '', note: ''
+          };
+          p.etapes.forEach(function (e) {
+            c.statut = e[0];
+            c.lieu = e[2];
+            c.note = e[3] || '';
+            c.maj_le = date(e[1], -2);
+            historiser(d, c, c.maj_le);
+          });
+          c.cree_le = c.recu_le = date(p.etapes[0][1], -2);
+          c.tarif_lb_usd = TARIF_LB_DEFAUT;
+          c.prix_usd = prixTransport(c.poids_lb, c.tarif_lb_usd);
+          d.colis.push(c);
+          // Chaque colis repart avec sa facture, comme en ligne. Le colis livré
+          // est payé ; l'ordinateur l'est à moitié ; les pièces auto sont en
+          // retard de paiement.
+          var f = facturerColisDemo(d, null, c).facture;
+          var fa = (d.factures || []).filter(function (x) { return x.id === f.id; })[0];
+          fa.cree_le = c.cree_le;
+          if (p.etapes[p.etapes.length - 1][0] === 'livre') {
+            ajouterPaiementDemo(d, null, fa, { montant_usd: fa.montant_usd, moyen: 'moncash', reference: 'MC-48213',
+                                               paye_le: date(10) }, 'saisie', null);
+          } else if (p.suivi === 'TBA305112233000') {
+            ajouterPaiementDemo(d, null, fa, { montant_usd: 20, moyen: 'especes', paye_le: date(2) }, 'saisie', null);
+          } else if (p.suivi === '1Z999AA10123456784') {
+            fa.echeance_le = date(2).slice(0, 10);
+          }
+        });
+        ecrireDonnees(d);
+        return plusTard(true);
+      },
+
+      effacerDemo: function () {
+        stockage('effacer', CLE_DONNEES);
+        stockage('effacer', CLE_RECUP);
+        stockage('effacer', CLE_SESSION);
+        prevenir('colis');
+        return plusTard(true);
+      }
+    }
+  };
+
+  /* ======================================================================
+     Espace fermé (site en ligne sans configuration)
+     ====================================================================== */
+  function ferme() { return Promise.reject(Erreur('ferme')); }
+  var offAPI = {
+    session: function () { return Promise.resolve(null); },
+    profil: function () { return Promise.resolve(null); },
+    inscrire: ferme, naissance: ferme, definirNaissance: ferme, portefeuille: ferme, utiliserPoints: ferme, mesAvantages: ferme,
+    maBienvenue: ferme, monParrainage: ferme, noterInvitation: ferme, utiliserCodeParrainage: ferme, preferencesProgrammes: ferme,
+    reglerAnniversaire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    surSessionPerdue: function () { return function () {}; },
+    envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
+    fournisseursConnexion: function () { return Promise.resolve([]); }, connecterAvec: ferme,
+    changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme, monResume: ferme,
+    surveiller: function () { return function () {}; },
+    suivre: ferme, estAdmin: function () { return Promise.resolve(false); },
+    permissions: function () { return Promise.resolve({ role: null, equipe: false, permissions: [] }); },
+    admin: {}
+  };
+
+  /* ======================================================================
+     Outils d'affichage partagés (suivi de l'accueil, Mon compte, tableau de bord)
+     ====================================================================== */
+  var textes = null;
+  var LOCALES = { fr: 'fr-FR', en: 'en-US', es: 'es-DO', ht: 'fr-FR' };
+  var MOIS_HT = ['janvye', 'fevriye', 'mas', 'avril', 'me', 'jen', 'jiyè', 'out', 'septanm', 'oktòb', 'novanm', 'desanm'];
+  var ETAPE = { recu: 1, emballe: 2, embarque: 3, distribution: 4, succursale: 5, disponible: 6, livre: 7 };
+
+  // Textes de la page (balise <template data-textes>), traduits avec elle
+  function texte(cle, valeurs) {
+    if (!textes) {
+      textes = {};
+      var modele = document.querySelector('template[data-textes]');
+      if (modele) {
+        Array.prototype.forEach.call(modele.content.querySelectorAll('[data-t]'), function (el) {
+          textes[el.getAttribute('data-t')] = el.textContent.trim();
+        });
+      }
+    }
+    var t = textes[cle] || '';
+    Object.keys(valeurs || {}).forEach(function (k) { t = t.split('{' + k + '}').join(valeurs[k]); });
+    return t;
+  }
+
+  function deuxChiffres(n) { return (n < 10 ? '0' : '') + n; }
+
+  function date(iso, avecHeure) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var heure = avecHeure ? deuxChiffres(d.getHours()) + ':' + deuxChiffres(d.getMinutes()) : '';
+    if (LANGUE === 'ht') return d.getDate() + ' ' + MOIS_HT[d.getMonth()] + ' ' + d.getFullYear() + (heure ? ', ' + heure : '');
+    var o = { day: 'numeric', month: 'short', year: 'numeric' };
+    if (avecHeure) { o.hour = '2-digit'; o.minute = '2-digit'; }
+    try { return new Intl.DateTimeFormat(LOCALES[LANGUE] || 'fr-FR', o).format(d); } catch (e) { return d.toLocaleString(); }
+  }
+
+  function nombre(n) {
+    try { return new Intl.NumberFormat(LOCALES[LANGUE] || 'fr-FR', { maximumFractionDigits: 1 }).format(n); }
+    catch (e) { return String(n); }
+  }
+
+  // Les montants sont en dollars des États-Unis, écrits selon la langue de la
+  // page : « 45,00 $US » en français, « $45.00 » en anglais.
+  function argent(n) {
+    var v = Number(n) || 0;
+    try {
+      return new Intl.NumberFormat(LOCALES[LANGUE] || 'fr-FR',
+                                   { style: 'currency', currency: 'USD' }).format(v);
+    } catch (e) {
+      return v.toFixed(2) + ' USD';
+    }
+  }
+
+  // Étape du parcours (1 à 5) ; un incident garde l'étape précédente
+  function etapeDe(statut, historique) {
+    if (ETAPE[statut]) return ETAPE[statut];
+    var h = (historique || []).slice().reverse();
+    for (var i = 0; i < h.length; i++) if (ETAPE[h[i].statut]) return ETAPE[h[i].statut];
+    return 1;
+  }
+
+  function remplirEtapes(liste, statut, historique) {
+    var n = etapeDe(statut, historique);
+    var total = liste.children.length;
+    // Sur téléphone, les libellés sont masqués : l'étape en cours s'affiche sous les points
+    liste.setAttribute('data-etape', texte('etape-sur', { n: n, total: total }) + ' · ' + texte('etape-' + n));
+    Array.prototype.forEach.call(liste.children, function (li, i) {
+      li.classList.toggle('is-fait', i < n);
+      li.classList.toggle('is-actuel', i === n - 1);
+      if (i === n - 1) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+    liste.classList.toggle('is-incident', statut === 'incident');
+  }
+
+  // Historique, du plus récent au plus ancien
+  function remplirHistorique(liste, historique, options) {
+    options = options || {};
+    var libelle = options.libelle || function (s) { return texte('statut-' + s); };
+    liste.textContent = '';
+    (historique || []).slice().reverse().forEach(function (h) {
+      var li = document.createElement('li');
+      var s = document.createElement('span');
+      s.className = 'gs-chrono__statut';
+      s.textContent = libelle(h.statut, h);
+      var m = document.createElement('span');
+      m.className = 'gs-chrono__meta';
+      m.textContent = [date(h.cree_le, true), h.lieu].filter(Boolean).join(' · ');
+      li.appendChild(s);
+      li.appendChild(m);
+      if (options.notes && h.note) {
+        var p = document.createElement('p');
+        p.className = 'gs-chrono__note';
+        p.textContent = h.note;
+        li.appendChild(p);
+      }
+      liste.appendChild(li);
+    });
+  }
+
+  function copier(t) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(t).catch(function () { return copierAncien(t); });
+    }
+    return copierAncien(t);
+  }
+
+  function copierAncien(t) {
+    return new Promise(function (ok, ko) {
+      var zone = document.createElement('textarea');
+      zone.value = t;
+      zone.setAttribute('readonly', '');
+      zone.style.position = 'fixed';
+      zone.style.opacity = '0';
+      document.body.appendChild(zone);
+      zone.select();
+      var reussi = false;
+      try { reussi = document.execCommand('copy'); } catch (e) { reussi = false; }
+      zone.remove();
+      if (reussi) ok(); else ko(new Error('copie'));
+    });
+  }
+
+  var api = MODE === 'supabase' ? supabaseAPI : (MODE === 'demo' ? demoAPI : offAPI);
+  api.mode = MODE;
+  api.statuts = STATUTS;
+  api.langue = LANGUE;
+  api.normaliserCode = normaliserCode;
+  api.outils = {
+    texte: texte, date: date, nombre: nombre, argent: argent, etapeDe: etapeDe,
+    remplirEtapes: remplirEtapes, remplirHistorique: remplirHistorique, copier: copier,
+    prixColis: prixColis, totauxFacture: totauxFacture, totauxAvecFrais: totauxAvecFrais, tarifDe: tarifDe, arrondi: arrondi,
+    etatFacture: etatFacture, soldeDe: soldeDe, payeDe: payeDe,
+    // Les jours d'une période de rapport (aperçu du formulaire) : la base refait le
+    // calcul (rapport_bornes) et c'est le sien qui compte
+    bornesRapport: function (periode, debut, fin) { return bornesRapport(periode, debut || null, fin || null); },
+    aujourdhui: aujourdhui
+  };
+
+  // Gelés : une page qui écrirait « API.tarifs.fraisService = 0 » n'obtiendrait
+  // rien. Le tarif à la livre n'est qu'une valeur de départ, remplaçable colis
+  // par colis dans le tableau de bord ; les frais de service ne le sont jamais.
+  api.tarifs = Object.freeze({ parLivre: TARIF_LB_DEFAUT, fraisService: FRAIS_SERVICE });
+  // La matrice des statuts, en lecture seule. Le tableau de bord demande
+  // plutôt à la base (admin.statutsPossibles) : c'est elle qui décide.
+  api.regles = Object.freeze({
+    transitions: TRANSITIONS, transitionPermise: transitionPermise, statutPrecedent: statutPrecedent,
+    prixTransport: prixTransport, typesEvenement: TYPES_EVENEMENT, natureTransition: natureTransition,
+    typePourStatut: typePourStatut, validerOperation: validerOperation,
+    libellesStatut: Object.freeze(LIBELLES), operationsScanner: Object.freeze(OPERATIONS_SCANNER.slice()),
+    moyensPaiement: Object.freeze(MOYENS_PAIEMENT.slice()),
+    permissionsDesRoles: Object.freeze(PERMISSIONS_DES_ROLES), rolesEquipe: Object.freeze(ROLES_EQUIPE.slice())
+  });
+  window.GoshipAPI = api;
+})();

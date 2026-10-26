@@ -1,0 +1,7450 @@
+/* ==========================================================================
+   Goship Express — tableau de bord (équipe)
+   Enregistrer les colis, mettre à jour leur statut (un par un ou par lot),
+   retrouver les clients. Les données se mettent à jour en direct.
+   ========================================================================== */
+(function () {
+  'use strict';
+
+  var API = window.GoshipAPI;
+  if (!API) return;
+  var O = API.outils;
+
+  var STATUTS = {
+    recu: 'Reçu', emballe: 'Emballé', embarque: 'Embarqué', distribution: 'Centre de distribution',
+    succursale: 'Transféré à la succursale', disponible: 'Disponible', livre: 'Livré', incident: 'Action requise'
+  };
+  var SERVICES = { aerien: 'Aérien', maritime: 'Maritime', terrestre: 'Terrestre' };
+  var PAYS = { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' };
+  var LANGUES = { fr: 'français', en: 'anglais', es: 'espagnol', ht: 'créole' };
+  var ERREURS = {
+    identifiants: 'E-mail ou mot de passe incorrect.',
+    reseau: 'Connexion impossible. Vérifiez la connexion Internet, puis réessayez.',
+    'non-autorise': 'Action réservée : votre rôle ne le permet pas, ou la session a expiré (reconnectez-vous).',
+    'trop-de-tentatives': 'Trop de tentatives. Patientez quelques minutes.',
+    'non-confirme': 'Adresse e-mail pas encore confirmée.',
+    // Les refus de la base (outils/supabase-services.sql). Elle joint le plus
+    // souvent une phrase plus précise, qui a la priorité (messageErreur).
+    SHIPMENT_NOT_FOUND: 'Ce colis n’existe plus : rechargez la liste.',
+    CLIENT_NOT_FOUND: 'Client introuvable : choisissez un client existant.',
+    INVALID_WEIGHT: 'Poids invalide : indiquez un nombre de livres supérieur à zéro.',
+    INVALID_RATE: 'Tarif invalide : entre 0 et 1 000 $ la livre.',
+    INVALID_DESCRIPTION: 'Décrivez le contenu du colis.',
+    INVALID_SERVICE: 'Service inconnu.',
+    INVALID_DESTINATION: 'Destination inconnue.',
+    INVALID_DATE: 'Date invalide.',
+    INVALID_STATUS: 'Statut inconnu.',
+    INVALID_STATUS_TRANSITION: 'Ce changement de statut n’est pas permis.',
+    STATUS_CONFLICT: 'Le colis a changé de statut entre-temps : rechargez la liste.',
+    CONCURRENT_MODIFICATION: 'Le colis a été modifié entre-temps par quelqu’un d’autre : rouvrez-le.',
+    LOCATION_REQUIRED: 'Indiquez l’agence où le client peut retirer son colis.',
+    TRACKING_ALREADY_EXISTS: 'Ce numéro de suivi vendeur est déjà celui d’un autre colis.',
+    DUPLICATE_OPERATION: 'Cette demande a déjà été traitée pour un autre client.',
+    INVOICE_ALREADY_EXISTS: 'Ce colis est déjà sur une facture.',
+    INVOICE_CLIENT_MISMATCH: 'Une facture ne regroupe que les colis d’un seul client.',
+    INVOICE_LOCKED: 'Cette partie de la facture est arrêtée depuis sa création.',
+    INVALID_AMOUNT: 'Montant invalide.',
+    INVALID_INPUT: 'Données incomplètes.',
+    // Les refus des finances (outils/supabase-finances.sql)
+    INVOICE_NOT_FOUND: 'Cette facture n’existe plus : rechargez la liste.',
+    INVOICE_CANCELLED: 'Cette facture est annulée : elle ne reçoit plus de paiement.',
+    INVOICE_ALREADY_PAID: 'Cette facture est déjà entièrement payée.',
+    OVERPAYMENT: 'Ce paiement dépasse ce qui reste à payer.',
+    INVALID_PAYMENT_METHOD: 'Moyen de paiement inconnu.',
+    DUPLICATE_PAYMENT: 'Ce paiement (même référence) est déjà enregistré.',
+    PAYMENT_NOT_FOUND: 'Ce paiement n’existe plus : rechargez la liste.',
+    PAYMENT_LOCKED: 'Un paiement enregistré ne se modifie pas : annulez-le, puis saisissez le bon.',
+    PAYMENT_REQUIRED: 'Le payé d’une facture suit ses paiements : enregistrez un paiement.',
+    REASON_REQUIRED: 'Indiquez le motif.',
+    INVOICE_HAS_PAYMENTS: 'Cette facture a déjà reçu un paiement.',
+    INVOICE_NOT_GROUPABLE: 'Cette facture ne peut pas être regroupée.',
+    INVOICE_DELETE_FORBIDDEN: 'Une facture ne se supprime pas : annulez-la.',
+    INVOICE_NUMBER_USED: 'Ce numéro de facture a déjà servi.',
+    // Les rôles (onglet Équipe)
+    INVALID_ROLE: 'Rôle inconnu.',
+    USER_NOT_FOUND: 'Aucun compte avec cette adresse : la personne doit d’abord créer son compte sur le site.',
+    SELF_ROLE_CHANGE: 'On ne change pas son propre rôle : demandez-le à un autre administrateur.',
+    LAST_ADMIN: 'C’est le dernier administrateur : nommez-en un autre d’abord.',
+    // La base n'a pas encore reçu l'un des fichiers outils/supabase-*.sql
+    absent: 'La base n’est pas à jour : lancez dans Supabase (SQL Editor) les fichiers de outils/, dans l’ordre du README.',
+    inconnu: 'Une erreur est survenue. Réessayez.'
+  };
+  var PAR_PAGE = 50;
+
+  function $(sel, scope) { return (scope || document).querySelector(sel); }
+  function $$(sel, scope) { return Array.prototype.slice.call((scope || document).querySelectorAll(sel)); }
+  function messageErreur(err) {
+    if (err && err.metier && err.detail) return err.detail;
+    // Un refus de la base dit souvent lequel (« Un tarif particulier est réservé… »)
+    if (err && err.code === 'non-autorise' && err.detail && !/^[a-z]/.test(err.detail)) return err.detail;
+    return ERREURS[err && err.code] || ERREURS.inconnu;
+  }
+
+  // Une clé par demande d'enregistrement, tirée à l'ouverture du formulaire et
+  // gardée jusqu'au succès : un second clic, ou un nouvel essai après une
+  // coupure, est reconnu par la base au lieu de créer un doublon.
+  function nouvelleCle() {
+    var octets = new Uint8Array(16);
+    if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(octets);
+    else for (var i = 0; i < 16; i++) octets[i] = Math.floor(Math.random() * 256);
+    return Array.prototype.map.call(octets, function (o) { return (o < 16 ? '0' : '') + o.toString(16); }).join('');
+  }
+
+  function el(balise, classe, texte) {
+    var n = document.createElement(balise);
+    if (classe) n.className = classe;
+    if (texte !== undefined && texte !== null) n.textContent = texte;
+    return n;
+  }
+
+  function ecran(nom) {
+    $$('[data-ecran]').forEach(function (s) { s.hidden = s.getAttribute('data-ecran') !== nom; });
+    // Le menu latéral et les outils de la barre n'existent qu'une fois dans le tableau de bord
+    document.body.classList.toggle('is-app', nom === 'tableau');
+    if (nom !== 'tableau') $('[data-titre-vue]').textContent = 'Tableau de bord';
+  }
+
+  var minuteurToast = null;
+  function toast(message, erreur) {
+    var t = $('[data-toast]');
+    t.textContent = message;
+    t.className = 'gs-toast' + (erreur ? ' gs-toast--erreur' : '');
+    t.hidden = false;
+    clearTimeout(minuteurToast);
+    minuteurToast = setTimeout(function () { t.hidden = true; }, 3600);
+  }
+
+  // attente(bouton, 'Enregistrement…') met le bouton en attente et rend la
+  // fonction qui le remet dans son état (… .then(fin)) ; attente(bouton) le
+  // remet directement.
+  function attente(bouton, texte) {
+    if (!bouton.hasAttribute('data-libelle')) bouton.setAttribute('data-libelle', bouton.textContent);
+    if (texte) {
+      bouton.disabled = true;
+      bouton.setAttribute('aria-busy', 'true');
+      bouton.textContent = '';
+      var roue = el('span', 'gs-roue');
+      roue.setAttribute('aria-hidden', 'true');
+      bouton.appendChild(roue);
+      bouton.appendChild(document.createTextNode(texte));
+      return function () { attente(bouton); };
+    }
+    bouton.disabled = false;
+    bouton.removeAttribute('aria-busy');
+    bouton.textContent = bouton.getAttribute('data-libelle');
+  }
+
+  function erreurFormulaire(form, message) {
+    var zone = $('[data-form-erreur]', form);
+    zone.textContent = message || '';
+    zone.hidden = !message;
+  }
+
+  /* ---- Les droits du compte connecté ----------------------------------------
+     Lus dans la base au démarrage (API.permissions → mes_permissions). Ils ne
+     servent qu'à montrer les bons menus et les bons boutons : chaque action
+     est revérifiée par la base, qui refuse d'elle-même ce que le rôle ne
+     permet pas. Un élément marqué data-permission="a b" n'apparaît que si le
+     compte a toutes ces permissions.
+     -------------------------------------------------------------------------- */
+  var droits = { role: null, equipe: false, permissions: [] };
+  var ROLES = { admin: 'Administrateur', gerant: 'Gérant', employe: 'Employé', client: 'Client' };
+
+  function peut(permission) {
+    return droits.permissions.indexOf(permission) >= 0;
+  }
+
+  function appliquerDroits() {
+    $$('[data-permission]').forEach(function (n) {
+      var permis = n.getAttribute('data-permission').split(/\s+/).every(peut);
+      if (permis) n.removeAttribute('data-interdit'); else n.setAttribute('data-interdit', '');
+    });
+    var badge = $('[data-role-compte]');
+    badge.textContent = ROLES[droits.role] || '';
+    badge.hidden = !droits.role;
+    $('[data-role-texte]').textContent = ROLES[droits.role] || '';
+  }
+
+  /* ---- État de l'affichage ------------------------------------------------ */
+  var etat = {
+    vue: 'apercu',
+    // page commence à 0 ; parPage : 10, 25, 50 ou 100 (barre de pagination)
+    colis: { lignes: [], total: 0, page: 0, parPage: 25, statut: 'actifs', recherche: '', clientId: null, clientCode: '',
+             service: '', pays: '', depuis: '', jusqua: '' },
+    clients: { lignes: [], total: 0, page: 0, parPage: 25, recherche: '', tri: 'recent', filtre: 'tous', finances: true },
+    factures: { lignes: [], total: 0, pages: 1, statut: 'a_payer' },
+    selection: [],
+    vus: {}
+  };
+
+  /* ---- Démarrage ---------------------------------------------------------- */
+  function demarrer() {
+    if (API.mode === 'demo') {
+      $('[data-demo]').hidden = false;
+      $('[data-demo-badge]').hidden = false;
+      $$('[data-demo-identifiants]').forEach(function (n) { n.hidden = false; });
+    }
+    if (API.mode === 'off') { ecran('off'); return; }
+    API.session().then(function (s) {
+      if (!s) { ecran('connexion'); return null; }
+      $$('[data-email]').forEach(function (n) { n.textContent = s.email; });
+      $('[data-avatar]').textContent = String(s.email || '?').replace(/@.*/, '').split(/[._-]+/)
+        .filter(Boolean).slice(0, 2).map(function (m) { return m.charAt(0).toUpperCase(); }).join('') || '?';
+      $('[data-barre-connecte]').hidden = false;
+      // Un compte de l'équipe entre ; un client est renvoyé vers son espace
+      return API.permissions().then(function (p) {
+        droits = p || droits;
+        appliquerDroits();
+        if (droits.equipe) ouvrirTableau(); else ecran('refuse');
+      });
+    }).catch(function (err) {
+      ecran('connexion');
+      erreurFormulaire($('form[data-form="admin-connexion"]'), messageErreur(err));
+    });
+  }
+
+  // Connexion
+  var formConnexion = $('form[data-form="admin-connexion"]');
+  formConnexion.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = formConnexion.elements;
+    if (!f.email.value.trim() || !f.mot_de_passe.value) {
+      erreurFormulaire(formConnexion, 'Renseignez votre e-mail et votre mot de passe.');
+      return;
+    }
+    erreurFormulaire(formConnexion, '');
+    var bouton = $('[data-envoyer]', formConnexion);
+    attente(bouton, 'Connexion…');
+    API.connecter(f.email.value.trim().toLowerCase(), f.mot_de_passe.value).then(function () {
+      attente(bouton);
+      f.mot_de_passe.value = '';
+      demarrer();
+    }).catch(function (err) {
+      attente(bouton);
+      erreurFormulaire(formConnexion, messageErreur(err));
+    });
+  });
+
+  var deconnexionVoulue = false;
+  $$('[data-action="deconnexion"]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      deconnexionVoulue = true;
+      API.deconnecter().then(function () { location.reload(); });
+    });
+  });
+
+  /* ---- Tableau de bord ---------------------------------------------------------- */
+  // Logo des e-mails : copié une fois dans le dossier public de Supabase, pour que
+  // Gmail et les autres messageries puissent l'afficher
+  var logoVerifie = false;
+  function installerLogoEmail() {
+    if (logoVerifie || API.mode !== 'supabase' || !window.GoshipNotifications || !API.admin.preparerLogo) return;
+    if (!peut('settings.manage')) return;   // le dossier « site » n'est ouvert qu'à ce rôle
+    logoVerifie = true;
+    API.admin.preparerLogo(window.GoshipNotifications.logo).then(function (etat) {
+      if (etat === 'envoye') toast('Logo des e-mails installé.');
+    }).catch(function (err) {
+      toast('Logo des e-mails non installé : ' + ((err && err.message) || 'erreur inconnue') + '.', true);
+    });
+  }
+
+  function ouvrirTableau() {
+    ecran('tableau');
+    $('[data-demo-actions]').hidden = API.mode !== 'demo';
+    appliquerReglages();
+    choisirVue(etat.vue);
+    chargerStatistiques();
+    chargerColis();
+    if (peut('clients.view')) chargerClients();
+    if (peut('invoices.view')) chargerFactures();
+    if (peut('users.view')) chargerEquipe();
+    installerLogoEmail();
+    arreterSurveillance();
+    arreterSurveillance = API.surveiller(function (quoi) {
+      clearTimeout(rechargementPrevu);
+      rechargementPrevu = setTimeout(function () { toutRecharger(quoi); }, 350);
+    }, { tout: true, etat: function (actif) {
+      $('[data-direct]').hidden = !actif;
+      etatDirect.connecte = actif;
+      majDirect();
+    } });
+  }
+
+  // Un changement signalé en direct (ou le retour du réseau) : les listes
+  // ouvertes se rechargent. La vue générale, au plus toutes les 15 secondes ;
+  // elle porte aussi les alertes des notifications du poste de travail.
+  var rechargementPrevu = null;
+  var arreterSurveillance = function () {};
+  function toutRecharger(quoi) {
+    chargerStatistiques();
+    chargerColis(true);
+    if (peut('clients.view') && (quoi === 'clients' || etat.vue === 'clients')) chargerClients();
+    if (peut('invoices.view') && (quoi === 'factures' || etat.vue === 'factures')) chargerFactures();
+    if (peut('users.view') && (quoi === 'clients' || etat.vue === 'equipe')) chargerEquipe();
+    if (!etatDirect.pause && (etat.vue === 'apercu' || notificationsActives())) rafraichirApercu();
+  }
+
+  function chargerStatistiques() {
+    API.admin.statistiques().then(function (s) {
+      var statuts = (s && s.statuts) || {};
+      $$('[data-stat]').forEach(function (n) {
+        var cle = n.getAttribute('data-stat');
+        var valeur = cle === 'clients' ? s.clients : (cle === 'livres_30j' ? s.livres_30j : statuts[cle]);
+        n.textContent = String(valeur || 0);
+      });
+    }).catch(function () { /* les chiffres restent affichés tels quels */ });
+  }
+
+  /* ---- Colis --------------------------------------------------------------- */
+  var corpsColis = $('[data-lignes="colis"]');
+
+  // Un jour du filtre « Reçus du … au … », en heure de Santo Domingo (UTC−4
+  // toute l'année) : « au 12/09 » compte tout le 12, jusqu'à minuit.
+  function debutDuJour(jour) { return jour + 'T00:00:00-04:00'; }
+  function lendemain(jour) {
+    var t = new Date(jour + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() + 1);
+    return t.toISOString().slice(0, 10);
+  }
+
+  function colisFiltres() {
+    var c = etat.colis;
+    return c.statut !== 'actifs' || c.recherche || c.clientId || c.service || c.pays || c.depuis || c.jusqua;
+  }
+
+  function chargerColis(enDirect) {
+    var c = etat.colis;
+    if (c.depuis && c.jusqua && c.jusqua < c.depuis) {
+      toast('La date de fin est avant la date de début.', true);
+      return Promise.resolve();
+    }
+    return API.admin.colis({
+      recherche: c.recherche, statut: c.statut, clientId: c.clientId, service: c.service, pays: c.pays,
+      depuis: c.depuis ? debutDuJour(c.depuis) : null, jusqua: c.jusqua ? debutDuJour(lendemain(c.jusqua)) : null,
+      page: c.page, parPage: c.parPage
+    }).then(function (r) {
+      // Une page vidée entre-temps (colis supprimés, filtre changé) : la dernière qui existe
+      if (!r.lignes.length && c.page > 0 && r.total > 0) {
+        c.page = Math.ceil(r.total / c.parPage) - 1;
+        return chargerColis(enDirect);
+      }
+      var nouveaux = [];
+      r.lignes.forEach(function (ligne) {
+        if (enDirect && etat.vus[ligne.id] !== ligne.maj_le) nouveaux.push(ligne.id);
+        etat.vus[ligne.id] = ligne.maj_le;
+      });
+      c.lignes = r.lignes;
+      c.total = r.total;
+      var ids = r.lignes.map(function (l) { return l.id; });
+      etat.selection = etat.selection.filter(function (id) { return ids.indexOf(id) >= 0; });
+      afficherColis(nouveaux);
+    }).catch(function (err) {
+      if (err.code === 'non-autorise') { location.reload(); return; }
+      toast(messageErreur(err), true);
+    });
+  }
+
+  function cellule(libelle) {
+    var td = el('td');
+    if (libelle) td.setAttribute('data-libelle', libelle);
+    return td;
+  }
+
+  function badge(statut) {
+    return el('span', 'gs-badge gs-badge--' + statut, STATUTS[statut] || statut);
+  }
+
+  /* ---- Étiquettes et factures imprimées ----------------------------------
+     assets/js/impression.js dessine le document, code-barres et QR code
+     compris, puis l'envoie à l'imprimante dans un cadre à part. La fenêtre
+     d'impression du navigateur sert d'aperçu : on n'en ajoute pas un second. */
+  var IMP = window.GoshipImpression;
+
+  function imprimer(noeuds, options) {
+    if (!IMP) {
+      toast("L'impression demande le fichier assets/js/impression.js.", true);
+      return Promise.resolve(false);
+    }
+    return IMP.imprimer(noeuds, options).catch(function () {
+      toast("L'impression n'a pas pu s'ouvrir. Réessayez.", true);
+      return false;
+    });
+  }
+
+  // L'étiquette d'expédition : 4 × 6 pouces, une page par colis
+  function imprimerEtiquettes(liste) {
+    if (!IMP || !liste.length) return;
+    var noeuds = liste.map(function (colis) { return IMP.etiquette(colis); });
+    imprimer(noeuds, {
+      papier: '4in 6in',
+      titre: liste.length === 1 ? 'Étiquette ' + liste[0].numero
+                                : liste.length + ' étiquettes Goship Express'
+    }).then(function (fait) {
+      if (fait && liste.length > 1) toast(liste.length + ' étiquettes envoyées à l\'imprimante.');
+    });
+  }
+
+  function imprimerFacture(facture) {
+    if (!IMP) return;
+    var client = facture.clients || {};
+    imprimer([IMP.facture(facture, client)], {
+      papier: 'A4', langue: client.langue || 'fr', titre: 'Facture ' + (facture.numero || '')
+    });
+  }
+
+  function boutonEtiquette(colis, classe) {
+    var b = el('button', classe, 'Étiquette');
+    b.type = 'button';
+    b.setAttribute('data-imprimer', '');
+    b.setAttribute('aria-label', 'Imprimer l\'étiquette du colis ' + colis.numero);
+    b.addEventListener('click', function () { imprimerEtiquettes([colis]); });
+    return b;
+  }
+
+  // « Voir la facture » : ouvre la facture de ce colis. Un colis d'avant la
+  // facturation automatique n'en a pas : on propose alors de la créer.
+  function boutonFactureDuColis(colis) {
+    var b = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Voir la facture');
+    b.type = 'button';
+    b.setAttribute('aria-label', 'Voir la facture du colis ' + colis.numero);
+    b.addEventListener('click', function () {
+      var fin = attente(b, 'Ouverture…');
+      API.admin.factureDuColis(colis.id).then(function (facture) {
+        if (facture) { choisirVue('factures'); ouvrirFacture(facture); return; }
+        if (!peut('invoices.create')) { toast('Ce colis n\u2019a pas encore de facture.'); return; }
+        if (!window.confirm('Ce colis n\u2019a pas encore de facture. En créer une maintenant ?')) return;
+        if (!colis.client_id) { toast('Colis sans client : facture impossible.', true); return; }
+        // La base crée la facture, ou rend celle qu'un collègue vient de créer
+        return API.admin.facturerColis(colis.id)
+          .then(function (r) { return ajouterLienPaiement(r.facture); })
+          .then(function (f) {
+            toast('Facture ' + (f && f.numero ? f.numero : '') + ' créée.');
+            choisirVue('factures');
+            return chargerFactures();
+          });
+      }).catch(function (err) { toast(messageErreur(err), true); }).then(fin);
+    });
+    return b;
+  }
+
+  function afficherColis(nouveaux) {
+    var c = etat.colis;
+    corpsColis.textContent = '';
+    c.lignes.forEach(function (colis) {
+      var tr = el('tr');
+      tr.setAttribute('data-id', colis.id);
+      var choisi = etat.selection.indexOf(colis.id) >= 0;
+      if (choisi) tr.classList.add('is-choisi');
+      if (nouveaux && nouveaux.indexOf(colis.id) >= 0) tr.classList.add('is-nouveau');
+
+      var tdCase = el('td', 'gs-tableau__case');
+      var caseACocher = el('input');
+      caseACocher.type = 'checkbox';
+      caseACocher.checked = choisi;
+      caseACocher.setAttribute('aria-label', 'Sélectionner le colis ' + colis.numero);
+      caseACocher.setAttribute('data-choix', colis.id);
+      tdCase.appendChild(caseACocher);
+      tr.appendChild(tdCase);
+
+      var tdNum = cellule('Colis');
+      tdNum.appendChild(el('span', 'gs-cellule-num', colis.numero));
+      if (colis.suivi_transporteur) tdNum.appendChild(el('span', 'gs-cellule-sous', colis.suivi_transporteur));
+      tr.appendChild(tdNum);
+
+      var tdClient = cellule('Client');
+      tdClient.appendChild(el('span', 'gs-cellule-principale', colis.nom_client || 'Client supprimé'));
+      tdClient.appendChild(el('span', 'gs-cellule-sous', [colis.code_client, colis.telephone_client].filter(Boolean).join(' · ')));
+      tr.appendChild(tdClient);
+
+      var tdContenu = cellule('Contenu');
+      tdContenu.appendChild(el('span', '', colis.description || '—'));
+      var detailsContenu = [colis.expediteur, colis.poids_lb != null && colis.poids_lb !== '' ? O.nombre(Number(colis.poids_lb)) + ' lb' : '']
+        .filter(Boolean).join(' · ');
+      if (detailsContenu) tdContenu.appendChild(el('span', 'gs-cellule-sous', detailsContenu));
+      tr.appendChild(tdContenu);
+
+      var tdService = cellule('Service');
+      tdService.appendChild(el('span', '', SERVICES[colis.service] || colis.service));
+      tdService.appendChild(el('span', 'gs-cellule-sous', [colis.destination, PAYS[colis.pays_destination]].filter(Boolean).join(', ')));
+      tr.appendChild(tdService);
+
+      var tdStatut = cellule('Statut');
+      tdStatut.appendChild(badge(colis.statut));
+      if (colis.lieu) tdStatut.appendChild(el('span', 'gs-cellule-sous', colis.lieu));
+      tr.appendChild(tdStatut);
+
+      var tdRecu = cellule('Reçu le');
+      tdRecu.textContent = O.date(colis.recu_le || colis.cree_le, true);
+      tr.appendChild(tdRecu);
+
+      var tdMaj = cellule('Mis à jour');
+      tdMaj.textContent = O.date(colis.maj_le, true);
+      tr.appendChild(tdMaj);
+
+      // Pas de boutons dans la ligne : « Mettre à jour », « Voir la facture » et
+      // « Étiquette » sont dans sa fiche, qu'un clic sur la ligne ouvre
+      corpsColis.appendChild(tr);
+    });
+
+    var vide = $('[data-vide="colis"]');
+    vide.hidden = c.lignes.length > 0;
+    if (!c.lignes.length) {
+      vide.textContent = colisFiltres()
+        ? 'Aucun colis ne correspond à ces filtres.'
+        : 'Aucun colis en cours. Cliquez sur « Enregistrer un colis » à la réception d’un paquet à Miami.';
+    }
+    $('.gs-tableau--colis').closest('.gs-tableau-cadre').hidden = !c.lignes.length;
+    paginer('colis', c, c.total, function () { chargerColis(); });
+    $('[data-action="reinitialiser-colis"]').hidden = !colisFiltres();
+    $('[data-total="colis"]').textContent = c.total ? String(c.total) : '';
+    majSelection();
+    $$('[data-filtre-statut]').forEach(function (b) {
+      b.classList.toggle('is-actif', !c.clientId && !c.recherche && b.getAttribute('data-filtre-statut') === c.statut);
+    });
+  }
+
+  // Recherche (avec un court délai pendant la frappe) et filtres
+  var delaiRecherche = null;
+  $('[data-recherche="colis"]').addEventListener('input', function (e) {
+    clearTimeout(delaiRecherche);
+    delaiRecherche = setTimeout(function () {
+      etat.colis.recherche = e.target.value.trim();
+      etat.colis.page = 0;
+      chargerColis();
+    }, 300);
+  });
+  var filtre = $('[data-filtre-colis]');
+  filtre.addEventListener('change', function () {
+    etat.colis.statut = filtre.value;
+    etat.colis.page = 0;
+    chargerColis();
+  });
+  // Service, destination, dates de réception : la base filtre, la page n'écarte rien
+  [['[data-filtre-service]', 'service'], ['[data-filtre-pays]', 'pays'], ['[data-filtre-depuis]', 'depuis'],
+   ['[data-filtre-jusqua]', 'jusqua']].forEach(function (x) {
+    $(x[0]).addEventListener('change', function (e) {
+      etat.colis[x[1]] = e.target.value || '';
+      etat.colis.page = 0;
+      chargerColis();
+    });
+  });
+  function viderFiltresColis() {
+    var c = etat.colis;
+    c.statut = 'actifs'; c.recherche = ''; c.service = ''; c.pays = ''; c.depuis = ''; c.jusqua = ''; c.page = 0;
+    filtre.value = 'actifs';
+    $('[data-recherche="colis"]').value = '';
+    $('[data-filtre-service]').value = '';
+    $('[data-filtre-pays]').value = '';
+    $('[data-filtre-depuis]').value = '';
+    $('[data-filtre-jusqua]').value = '';
+  }
+  $('[data-action="reinitialiser-colis"]').addEventListener('click', function () {
+    viderFiltresColis();
+    retirerFiltreClient(false);
+    chargerColis();
+  });
+  $$('[data-filtre-statut]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      // La pastille compte tous les colis de ce statut : les autres filtres s'effacent
+      viderFiltresColis();
+      filtrerParStatut(b.getAttribute('data-filtre-statut'));
+    });
+  });
+  $('[data-vue-cible="clients"]').addEventListener('click', function () { choisirVue('clients'); });
+
+  // La liste des colis, filtrée sur un statut (pastilles du haut, vue générale)
+  function filtrerParStatut(statut) {
+    filtre.value = statut;
+    etat.colis.statut = statut;
+    retirerFiltreClient(false);
+    etat.colis.page = 0;
+    choisirVue('colis');
+    chargerColis();
+  }
+
+  function filtrerParClient(client) {
+    etat.colis.clientId = client.id;
+    etat.colis.clientCode = client.code;
+    etat.colis.statut = '';
+    filtre.value = '';
+    etat.colis.recherche = '';
+    $('[data-recherche="colis"]').value = '';
+    etat.colis.page = 0;
+    $('[data-filtre-client-nom]').textContent = client.nom_complet + ' (' + client.code + ')';
+    $('[data-filtre-client]').hidden = false;
+    choisirVue('colis');
+    chargerColis();
+  }
+
+  function retirerFiltreClient(recharger) {
+    etat.colis.clientId = null;
+    etat.colis.clientCode = '';
+    $('[data-filtre-client]').hidden = true;
+    if (recharger) {
+      etat.colis.statut = 'actifs';
+      filtre.value = 'actifs';
+      etat.colis.page = 0;
+      chargerColis();
+    }
+  }
+  $('[data-action="retirer-filtre-client"]').addEventListener('click', function () { retirerFiltreClient(true); });
+
+  // Sélection de plusieurs colis
+  function majSelection() {
+    var n = etat.selection.length;
+    $('[data-selection]').hidden = n === 0;
+    $('[data-selection-nombre]').textContent = n + (n > 1 ? ' colis sélectionnés' : ' colis sélectionné');
+    var tout = $('[data-tout-selectionner]');
+    var affiches = etat.colis.lignes.length;
+    tout.checked = affiches > 0 && n === affiches;
+    tout.indeterminate = n > 0 && n < affiches;
+  }
+
+  corpsColis.addEventListener('change', function (e) {
+    var id = e.target.getAttribute('data-choix');
+    if (!id) return;
+    if (e.target.checked) { if (etat.selection.indexOf(id) < 0) etat.selection.push(id); }
+    else etat.selection = etat.selection.filter(function (x) { return x !== id; });
+    e.target.closest('tr').classList.toggle('is-choisi', e.target.checked);
+    majSelection();
+  });
+  $('[data-tout-selectionner]').addEventListener('change', function (e) {
+    etat.selection = e.target.checked ? etat.colis.lignes.map(function (l) { return l.id; }) : [];
+    afficherColis();
+  });
+  $('[data-action="deselectionner"]').addEventListener('click', function () {
+    etat.selection = [];
+    afficherColis();
+  });
+  // Toutes les étiquettes d'un coup : c'est ce qu'on veut après avoir
+  // enregistré l'arrivée d'un lot.
+  $('[data-action="etiquettes-groupe"]').addEventListener('click', function () {
+    var ids = etat.selection;
+    imprimerEtiquettes(etat.colis.lignes.filter(function (l) { return ids.indexOf(l.id) >= 0; }));
+  });
+  /* Supprimer les colis cochés. Irréversible : la base emporte aussi leur
+     historique. On nomme donc ce qu'on va détruire, jusqu'à trois numéros. */
+  $('[data-action="supprimer-groupe"]').addEventListener('click', function () {
+    var ids = etat.selection.slice();
+    if (!ids.length) return;
+    var numeros = etat.colis.lignes
+      .filter(function (l) { return ids.indexOf(l.id) >= 0; })
+      .map(function (l) { return l.numero; });
+    var quoi = numeros.length <= 3
+      ? (numeros.length === 1 ? 'le colis ' : 'les colis ') + numeros.join(', ')
+      : 'ces ' + ids.length + ' colis';
+    if (!window.confirm('Supprimer définitivement ' + quoi + ' et leur historique ?\n'
+                        + 'Cette action ne peut pas être annulée.')) return;
+    Promise.all(ids.map(function (id) {
+      return API.admin.supprimerColis(id).then(function () { return true; },
+                                               function () { return false; });
+    })).then(function (faits) {
+      var reussis = faits.filter(Boolean).length;
+      var rates = faits.length - reussis;
+      etat.selection = [];
+      chargerStatistiques();
+      chargerColis();
+      if (rates) toast(reussis + ' colis supprimé' + (reussis > 1 ? 's' : '') + ', '
+                       + rates + ' non supprimé' + (rates > 1 ? 's' : '') + '.', true);
+      else toast(reussis > 1 ? reussis + ' colis supprimés.' : 'Colis supprimé.');
+    });
+  });
+
+  $('[data-action="statut-groupe"]').addEventListener('click', function () {
+    if (etat.selection.length) ouvrirStatut(etat.selection.slice(), null);
+  });
+
+  /* ---- Clients ---------------------------------------------------------------- */
+  var corpsClients = $('[data-lignes="clients"]');
+
+  // Une page de clients avec leurs colis en cours et leurs montants, triée,
+  // filtrée et comptée par la base (clients_soldes) : juste pour 50 clients
+  // comme pour 50 000. Sans outils/supabase-tableau-de-bord.sql, la liste
+  // s'affiche quand même, sans les chiffres.
+  function chargerClients() {
+    var c = etat.clients;
+    return API.admin.clientsSoldes({ recherche: c.recherche, tri: c.tri, filtre: c.filtre, page: c.page, parPage: c.parPage })
+      .then(function (r) {
+        if (!r.lignes.length && c.page > 0 && r.total > 0) {
+          c.page = Math.ceil(r.total / c.parPage) - 1;
+          return chargerClients();
+        }
+        c.lignes = r.lignes || [];
+        c.total = r.total || 0;
+        c.finances = r.finances !== false;
+        c.sansChiffres = false;
+        afficherClients();
+      })
+      .catch(function (err) {
+        if (err.code !== 'absent') { toast(messageErreur(err), true); return; }
+        return API.admin.clients({ recherche: c.recherche, page: c.page, parPage: c.parPage }).then(function (r) {
+          c.lignes = r.lignes;
+          c.total = r.total;
+          c.sansChiffres = true;
+          afficherClients();
+        }).catch(function (e) { toast(messageErreur(e), true); });
+      });
+  }
+
+  // Les statuts d'un client, du plus avancé au moins avancé, en petites pastilles
+  function pastillesStatuts(statuts) {
+    var boite = el('span', 'gs-statuts-mini');
+    Object.keys(STATUTS).forEach(function (cle) {
+      var n = statuts[cle];
+      if (!n) return;
+      var p = el('span', 'gs-statut-mini gs-statut-mini--' + cle);
+      p.appendChild(el('i', 'gs-pastille gs-pastille--' + cle));
+      p.appendChild(document.createTextNode(n + ' ' + STATUTS[cle].toLowerCase()));
+      boite.appendChild(p);
+    });
+    return boite;
+  }
+
+  // Les actions d'un client, montrées dans sa fiche : selon les permissions du rôle
+  function actionsClient(client) {
+    var r = [];
+    var voir = petitBouton('Ses colis', null, function () { filtrerParClient(client); });
+    r.push(voir);
+    if (peut('invoices.create')) {
+      var sesFactures = petitBouton('Ses factures', null, function () {
+        choisirVue('factures');
+        ouvrirFacture(null);
+        champCodeFacture.value = client.code || '';
+        champCodeFacture.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      sesFactures.setAttribute('aria-label', 'Voir les factures de ' + (client.nom_complet || client.code));
+      r.push(sesFactures);
+    }
+    if (peut('shipments.create')) {
+      var ajouter = petitBouton('+ Colis', null, function () { ouvrirColis({ code: client.code }); });
+      ajouter.setAttribute('aria-label', 'Enregistrer un colis pour ' + (client.nom_complet || client.code));
+      r.push(ajouter);
+    }
+    return r;
+  }
+
+  function afficherClients() {
+    var c = etat.clients;
+    var montants = peut('invoices.view') && c.finances && !c.sansChiffres;
+    corpsClients.textContent = '';
+    c.lignes.forEach(function (client) {
+      var tr = el('tr');
+      FICHES.set(tr, { client: client });
+      var enCours = Number(client.colis_en_cours) || 0;
+      if (enCours) tr.classList.add('is-actif-client');
+
+      var tdCode = cellule('Identifiant');
+      tdCode.appendChild(el('span', 'gs-cellule-num', client.code || '—'));
+      if (client.cree_le) tdCode.appendChild(el('span', 'gs-cellule-sous', 'Inscrit le ' + O.date(client.cree_le)));
+      tr.appendChild(tdCode);
+
+      var tdNom = cellule('Client');
+      tdNom.appendChild(el('span', 'gs-cellule-principale', client.nom_complet || '—'));
+      tdNom.appendChild(el('span', 'gs-cellule-sous',
+        [client.telephone, [client.ville, PAYS[client.pays] || client.pays].filter(Boolean).join(', ')]
+          .filter(Boolean).join(' · ')));
+      tdNom.appendChild(el('span', 'gs-cellule-sous', client.email || ''));
+      tr.appendChild(tdNom);
+
+      var tdNb = cellule('Colis en cours');
+      if (c.sansChiffres) {
+        tdNb.appendChild(el('span', 'gs-cellule-sous', 'Non disponible'));
+      } else if (enCours) {
+        tdNb.appendChild(el('span', 'gs-cellule-principale', String(enCours)));
+        tdNb.appendChild(pastillesStatuts(client.statuts || {}));
+      } else {
+        tdNb.appendChild(el('span', 'gs-cellule-sous', 'Aucun colis en cours'));
+      }
+      tr.appendChild(tdNb);
+
+      var tdPoids = cellule('Poids en cours');
+      tdPoids.textContent = Number(client.poids_en_cours) ? O.nombre(Number(client.poids_en_cours)) + ' lb' : '—';
+      tr.appendChild(tdPoids);
+
+      if (peut('invoices.view')) {
+        var tdFacture = cellule('Facturé');
+        tdFacture.textContent = montants && Number(client.facture_usd) ? argent(client.facture_usd) : (montants ? '—' : 'Non disponible');
+        tr.appendChild(tdFacture);
+        var tdPaye = cellule('Payé');
+        tdPaye.textContent = montants && Number(client.paye_usd) ? argent(client.paye_usd) : (montants ? '—' : 'Non disponible');
+        tr.appendChild(tdPaye);
+        var tdSolde = cellule('Solde');
+        var solde = Number(client.solde_usd) || 0;
+        tdSolde.appendChild(el('span', solde > 0 ? 'gs-cellule-principale gs-balance-due' : 'gs-cellule-sous',
+                               !montants ? 'Non disponible' : (solde > 0 ? argent(solde) : 'Rien à payer')));
+        if (montants && Number(client.factures_ouvertes) > 0) {
+          tdSolde.appendChild(el('span', 'gs-cellule-sous', client.factures_ouvertes +
+                                 (client.factures_ouvertes > 1 ? ' factures ouvertes' : ' facture ouverte')));
+        }
+        tr.appendChild(tdSolde);
+      }
+
+      var tdDate = cellule('Dernière activité');
+      tdDate.textContent = client.derniere_activite ? O.date(client.derniere_activite, true) : '—';
+      tr.appendChild(tdDate);
+
+      // Pas de boutons dans la ligne : ses actions sont dans sa fiche (actionsClient)
+      corpsClients.appendChild(tr);
+    });
+    var vide = $('[data-vide="clients"]');
+    vide.hidden = c.lignes.length > 0;
+    if (!c.lignes.length) {
+      vide.textContent = c.recherche || c.filtre !== 'tous' ? 'Aucun client ne correspond à cette recherche.'
+        : 'Aucun client inscrit pour l’instant. Les comptes créés sur le site apparaissent ici, avec leur code GSE.';
+    }
+    $('.gs-tableau--clients').closest('.gs-tableau-cadre').hidden = !c.lignes.length;
+    paginer('clients', c, c.total, function () { chargerClients(); });
+    $('[data-total="clients"]').textContent = c.total ? String(c.total) : '';
+  }
+
+  var delaiClients = null;
+  $('[data-recherche="clients"]').addEventListener('input', function (e) {
+    clearTimeout(delaiClients);
+    delaiClients = setTimeout(function () {
+      etat.clients.recherche = e.target.value.trim();
+      etat.clients.page = 0;
+      chargerClients();
+    }, 300);
+  });
+  $('[data-filtre-clients]').addEventListener('change', function (e) {
+    etat.clients.filtre = e.target.value;
+    etat.clients.page = 0;
+    chargerClients();
+  });
+  $('[data-tri-clients]').addEventListener('change', function (e) {
+    etat.clients.tri = e.target.value;
+    etat.clients.page = 0;
+    chargerClients();
+  });
+
+
+  /* ---- Factures -------------------------------------------------------------
+     La base fait tous les comptes (outils/supabase-finances.sql) : le total à
+     la création, le payé, le solde et l'état à chaque paiement. Cette page
+     les affiche tels qu'elle les reçoit et ne décide de rien : pas de
+     « Marquer payée », mais un paiement enregistré ; pas de suppression, mais
+     une annulation motivée.
+     -------------------------------------------------------------------------- */
+  var corpsFactures = $('[data-lignes="factures"]');
+  var dlgFacture = $('[data-dialogue="facture"]');
+  var formFacture = $('form[data-form="facture"]', dlgFacture);
+  var champCodeFacture = $('[data-code-client-facture]', formFacture);
+  var infoClientFacture = $('[data-client-facture]', formFacture);
+  var blocColisFacture = $('[data-colis-facture]', formFacture);
+  var listeColisFacture = $('[data-liste-colis-facture]', formFacture);
+  var blocPaiements = $('[data-bloc-paiements]', formFacture);
+  var blocActionsFacture = $('[data-bloc-actions-facture]', formFacture);
+  var factureEditee = null;
+  var clientFacture = null;
+  var rechercheFacture = null;
+
+  var ETATS_FACTURE = {
+    a_payer: 'À payer', partielle: 'Payée en partie', en_retard: 'En retard', payee: 'Payée', annulee: 'Annulée'
+  };
+  var MOYENS = {
+    paypal: 'PayPal', banque: 'Virement bancaire', azul: 'Azul', moncash: 'MonCash', natcash: 'NatCash',
+    especes: 'Espèces', transfert: 'Transfert d’argent', autre: 'Autre moyen'
+  };
+  var MESSAGE_FACTURE = {
+    fr: 'Bonjour {nom}, votre facture {numero} chez GoShip Express s’élève à {montant}.{lien}',
+    en: 'Hello {nom}, your GoShip Express invoice {numero} comes to {montant}.{lien}',
+    es: 'Hola {nom}, su factura {numero} de GoShip Express asciende a {montant}.{lien}',
+    ht: 'Bonjou {nom}, fakti ou {numero} nan GoShip Express se {montant}.{lien}'
+  };
+  // Une facture déjà payée en partie : on rappelle ce qui reste, pas le total
+  var MESSAGE_RESTE = {
+    fr: 'Bonjour {nom}, il reste {montant} à payer sur votre facture {numero} chez GoShip Express.{lien}',
+    en: 'Hello {nom}, {montant} is still due on your GoShip Express invoice {numero}.{lien}',
+    es: 'Hola {nom}, quedan {montant} por pagar en su factura {numero} de GoShip Express.{lien}',
+    ht: 'Bonjou {nom}, ou rete {montant} pou peye sou fakti {numero} ou nan GoShip Express.{lien}'
+  };
+
+  // Lien de paiement par carte (Visa, Mastercard) d'une facture :
+  // le lien d'Azul (ou d'un autre encaisseur) s'il est renseigné dans config.js,
+  // sinon un lien PayPal fabriqué avec l'adresse et le montant.
+  function lienCarte(numero, montant) {
+    var cfg = window.GOSHIP_CONFIG || {};
+    if (cfg.carteLien) return cfg.carteLien;
+    if (!cfg.carteEmail) return '';
+    return 'https://www.paypal.com/cgi-bin/webscr?cmd=_xclick' +
+      '&business=' + encodeURIComponent(cfg.carteEmail) +
+      '&currency_code=' + encodeURIComponent(cfg.carteDevise || 'USD') +
+      '&amount=' + (Number(montant) || 0).toFixed(2) +
+      '&item_name=' + encodeURIComponent('Goship Express — facture ' + numero) +
+      '&no_shipping=1&no_note=1';
+  }
+
+  function argent(n) { return (Number(n) || 0).toFixed(2).replace('.', ',') + ' $'; }
+
+  // Une facture de colis, à payer, sans aucun paiement : elle peut se regrouper
+  function regroupable(f) {
+    var lignes = f.facture_lignes || [];
+    return f.statut === 'a_payer' && O.payeDe(f) === 0 && lignes.length > 0 &&
+           lignes.every(function (l) { return l.colis_id; });
+  }
+
+  // Plusieurs chargements peuvent se croiser (filtre changé, mise à jour en
+  // direct, paiement) : seule la réponse du plus récent s'affiche.
+  var demandeFactures = 0;
+  function chargerFactures() {
+    var f = etat.factures;
+    var numero = ++demandeFactures;
+    if (peut('reports.view')) chargerResumeFactures();
+    return API.admin.factures({ etat: f.statut, page: 0, parPage: PAR_PAGE * f.pages }).then(function (r) {
+      if (numero !== demandeFactures) return;
+      f.lignes = r.lignes || [];
+      f.total = r.total || 0;
+      afficherFactures();
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  // Les trois chiffres du haut, calculés par la base (resume_facturation)
+  function chargerResumeFactures() {
+    var zone = $('[data-resume-factures]');
+    return API.admin.resumeFacturation().then(function (r) {
+      function poser(cle, texte) { $('[data-resume="' + cle + '"]', zone).textContent = texte; }
+      poser('a_encaisser', argent(r.a_encaisser));
+      poser('ouvertes', r.ouvertes + (r.ouvertes > 1 ? ' factures ouvertes' : ' facture ouverte'));
+      poser('montant_en_retard', argent(r.montant_en_retard));
+      poser('en_retard', r.en_retard ? r.en_retard + (r.en_retard > 1 ? ' factures échues' : ' facture échue')
+                                     : 'Aucune facture échue');
+      poser('encaisse_mois', argent(r.encaisse_mois));
+      poser('partielles', r.partielles ? r.partielles + (r.partielles > 1 ? ' payées en partie' : ' payée en partie') : '');
+      zone.classList.toggle('gs-finances--retard', r.en_retard > 0);
+      zone.hidden = false;
+    }).catch(function () { zone.hidden = true; });
+  }
+
+  function badgeFacture(etatFacture) {
+    return el('span', 'gs-badge gs-badge--facture-' + etatFacture, ETATS_FACTURE[etatFacture] || etatFacture);
+  }
+
+  function petitBouton(texte, classe, action) {
+    var b = el('button', 'gs-bouton gs-bouton--petit ' + (classe || 'gs-bouton--contour'), texte);
+    b.type = 'button';
+    b.addEventListener('click', action);
+    return b;
+  }
+
+  // Les actions d'une facture, montrées dans sa fiche : selon son état et les permissions
+  function actionsFacture(facture) {
+    var client = facture.clients || {};
+    var t = O.totauxFacture(facture);
+    var r = [];
+    if (t.etat !== 'annulee' && t.balance > 0 && peut('payments.create')) {
+      r.push(petitBouton('Encaisser', 'gs-bouton--plein', function () { ouvrirPaiement(facture); }));
+    }
+    var imprimerBouton = petitBouton('Imprimer', null, function () { imprimerFacture(facture); });
+    imprimerBouton.setAttribute('aria-label', 'Imprimer la facture ' + facture.numero);
+    imprimerBouton.setAttribute('data-imprimer', '');
+    r.push(imprimerBouton);
+    r.push(petitBouton(t.etat === 'annulee' ? 'Voir' : 'Détails', null, function () { ouvrirFacture(facture); }));
+    if (client.telephone && t.etat !== 'annulee' && t.balance > 0) {
+      r.push(petitBouton('WhatsApp', null, function () {
+        var reste = t.paye > 0;
+        var modele = (reste ? MESSAGE_RESTE : MESSAGE_FACTURE)[client.langue] || (reste ? MESSAGE_RESTE : MESSAGE_FACTURE).fr;
+        var texte = modele
+          .replace('{nom}', (client.nom_complet || '').split(' ')[0])
+          .replace('{numero}', facture.numero)
+          .replace('{montant}', argent(reste ? t.balance : t.grandTotal))
+          .replace('{lien}', facture.lien_paiement ? '\n' + facture.lien_paiement : '');
+        var numero = String(client.telephone).replace(/\D/g, '');
+        window.open('https://wa.me/' + numero + '?text=' + encodeURIComponent(texte), '_blank', 'noopener');
+      }));
+    }
+    if (t.etat !== 'annulee' && sortable(facture)) {
+      var sortirBouton = petitBouton('Sortir des colis', null, function () { ouvrirSortie(facture); });
+      sortirBouton.setAttribute('aria-label', 'Sortir des colis de la facture ' + facture.numero);
+      r.push(sortirBouton);
+    }
+    if (t.etat !== 'annulee' && t.paye === 0 && peut('invoices.cancel')) {
+      var annuler = petitBouton('Annuler', 'gs-bouton--danger', function () { demanderAnnulationFacture(facture); });
+      annuler.setAttribute('aria-label', 'Annuler la facture ' + facture.numero);
+      r.push(annuler);
+    }
+    return r;
+  }
+
+  function afficherFactures() {
+    var f = etat.factures;
+    corpsFactures.textContent = '';
+    f.lignes.forEach(function (facture) {
+      var client = facture.clients || {};
+      var t = O.totauxFacture(facture);
+      var tr = el('tr', t.etat === 'annulee' ? 'gs-ligne-annulee' : '');
+      FICHES.set(tr, { facture: facture });
+
+      var tdNum = cellule('Facture');
+      tdNum.appendChild(el('span', 'gs-cellule-num', facture.numero || '—'));
+      var nb = (facture.facture_lignes || []).length;
+      if (nb) tdNum.appendChild(el('span', 'gs-cellule-sous', nb + (nb > 1 ? ' colis' : ' colis')));
+      tr.appendChild(tdNum);
+
+      var tdClient = cellule('Client');
+      tdClient.appendChild(el('span', 'gs-cellule-principale', client.nom_complet || '—'));
+      tdClient.appendChild(el('span', 'gs-cellule-sous', client.code || ''));
+      tr.appendChild(tdClient);
+
+      var tdMontant = cellule('Montant');
+      tdMontant.appendChild(el('span', 'gs-cellule-principale', argent(t.grandTotal)));
+      if (t.etat === 'payee') {
+        tdMontant.appendChild(el('span', 'gs-cellule-sous', facture.moyen ? 'Payée · ' + (MOYENS[facture.moyen] || facture.moyen)
+                                                                          : 'Payée'));
+      } else if (t.paye > 0 && t.etat !== 'annulee') {
+        tdMontant.appendChild(el('span', 'gs-cellule-sous', 'Payé ' + argent(t.paye) + ' · reste ' + argent(t.balance)));
+      } else if (facture.lien_paiement && t.etat !== 'annulee') {
+        tdMontant.appendChild(el('span', 'gs-cellule-sous', 'Lien de paiement prêt'));
+      }
+      tr.appendChild(tdMontant);
+
+      var tdEtat = cellule('État');
+      tdEtat.appendChild(badgeFacture(t.etat));
+      if (t.etat === 'annulee') {
+        if (facture.motif_annulation) tdEtat.appendChild(el('span', 'gs-cellule-sous', facture.motif_annulation));
+      } else if (facture.echeance_le && t.balance > 0) {
+        tdEtat.appendChild(el('span', 'gs-cellule-sous', (t.etat === 'en_retard' ? 'Échue le ' : 'Avant le ') +
+                                                         O.date(facture.echeance_le)));
+      }
+      tr.appendChild(tdEtat);
+
+      var tdDate = cellule('Créée le');
+      tdDate.textContent = O.date(facture.cree_le);
+      tr.appendChild(tdDate);
+
+      // Pas de boutons dans la ligne : ses actions sont dans sa fiche (actionsFacture)
+      corpsFactures.appendChild(tr);
+    });
+
+    var vide = $('[data-vide="factures"]');
+    vide.hidden = f.lignes.length > 0;
+    if (!f.lignes.length) {
+      vide.textContent = f.statut === 'a_payer'
+        ? 'Aucune facture à payer. Créez-en une avec « Nouvelle facture ».'
+        : 'Aucune facture pour ce filtre.';
+    }
+    $('.gs-tableau--factures').closest('.gs-tableau-cadre').hidden = !f.lignes.length;
+    $('[data-plus="factures"]').hidden = f.lignes.length >= f.total;
+    $('[data-total="factures"]').textContent = f.total ? String(f.total) : '';
+  }
+
+  $('[data-filtre-factures]').addEventListener('change', function (e) {
+    etat.factures.statut = e.target.value;
+    etat.factures.pages = 1;
+    chargerFactures();
+  });
+  $('[data-plus="factures"]').addEventListener('click', function () {
+    etat.factures.pages += 1;
+    chargerFactures();
+  });
+  $('[data-action="nouvelle-facture"]').addEventListener('click', function () { ouvrirFacture(null); });
+
+  function montrerClientFacture(client, message) {
+    clientFacture = client;
+    infoClientFacture.className = 'gs-champ__aide gs-client-trouve' + (client ? ' is-ok' : (message ? ' is-erreur' : ''));
+    infoClientFacture.textContent = client
+      ? '✓ ' + client.nom_complet + ' — ' + [client.ville, PAYS[client.pays]].filter(Boolean).join(', ')
+      : (message || '');
+    blocColisFacture.hidden = !client || !!factureEditee;
+    if (client && !factureEditee) chargerColisDuClient(client);
+    else listeColisFacture.textContent = '';
+  }
+
+  // Les colis proposés à la facturation, par identifiant. La liste ne contient
+  // que ceux du client choisi : deux clients ne peuvent pas se retrouver sur la
+  // même facture, ni par la souris ni par « tout sélectionner ».
+  var colisFacturables = {};
+
+  function chargerColisDuClient(client) {
+    colisFacturables = {};
+    listeColisFacture.textContent = 'Chargement…';
+    API.admin.colis({ clientId: client.id, statut: '', parPage: 40 }).then(function (r) {
+      listeColisFacture.textContent = '';
+      if (!r.lignes.length) {
+        listeColisFacture.appendChild(el('p', 'gs-champ__aide', 'Ce client n’a aucun colis enregistré.'));
+        majTotauxFacture();
+        return;
+      }
+      r.lignes.forEach(function (colis) {
+        if (colis.client_id !== client.id) return;   // ceinture et bretelles
+        colisFacturables[colis.id] = colis;
+        var label = el('label');
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = colis.id;
+        input.setAttribute('data-colis-id', colis.id);
+        input.setAttribute('data-colis-libelle', [colis.numero, colis.description].filter(Boolean).join(' — '));
+        input.addEventListener('change', majTotauxFacture);
+        var span = el('span');
+        span.appendChild(el('strong', '', colis.numero));
+        var poids = colis.poids_lb != null && colis.poids_lb !== '' ? O.nombre(Number(colis.poids_lb)) + ' lb' : '';
+        span.appendChild(el('span', 'gs-cellule-sous',
+          [colis.description, poids, STATUTS[colis.statut]].filter(Boolean).join(' · ')));
+        label.appendChild(input);
+        label.appendChild(span);
+        label.appendChild(el('span', 'gs-choix-colis__prix', argent(O.prixColis(colis))));
+        listeColisFacture.appendChild(label);
+      });
+      majTotauxFacture();
+    }).catch(function () {
+      listeColisFacture.textContent = '';
+      listeColisFacture.appendChild(el('p', 'gs-champ__aide', 'Colis indisponibles pour l’instant.'));
+      majTotauxFacture();
+    });
+  }
+
+  function casesColisFacture() { return $$('[data-colis-id]', listeColisFacture); }
+  function colisCoches() {
+    return casesColisFacture().filter(function (i) { return i.checked; })
+      .map(function (i) { return colisFacturables[i.getAttribute('data-colis-id')]; })
+      .filter(Boolean);
+  }
+
+  // Aperçu du total pendant qu'on coche : prix inscrits sur les colis, frais
+  // de service une seule fois. Ce n'est qu'un aperçu : la base refait le
+  // compte à l'enregistrement (creer_facture), et c'est le sien qui compte.
+  function majTotauxFacture() {
+    var cases = casesColisFacture();
+    var choisis = colisCoches();
+    var totalColis = O.arrondi(choisis.reduce(function (s, c) { return s + O.prixColis(c); }, 0));
+    // Sans frais de service : ils s'ajoutent au regroupement ou à l'encaissement
+    var frais = 0;
+    var grand = totalColis;
+
+    var tout = $('[data-tout-colis-facture]', formFacture);
+    if (tout) {
+      tout.checked = cases.length > 0 && choisis.length === cases.length;
+      tout.indeterminate = choisis.length > 0 && choisis.length < cases.length;
+      tout.disabled = !cases.length;
+    }
+    $('[data-compte-colis]', formFacture).textContent = cases.length
+      ? choisis.length + ' / ' + cases.length + (cases.length > 1 ? ' colis cochés' : ' colis coché')
+      : '';
+
+    var recap = $('[data-recap-facture]');
+    recap.hidden = !choisis.length;
+    $$('[data-recap-emise]', recap).forEach(function (n) { n.hidden = true; });
+    if (choisis.length) {
+      $('[data-recap="colis"]', recap).textContent = argent(totalColis);
+      $('[data-recap="frais"]', recap).textContent = argent(frais);
+      $('[data-recap="grand"]', recap).textContent = argent(grand);
+      formFacture.montant_usd.value = grand.toFixed(2);
+      formFacture.montant_usd.readOnly = true;
+      $('[data-aide-montant]', formFacture).textContent =
+        choisis.length + (choisis.length > 1 ? ' colis' : ' colis') + ', sans frais de service : ils s’ajoutent à l’encaissement.';
+    } else if (!factureEditee) {
+      formFacture.montant_usd.readOnly = false;
+      $('[data-aide-montant]', formFacture).textContent = 'Cochez des colis, ou saisissez un montant libre.';
+    }
+  }
+
+  $('[data-tout-colis-facture]', formFacture).addEventListener('change', function (e) {
+    casesColisFacture().forEach(function (i) { i.checked = e.target.checked; });
+    majTotauxFacture();
+  });
+
+  champCodeFacture.addEventListener('input', function () {
+    clearTimeout(rechercheFacture);
+    var valeur = champCodeFacture.value.trim();
+    if (!valeur) { montrerClientFacture(null, ''); return; }
+    rechercheFacture = setTimeout(function () {
+      API.admin.chercherClient(valeur).then(function (client) {
+        montrerClientFacture(client, client ? '' : 'Aucun client avec ce code.');
+      }).catch(function () { montrerClientFacture(null, 'Recherche impossible.'); });
+    }, 350);
+  });
+
+  // Les paiements d'une facture, du plus ancien au plus récent. Un paiement
+  // annulé reste dans la liste, barré, avec son motif.
+  function afficherPaiements(facture) {
+    var liste = $('[data-liste-paiements]', formFacture);
+    liste.textContent = '';
+    var paiements = facture.paiements || [];
+    paiements.forEach(function (p) {
+      var li = el('li', 'gs-paiement' + (p.annule_le ? ' gs-paiement--annule' : ''));
+      var corps = el('div', 'gs-paiement__corps');
+      corps.appendChild(el('strong', 'gs-paiement__montant', argent(p.montant_usd)));
+      corps.appendChild(el('span', 'gs-paiement__moyen',
+        [MOYENS[p.moyen] || p.moyen, p.reference ? 'réf. ' + p.reference : '', O.date(p.paye_le)].filter(Boolean).join(' · ')));
+      var notes = [];
+      if (p.origine === 'reprise') notes.push('Montant payé enregistré avant le registre des paiements');
+      if (p.origine === 'creation') notes.push('Payé à la création de la facture');
+      if (p.note) notes.push(p.note);
+      if (p.annule_le) notes.push('Annulé le ' + O.date(p.annule_le) + ' : ' + p.motif_annulation);
+      if (notes.length) corps.appendChild(el('span', 'gs-paiement__note', notes.join(' — ')));
+      li.appendChild(corps);
+      if (!p.annule_le && peut('payments.cancel')) {
+        var annuler = el('button', 'gs-lien-bouton gs-lien-bouton--danger', 'Annuler');
+        annuler.type = 'button';
+        annuler.setAttribute('aria-label', 'Annuler le paiement de ' + argent(p.montant_usd));
+        annuler.addEventListener('click', function () { demanderAnnulationPaiement(facture, p); });
+        li.appendChild(annuler);
+      }
+      liste.appendChild(li);
+    });
+    $('[data-paiements-vide]', formFacture).hidden = paiements.length > 0;
+  }
+
+  // La fenêtre d'une facture : nouvelle (client, colis, montant), ou émise
+  // (échéance, note, lien ; ses totaux, ses paiements, et ce qu'on peut en faire)
+  function ouvrirFacture(facture) {
+    factureEditee = facture;
+    formFacture.reset();
+    erreurFormulaire(formFacture, '');
+    $('[data-dialogue-titre]', dlgFacture).textContent = facture ? 'Facture ' + facture.numero : 'Nouvelle facture';
+    blocColisFacture.hidden = true;
+    listeColisFacture.textContent = '';
+    colisFacturables = {};
+    $('[data-recap-facture]').hidden = true;
+    $('[data-compte-colis]', formFacture).textContent = '';
+    formFacture.montant_usd.readOnly = false;
+    blocPaiements.hidden = !facture;
+    blocActionsFacture.hidden = true;
+    var annulee = $('[data-facture-annulee]', formFacture);
+    annulee.hidden = true;
+    // Une facture émise : le motif de la modification (obligatoire pour corriger un
+    // montant), et la date de sa dernière correction si elle en a eu une
+    $('[data-bloc-motif-facture]', formFacture).hidden = !facture;
+    var rectifiee = $('[data-facture-rectifiee]', formFacture);
+    rectifiee.hidden = !(facture && facture.rectifiee_le);
+    rectifiee.textContent = facture && facture.rectifiee_le
+      ? 'Montant rectifié le ' + O.date(facture.rectifiee_le, true) + ' : l’ancien montant est gardé dans l’historique des modifications.'
+      : '';
+    var enregistrer = $('button[type="submit"]', formFacture);
+    enregistrer.hidden = false;
+    $$('input, textarea', formFacture).forEach(function (n) { n.disabled = false; });
+
+    if (facture) {
+      var client = facture.clients || {};
+      var t = O.totauxFacture(facture);
+      champCodeFacture.value = client.code || '';
+      champCodeFacture.readOnly = true;
+      clientFacture = { id: facture.client_id, nom_complet: client.nom_complet, code: client.code };
+      infoClientFacture.className = 'gs-champ__aide gs-client-trouve is-ok';
+      infoClientFacture.textContent = '✓ ' + (client.nom_complet || '') + ' · ' + ETATS_FACTURE[t.etat];
+      formFacture.montant_usd.value = t.grandTotal.toFixed(2);
+      formFacture.echeance_le.value = facture.echeance_le || '';
+      formFacture.lien_paiement.value = facture.lien_paiement || '';
+      formFacture.note.value = facture.note || '';
+      // Les totaux tels que la base les a arrêtés et tels que les paiements
+      // les ont amenés : rien n'est recalculé ici.
+      var recap = $('[data-recap-facture]');
+      $('[data-recap="colis"]', recap).textContent = argent(t.colis);
+      $('[data-recap="frais"]', recap).textContent = argent(t.frais);
+      $('[data-recap="grand"]', recap).textContent = argent(t.grandTotal);
+      $('[data-recap="paye"]', recap).textContent = argent(t.paye);
+      $('[data-recap="balance"]', recap).textContent = argent(t.balance);
+      $$('[data-recap-emise]', recap).forEach(function (n) { n.hidden = false; });
+      recap.hidden = false;
+      $('[data-aide-montant]', formFacture).textContent = 'Total arrêté à la création de la facture.';
+      // Une facture de colis garde le total de ses colis : la base refuse
+      // qu'on le change. Celui d'une facture libre, oui, jamais sous le payé.
+      formFacture.montant_usd.readOnly = (facture.facture_lignes || []).some(function (l) { return l.colis_id; });
+      afficherPaiements(facture);
+      $('[data-action="encaisser-facture"]', formFacture).hidden = t.etat === 'annulee' || t.balance <= 0;
+      if (t.etat === 'annulee') {
+        annulee.textContent = 'Annulée le ' + O.date(facture.annulee_le || facture.cree_le) +
+          (facture.motif_annulation ? ' — ' + facture.motif_annulation : '') + '. Elle garde son numéro et ne se modifie plus.';
+        annulee.hidden = false;
+        enregistrer.hidden = true;
+        $$('input, textarea', formFacture).forEach(function (n) { n.disabled = true; });
+      } else {
+        var regrouper = regroupable(facture) && peut('invoices.create') && peut('invoices.cancel');
+        var sortir = sortable(facture);
+        var annulable = t.paye === 0 && peut('invoices.cancel');
+        // Le frais de service d'une facture à payer : l'ajouter s'il n'y est pas, le
+        // retirer s'il y est (jamais sous ce qui est payé : la base refuse)
+        var fraisModifiable = t.balance > 0 && peut('invoices.edit');
+        var ajouterFrais = fraisModifiable && t.frais === 0;
+        var retirerFrais = fraisModifiable && t.frais > 0;
+        $('[data-action="regrouper-facture"]', formFacture).hidden = !regrouper;
+        $('[data-action="sortir-regroupement"]', formFacture).hidden = !sortir;
+        $('[data-action="annuler-facture"]', formFacture).hidden = !annulable;
+        $('[data-action="ajouter-frais"]', formFacture).hidden = !ajouterFrais;
+        $('[data-action="retirer-frais"]', formFacture).hidden = !retirerFrais;
+        blocActionsFacture.hidden = !regrouper && !sortir && !annulable && !ajouterFrais && !retirerFrais;
+        // Sans invoices.edit, la facture se consulte sans se modifier
+        if (!peut('invoices.edit')) {
+          enregistrer.hidden = true;
+          $$('input, textarea', formFacture).forEach(function (n) { n.disabled = true; });
+        }
+      }
+    } else {
+      cleFacture = nouvelleCle();
+      champCodeFacture.readOnly = false;
+      clientFacture = null;
+      infoClientFacture.textContent = '';
+      infoClientFacture.className = 'gs-champ__aide gs-client-trouve';
+      $('[data-aide-montant]', formFacture).textContent = 'Cochez des colis, ou saisissez un montant libre.';
+    }
+    if (!dlgFacture.open) dlgFacture.showModal();
+  }
+
+  var cleFacture = null;
+
+  formFacture.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formFacture, '');
+    if (!clientFacture) { erreurFormulaire(formFacture, 'Indiquez d’abord le code du client.'); return; }
+    var montant = Number(String(formFacture.montant_usd.value).replace(',', '.'));
+    if (!(montant >= 0)) { erreurFormulaire(formFacture, 'Indiquez le montant de la facture.'); return; }
+
+    var choisis = colisCoches();
+    // Une facture appartient à un seul client. La liste n'en propose jamais
+    // d'autres, mais on refuse quand même plutôt que d'émettre un document faux.
+    var intrus = choisis.filter(function (c) { return c.client_id && c.client_id !== clientFacture.id; });
+    if (intrus.length) {
+      erreurFormulaire(formFacture, 'Un colis sélectionné appartient à un autre client : une facture ne peut en regrouper qu’un seul.');
+      return;
+    }
+
+    // Corriger le montant d'une facture émise est une rectification : la base exige
+    // un motif (modifier_facture) ; on le demande avant de partir.
+    var motif = factureEditee ? formFacture.motif.value.trim() : '';
+    if (factureEditee && O.arrondi(montant) !== O.arrondi(Number(factureEditee.montant_usd)) && motif.length < 5) {
+      erreurFormulaire(formFacture, 'Vous corrigez le montant de la facture : indiquez-en le motif (5 caractères au moins), il sera gardé au journal.');
+      formFacture.motif.focus();
+      return;
+    }
+
+    var champs = {
+      client_id: clientFacture.id,
+      montant_usd: montant,
+      echeance_le: formFacture.echeance_le.value || null,
+      lien_paiement: formFacture.lien_paiement.value.trim(),
+      note: formFacture.note.value.trim()
+    };
+
+    // Une nouvelle facture : la base fait les comptes (prix des colis, frais
+    // de service une fois). Le montant saisi ne compte que pour une facture
+    // sans colis. Une facture émise : seuls l'échéance, le lien, la note — et
+    // le total d'une facture libre — se changent.
+    var bouton = $('button[type="submit"]', formFacture);
+    var fin = attente(bouton, 'Enregistrement…');
+    var action = factureEditee
+      ? API.admin.modifierFacture(factureEditee.id, champs, motif)
+      : API.admin.creerFacture(champs, choisis.map(function (c) { return c.id; }), cleFacture)
+          .then(function (r) {
+            cleFacture = null;
+            // Aucun lien fourni : on en fabrique un avec l'adresse PayPal des réglages
+            return champs.lien_paiement ? r.facture : ajouterLienPaiement(r.facture);
+          });
+    action.then(function (f) {
+      dlgFacture.close();
+      toast(factureEditee ? 'Facture mise à jour.' : 'Facture ' + (f && f.numero ? f.numero : '') + ' créée.');
+      return chargerFactures();
+    }).catch(function (err) {
+      erreurFormulaire(formFacture, messageErreur(err));
+    }).then(fin);
+  });
+
+  // Après un paiement ou une annulation : la liste, et la fenêtre de la
+  // facture si elle est ouverte, montrent ce que la base vient de répondre.
+  function apresFinances(facture, message) {
+    toast(message);
+    if (dlgFacture.open && factureEditee && facture && factureEditee.id === facture.id) {
+      ouvrirFacture(facture);
+    }
+    return chargerFactures();
+  }
+
+  /* ---- Encaisser un paiement ------------------------------------------------ */
+  var dlgPaiement = $('[data-dialogue="paiement"]');
+  var formPaiement = $('form[data-form="paiement"]', dlgPaiement);
+  var facturePayee = null;
+  var clePaiement = null;
+  var suitePaiement = null;   // ce que la fenêtre qui a demandé l'encaissement fait ensuite
+
+  function dateDuJour() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  // Le frais de service à l'encaissement (supabase-frais-service.sql) : pas encore
+  // sur la facture, on demande Oui / Non avant tout ; déjà dessus, on le dit, et il
+  // ne s'ajoute jamais une seconde fois (la base y veille aussi).
+  var blocFraisPaiement = $('[data-paiement-frais]', dlgPaiement);
+  var fraisInclusPaiement = $('[data-paiement-frais-inclus]', dlgPaiement);
+  var choixFraisPaiement = $$('input[name="frais_service"]', formPaiement);
+
+  function fraisDemande() {
+    if (blocFraisPaiement.hidden) return 'non';
+    var c = choixFraisPaiement.filter(function (i) { return i.checked; })[0];
+    return c ? c.value : '';
+  }
+
+  // Les montants de la fenêtre : ceux de la facture, ou, avec « Oui », ceux qu'elle
+  // aura une fois le frais ajouté — montrés avant de confirmer
+  function totauxPaiement() {
+    return fraisDemande() === 'oui' ? O.totauxAvecFrais(facturePayee) : O.totauxFacture(facturePayee);
+  }
+
+  function majPaiement() {
+    var t = totauxPaiement();
+    $('[data-paiement-recap="initial"]', dlgPaiement).textContent = argent(t.colis);
+    $('[data-paiement-recap="frais"]', dlgPaiement).textContent = argent(t.frais);
+    $('[data-paiement-recap="total"]', dlgPaiement).textContent = argent(t.grandTotal);
+    $('[data-paiement-recap="paye"]', dlgPaiement).textContent = argent(t.paye);
+    $('[data-paiement-recap="solde"]', dlgPaiement).textContent = argent(t.balance);
+    formPaiement.montant_usd.value = t.balance.toFixed(2);
+    formPaiement.montant_usd.max = t.balance.toFixed(2);
+    var choix = fraisDemande();
+    $('[data-paiement-frais-aide]', dlgPaiement).textContent = choix === 'oui'
+      ? 'Le frais de service sera ajouté à la facture en même temps que le paiement.'
+      : choix === 'non' ? 'La facture reste sans frais de service.'
+        : 'Le frais de service (' + argent(API.tarifs.fraisService) + ') n’est pas sur cette facture. ' +
+          'Choisissez Oui ou Non : les montants se mettent à jour avant la confirmation.';
+  }
+
+  choixFraisPaiement.forEach(function (i) {
+    i.addEventListener('change', function () { erreurFormulaire(formPaiement, ''); majPaiement(); });
+  });
+
+  function ouvrirPaiement(facture, suite) {
+    facturePayee = facture;
+    suitePaiement = suite || null;
+    clePaiement = nouvelleCle();
+    formPaiement.reset();
+    erreurFormulaire(formPaiement, '');
+    $('[data-paiement-facture]', dlgPaiement).textContent =
+      'Facture ' + facture.numero + ' · ' + ((facture.clients || {}).nom_complet || '');
+    var dejaInclus = O.totauxFacture(facture).frais > 0;
+    // Ajouter le frais change la facture : il faut aussi invoices.edit
+    blocFraisPaiement.hidden = dejaInclus || !peut('invoices.edit');
+    fraisInclusPaiement.hidden = !dejaInclus;
+    fraisInclusPaiement.textContent = dejaInclus
+      ? 'Frais de service déjà inclus (' + argent(O.totauxFacture(facture).frais) + ') : il ne s’ajoute pas une seconde fois.'
+      : '';
+    majPaiement();
+    formPaiement.paye_le.value = dateDuJour();
+    formPaiement.paye_le.max = dateDuJour();
+    dlgPaiement.showModal();
+    (blocFraisPaiement.hidden ? formPaiement.moyen : choixFraisPaiement[0]).focus();
+  }
+
+  formPaiement.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formPaiement, '');
+    var frais = fraisDemande();
+    if (!frais) { erreurFormulaire(formPaiement, 'Indiquez s’il faut ajouter le frais de service.'); return; }
+    var t = totauxPaiement();
+    var montant = Number(String(formPaiement.montant_usd.value).replace(',', '.'));
+    if (!(montant > 0)) { erreurFormulaire(formPaiement, 'Indiquez le montant reçu.'); return; }
+    if (montant > t.balance) {
+      erreurFormulaire(formPaiement, 'Il ne reste que ' + argent(t.balance) + ' à payer sur cette facture.');
+      return;
+    }
+    if (!formPaiement.moyen.value) { erreurFormulaire(formPaiement, 'Indiquez comment le client a payé.'); return; }
+    // Reçu aujourd'hui : l'heure exacte. Un autre jour : midi, heure locale.
+    var jour = formPaiement.paye_le.value;
+    var payeLe = !jour || jour === dateDuJour() ? new Date().toISOString() : new Date(jour + 'T12:00:00').toISOString();
+    var bouton = $('button[type="submit"]', formPaiement);
+    var fin = attente(bouton, 'Enregistrement…');
+    API.admin.encaisserFacture(facturePayee.id, {
+      montant_usd: montant, moyen: formPaiement.moyen.value, reference: formPaiement.reference.value.trim(),
+      paye_le: payeLe, note: formPaiement.note.value.trim()
+    }, frais === 'oui', clePaiement).then(function (r) {
+      clePaiement = null;
+      dlgPaiement.close();
+      var f = r.facture;
+      var suite = suitePaiement;
+      suitePaiement = null;
+      if (suite) suite(f);
+      var tf = O.totauxFacture(f);
+      return majLienPaiement(f).then(function () {
+        return apresFinances(f, (r.frais_ajoutes ? 'Frais de service de ' + argent(tf.frais) + ' ajoutés. ' : '') +
+          (r.deja ? 'Paiement déjà enregistré. ' : 'Paiement de ' + argent(r.paiement.montant_usd) +
+          ' enregistré. ') + (tf.balance > 0 ? 'Reste ' + argent(tf.balance) + ' à payer.' : 'Facture ' + f.numero + ' soldée.'));
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formPaiement, messageErreur(err));
+    }).then(fin);
+  });
+
+  $('[data-action="encaisser-facture"]', formFacture).addEventListener('click', function () {
+    if (factureEditee) ouvrirPaiement(factureEditee);
+  });
+
+  // Ajouter ou retirer le frais de service depuis la fiche : la base recalcule le
+  // total, le payé et le solde (changer_frais_service)
+  function changerFrais(appliquer, bouton) {
+    if (!factureEditee) return;
+    erreurFormulaire(formFacture, '');
+    var fin = attente(bouton, appliquer ? 'Ajout…' : 'Retrait…');
+    API.admin.changerFraisService(factureEditee.id, appliquer).then(function (r) {
+      var f = r.facture;
+      return majLienPaiement(f).then(function () {
+        var tf = O.totauxFacture(f);
+        return apresFinances(f, r.deja ? 'Rien à changer : la facture est déjà ainsi.'
+          : (appliquer ? 'Frais de service ajoutés' : 'Frais de service retirés') + ' : total ' + argent(tf.grandTotal) + '.');
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formFacture, messageErreur(err));
+    }).then(fin);
+  }
+  $('[data-action="ajouter-frais"]', formFacture).addEventListener('click', function (e) { changerFrais(true, e.currentTarget); });
+  $('[data-action="retirer-frais"]', formFacture).addEventListener('click', function (e) { changerFrais(false, e.currentTarget); });
+
+  // Un lien PayPal fabriqué ici porte un montant. Après un acompte, il doit
+  // demander ce qui reste, pas le total : sinon le client paierait deux fois.
+  // Un lien collé à la main (Azul…) n'est pas touché.
+  function majLienPaiement(f) {
+    var t = O.totauxFacture(f);
+    if (!f.lien_paiement || t.balance <= 0 || t.etat === 'annulee') return Promise.resolve(f);
+    if (!/^https:\/\/www\.paypal\.com\/cgi-bin\/webscr\?cmd=_xclick&/.test(f.lien_paiement)) return Promise.resolve(f);
+    var lien = lienCarte(f.numero, t.balance);
+    if (!lien || lien === f.lien_paiement) return Promise.resolve(f);
+    return API.admin.poserLienPaiement(f.id, lien)
+      .then(function () { f.lien_paiement = lien; return f; })
+      .catch(function () { return f; });
+  }
+
+  /* ---- Annuler, avec son motif ------------------------------------------------ */
+  var dlgMotif = $('[data-dialogue="motif"]');
+  var formMotif = $('form[data-form="motif"]', dlgMotif);
+  var actionMotif = null;
+
+  function demanderMotif(options, action) {
+    actionMotif = action;
+    formMotif.reset();
+    erreurFormulaire(formMotif, '');
+    $('[data-motif-titre]', dlgMotif).textContent = options.titre;
+    $('[data-motif-sous-titre]', dlgMotif).textContent = options.sousTitre || '';
+    $('[data-motif-aide]', dlgMotif).textContent = options.aide || '';
+    var valider = $('[data-motif-valider]', dlgMotif);
+    valider.textContent = options.bouton;
+    valider.removeAttribute('data-libelle');
+    dlgMotif.showModal();
+    formMotif.motif.focus();
+  }
+
+  formMotif.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formMotif, '');
+    var motif = formMotif.motif.value.trim();
+    if (!motif) { erreurFormulaire(formMotif, 'Indiquez le motif : il reste au journal.'); return; }
+    var bouton = $('[data-motif-valider]', dlgMotif);
+    var fin = attente(bouton, 'Annulation…');
+    actionMotif(motif).then(function () {
+      dlgMotif.close();
+    }).catch(function (err) {
+      erreurFormulaire(formMotif, messageErreur(err));
+    }).then(fin);
+  });
+
+  function demanderAnnulationFacture(facture) {
+    demanderMotif({
+      titre: 'Annuler la facture ' + facture.numero,
+      sousTitre: ((facture.clients || {}).nom_complet || '') + ' · ' + argent(facture.montant_usd),
+      aide: 'La facture ne sera pas supprimée : elle garde son numéro et reste consultable, marquée « Annulée ». ' +
+            'Ses colis pourront être facturés à nouveau.',
+      bouton: 'Annuler la facture'
+    }, function (motif) {
+      return API.admin.annulerFacture(facture.id, motif).then(function (r) {
+        return apresFinances(r.facture, 'Facture ' + facture.numero + ' annulée.');
+      });
+    });
+  }
+
+  function demanderAnnulationPaiement(facture, paiement) {
+    demanderMotif({
+      titre: 'Annuler le paiement de ' + argent(paiement.montant_usd),
+      sousTitre: 'Facture ' + facture.numero + ' · ' + (MOYENS[paiement.moyen] || paiement.moyen) + ' · ' +
+                 O.date(paiement.paye_le),
+      aide: 'Le paiement restera visible, barré, avec ce motif. Le solde de la facture remonte d’autant. ' +
+            'S’il s’agissait d’une erreur de saisie, enregistrez ensuite le bon paiement.',
+      bouton: 'Annuler le paiement'
+    }, function (motif) {
+      return API.admin.annulerPaiement(paiement.id, motif).then(function (r) {
+        return apresFinances(r.facture, r.deja ? 'Ce paiement était déjà annulé.' : 'Paiement annulé.');
+      });
+    });
+  }
+
+  $('[data-action="annuler-facture"]', formFacture).addEventListener('click', function () {
+    if (factureEditee) demanderAnnulationFacture(factureEditee);
+  });
+
+  /* ---- Regrouper les factures d'un client --------------------------------- */
+  var dlgRegroupement = $('[data-dialogue="regroupement"]');
+  var formRegroupement = $('form[data-form="regroupement"]', dlgRegroupement);
+  var listeRegroupement = $('[data-liste-regroupement]', dlgRegroupement);
+  var facturesRegroupables = {};
+  var candidatesRegroupement = [];   // dans l'ordre de la base
+  var retireesRegroupement = {};     // enlevées de la liste par « Retirer »
+  var cocheesRegroupement = {};
+  var cleRegroupement = null;
+  var apercuRegroupement = 0;
+  var clientRegroupement = null;
+  // Les colis ajoutés par « + Ajouter un colis » qui ne sont pas déjà là par leur
+  // facture : sans facture, ou sur une facture hors de la liste (elle entrera avec eux)
+  var colisAjoutes = [];
+  var caseFraisRegroupement = $('[data-regroupement-frais]', dlgRegroupement);
+
+  function ouvrirRegroupement(facture) {
+    cleRegroupement = nouvelleCle();
+    facturesRegroupables = {};
+    candidatesRegroupement = [];
+    retireesRegroupement = {};
+    cocheesRegroupement = {};
+    cocheesRegroupement[facture.id] = true;
+    colisAjoutes = [];
+    clientRegroupement = { id: facture.client_id, nom_complet: (facture.clients || {}).nom_complet || '' };
+    caseFraisRegroupement.checked = true;
+    erreurFormulaire(formRegroupement, '');
+    $('[data-regroupement-client]', dlgRegroupement).textContent = (facture.clients || {}).nom_complet || '';
+    listeRegroupement.textContent = 'Chargement…';
+    $('[data-regroupement-retirees]', dlgRegroupement).hidden = true;
+    $('[data-recap-regroupement]', dlgRegroupement).hidden = true;
+    dlgRegroupement.showModal();
+    API.admin.factures({ client_id: facture.client_id, etat: 'a_payer', parPage: 200 }).then(function (r) {
+      candidatesRegroupement = (r.lignes || []).filter(regroupable);
+      candidatesRegroupement.forEach(function (f) { facturesRegroupables[f.id] = f; });
+      afficherRegroupement();
+    }).catch(function (err) {
+      listeRegroupement.textContent = '';
+      erreurFormulaire(formRegroupement, messageErreur(err));
+    });
+  }
+
+  // Chaque facture : sa carte à cocher, et deux gestes à côté (pas dans le
+  // <label> : un bouton n'a rien à faire dans l'étiquette d'une case)
+  function afficherRegroupement() {
+    listeRegroupement.textContent = '';
+    var visibles = candidatesRegroupement.filter(function (f) { return !retireesRegroupement[f.id]; });
+    visibles.forEach(function (f) {
+      var ligne = el('div', 'gs-regroupement__ligne');
+      var label = el('label', 'gs-regroupement__choix');
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = f.id;
+      input.checked = !!cocheesRegroupement[f.id];
+      input.addEventListener('change', function () {
+        cocheesRegroupement[f.id] = input.checked;
+        majApercuRegroupement();
+      });
+      var carte = el('div', 'gs-regroupement__carte');
+      carte.appendChild(el('strong', '', f.numero));
+      carte.appendChild(el('b', '', argent(f.montant_usd)));
+      carte.appendChild(el('small', '', (f.facture_lignes || []).map(function (l) {
+        return (l.colis && l.colis.numero) || l.libelle;
+      }).join(', ') + ' · ' + O.date(f.cree_le)));
+      label.appendChild(input);
+      label.appendChild(carte);
+      ligne.appendChild(label);
+      var gestes = el('div', 'gs-regroupement__gestes');
+      if (peut('payments.create')) {
+        var encaisser = petitBouton('Encaisser', 'gs-bouton--plein', function () {
+          // Payée (même en partie), elle ne se regroupe plus : elle quitte la liste
+          ouvrirPaiement(f, function (payee) {
+            candidatesRegroupement = candidatesRegroupement.filter(function (x) { return x.id !== payee.id; });
+            delete facturesRegroupables[payee.id];
+            delete cocheesRegroupement[payee.id];
+            if (dlgRegroupement.open) afficherRegroupement();
+          });
+        });
+        encaisser.setAttribute('aria-label', 'Encaisser la facture ' + f.numero);
+        gestes.appendChild(encaisser);
+      }
+      var retirer = petitBouton('Retirer', null, function () {
+        retireesRegroupement[f.id] = true;
+        delete cocheesRegroupement[f.id];
+        afficherRegroupement();
+      });
+      retirer.setAttribute('aria-label', 'Retirer la facture ' + f.numero + ' de la liste');
+      gestes.appendChild(retirer);
+      ligne.appendChild(gestes);
+      listeRegroupement.appendChild(ligne);
+    });
+    // Les colis ajoutés, chacun avec « Retirer »
+    colisAjoutes.forEach(function (x) {
+      var ligne = el('div', 'gs-regroupement__ligne');
+      var carte = el('div', 'gs-regroupement__carte gs-regroupement__carte--ajout');
+      carte.appendChild(el('strong', '', x.numero));
+      carte.appendChild(el('b', '', argent(x.prix_usd)));
+      if (x.description) carte.appendChild(el('small', '', x.description));
+      carte.appendChild(el('small', '', x.facture ? 'Sa facture ' + x.facture.numero + ' entre avec lui' : 'Colis ajouté, sans facture'));
+      ligne.appendChild(carte);
+      var gestes = el('div', 'gs-regroupement__gestes');
+      var retirer = petitBouton('Retirer', null, function () {
+        colisAjoutes = colisAjoutes.filter(function (y) { return y.colis_id !== x.colis_id; });
+        afficherRegroupement();
+      });
+      retirer.setAttribute('aria-label', 'Retirer le colis ' + x.numero);
+      gestes.appendChild(retirer);
+      ligne.appendChild(gestes);
+      listeRegroupement.appendChild(ligne);
+    });
+    if (visibles.length + colisAjoutes.length < 2) {
+      listeRegroupement.appendChild(el('p', 'gs-champ__aide', candidatesRegroupement.length < 2 && !colisAjoutes.length
+        ? 'Ce client n’a pas d’autre facture de colis à payer sans paiement : ajoutez un colis pour le regrouper avec cette facture.'
+        : 'Moins de deux factures dans la liste : ajoutez-en une, ou un colis.'));
+    }
+    var nbRetirees = candidatesRegroupement.filter(function (f) { return retireesRegroupement[f.id]; }).length;
+    $('[data-regroupement-retirees]', dlgRegroupement).hidden = !nbRetirees;
+    $('[data-regroupement-retirees-texte]', dlgRegroupement).textContent = nbRetirees === 1
+      ? '1 facture retirée de la liste.' : nbRetirees + ' factures retirées de la liste.';
+    majApercuRegroupement();
+  }
+
+  $('[data-action="remettre-regroupement"]', dlgRegroupement).addEventListener('click', function () {
+    retireesRegroupement = {};
+    afficherRegroupement();
+  });
+
+  function facturesCochees() {
+    return candidatesRegroupement.filter(function (f) {
+      return cocheesRegroupement[f.id] && !retireesRegroupement[f.id];
+    });
+  }
+
+  // Tous les colis de la future facture : ceux des factures cochées et ceux ajoutés
+  function colisDuRegroupement() {
+    var colis = [];
+    facturesCochees().forEach(function (f) { (f.facture_lignes || []).forEach(function (l) { colis.push(l.colis_id); }); });
+    colisAjoutes.forEach(function (x) { if (colis.indexOf(x.colis_id) < 0) colis.push(x.colis_id); });
+    return colis;
+  }
+
+  // L'aperçu vient de la base (calculer_facture) : c'est elle qui facturera. Sans
+  // le frais de service, la facture vaut son sous-total.
+  function majApercuRegroupement() {
+    var cochees = facturesCochees();
+    var recap = $('[data-recap-regroupement]', dlgRegroupement);
+    var assez = cochees.length + colisAjoutes.length >= 2;
+    $('[data-regroupement-valider]', dlgRegroupement).disabled = !assez;
+    var numero = ++apercuRegroupement;
+    if (!assez) { recap.hidden = true; return; }
+    var avecFrais = caseFraisRegroupement.checked;
+    API.admin.calculerFacture(colisDuRegroupement()).then(function (c) {
+      if (numero !== apercuRegroupement) return;   // une coche plus récente a déjà répondu
+      var avant = O.arrondi(cochees.reduce(function (s, f) { return s + Number(f.montant_usd); }, 0));
+      $('[data-regroupement-avant]', dlgRegroupement).textContent = cochees.length === 1
+        ? 'Aujourd\'hui, une facture' : 'Aujourd’hui, ' + cochees.length + ' factures';
+      $('[data-regroupement="avant"]', dlgRegroupement).textContent = argent(avant);
+      $('[data-regroupement="nombre"]', dlgRegroupement).textContent = String((c.lignes || []).length);
+      $('[data-regroupement="colis"]', dlgRegroupement).textContent = argent(c.sous_total);
+      $('[data-regroupement="frais"]', dlgRegroupement).textContent = argent(avecFrais ? c.frais_service : 0);
+      $('[data-regroupement="total"]', dlgRegroupement).textContent = argent(avecFrais ? c.total : c.sous_total);
+      recap.hidden = false;
+    }).catch(function () { recap.hidden = true; });
+  }
+
+  caseFraisRegroupement.addEventListener('change', majApercuRegroupement);
+
+  formRegroupement.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formRegroupement, '');
+    var cochees = facturesCochees();
+    if (cochees.length + colisAjoutes.length < 2) {
+      erreurFormulaire(formRegroupement, 'Choisissez au moins deux factures, ou une facture et un colis.');
+      return;
+    }
+    var bouton = $('[data-regroupement-valider]', dlgRegroupement);
+    var fin = attente(bouton, 'Regroupement…');
+    API.admin.regrouper(cochees.map(function (f) { return f.id; }), colisAjoutes.map(function (x) { return x.colis_id; }),
+                        caseFraisRegroupement.checked, cleRegroupement).then(function (r) {
+      cleRegroupement = null;
+      dlgRegroupement.close();
+      if (dlgFacture.open) dlgFacture.close();
+      return ajouterLienPaiement(r.facture).then(function () {
+        var n = (r.facture.facture_lignes || []).length;
+        toast('Nouvelle facture ' + r.facture.numero + ' (' + argent(r.facture.montant_usd) + ') : ' +
+              n + (n > 1 ? ' colis' : ' colis') + ', ' + r.annulees.length +
+              (r.annulees.length > 1 ? ' factures regroupées.' : ' facture regroupée.'));
+        return chargerFactures();
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formRegroupement, messageErreur(err));
+    }).then(fin);
+  });
+
+  $('[data-action="regrouper-facture"]', formFacture).addEventListener('click', function () {
+    if (factureEditee) ouvrirRegroupement(factureEditee);
+  });
+
+  /* ---- « + Ajouter un colis » au regroupement ------------------------------- */
+  // Les colis du client qui peuvent rejoindre la facture, selon la base
+  // (colis_a_regrouper) : sans facture, ou sur une facture regroupable. Ceux déjà
+  // dans la fenêtre (par une facture cochée, ou ajoutés) n'y sont pas.
+  var dlgAjoutColis = $('[data-dialogue="ajout-colis"]');
+  var formAjoutColis = $('form[data-form="ajout-colis"]', dlgAjoutColis);
+  var listeAjoutColis = $('[data-liste-ajout-colis]', dlgAjoutColis);
+  var trouvesAjout = {};
+  var rechercheAjout = 0;
+  var minuteurAjout = null;
+
+  function colisDejaLa() {
+    return colisDuRegroupement();
+  }
+
+  function chercherColisAjout() {
+    var numero = ++rechercheAjout;
+    listeAjoutColis.textContent = 'Recherche…';
+    API.admin.colisARegrouper(clientRegroupement.id, formAjoutColis.recherche.value.trim(), colisDejaLa()).then(function (liste) {
+      if (numero !== rechercheAjout) return;   // une frappe plus récente a déjà répondu
+      listeAjoutColis.textContent = '';
+      trouvesAjout = {};
+      liste.forEach(function (x) {
+        trouvesAjout[x.colis_id] = x;
+        var label = el('label', 'gs-regroupement__choix');
+        var input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = x.colis_id;
+        input.addEventListener('change', majBoutonAjout);
+        var carte = el('div', 'gs-regroupement__carte');
+        carte.appendChild(el('strong', '', x.numero));
+        carte.appendChild(el('b', '', argent(x.prix_usd)));
+        var facture = x.facture
+          ? 'Sur la facture ' + x.facture.numero + (x.facture.nb_colis > 1 ? ' (' + x.facture.nb_colis + ' colis, qui entrent ensemble)' : '')
+          : 'Sans facture';
+        var detail = [x.description, x.suivi_transporteur].filter(Boolean).join(' · ');
+        if (detail) carte.appendChild(el('small', '', detail));
+        carte.appendChild(el('small', '', facture));
+        label.appendChild(input);
+        label.appendChild(carte);
+        listeAjoutColis.appendChild(label);
+      });
+      if (!liste.length) listeAjoutColis.appendChild(el('p', 'gs-champ__aide', 'Aucun colis à ajouter.'));
+      majBoutonAjout();
+    }).catch(function (err) {
+      listeAjoutColis.textContent = '';
+      erreurFormulaire(formAjoutColis, messageErreur(err));
+    });
+  }
+
+  function majBoutonAjout() {
+    $('[data-ajout-colis-valider]', dlgAjoutColis).disabled =
+      !$$('input[type="checkbox"]', listeAjoutColis).some(function (i) { return i.checked; });
+  }
+
+  $('[data-action="ajouter-colis-regroupement"]', dlgRegroupement).addEventListener('click', function () {
+    if (!clientRegroupement) return;
+    formAjoutColis.reset();
+    erreurFormulaire(formAjoutColis, '');
+    $('[data-ajout-colis-client]', dlgAjoutColis).textContent = clientRegroupement.nom_complet;
+    dlgAjoutColis.showModal();
+    chercherColisAjout();
+    formAjoutColis.recherche.focus();
+  });
+
+  formAjoutColis.recherche.addEventListener('input', function () {
+    clearTimeout(minuteurAjout);
+    minuteurAjout = setTimeout(chercherColisAjout, 250);
+  });
+
+  // Un colis dont la facture est dans la liste : on la coche (elle revient si elle
+  // avait été retirée). Les autres rejoignent les colis ajoutés. Jamais deux fois.
+  formAjoutColis.addEventListener('submit', function (e) {
+    e.preventDefault();
+    $$('input[type="checkbox"]', listeAjoutColis).filter(function (i) { return i.checked; }).forEach(function (i) {
+      var x = trouvesAjout[i.value];
+      if (!x) return;
+      if (x.facture && facturesRegroupables[x.facture.id]) {
+        cocheesRegroupement[x.facture.id] = true;
+        delete retireesRegroupement[x.facture.id];
+      } else if (!colisAjoutes.some(function (y) { return y.colis_id === x.colis_id; })) {
+        colisAjoutes.push(x);
+      }
+    });
+    dlgAjoutColis.close();
+    afficherRegroupement();
+  });
+
+  /* ---- Sortir des colis d'une facture regroupée ------------------------------ */
+  // Le chemin inverse du regroupement (outils/supabase-regroupement.sql) : les
+  // colis cochés passent sur leur propre facture, les autres restent ensemble
+  // sur une nouvelle. La base décide de tout ; ici, on choisit et on montre.
+  var dlgSortie = $('[data-dialogue="sortie"]');
+  var formSortie = $('form[data-form="sortie"]', dlgSortie);
+  var listeSortie = $('[data-liste-sortie]', dlgSortie);
+  var factureSortie = null;
+  var cleSortie = null;
+  var apercuSortie = 0;
+
+  // Une facture de colis, à payer, sans paiement, d'au moins deux colis
+  function sortable(f) {
+    return regroupable(f) && (f.facture_lignes || []).length >= 2 &&
+           peut('invoices.create') && peut('invoices.cancel');
+  }
+
+  function ouvrirSortie(facture) {
+    factureSortie = facture;
+    cleSortie = nouvelleCle();
+    erreurFormulaire(formSortie, '');
+    $('[data-sortie-facture]', dlgSortie).textContent =
+      'Facture ' + facture.numero + ' · ' + ((facture.clients || {}).nom_complet || '');
+    listeSortie.textContent = '';
+    (facture.facture_lignes || []).forEach(function (l) {
+      var label = el('label', 'gs-regroupement__choix');
+      var input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = l.colis_id;
+      input.addEventListener('change', majApercuSortie);
+      var carte = el('div', 'gs-regroupement__carte');
+      carte.appendChild(el('strong', '', (l.colis && l.colis.numero) || l.libelle || 'Colis'));
+      carte.appendChild(el('b', '', argent(l.montant_usd)));
+      carte.appendChild(el('small', '', [l.libelle, l.poids_lb != null ? String(l.poids_lb).replace('.', ',') + ' lb' : '']
+        .filter(Boolean).join(' · ')));
+      label.appendChild(input);
+      label.appendChild(carte);
+      listeSortie.appendChild(label);
+    });
+    $('[data-sortie-encaisser]', dlgSortie).hidden = !peut('payments.create');
+    majApercuSortie();
+    dlgSortie.showModal();
+  }
+
+  function colisSortis() {
+    return $$('input[type="checkbox"]', listeSortie).filter(function (i) { return i.checked; })
+      .map(function (i) { return i.value; });
+  }
+
+  // Deux aperçus de la base (calculer_facture) : la facture des colis sortis,
+  // celle des autres.
+  function majApercuSortie() {
+    var sortis = colisSortis();
+    var tous = (factureSortie.facture_lignes || []).map(function (l) { return l.colis_id; });
+    var reste = tous.filter(function (i) { return sortis.indexOf(i) < 0; });
+    var possible = sortis.length > 0 && reste.length > 0;
+    $('[data-sortie-valider]', dlgSortie).disabled = !possible;
+    $('[data-sortie-encaisser]', dlgSortie).disabled = !possible;
+    var recap = $('[data-recap-sortie]', dlgSortie);
+    var numero = ++apercuSortie;
+    if (!possible) {
+      recap.hidden = true;
+      if (sortis.length && !reste.length) {
+        erreurFormulaire(formSortie, 'Il doit rester au moins un colis sur la facture. Pour tout défaire, annulez la facture.');
+      } else {
+        erreurFormulaire(formSortie, '');
+      }
+      return;
+    }
+    erreurFormulaire(formSortie, '');
+    Promise.all([API.admin.calculerFacture(sortis), API.admin.calculerFacture(reste)]).then(function (c) {
+      if (numero !== apercuSortie) return;
+      $('[data-sortie="avant"]', dlgSortie).textContent = argent(O.totauxFacture(factureSortie).grandTotal);
+      $('[data-sortie-libelle-sortis]', dlgSortie).textContent = sortis.length === 1
+        ? 'Le colis sorti, sur sa facture' : 'Les ' + sortis.length + ' colis sortis, sur leur facture';
+      $('[data-sortie-libelle-reste]', dlgSortie).textContent = reste.length === 1
+        ? 'Le colis qui reste, sur sa facture' : 'Les ' + reste.length + ' colis qui restent, ensemble';
+      // La facture des colis sortis naît sans frais ; celle qui reste les garde s'il y en avait
+      var avecFrais = O.totauxFacture(factureSortie).frais > 0;
+      var montantSortis = c[0].sous_total, montantReste = avecFrais ? c[1].total : c[1].sous_total;
+      $('[data-sortie="sortis"]', dlgSortie).textContent = argent(montantSortis);
+      $('[data-sortie="reste"]', dlgSortie).textContent = argent(montantReste);
+      $('[data-sortie="apres"]', dlgSortie).textContent = argent(O.arrondi(montantSortis + montantReste));
+      recap.hidden = false;
+    }).catch(function () { recap.hidden = true; });
+  }
+
+  function sortirDuRegroupement(encaisser) {
+    erreurFormulaire(formSortie, '');
+    var sortis = colisSortis();
+    if (!sortis.length) { erreurFormulaire(formSortie, 'Cochez le colis qui sort de la facture.'); return; }
+    var bouton = encaisser ? $('[data-sortie-encaisser]', dlgSortie) : $('[data-sortie-valider]', dlgSortie);
+    var fin = attente(bouton, 'Sortie…');
+    var client = factureSortie.clients;
+    API.admin.sortirDuRegroupement(factureSortie.id, sortis, cleSortie).then(function (r) {
+      cleSortie = null;
+      dlgSortie.close();
+      if (dlgFacture.open) dlgFacture.close();
+      // Le lien de l'ancienne portait son montant : chacune reçoit le sien
+      return Promise.all([ajouterLienPaiement(r.facture), ajouterLienPaiement(r.reste)]).then(function () {
+        toast('Colis sortis : facture ' + r.facture.numero + ' (' + argent(r.facture.montant_usd) + '). ' +
+              'Les autres : facture ' + r.reste.numero + ' (' + argent(r.reste.montant_usd) + ').');
+        if (encaisser) {
+          if (!r.facture.clients) r.facture.clients = client;
+          ouvrirPaiement(r.facture);
+        }
+        return chargerFactures();
+      });
+    }).catch(function (err) {
+      erreurFormulaire(formSortie, messageErreur(err));
+    }).then(fin);
+  }
+
+  formSortie.addEventListener('submit', function (e) {
+    e.preventDefault();
+    sortirDuRegroupement(false);
+  });
+  $('[data-sortie-encaisser]', dlgSortie).addEventListener('click', function () { sortirDuRegroupement(true); });
+
+  $('[data-action="sortir-regroupement"]', formFacture).addEventListener('click', function () {
+    if (factureEditee) ouvrirSortie(factureEditee);
+  });
+
+  /* ---- Contrôle de la facturation ------------------------------------------- */
+  var dlgControle = $('[data-dialogue="controle"]');
+  var GRAVITES = { erreur: 'Erreur', attention: 'À regarder', info: 'Pour info' };
+
+  function ligneAnomalie(a) {
+    var li = el('li', 'gs-anomalie gs-anomalie--' + a.gravite);
+    li.appendChild(el('span', 'gs-anomalie__gravite', GRAVITES[a.gravite] || a.gravite));
+    var texte = el('span', 'gs-anomalie__texte');
+    if (a.numero) texte.appendChild(el('strong', '', a.numero + ' '));
+    texte.appendChild(document.createTextNode(a.detail));
+    li.appendChild(texte);
+    return li;
+  }
+
+  $('[data-action="controler-factures"]').addEventListener('click', function () {
+    var liste = $('[data-liste-anomalies]', dlgControle);
+    var resume = $('[data-controle-resume]', dlgControle);
+    liste.textContent = 'Contrôle en cours…';
+    resume.textContent = '';
+    dlgControle.showModal();
+    API.admin.anomaliesFacturation().then(function (anomalies) {
+      liste.textContent = '';
+      var compte = { erreur: 0, attention: 0, info: 0 };
+      anomalies.forEach(function (a) { compte[a.gravite] = (compte[a.gravite] || 0) + 1; });
+      resume.textContent = compte.erreur || compte.attention
+        ? compte.erreur + ' erreur' + (compte.erreur > 1 ? 's' : '') + ' · ' + compte.attention + ' à regarder · ' +
+          compte.info + ' pour info'
+        : 'Rien d’anormal' + (compte.info ? ' · ' + compte.info + ' remarque' + (compte.info > 1 ? 's' : '') + ' pour info' : '');
+      anomalies.filter(function (a) { return a.gravite !== 'info'; }).forEach(function (a) { liste.appendChild(ligneAnomalie(a)); });
+      var infos = anomalies.filter(function (a) { return a.gravite === 'info'; });
+      if (infos.length) {
+        var details = el('details', 'gs-anomalies__infos');
+        details.appendChild(el('summary', '', infos.length + ' remarque' + (infos.length > 1 ? 's' : '') + ' pour information'));
+        var sous = el('ul', 'gs-anomalies');
+        infos.forEach(function (a) { sous.appendChild(ligneAnomalie(a)); });
+        details.appendChild(sous);
+        var li = el('li', 'gs-anomalies__groupe');
+        li.appendChild(details);
+        liste.appendChild(li);
+      }
+      if (!anomalies.length) liste.appendChild(el('li', 'gs-anomalie', 'Aucune incohérence trouvée.'));
+    }).catch(function (err) {
+      liste.textContent = '';
+      liste.appendChild(el('li', 'gs-anomalie gs-anomalie--erreur', messageErreur(err)));
+    });
+  });
+
+  /* ---- Équipe ------------------------------------------------------------------
+     Qui fait partie de l'équipe, avec quel rôle (users.view), et, pour qui a
+     roles.manage, le formulaire qui donne un rôle. La base refuse d'elle-même
+     tout le reste : changer son propre rôle, retirer le dernier
+     administrateur, donner un rôle sans en avoir le droit.
+     -------------------------------------------------------------------------- */
+  var corpsEquipe = $('[data-lignes="equipe"]');
+  var formRole = $('form[data-form="role"]');
+  var LIBELLES_PERMISSIONS = {
+    'clients.view': 'Voir les clients', 'clients.create': 'Créer un client', 'clients.edit': 'Modifier un client',
+    'shipments.view': 'Voir les colis', 'shipments.create': 'Enregistrer un colis', 'shipments.edit': 'Modifier un colis',
+    'shipments.delete': 'Supprimer un colis', 'shipments.scan': 'Scanner',
+    'shipments.change_status': 'Changer un statut', 'shipments.correct': 'Corriger une étape',
+    'shipments.view_history': 'Historique interne',
+    'invoices.view': 'Voir les factures', 'invoices.create': 'Créer une facture', 'invoices.edit': 'Modifier une facture',
+    'invoices.cancel': 'Annuler une facture',
+    'payments.view': 'Voir les paiements', 'payments.create': 'Encaisser', 'payments.cancel': 'Annuler un paiement',
+    'reports.view': 'Chiffres et contrôle de la facturation',
+    'reports.create': 'Créer un rapport', 'reports.edit': 'Modifier un rapport',
+    'reports.delete': 'Supprimer un rapport',
+    'users.view': 'Voir l’équipe', 'roles.manage': 'Donner un rôle', 'settings.manage': 'Réglages du site',
+    'audit_logs.view': 'Journal d’audit'
+  };
+
+  function chargerEquipe() {
+    return API.admin.equipe().then(afficherEquipe).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  function afficherEquipe(membres) {
+    corpsEquipe.textContent = '';
+    membres.forEach(function (m) {
+      var tr = el('tr');
+      var tdNom = cellule('Nom');
+      tdNom.appendChild(el('span', 'gs-cellule-principale', (m.nom_complet || '—') + (m.moi ? ' (vous)' : '')));
+      tr.appendChild(tdNom);
+      var tdEmail = cellule('E-mail');
+      tdEmail.textContent = m.email || '';
+      tr.appendChild(tdEmail);
+      var tdRole = cellule('Rôle');
+      tdRole.appendChild(el('span', 'gs-badge gs-badge--role-' + m.role, ROLES[m.role] || m.role));
+      tr.appendChild(tdRole);
+      var tdActions = el('td', 'gs-cellule-actions');
+      if (peut('roles.manage') && !m.moi) {
+        tdActions.appendChild(petitBouton('Changer le rôle', null, function () {
+          formRole.compte.value = m.email || '';
+          formRole.role.value = m.role;
+          formRole.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          formRole.role.focus();
+        }));
+      }
+      tr.appendChild(tdActions);
+      corpsEquipe.appendChild(tr);
+    });
+  }
+
+  // La matrice des rôles, pour que chacun sache ce que son rôle permet
+  (function () {
+    var table = $('[data-matrice-roles]');
+    var roles = ['admin', 'gerant', 'employe', 'client'];
+    var thead = el('thead'), ligne = el('tr');
+    ligne.appendChild(el('th', null, 'Permission'));
+    roles.forEach(function (r) { ligne.appendChild(el('th', 'gs-centre', ROLES[r])); });
+    thead.appendChild(ligne);
+    table.appendChild(thead);
+    var tbody = el('tbody');
+    Object.keys(LIBELLES_PERMISSIONS).forEach(function (perm) {
+      var tr = el('tr');
+      var th = el('th', null, LIBELLES_PERMISSIONS[perm]);
+      th.appendChild(el('span', 'gs-cellule-sous', perm));
+      tr.appendChild(th);
+      roles.forEach(function (r) {
+        var liste = API.regles.permissionsDesRoles[r] || [];
+        tr.appendChild(el('td', 'gs-centre', liste.indexOf(perm) >= 0 ? '✓'
+                                              : (liste.indexOf(perm + ':own') >= 0 ? 'les siens' : '—')));
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+  })();
+
+  formRole.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formRole, '');
+    var compte = formRole.compte.value.trim().toLowerCase();
+    if (!compte) { erreurFormulaire(formRole, 'Indiquez l’e-mail du compte.'); return; }
+    var bouton = $('button[type="submit"]', formRole);
+    var fin = attente(bouton, 'Enregistrement…');
+    API.admin.changerRole(compte, formRole.role.value).then(function (r) {
+      toast(r.deja ? (r.compte.nom_complet || compte) + ' avait déjà ce rôle.'
+                   : (r.compte.nom_complet || compte) + ' : ' + (ROLES[r.ancien_role] || r.ancien_role) + ' → ' +
+                     (ROLES[r.nouveau_role] || r.nouveau_role) + '.');
+      formRole.reset();
+      return chargerEquipe();
+    }).catch(function (err) {
+      erreurFormulaire(formRole, messageErreur(err));
+    }).then(fin);
+  });
+
+  /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
+  var onglets = $$('[data-onglet-vue]');
+  var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
+                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports', programmes: 'Programmes' };
+  function choisirVue(vue) {
+    var onglet = $('[data-onglet-vue="' + vue + '"]');
+    if (!onglet || onglet.hasAttribute('data-interdit')) {
+      vue = $('[data-onglet-vue="apercu"]').hasAttribute('data-interdit') ? 'colis' : 'apercu';
+    }
+    etat.vue = vue;
+    $('[data-titre-vue]').textContent = TITRES_VUES[vue] || 'Tableau de bord';
+    fermerMenu();
+    onglets.forEach(function (b) {
+      var actif = b.getAttribute('data-onglet-vue') === vue;
+      b.setAttribute('aria-selected', String(actif));
+      b.tabIndex = actif ? 0 : -1;
+    });
+    $$('[data-vue]').forEach(function (v) { v.hidden = v.getAttribute('data-vue') !== vue; });
+    // Les factures ne se rechargent qu'à leur propre changement : en ouvrant
+    // l'onglet, on s'assure de ne pas regarder une liste d'il y a une heure.
+    if (vue === 'factures') chargerFactures();
+    if (vue === 'apercu' && Date.now() - etatApercu.charge > 60000) chargerApercu();
+    if (vue === 'analytics') afficherAnalytics();
+    if (vue === 'rapports') ouvrirVueRapports();
+    // Les vues qui vivent dans leur propre fichier (programmes.js) l'apprennent par cet événement
+    window.dispatchEvent(new CustomEvent('goship:vue', { detail: vue }));
+  }
+  onglets.forEach(function (b, i) {
+    b.addEventListener('click', function () { choisirVue(b.getAttribute('data-onglet-vue')); });
+    b.addEventListener('keydown', function (e) {
+      // Le menu est vertical : ↓ et → pour le suivant, ↑ et ← pour le précédent
+      var sens = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!sens) return;
+      e.preventDefault();
+      var visibles = onglets.filter(function (o) { return !o.hasAttribute('data-interdit'); });
+      var autre = visibles[(visibles.indexOf(b) + sens + visibles.length) % visibles.length];
+      autre.focus();
+      choisirVue(autre.getAttribute('data-onglet-vue'));
+    });
+  });
+
+  /* ---- Fenêtres : elles ne se ferment que sur demande -------------------------
+     Un clic à côté d'une fenêtre ne la ferme plus : un clic manqué, une
+     sélection de texte qui déborde du champ faisaient perdre toute la saisie.
+     Seuls ses boutons (×, Annuler, Fermer) et la touche Échap la ferment ; et
+     si l'on y a déjà saisi quelque chose, « Fermer sans enregistrer ? » le fait
+     confirmer. Une fermeture décidée par la page (après un enregistrement, une
+     session expirée) passe par d.close() et ne demande rien.
+     -------------------------------------------------------------------------- */
+  var dlgAbandon = $('[data-dialogue="abandon"]');
+  var fenetreAbandonnee = null;
+
+  function saisieEnCours(d) { return d.hasAttribute('data-saisie'); }
+
+  function demanderFermeture(d) {
+    if (!saisieEnCours(d)) { d.close(); return; }
+    fenetreAbandonnee = d;
+    dlgAbandon.showModal();
+  }
+
+  $('[data-abandon-confirmer]', dlgAbandon).addEventListener('click', function () {
+    var d = fenetreAbandonnee;
+    fenetreAbandonnee = null;
+    dlgAbandon.close();
+    if (d && d.open) d.close();
+  });
+  $('[data-abandon-continuer]', dlgAbandon).addEventListener('click', function () { dlgAbandon.close(); });
+  // Échap sur la question : on reste dans la fenêtre, rien n'est perdu
+  dlgAbandon.addEventListener('close', function () { fenetreAbandonnee = null; });
+
+  $$('.gs-dialogue').forEach(function (d) {
+    if (d === dlgAbandon) return;
+    // d.close() : une fermeture voulue par la page, jamais contestée
+    var fermerVraiment = d.close.bind(d);
+    var voulue = false;
+    d.close = function (valeur) {
+      if (!d.open) return;
+      voulue = true;
+      d.removeAttribute('data-saisie');
+      fermerVraiment(valeur);
+    };
+    // Seule une vraie saisie compte (isTrusted) : les valeurs que la page
+    // remplit elle-même en ouvrant la fenêtre ne sont pas « à perdre »
+    // Une fenêtre de simple recherche (data-sans-confirmation) n'a rien à perdre
+    function saisie(e) {
+      if (d.hasAttribute('data-sans-confirmation')) return;
+      if (e.isTrusted && e.target.closest && e.target.closest('form')) d.setAttribute('data-saisie', '');
+    }
+    d.addEventListener('input', saisie);
+    d.addEventListener('change', saisie);
+    // Échap : même règle que le bouton de fermeture
+    d.addEventListener('cancel', function (e) {
+      e.preventDefault();
+      demanderFermeture(d);
+    });
+    // Certains navigateurs ferment quand même au second Échap : on rouvre la
+    // fenêtre telle quelle (ses champs sont intacts) et on pose la question
+    d.addEventListener('close', function () {
+      if (!voulue && saisieEnCours(d)) {
+        d.showModal();
+        demanderFermeture(d);
+        return;
+      }
+      voulue = false;
+      d.removeAttribute('data-saisie');
+    });
+    $$('[data-action="fermer"]', d).forEach(function (b) {
+      b.addEventListener('click', function () { demanderFermeture(d); });
+    });
+  });
+
+  // Enregistrer ou modifier un colis
+  var dlgColis = $('[data-dialogue="colis"]');
+  var formColis = $('form[data-form="colis"]', dlgColis);
+  var champCode = $('[data-code-client]', formColis);
+  var infoClient = $('[data-client-trouve]', formColis);
+  var listeClients = $('[data-completion-client]', formColis);
+  var colisEdite = null;
+  var clientChoisi = null;
+  var recherchesClient = 0;
+  var suggestions = [];
+  var suggestionActive = -1;
+
+  function montrerClient(client, message) {
+    clientChoisi = client;
+    infoClient.className = 'gs-champ__aide gs-client-trouve' + (client ? ' is-ok' : (message ? ' is-erreur' : ''));
+    infoClient.textContent = client
+      ? '✓ ' + client.nom_complet + ' — ' + [client.ville, client.region, PAYS[client.pays]].filter(Boolean).join(', ')
+      : (message || '');
+  }
+
+  function prefillClient(client) {
+    var f = formColis.elements;
+    if (PAYS[client.pays] && client.pays !== 'US') f.pays_destination.value = client.pays;
+    if (!f.destination.value) f.destination.value = client.ville || '';
+  }
+
+  // Liste déroulante sous le champ, quand plusieurs clients correspondent
+  function fermerSuggestions() {
+    suggestions = [];
+    suggestionActive = -1;
+    listeClients.hidden = true;
+    listeClients.textContent = '';
+    champCode.setAttribute('aria-expanded', 'false');
+    champCode.removeAttribute('aria-activedescendant');
+  }
+
+  function surlignerSuggestion(index) {
+    suggestionActive = index;
+    $$('[role="option"]', listeClients).forEach(function (o, i) {
+      var actif = i === index;
+      o.classList.toggle('is-actif', actif);
+      o.setAttribute('aria-selected', actif ? 'true' : 'false');
+      if (actif) {
+        champCode.setAttribute('aria-activedescendant', o.id);
+        if (o.scrollIntoView) o.scrollIntoView({ block: 'nearest' });
+      }
+    });
+    if (index < 0) champCode.removeAttribute('aria-activedescendant');
+  }
+
+  function choisirSuggestion(client) {
+    champCode.value = client.code || '';
+    montrerClient(client);
+    if (!colisEdite) prefillClient(client);
+    fermerSuggestions();
+    champCode.focus();
+  }
+
+  function afficherSuggestions(clients) {
+    listeClients.textContent = '';
+    suggestions = clients;
+    suggestionActive = -1;
+    if (!clients.length) {
+      var vide = document.createElement('p');
+      vide.className = 'gs-completion__vide';
+      vide.textContent = 'Aucun client ne correspond.';
+      listeClients.appendChild(vide);
+    } else {
+      clients.forEach(function (client, i) {
+        var bouton = document.createElement('button');
+        bouton.type = 'button';
+        bouton.id = 'col-client-' + i;
+        bouton.className = 'gs-completion__item';
+        bouton.setAttribute('role', 'option');
+        bouton.setAttribute('aria-selected', 'false');
+        var code = document.createElement('span');
+        code.className = 'gs-completion__code';
+        code.textContent = client.code || '—';
+        bouton.appendChild(code);
+        bouton.appendChild(document.createTextNode(' · ' + (client.nom_complet || '')));
+        var detail = document.createElement('span');
+        detail.className = 'gs-completion__det';
+        detail.textContent = [client.email, client.ville].filter(Boolean).join(' — ');
+        bouton.appendChild(detail);
+        bouton.addEventListener('click', function () { choisirSuggestion(client); });
+        listeClients.appendChild(bouton);
+      });
+    }
+    listeClients.hidden = false;
+    champCode.setAttribute('aria-expanded', 'true');
+  }
+
+  // Recherche par identifiant GSE, nom ou e-mail. Un identifiant complet est
+  // résolu directement ; tout autre texte passe par la recherche multi-champs,
+  // qui propose la liste des correspondances dès qu'il y en a plusieurs.
+  function chercherParTexte(texte, numero, prefill) {
+    return API.admin.clients({ recherche: texte, parPage: 8 }).then(function (r) {
+      if (numero !== recherchesClient) return clientChoisi;
+      var lignes = (r && r.lignes) || [];
+      if (!lignes.length) {
+        afficherSuggestions([]);
+        montrerClient(null, 'Aucun client ne correspond à « ' + texte + ' ».');
+        return null;
+      }
+      if (lignes.length === 1) {
+        fermerSuggestions();
+        montrerClient(lignes[0]);
+        if (prefill) prefillClient(lignes[0]);
+        return lignes[0];
+      }
+      afficherSuggestions(lignes);
+      montrerClient(null, lignes.length + ' clients correspondent — choisissez dans la liste.');
+      return null;
+    }).catch(function (err) { fermerSuggestions(); montrerClient(null, messageErreur(err)); return null; });
+  }
+
+  function chercherClient(prefill) {
+    var texte = champCode.value.trim();
+    if (!texte) { fermerSuggestions(); montrerClient(null, ''); return Promise.resolve(null); }
+    var numero = ++recherchesClient;
+    infoClient.className = 'gs-champ__aide gs-client-trouve';
+    infoClient.textContent = 'Recherche du client…';
+    var code = API.normaliserCode(texte);
+    if (code) {
+      return API.admin.chercherClient(code).then(function (client) {
+        if (numero !== recherchesClient) return clientChoisi;
+        if (client) {
+          fermerSuggestions();
+          montrerClient(client);
+          if (prefill) prefillClient(client);
+          return client;
+        }
+        return chercherParTexte(texte, numero, prefill);
+      }).catch(function (err) { montrerClient(null, messageErreur(err)); return null; });
+    }
+    if (texte.length < 2) { fermerSuggestions(); montrerClient(null, ''); return Promise.resolve(null); }
+    return chercherParTexte(texte, numero, prefill);
+  }
+
+  /* ---- Prix du colis : poids x tarif -----------------------------------------
+     Le tarif de la maison est 5 $/lb ; il reste remplaçable colis par colis
+     pour un accord particulier. Le prix, lui, ne se saisit plus : c'est la
+     base qui le calcule (outils/supabase-services.sql, regles_colis) et qui
+     l'arrête. Le champ n'en montre qu'un aperçu, fait avec la même règle.
+     -------------------------------------------------------------------------- */
+  var champTarif = $('[data-tarif-lb]', formColis);
+  // Le tarif à la livre change ce que paiera le client : réservé à qui peut
+  // modifier les factures (la base refuse de toute façon un autre tarif).
+  var champPrix = $('[data-prix-colis]', formColis);
+  var aidePrix = $('[data-calcul-prix]', formColis);
+  // « Fixer le prix à la main » : le prix saisi remplace poids × tarif
+  // (prix_fixe_usd). Comme un tarif particulier, c'est un geste de facturation :
+  // la case n'apparaît qu'à qui peut modifier les factures, et la base refuse
+  // de toute façon un prix fixé par un autre compte.
+  var casePrixManuel = $('[data-prix-manuel]', formColis);
+  var PRIX_MAX = 100000;
+
+  function prixManuel() { return casePrixManuel.checked; }
+
+  // Le poids n'est obligatoire qu'au prix calculé : un prix fixé à la main ne se
+  // calcule pas (supabase-corrections.sql, regles_colis). Un poids saisi reste
+  // toujours > 0 ; on n'en invente jamais un.
+  var aidePoids = $('[data-aide-poids]', formColis);
+  function poidsExige() {
+    if (prixManuel()) return false;
+    // Un ancien colis enregistré sans poids, au prix calculé, reste modifiable
+    // sans en inventer un (la base dira s'il en faut un pour recalculer le prix)
+    return !(colisEdite && (colisEdite.poids_lb == null || colisEdite.poids_lb === '') &&
+             (colisEdite.prix_fixe_usd == null || colisEdite.prix_fixe_usd === ''));
+  }
+
+  // Le prix se saisit seulement en mode manuel ; le tarif, alors, ne sert plus
+  function appliquerModePrix() {
+    var factureur = peut('invoices.edit');
+    var manuel = prixManuel();
+    aidePoids.textContent = manuel ? 'Facultatif : le prix est fixé à la main. S’il est connu, indiquez-le quand même.'
+      : 'Obligatoire : le prix se calcule poids × tarif.';
+    champPrix.readOnly = !(manuel && factureur);
+    champPrix.tabIndex = champPrix.readOnly ? -1 : 0;
+    champTarif.readOnly = manuel || !factureur;
+    champTarif.title = manuel ? 'Sans effet : le prix du colis est fixé à la main'
+      : (!factureur ? 'Tarif de la maison : un tarif particulier est réservé à qui peut modifier les factures' : '');
+    recalculerPrix();
+  }
+
+  function nombreSaisi(valeur) {
+    var n = Number(String(valeur == null ? '' : valeur).replace(',', '.').trim());
+    return isFinite(n) ? n : NaN;
+  }
+
+  // Champ vide : le tarif de la maison. Zéro reste zéro (un envoi offert).
+  function tarifSaisi() {
+    if (!champTarif.value.trim()) return API.tarifs.parLivre;
+    return nombreSaisi(champTarif.value);
+  }
+
+  function ecrireMontant(champ, valeur) {
+    champ.value = O.arrondi(valeur).toFixed(2).replace('.', ',');
+  }
+
+  function recalculerPrix() {
+    if (prixManuel()) {
+      var saisi = champPrix.value.trim();
+      var montant = nombreSaisi(saisi);
+      if (!saisi) {
+        aidePrix.textContent = 'Saisissez le prix du colis, en dollars : il remplace le calcul poids × tarif.';
+      } else if (!(montant >= 0 && montant <= PRIX_MAX)) {
+        aidePrix.textContent = 'Prix invalide : un montant en dollars, de 0 à 100 000.';
+      } else {
+        aidePrix.textContent = 'Prix fixé à la main : ' + argent(montant) +
+          (colisEdite ? ' · une facture déjà émise ne change pas.'
+                      : ' · sans frais de service : ils s’ajoutent au regroupement ou à l’encaissement.');
+      }
+      return;
+    }
+    var poids = nombreSaisi(formColis.elements.poids_lb.value);
+    var tarif = tarifSaisi();
+    if (!(tarif >= 0)) {
+      champPrix.value = '';
+      aidePrix.textContent = 'Tarif invalide : un nombre de dollars par livre, 5 par défaut.';
+      return;
+    }
+    // Un colis déjà enregistré garde le prix arrêté tant que ni son poids ni
+    // son tarif ne changent : il a pu être facturé.
+    // (Un colis qui avait un prix fixé, lui, repasse au calcul : on montre le calcul.)
+    if (colisEdite && colisEdite.prix_usd != null && poids === Number(colisEdite.poids_lb) &&
+        tarif === O.tarifDe(colisEdite) && (colisEdite.prix_fixe_usd == null || colisEdite.prix_fixe_usd === '')) {
+      ecrireMontant(champPrix, Number(colisEdite.prix_usd));
+      aidePrix.textContent = 'Prix arrêté à l’enregistrement du colis.';
+      return;
+    }
+    if (!(poids > 0)) {
+      champPrix.value = '';
+      aidePrix.textContent = 'Indiquez le poids : le prix se calcule tout seul, à ' + argent(tarif) + ' la livre.';
+      return;
+    }
+    var prix = API.regles.prixTransport(poids, tarif);
+    ecrireMontant(champPrix, prix);
+    aidePrix.textContent = O.nombre(poids) + ' lb × ' + argent(tarif) + ' = ' + argent(prix) +
+      (colisEdite ? ' · recalculé à l’enregistrement ; une facture déjà émise ne change pas.'
+                  : ' · sans frais de service : ils s’ajoutent au regroupement ou à l’encaissement.');
+  }
+
+  formColis.elements.poids_lb.addEventListener('input', recalculerPrix);
+  champTarif.addEventListener('input', recalculerPrix);
+  champPrix.addEventListener('input', recalculerPrix);
+  casePrixManuel.addEventListener('change', function () {
+    // En passant au prix manuel, on part du prix calculé ; en revenant, le
+    // calcul reprend la main
+    if (prixManuel() && !champPrix.value.trim()) {
+      var poids = nombreSaisi(formColis.elements.poids_lb.value);
+      var tarif = tarifSaisi();
+      if (poids > 0 && tarif >= 0) ecrireMontant(champPrix, API.regles.prixTransport(poids, tarif));
+    }
+    appliquerModePrix();
+    if (prixManuel() && !champPrix.readOnly) { champPrix.focus(); champPrix.select(); }
+  });
+
+  /* ---- Ville de livraison : une ville du pays choisi --------------------------
+     Le pays et la ville sont deux champs distincts, et tous deux obligatoires
+     (la base refuse une ville vide : CITY_REQUIRED). Pour Haïti et la République
+     dominicaine, la ville doit être l'une de celles de lieux.js (la même liste que
+     l'espace client) : une saisie qui n'en désigne qu'une est complétée à son nom
+     officiel (« santiago » → « Santiago de los Caballeros »), une saisie ambiguë
+     (« Santo Domingo ») demande de préciser. Pour les États-Unis, lieux.js n'a que
+     les États : la ville se saisit librement. Changer de pays revalide la ville.
+     -------------------------------------------------------------------------- */
+  var REFERENCE_LIEUX = window.GoshipLieux || { REGIONS: {} };
+  var champVille = $('[data-ville-livraison]', formColis);
+  var aideVille = $('[data-aide-ville]', formColis);
+  var listeVilles = $('#villes-livraison');
+  var NOMS_PAYS_LIVRAISON = { HT: 'Haïti', DO: 'la République dominicaine', US: 'les États-Unis' };
+
+  function villesDu(pays) {
+    var regions = REFERENCE_LIEUX.REGIONS[pays];
+    if (!regions) return null;
+    var villes = [];
+    Object.keys(regions).forEach(function (r) { villes = villes.concat(regions[r]); });
+    return villes;
+  }
+  // « Cap-Haïtien », « cap haitien » et « CAP HAÏTIEN » se valent
+  function cleVilleLivraison(texte) {
+    var t = String(texte || '');
+    if (t.normalize) t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return t.toLowerCase().replace(/[\s'’.-]+/g, ' ').trim();
+  }
+  // { ville } : le nom officiel ; { choix } : plusieurs villes possibles ; { aucune } ;
+  // null : pas de liste pour ce pays (saisie libre)
+  function reconnaitreVille(pays, saisie) {
+    var villes = villesDu(pays);
+    if (!villes) return null;
+    var cle = cleVilleLivraison(saisie);
+    if (!cle) return { aucune: true };
+    var exactes = villes.filter(function (v) { return cleVilleLivraison(v) === cle; });
+    if (exactes.length) return { ville: exactes[0] };
+    var debuts = villes.filter(function (v) { return cleVilleLivraison(v).indexOf(cle + ' ') === 0; });
+    if (debuts.length === 1) return { ville: debuts[0] };
+    if (debuts.length > 1) return { choix: debuts };
+    return { aucune: true };
+  }
+  function remplirVilles() {
+    listeVilles.textContent = '';
+    (villesDu(formColis.elements.pays_destination.value) || []).slice().sort(function (a, b) { return a.localeCompare(b); })
+      .forEach(function (v) { listeVilles.appendChild(el('option', '', '')).value = v; });
+    var pays = formColis.elements.pays_destination.value;
+    aideVille.textContent = villesDu(pays) ? 'Une ville de ' + NOMS_PAYS_LIVRAISON[pays] + ' : commencez à la taper.'
+      : 'La ville de livraison, en toutes lettres.';
+  }
+  // Un ancien colis garde la ville qu'il avait, tant que sa destination ne change pas
+  function villeInchangee() {
+    return !!colisEdite && champVille.value.trim() === (colisEdite.destination || '') &&
+      formColis.elements.pays_destination.value === colisEdite.pays_destination;
+  }
+  // La ville saisie, vérifiée : '' et un message si elle ne va pas
+  function villeValide() {
+    var saisie = champVille.value.trim();
+    var pays = formColis.elements.pays_destination.value;
+    if (!saisie) return { message: 'Indiquez la ville de livraison du colis.' };
+    if (villeInchangee()) return { ville: saisie };
+    var r = reconnaitreVille(pays, saisie);
+    if (!r) return { ville: saisie };
+    if (r.ville) return { ville: r.ville };
+    if (r.choix) return { message: 'Précisez la ville : ' + r.choix.slice(0, 5).join(', ') + (r.choix.length > 5 ? '…' : '') + '.' };
+    return { message: '« ' + saisie + ' » n’est pas une ville de ' + NOMS_PAYS_LIVRAISON[pays] +
+                      ' connue : choisissez-la dans la liste proposée.' };
+  }
+  champVille.addEventListener('blur', function () {
+    if (villeInchangee()) return;
+    var r = reconnaitreVille(formColis.elements.pays_destination.value, champVille.value);
+    if (r && r.ville) champVille.value = r.ville;
+  });
+  formColis.elements.pays_destination.addEventListener('change', function () {
+    remplirVilles();
+    // Une ville d'un autre pays ne passe pas : on l'efface plutôt que de la garder
+    var r = reconnaitreVille(formColis.elements.pays_destination.value, champVille.value);
+    if (champVille.value.trim() && r && r.aucune) {
+      champVille.value = '';
+      aideVille.textContent = 'Le pays a changé : choisissez une ville de ' +
+        NOMS_PAYS_LIVRAISON[formColis.elements.pays_destination.value] + '.';
+    }
+  });
+
+  var delaiCode = null;
+  champCode.addEventListener('input', function () {
+    clearTimeout(delaiCode);
+    clientChoisi = null;
+    delaiCode = setTimeout(function () { chercherClient(!colisEdite); }, 300);
+  });
+  champCode.addEventListener('keydown', function (e) {
+    if (listeClients.hidden || !suggestions.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); surlignerSuggestion((suggestionActive + 1) % suggestions.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); surlignerSuggestion((suggestionActive - 1 + suggestions.length) % suggestions.length); }
+    else if (e.key === 'Enter' && suggestionActive >= 0) { e.preventDefault(); choisirSuggestion(suggestions[suggestionActive]); }
+    else if (e.key === 'Escape') { e.preventDefault(); fermerSuggestions(); }
+    else if (e.key === 'Tab') fermerSuggestions();
+  });
+  // Un identifiant saisi en clair est remis au format GSE-0000, mais jamais un
+  // nom ni un e-mail : « client2024@… » ne doit pas devenir « GSE-2024 ».
+  champCode.addEventListener('blur', function () {
+    if (clientChoisi && clientChoisi.code) { champCode.value = clientChoisi.code; return; }
+    if (!/^\s*(gse)?[\s-]*\d{4,}\s*$/i.test(champCode.value)) return;
+    var code = API.normaliserCode(champCode.value);
+    if (code) champCode.value = code;
+  });
+  document.addEventListener('click', function (e) {
+    if (e.target !== champCode && !listeClients.contains(e.target)) fermerSuggestions();
+  });
+
+  // Date et heure au format des champs du formulaire (heure locale)
+  function deux(n) { return (n < 10 ? '0' : '') + n; }
+  function valeurDate(d) { return d.getFullYear() + '-' + deux(d.getMonth() + 1) + '-' + deux(d.getDate()); }
+  function valeurHeure(d) { return deux(d.getHours()) + ':' + deux(d.getMinutes()); }
+  function dateHeureSaisie(date, heure) {
+    var d = new Date(date + 'T' + (heure || '00:00'));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  /* ---- La facture d'un colis --------------------------------------------------
+     Tout colis enregistré repart avec sa facture : la base les crée ensemble,
+     dans la même transaction (creer_colis). Reste ici le lien de paiement,
+     préparé dans la foulée quand les réglages le permettent.
+     -------------------------------------------------------------------------- */
+  function ajouterLienPaiement(f) {
+    if (!f || f.lien_paiement) return Promise.resolve(f);
+    var lien = lienCarte(f.numero, Number(f.montant_usd));
+    if (!lien) return Promise.resolve(f);
+    return API.admin.poserLienPaiement(f.id, lien)
+      .then(function () { f.lien_paiement = lien; return f; })
+      .catch(function () { return f; });   // sans lien, la facture reste valable
+  }
+
+  var cleColis = null;
+
+  function ouvrirColis(options) {
+    options = options || {};
+    colisEdite = options.colis || null;
+    cleColis = colisEdite ? null : nouvelleCle();
+    formColis.reset();
+    erreurFormulaire(formColis, '');
+    fermerSuggestions();
+    montrerClient(null, '');
+    var f = formColis.elements;
+    var reception = colisEdite && (colisEdite.recu_le || colisEdite.cree_le) ? new Date(colisEdite.recu_le || colisEdite.cree_le) : new Date();
+    f.date_reception.value = valeurDate(reception);
+    f.heure_reception.value = valeurHeure(reception);
+    $('[data-bloc-etape]', formColis).hidden = !!colisEdite;
+    $('[data-dialogue-titre]', dlgColis).textContent = colisEdite ? 'Modifier le colis ' + colisEdite.numero : 'Enregistrer un colis';
+    var bouton = $('[data-envoyer]', formColis);
+    bouton.removeAttribute('data-libelle');
+    bouton.textContent = colisEdite ? 'Enregistrer les modifications' : 'Enregistrer le colis';
+    if (colisEdite) {
+      f.code.value = colisEdite.code_client || '';
+      f.description.value = colisEdite.description || '';
+      f.expediteur.value = colisEdite.expediteur || '';
+      f.suivi_transporteur.value = colisEdite.suivi_transporteur || '';
+      f.poids_lb.value = colisEdite.poids_lb != null ? String(colisEdite.poids_lb).replace('.', ',') : '';
+      f.service.value = colisEdite.service;
+      f.pays_destination.value = colisEdite.pays_destination;
+      f.destination.value = colisEdite.destination || '';
+      f.adresse_livraison.value = colisEdite.adresse_livraison || '';
+      // Un colis déjà enregistré garde son prix tel quel : il a pu être
+      // facturé, et sa facture ne doit pas bouger derrière son dos.
+      champTarif.value = colisEdite.tarif_lb_usd != null ? String(colisEdite.tarif_lb_usd).replace('.', ',') : '';
+      // Un prix fixé à la main se montre tel quel ; sans le droit de facturer,
+      // il reste affiché mais ne se change pas
+      casePrixManuel.checked = colisEdite.prix_fixe_usd != null && colisEdite.prix_fixe_usd !== '';
+      if (casePrixManuel.checked) {
+        ecrireMontant(champPrix, Number(colisEdite.prix_fixe_usd));
+        if (!champTarif.value) champTarif.value = String(API.tarifs.parLivre);
+      }
+    } else {
+      f.code.value = options.code || etat.colis.clientCode || '';
+      // Aucun lieu par défaut : le personnel dit où le colis est reçu (Miami, Santo Domingo,
+      // Port-au-Prince…), et le client le lit dans son e-mail « Colis reçu à… ».
+      f.lieu.value = '';
+      champTarif.value = String(API.tarifs.parLivre);
+      casePrixManuel.checked = false;
+      champPrix.value = '';
+    }
+    $('[data-bloc-motif-colis]', formColis).hidden = !colisEdite;
+    remplirVilles();
+    appliquerModePrix();
+    dlgColis.showModal();
+    if (f.code.value) chercherClient(!colisEdite);
+    (f.code.value ? f.description : f.code).focus();
+  }
+  $('[data-action="nouveau-colis"]').addEventListener('click', function () { ouvrirColis(); });
+
+  formColis.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erreurFormulaire(formColis, '');
+    var f = formColis.elements;
+    var bouton = $('[data-envoyer]', formColis);
+    // Ces contrôles ne font que prévenir plus tôt : la base refait les mêmes,
+    // et c'est elle qui décide.
+    var poids = String(f.poids_lb.value || '').replace(',', '.').trim();
+    if (poids && (isNaN(Number(poids)) || Number(poids) <= 0)) {
+      erreurFormulaire(formColis, 'Le poids est un nombre de livres supérieur à zéro (ex. 4,5).');
+      f.poids_lb.focus();
+      return;
+    }
+    if (!poids && poidsExige()) {
+      erreurFormulaire(formColis, 'Indiquez le poids du colis, en livres (ex. 4,5) : le prix se calcule poids × tarif. ' +
+                                  'Sans poids, cochez « Fixer le prix à la main ».');
+      f.poids_lb.focus();
+      return;
+    }
+    if (!f.description.value.trim()) {
+      erreurFormulaire(formColis, 'Décrivez le contenu du colis.');
+      f.description.focus();
+      return;
+    }
+    if (!colisEdite && !f.lieu.value.trim()) {
+      erreurFormulaire(formColis, 'Indiquez le lieu de réception du colis (Miami, Santo Domingo, Port-au-Prince…) : le client le lit dans son e-mail.');
+      f.lieu.focus();
+      return;
+    }
+    var reception = dateHeureSaisie(f.date_reception.value, f.heure_reception.value);
+    if (!reception) {
+      erreurFormulaire(formColis, 'Indiquez la date et l’heure de réception du colis.');
+      f.date_reception.focus();
+      return;
+    }
+    if (reception.getTime() > Date.now() + 36e5) {
+      erreurFormulaire(formColis, 'La date de réception ne peut pas être dans le futur.');
+      f.date_reception.focus();
+      return;
+    }
+    var ville = villeValide();
+    if (ville.message) {
+      erreurFormulaire(formColis, ville.message);
+      champVille.focus();
+      return;
+    }
+    champVille.value = ville.ville;
+    var prixSaisi = prixManuel() ? champPrix.value.trim() : '';
+    if (prixManuel() && !(prixSaisi && nombreSaisi(prixSaisi) >= 0 && nombreSaisi(prixSaisi) <= PRIX_MAX)) {
+      erreurFormulaire(formColis, 'Indiquez le prix du colis, en dollars (de 0 à 100 000), ou décochez « Fixer le prix à la main ».');
+      champPrix.focus();
+      return;
+    }
+    attente(bouton, 'Enregistrement…');
+    (clientChoisi ? Promise.resolve(clientChoisi) : chercherClient(false)).then(function (client) {
+      if (!client) {
+        attente(bouton);
+        erreurFormulaire(formColis, 'Choisissez un client existant : identifiant GSE, nom ou e-mail.');
+        f.code.focus();
+        return;
+      }
+      var donnees = {
+        client_id: client.id,
+        description: f.description.value.trim(),
+        expediteur: f.expediteur.value.trim(),
+        recu_le: reception.toISOString(),
+        suivi_transporteur: f.suivi_transporteur.value.trim(),
+        // Vide : aucun poids (permis au prix fixé à la main). Jamais 0 à la place.
+        poids_lb: poids ? Math.round(Number(poids) * 100) / 100 : null,
+        service: f.service.value,
+        pays_destination: f.pays_destination.value,
+        destination: ville.ville,
+        adresse_livraison: f.adresse_livraison.value.trim(),
+        // Tel que saisi : la base lit « 5,5 » comme 5.5, et refuse ce qui
+        // n'est pas un tarif (INVALID_RATE). Vide : le tarif de la maison.
+        tarif_lb_usd: champTarif.value.trim() || null,
+        // Prix fixé à la main, ou null pour le prix calculé (poids × tarif).
+        // Sans changement, la base ne demande aucun droit particulier.
+        prix_fixe_usd: prixSaisi || null
+      };
+      // Ni prix ni statut : la base calcule l'un et fait naître le colis
+      // « Reçu ». Le lieu et le message sont ceux de ce premier événement.
+      var creation = !colisEdite;
+      if (creation) {
+        donnees.lieu = f.lieu.value.trim();
+        donnees.note = f.note.value.trim();
+      } else {
+        // Le motif accompagne la ligne du journal des modifications
+        donnees.motif = f.motif.value.trim();
+      }
+      var prixAvant = colisEdite ? Number(colisEdite.prix_usd) : null;
+      var prevenir = creation && f.prevenir.checked;
+      var action = creation ? API.admin.creerColis(donnees, cleColis)
+                            : API.admin.modifierColis(colisEdite.id, donnees, colisEdite.maj_le);
+      return action.then(function (r) {
+        var colis = creation ? r.colis : r;
+        attente(bouton);
+        dlgColis.close();
+        etat.vus[colis.id] = null;
+        chargerStatistiques();
+        chargerColis(true);
+        if (!creation) {
+          // Une facture déjà émise ne change pas derrière le dos du client : on le dit
+          var prixChange = prixAvant != null && colis.prix_usd != null && Number(colis.prix_usd) !== prixAvant;
+          toast('Colis ' + colis.numero + ' modifié.' + (prixChange
+            ? ' Nouveau prix : ' + argent(colis.prix_usd) + '. Une facture déjà émise garde son montant : ' +
+              'annulez-la et refacturez pour l’ajuster.' : ''));
+          return colis;
+        }
+        cleColis = null;
+        if (r.deja) {
+          // Second envoi de la même demande : la base a rendu le colis déjà
+          // créé. Rien n'est fait deux fois, ni facture ni message au client.
+          toast('Colis ' + colis.numero + ' déjà enregistré : rien n\u2019a été créé en double.');
+          return colis;
+        }
+        // Colis et facture sont nés ensemble ; seul le lien de paiement reste
+        // à poser, et son échec ne retire rien au reste.
+        return ajouterLienPaiement(r.facture).then(function (facture) {
+          if (prevenir) notifier([{ colis: colis, client: client }], 'recu', { apresEnregistrement: true });
+          else toast('Colis ' + colis.numero + ' enregistré pour ' + client.nom_complet +
+                     (facture ? ' · facture ' + facture.numero : '') + '.');
+          if (etat.vue === 'factures') chargerFactures();
+          return colis;
+        });
+      });
+    }).catch(function (err) {
+      attente(bouton);
+      erreurFormulaire(formColis, messageErreur(err));
+    });
+  });
+
+  // Mettre à jour le statut (un colis ou une sélection)
+  var dlgStatut = $('[data-dialogue="statut"]');
+  var formStatut = $('form[data-form="statut"]', dlgStatut);
+  var cibleStatut = { ids: [], colis: null };
+  var cleStatut = null;
+
+  function ouvrirStatut(ids, colis) {
+    cibleStatut = { ids: ids, colis: colis };
+    formStatut.reset();
+    erreurFormulaire(formStatut, '');
+    var bouton = $('[data-envoyer]', formStatut);
+    bouton.removeAttribute('data-libelle');
+    bouton.textContent = 'Mettre à jour';
+    $('[data-statut-cible]', dlgStatut).textContent = colis
+      ? colis.numero + ' · ' + (colis.nom_client || 'Client supprimé') + (colis.code_client ? ' (' + colis.code_client + ')' : '')
+      : ids.length + ' colis sélectionnés : le même statut sera appliqué à chacun.';
+    $('[data-bloc-historique]', dlgStatut).hidden = !colis;
+    $('[data-bloc-actions]', dlgStatut).hidden = !colis;
+    $('[data-bloc-notifications]', dlgStatut).hidden = true;
+    $('[data-action="prevenir-client"]', dlgStatut).hidden = !(colis && EVENEMENTS.indexOf(colis.statut) >= 0);
+    var historique = $('[data-historique]', dlgStatut);
+    historique.textContent = '';
+    griserStatuts(null);
+    cleStatut = nouvelleCle();
+    formStatut.elements.motif.value = '';
+    if (colis) {
+      var radio = $('input[name="statut"][value="' + colis.statut + '"]', formStatut);
+      if (radio) radio.checked = true;
+      formStatut.elements.lieu.value = colis.lieu || '';
+      formStatut.elements.note.value = colis.note || '';
+      API.admin.historique(colis.id).then(function (h) {
+        O.remplirHistorique(historique, h, { notes: true, libelle: libelleEvenement });
+      }).catch(function () { /* historique facultatif */ });
+      // Les statuts que ce colis ne peut pas prendre sont grisés. C'est la
+      // base qui répond : elle seule connaît la règle et l'historique complet.
+      // Sans réponse, rien n'est grisé et la base refusera le cas échéant.
+      if (API.admin.statutsPossibles) {
+        API.admin.statutsPossibles(colis.id).then(function (p) {
+          if (cibleStatut.colis === colis) { griserStatuts(p.possibles, p.correction); majChoixStatut(); }
+        }).catch(function () { /* simple confort d'affichage */ });
+      }
+      afficherNotificationsEnvoyees(colis.id);
+    }
+    majChoixStatut();
+    dlgStatut.showModal();
+    var coche = $('input[name="statut"]:checked', formStatut) || $('input[name="statut"]', formStatut);
+    coche.focus();
+  }
+
+  // possibles : la liste des statuts permis, ou null pour tout laisser ouvert
+  // (un lot mêle des colis à des étapes différentes : la base triera).
+  // correction : l'étape d'avant, permise seulement comme correction (motif
+  // obligatoire), ou null.
+  var statutCorrection = null;
+  function griserStatuts(possibles, correction) {
+    statutCorrection = peut('shipments.correct') ? correction || null : null;
+    $$('input[name="statut"]', formStatut).forEach(function (r) {
+      var permis = !possibles || possibles.indexOf(r.value) >= 0 || r.value === statutCorrection;
+      r.disabled = !permis;
+      r.parentNode.title = !permis ? 'Transition non permise depuis le statut actuel'
+        : (r.value === statutCorrection ? 'Retour à l\u2019étape précédente : correction, motif obligatoire' : '');
+    });
+  }
+
+  // Le libellé d'un événement de l'historique. Les étapes gardent le nom de
+  // leur statut ; les opérations internes et les corrections disent ce
+  // qu'elles sont. Une étape annulée par une correction le dit aussi.
+  var EVENEMENTS_INTERNES = { COLIS_INSPECTE: 'Inspecté', COLIS_CONSOLIDE: 'Consolidé', COLIS_CHARGE: 'Chargé' };
+  function libelleEvenement(statut, h) {
+    h = h || {};
+    var texte;
+    if (EVENEMENTS_INTERNES[h.type_evenement]) texte = EVENEMENTS_INTERNES[h.type_evenement] + ' (interne)';
+    else if (h.type_evenement === 'CORRECTION') {
+      texte = 'Correction → ' + (STATUTS[statut] || statut) +
+        (h.metadonnees && h.metadonnees.motif ? ' — ' + h.metadonnees.motif : '');
+    } else texte = STATUTS[statut] || statut;
+    if (h.corrige) texte += ' (annulé par une correction)';
+    if (h.auteur) texte += ' · ' + h.auteur;
+    return texte;
+  }
+
+  // « Disponible en agence » : l'agence devient obligatoire et le client est prévenu
+  var libelleLieu = $('[data-libelle-lieu]', formStatut);
+  var libelleLieuOrigine = libelleLieu.innerHTML;
+  function majChoixStatut() {
+    var statut = ($('input[name="statut"]:checked', formStatut) || {}).value;
+    var colis = cibleStatut.colis;
+    // Le motif : pour un colis, quand le statut coché est une correction ;
+    // pour un lot, toujours proposé (la base dira pour quels colis il manque).
+    $('[data-bloc-motif]', formStatut).hidden = colis ? !(statut && statut === statutCorrection) : false;
+    var disponible = statut === 'disponible';
+    // Le client est prévenu quand son colis devient disponible (pas à chaque
+    // modification, ni quand une correction le ramène à « Disponible »)
+    $('[data-bloc-prevenir]', formStatut).hidden = !disponible || !!(colis && colis.statut === 'disponible') ||
+      !!(colis && statut === statutCorrection);
+    if (disponible) libelleLieu.textContent = 'Agence où retirer le colis';
+    else libelleLieu.innerHTML = libelleLieuOrigine;
+    var lieu = formStatut.elements.lieu;
+    lieu.placeholder = disponible ? 'Ex. Ciudad Juan Bosch' : 'Ex. Port-au-Prince';
+    // Nouvelle étape : le lieu et le message de l'étape précédente ne sont pas repris
+    if (colis) {
+      [[lieu, colis.lieu], [formStatut.elements.note, colis.note]].forEach(function (c) {
+        if (statut !== colis.statut && c[0].value === (c[1] || '')) c[0].value = '';
+        else if (statut === colis.statut && !c[0].value) c[0].value = c[1] || '';
+      });
+    }
+  }
+  $$('input[name="statut"]', formStatut).forEach(function (r) { r.addEventListener('change', majChoixStatut); });
+
+  formStatut.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = formStatut.elements;
+    var statut = ($('input[name="statut"]:checked', formStatut) || {}).value;
+    if (!statut) { erreurFormulaire(formStatut, 'Choisissez le nouveau statut.'); return; }
+    var lieu = f.lieu.value.trim();
+    if (statut === 'disponible' && !lieu) {
+      erreurFormulaire(formStatut, 'Indiquez l’agence où le client peut retirer son colis.');
+      f.lieu.focus();
+      return;
+    }
+    var motif = f.motif.value.trim();
+    if (cibleStatut.colis && statut === statutCorrection && !motif) {
+      erreurFormulaire(formStatut, 'Revenir à l\u2019étape précédente est une correction : indiquez-en le motif.');
+      f.motif.focus();
+      return;
+    }
+    erreurFormulaire(formStatut, '');
+    var bouton = $('[data-envoyer]', formStatut);
+    var prevenir = statut === 'disponible' && f.prevenir.checked && !$('[data-bloc-prevenir]', formStatut).hidden;
+    var note = f.note.value.trim();
+    // Colis qui deviennent disponibles, avec les coordonnées de leur client
+    var concernes = (cibleStatut.colis ? [cibleStatut.colis] : etat.colis.lignes.filter(function (l) {
+      return cibleStatut.ids.indexOf(l.id) >= 0;
+    })).filter(function (l) { return l.statut !== 'disponible'; });
+    // Le statut que la page affichait pour chaque colis : si quelqu'un l'a
+    // changé entre-temps, la base le dit au lieu d'écraser son travail.
+    var attendus = {};
+    (cibleStatut.colis ? [cibleStatut.colis] : etat.colis.lignes).forEach(function (l) {
+      if (cibleStatut.ids.indexOf(l.id) >= 0) attendus[l.id] = l.statut;
+    });
+    attente(bouton, 'Mise à jour…');
+    API.admin.changerStatut(cibleStatut.ids, { statut: statut, lieu: lieu, note: note }, attendus, motif || null, cleStatut)
+      .then(function (r) {
+        attente(bouton);
+        // Tout ou rien : un seul colis bloquant, et aucun n'a changé. On dit
+        // lesquels, le dialogue reste ouvert pour les décocher.
+        if (r.refus.length) {
+          var details = r.refus.slice(0, 4).map(function (x) { return x.detail; }).join(' · ') +
+            (r.refus.length > 4 ? ' · et ' + (r.refus.length - 4) + ' autre(s).' : '');
+          erreurFormulaire(formStatut, cibleStatut.ids.length > 1
+            ? 'Aucun colis n\u2019a changé. ' + details : details);
+          return;
+        }
+        var n = r.modifies + r.inchanges;
+        // Ne prévenir que les colis réellement passés à « Disponible » par
+        // cette demande : un double clic ne renvoie pas le message.
+        concernes = concernes.filter(function (l) { return r.ids.indexOf(l.id) >= 0; });
+        dlgStatut.close();
+        cibleStatut.ids.forEach(function (id) { etat.vus[id] = null; });
+        if (!cibleStatut.colis) etat.selection = [];
+        chargerStatistiques();
+        chargerColis(true);
+        if (prevenir && concernes.length) {
+          notifier(concernes.map(function (ligne) {
+            return { colis: Object.assign({}, ligne, { statut: statut, lieu: lieu, note: note }), client: clientDe(ligne) };
+          }), 'disponible');
+        } else {
+          toast(n > 1 ? n + ' colis passés à « ' + STATUTS[statut] + ' ».' : 'Statut mis à jour : ' + STATUTS[statut] + '.');
+        }
+      }).catch(function (err) {
+        attente(bouton);
+        erreurFormulaire(formStatut, messageErreur(err));
+      });
+  });
+
+  $('[data-action="prevenir-client"]', dlgStatut).addEventListener('click', function () {
+    var colis = cibleStatut.colis;
+    if (!colis || EVENEMENTS.indexOf(colis.statut) < 0) return;
+    dlgStatut.close();
+    notifier([{ colis: colis, client: clientDe(colis) }], colis.statut);
+  });
+
+  $('[data-action="etiquette-colis"]', dlgStatut).addEventListener('click', function () {
+    var colis = cibleStatut.colis;
+    // La fenêtre d'impression s'ouvre par-dessus le dialogue : on le ferme
+    // d'abord, sinon l'aperçu ne montre rien.
+    dlgStatut.close();
+    if (colis) imprimerEtiquettes([colis]);
+  });
+
+  $('[data-action="modifier-colis"]', dlgStatut).addEventListener('click', function () {
+    var colis = cibleStatut.colis;
+    dlgStatut.close();
+    if (colis) ouvrirColis({ colis: colis });
+  });
+
+  $('[data-action="supprimer-colis"]', dlgStatut).addEventListener('click', function () {
+    var colis = cibleStatut.colis;
+    if (!colis || !window.confirm('Supprimer définitivement le colis ' + colis.numero + ' et son historique ?')) return;
+    API.admin.supprimerColis(colis.id).then(function () {
+      dlgStatut.close();
+      toast('Colis ' + colis.numero + ' supprimé.');
+      chargerStatistiques();
+      chargerColis();
+    }).catch(function (err) { erreurFormulaire(formStatut, messageErreur(err)); });
+  });
+
+  /* ---- Messages au client ----------------------------------------------------------
+     La base prévient le client elle-même, à chaque étape, selon ses règles
+     (outils/supabase-notifications.sql) : l'e-mail et le WhatsApp « Colis reçu »
+     naissent dans la même transaction que le colis. Ce tableau de bord n'envoie
+     donc plus rien — les anciennes fonctions d'envoi lui sont fermées, et les
+     appeler donnait « permission refusée », même à un administrateur. Il montre
+     ce qui est parti, ce qui attend, ou pourquoi rien n'est parti, et garde
+     l'envoi WhatsApp « à la main » depuis votre propre WhatsApp quand l'API n'est
+     pas configurée : c'est vous qui envoyez, pas la base. Rien ici ne touche au
+     colis : un message qui échoue ne fait jamais enregistrer un colis deux fois. */
+  var EVENEMENTS = ['recu', 'disponible'];
+  var N = window.GoshipNotifications;
+  var dlgNotif = $('[data-dialogue="notification"]');
+  var EVENEMENT_LIBELLE = { recu: 'Colis reçu', disponible: 'Colis disponible' };
+  var TYPE_EVENEMENT = { recu: 'shipment_received', disponible: 'shipment_available' };
+  var CANAUX = { push: 'Téléphone', email: 'E-mail', whatsapp: 'WhatsApp', sms: 'SMS' };
+  var ETATS_ENVOI = { attente: 'en file d’envoi', envoi: 'remis au fournisseur', envoye: 'envoyé', livre: 'livré',
+                      echec: 'échec', annule: 'non envoyé' };
+  // Pourquoi un envoi n'est pas parti : une configuration qui manque, une coordonnée
+  // absente, un fournisseur qui refuse — jamais une question de droits de l'équipe.
+  var RAISONS = {
+    NON_CONFIGURE: 'canal non configuré', PREFERENCE: 'coupé par le client', REGLE_COUPEE: 'e-mail coupé dans les règles', SANS_APPAREIL: 'aucun téléphone enregistré',
+    SANS_DESTINATAIRE: 'pas d’adresse ou de numéro', SANS_MODELE: 'pas de modèle WhatsApp pour ce message',
+    APPAREIL_INCONNU: 'téléphone oublié', DeviceNotRegistered: 'application désinstallée',
+    RESEAU: 'fournisseur injoignable', ERREUR_INTERNE: 'erreur interne'
+  };
+  // Les libellés des règles (notification_regles, supabase-notifications.sql)
+  var TYPES_NOTIF = {
+    shipment_received: 'Colis reçu à l’entrepôt', shipment_packed: 'Colis emballé', shipment_shipped: 'Colis expédié',
+    shipment_arrived: 'Arrivé au centre de distribution', shipment_transferred: 'Transféré à la succursale',
+    shipment_available: 'Colis disponible', shipment_delivered: 'Colis livré', action_required: 'Action requise',
+    action_resolved: 'Action résolue'
+  };
+
+  function clientDe(ligne) {
+    return {
+      nom_complet: ligne.nom_client, code: ligne.code_client, telephone: ligne.telephone_client,
+      email: ligne.email_client, langue: ligne.langue_client, pays: ligne.pays_client
+    };
+  }
+
+  // « E-mail : non envoyé (canal non configuré) », « Téléphone : envoyé »…
+  function etatEnvoi(e) {
+    var texte = ETATS_ENVOI[e.statut] || e.statut;
+    var raison = e.code_erreur ? (RAISONS[e.code_erreur] || e.code_erreur) : '';
+    if (e.statut === 'attente' && e.tentative > 0) texte = 'nouvel essai prévu';
+    return (CANAUX[e.canal] || e.canal) + ' : ' + texte + (raison ? ' (' + raison + ')' : '');
+  }
+  function classeEnvoi(e) {
+    return e.statut === 'envoye' || e.statut === 'livre' ? 'gs-envoi__ligne--ok'
+      : e.statut === 'echec' ? 'gs-envoi__ligne--alerte' : '';
+  }
+
+  function notifier(entrees, evenement, options) {
+    options = options || {};
+    var liste = $('[data-envois]', dlgNotif);
+    liste.textContent = '';
+    var premier = entrees[0];
+    $('[data-notif-titre]', dlgNotif).textContent = options.apresEnregistrement ? 'Colis enregistré'
+      : (entrees.length > 1 ? entrees.length + ' clients prévenus' : 'Messages au client');
+    $('[data-notif-sous-titre]', dlgNotif).textContent = entrees.length === 1
+      ? premier.colis.numero + ' · ' + (premier.client.nom_complet || '') + (premier.client.code ? ' (' + premier.client.code + ')' : '')
+      : (EVENEMENT_LIBELLE[evenement] || '') + ' : chaque client est prévenu par la base.';
+    $('[data-action="autre-colis"]', dlgNotif).hidden = !options.apresEnregistrement;
+    var aide = $('[data-notif-aide]', dlgNotif);
+    aide.hidden = true;
+
+    var aLaMain = false;
+    var chargements = entrees.map(function (entree) {
+      var colis = entree.colis, client = entree.client || {};
+      var li = el('li', 'gs-envoi');
+      var tete = el('div', 'gs-envoi__tete');
+      tete.appendChild(el('strong', '', client.nom_complet || client.code || 'Client'));
+      tete.appendChild(el('span', 'gs-envoi__num', colis.numero));
+      li.appendChild(tete);
+      var lignes = el('div', '');
+      lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--attente', 'Lecture des envois…'));
+      li.appendChild(lignes);
+      liste.appendChild(li);
+
+      return API.admin.envoisColis(colis.id).then(function (envois) {
+        // La notification de l'événement demandé, sinon la plus récente du colis
+        var voulu = TYPE_EVENEMENT[evenement];
+        var cible = envois.filter(function (e) { return e.type === voulu; })[0] || envois[0];
+        var siens = cible ? envois.filter(function (e) { return e.notification_id === cible.notification_id; }) : [];
+        lignes.textContent = '';
+        if (!cible) {
+          lignes.appendChild(el('p', 'gs-envoi__ligne', 'Aucune notification pour ce colis (règle coupée, ou colis sans client).'));
+          return;
+        }
+        lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--ok',
+                              '✓ ' + (TYPES_NOTIF[cible.type] || cible.type) + ' : visible dans l’espace du client (site et application)'));
+        siens.forEach(function (e) { lignes.appendChild(el('p', 'gs-envoi__ligne ' + classeEnvoi(e), etatEnvoi(e))); });
+        // WhatsApp sans API : l'équipe peut l'envoyer elle-même, message déjà rédigé
+        var wa = siens.filter(function (e) { return e.canal === 'whatsapp'; })[0];
+        if (N && EVENEMENTS.indexOf(evenement) >= 0 && wa && wa.statut === 'annule' &&
+            (wa.code_erreur === 'NON_CONFIGURE' || wa.code_erreur === 'SANS_MODELE')) {
+          var message = N.preparer(evenement, colis, client);
+          if (message.lienWhatsApp) {
+            aLaMain = true;
+            var lien = el('a', 'gs-bouton gs-bouton--petit gs-bouton--wa', 'Envoyer depuis mon WhatsApp');
+            lien.href = message.lienWhatsApp;
+            lien.target = '_blank';
+            lien.rel = 'noopener';
+            lien.addEventListener('click', function () {
+              lien.textContent = '✓ WhatsApp ouvert';
+              lien.classList.add('is-fait');
+            });
+            var actions = el('div', 'gs-envoi__actions');
+            actions.appendChild(lien);
+            lignes.appendChild(actions);
+          }
+        }
+      }).catch(function (err) {
+        // Le colis, lui, est enregistré : seule la lecture des envois a échoué
+        lignes.textContent = '';
+        lignes.appendChild(el('p', 'gs-envoi__ligne gs-envoi__ligne--alerte',
+                              'État des messages illisible (le colis est bien enregistré) : ' + messageErreur(err)));
+      });
+    });
+
+    Promise.all(chargements).then(function () {
+      if (aLaMain) {
+        aide.textContent = 'WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour que la base l’envoie elle-même, configurez l’API WhatsApp (docs/notifications.md).';
+        aide.hidden = false;
+      }
+    });
+    dlgNotif.showModal();
+  }
+
+  $('[data-action="autre-colis"]', dlgNotif).addEventListener('click', function () {
+    dlgNotif.close();
+    ouvrirColis();
+  });
+
+  // Messages au client pour un colis (fenêtre « Mettre à jour ») : une ligne par
+  // notification, avec l'état de chaque envoi
+  function afficherNotificationsEnvoyees(id) {
+    var bloc = $('[data-bloc-notifications]', dlgStatut);
+    var liste = $('[data-notifications]', dlgStatut);
+    liste.textContent = '';
+    API.admin.envoisColis(id).then(function (envois) {
+      if (!cibleStatut.colis || cibleStatut.colis.id !== id || !envois || !envois.length) return;
+      var parNotif = [];
+      envois.forEach(function (e) {
+        var g = parNotif.filter(function (x) { return x.id === e.notification_id; })[0];
+        if (!g) parNotif.push(g = { id: e.notification_id, type: e.type, cree_le: e.cree_le, envois: [] });
+        g.envois.push(e);
+      });
+      parNotif.forEach(function (g) {
+        var echec = g.envois.some(function (e) { return e.statut === 'echec'; });
+        var li = el('li', echec ? 'is-echec' : '');
+        li.appendChild(el('strong', '', (TYPES_NOTIF[g.type] || g.type) + ' · ' + O.date(g.cree_le, true)));
+        li.appendChild(el('span', '', ['Espace client'].concat(g.envois.map(etatEnvoi)).join(' · ')));
+        liste.appendChild(li);
+      });
+      bloc.hidden = false;
+    }).catch(function () { /* liste facultative */ });
+  }
+
+  /* ---- Pagination -------------------------------------------------------------
+     La même barre pour les colis, les clients et les colis à traiter :
+     « Lignes par page · 26–50 sur 340 · Précédente · Suivante ». La base
+     compte et découpe ; la page n'affiche que ce qu'elle reçoit. */
+  var TAILLES_PAGE = [10, 25, 50, 100];
+
+  // nom : la zone [data-pagination=nom], ou la zone elle-même quand elle n'est
+  // pas encore dans la page (les Analytics se construisent à part, puis s'affichent)
+  function paginer(nom, p, total, recharger) {
+    var zone = typeof nom === 'string' ? $('[data-pagination="' + nom + '"]') : nom;
+    zone.textContent = '';
+    total = Number(total) || 0;
+    zone.hidden = !total || (total <= TAILLES_PAGE[0] && !p.page);
+    if (zone.hidden) return;
+    var taille = el('label', 'gs-pagination__taille');
+    taille.appendChild(el('span', '', 'Lignes par page'));
+    var choix = el('select', 'gs-admin-filtre gs-admin-filtre--petit');
+    TAILLES_PAGE.forEach(function (n) {
+      var o = new Option(String(n), String(n));
+      o.selected = n === p.parPage;
+      choix.add(o);
+    });
+    choix.addEventListener('change', function () { p.parPage = Number(choix.value); p.page = 0; recharger(); });
+    taille.appendChild(choix);
+    zone.appendChild(taille);
+    var premier = p.page * p.parPage + 1, dernier = Math.min(total, (p.page + 1) * p.parPage);
+    zone.appendChild(el('span', 'gs-pagination__texte', premier + '–' + dernier + ' sur ' + total));
+    var precedente = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Précédente');
+    precedente.type = 'button';
+    precedente.disabled = p.page === 0;
+    precedente.addEventListener('click', function () { p.page -= 1; recharger(); });
+    var suivante = el('button', 'gs-bouton gs-bouton--petit gs-bouton--contour', 'Suivante');
+    suivante.type = 'button';
+    suivante.disabled = dernier >= total;
+    suivante.addEventListener('click', function () { p.page += 1; recharger(); });
+    zone.appendChild(precedente);
+    zone.appendChild(suivante);
+  }
+
+  /* ---- Petits outils d'affichage ---------------------------------------------- */
+  function entier(n) { return O.nombre(Number(n) || 0); }
+  function pluriel(n, un, plusieurs) { return entier(n) + ' ' + ((Number(n) || 0) > 1 ? plusieurs : un); }
+  // « 2026-09-12 » → « 12/09/2026 », sans passer par un fuseau horaire
+  function jourLisible(jour, court) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(jour || ''));
+    if (!m) return '';
+    return m[3] + '/' + m[2] + (court ? '' : '/' + m[1]);
+  }
+  function heure(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+  function libelleTypeEvenement(type) {
+    var t = API.regles.typesEvenement[type];
+    return t ? t.libelle : (type || 'Étape');
+  }
+  var SOURCES = { scanner: 'scanner', tableau_de_bord: 'tableau de bord', creation: 'enregistrement' };
+
+  // Ouvrir un colis trouvé ailleurs (vue générale, recherche, poste de scan) dans sa
+  // fiche : la liste des colis le relit d'abord, pour l'avoir complet et à jour.
+  function ouvrirColisParNumero(numero) {
+    API.admin.colis({ recherche: numero, statut: '', parPage: 5 }).then(function (r) {
+      var colis = (r.lignes || []).filter(function (l) { return l.numero === numero; })[0];
+      if (colis) ouvrirFicheColis(colis);
+      else toast('Ce colis n’existe plus.', true);
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  function ouvrirFactureParId(id) {
+    API.admin.factures({ id: id, etat: '', parPage: 1 }).then(function (r) {
+      var facture = (r.lignes || [])[0];
+      if (!facture) { toast('Cette facture n’existe plus.', true); return; }
+      choisirVue('factures');
+      ouvrirFacture(facture);
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  /* ---- Graphiques -----------------------------------------------------------------
+     Peu nombreux, et seulement ce qui se lit mieux en barres : par jour et par
+     statut. Les valeurs sont celles de la base ; la page ne fait que les
+     mettre à l'échelle. Chaque barre porte son chiffre (survol, lecteur
+     d'écran), et le résumé écrit dit l'essentiel sans le dessin. */
+  var SVG = 'http://www.w3.org/2000/svg';
+  function svg(balise, attributs) {
+    var n = document.createElementNS(SVG, balise);
+    Object.keys(attributs || {}).forEach(function (k) { n.setAttribute(k, attributs[k]); });
+    return n;
+  }
+
+  // series : [{ nom, cle, classe, total, format }] ; jours : [{ jour, <cle>: n }]
+  function grapheJours(zone, jours, series, nommer) {
+    // nommer(case, court) : « 12/09 », « semaine du 07/09 », « sept. 2026 »…
+    nommer = nommer || function (j, court) { return jourLisible(j.jour, court); };
+    zone.textContent = '';
+    jours = jours || [];
+    var max = 0;
+    jours.forEach(function (j) { series.forEach(function (s) { max = Math.max(max, Number(j[s.cle]) || 0); }); });
+    var legende = el('ul', 'gs-graphe__legende');
+    series.forEach(function (s) {
+      var li = el('li');
+      li.appendChild(el('i', 'gs-graphe__puce ' + s.classe));
+      li.appendChild(document.createTextNode(s.nom + ' : ' + s.format(s.total)));
+      legende.appendChild(li);
+    });
+    zone.appendChild(legende);
+    if (!jours.length || !max) {
+      zone.appendChild(el('p', 'gs-graphe__vide', 'Rien sur cette période.'));
+      return;
+    }
+    var L = 600, H = 160, n = jours.length, pas = L / n;
+    var largeur = Math.max(1, (pas * (n > 60 ? 0.9 : 0.72)) / series.length);
+    var dessin = svg('svg', { viewBox: '0 0 ' + L + ' ' + H, preserveAspectRatio: 'none', class: 'gs-graphe__svg',
+                              role: 'img', 'aria-label': series.map(function (s) { return s.nom + ' ' + s.format(s.total); }).join(', ') +
+                                ', du ' + nommer(jours[0]) + ' au ' + nommer(jours[n - 1]) + '.' });
+    dessin.appendChild(svg('line', { x1: 0, x2: L, y1: H - 0.5, y2: H - 0.5, class: 'gs-graphe__axe' }));
+    jours.forEach(function (j, i) {
+      series.forEach(function (s, k) {
+        var v = Number(j[s.cle]) || 0;
+        if (!v) return;
+        var h = Math.max(2, v / max * (H - 8));
+        var barre = svg('rect', { x: (i * pas + (pas - largeur * series.length) / 2 + k * largeur).toFixed(2),
+                                  y: (H - h).toFixed(2), width: largeur.toFixed(2), height: h.toFixed(2), class: s.classe,
+                                  rx: Math.min(4, largeur / 2).toFixed(2) });
+        var titre = svg('title');
+        titre.textContent = nommer(j) + ' — ' + s.nom + ' : ' + s.format(v);
+        barre.appendChild(titre);
+        dessin.appendChild(barre);
+      });
+    });
+    var cadre = el('div', 'gs-graphe__cadre');
+    cadre.appendChild(el('span', 'gs-graphe__max', 'max. ' + series[0].format(max)));
+    cadre.appendChild(dessin);
+    zone.appendChild(cadre);
+    var axe = el('div', 'gs-graphe__dates');
+    axe.appendChild(el('span', '', nommer(jours[0], true)));
+    if (n > 2) axe.appendChild(el('span', '', nommer(jours[Math.floor((n - 1) / 2)], true)));
+    if (n > 1) axe.appendChild(el('span', '', nommer(jours[n - 1], true)));
+    zone.appendChild(axe);
+  }
+
+  // Une répartition en barres horizontales : [{ libelle, nombre, classe }]
+  function repartition(liste, lignes, videTexte) {
+    liste.textContent = '';
+    var max = 0;
+    lignes.forEach(function (l) { max = Math.max(max, Number(l.nombre) || 0); });
+    if (!lignes.length) {
+      liste.appendChild(el('li', 'gs-repartition__vide', videTexte));
+      return;
+    }
+    lignes.forEach(function (l) {
+      var li = el('li', 'gs-repartition__ligne');
+      var nom = el('span', 'gs-repartition__nom');
+      if (l.pastille) nom.appendChild(el('i', 'gs-pastille gs-pastille--' + l.pastille));
+      nom.appendChild(document.createTextNode(l.libelle));
+      li.appendChild(nom);
+      var piste = el('span', 'gs-repartition__piste');
+      var barre = el('span', 'gs-repartition__barre' + (l.pastille ? ' gs-repartition__barre--' + l.pastille : ''));
+      barre.style.width = max ? Math.round((Number(l.nombre) || 0) / max * 100) + '%' : '0%';
+      piste.appendChild(barre);
+      li.appendChild(piste);
+      li.appendChild(el('strong', 'gs-repartition__nombre', entier(l.nombre)));
+      liste.appendChild(li);
+    });
+  }
+
+  /* ---- La vue générale ------------------------------------------------------------
+     Une requête (vue_generale) pour tous les chiffres de la période ; une
+     seconde (colis_a_traiter) pour la liste du bas. Mise à jour : le bouton
+     « Actualiser », l'ouverture de l'onglet si les chiffres ont plus d'une
+     minute, et les changements en direct — au plus une fois toutes les
+     quinze secondes, pour ne pas recompter la base à chaque scan. */
+  var etatApercu = { periode: '30j', debut: '', fin: '', donnees: null, charge: 0, demande: 0, prevu: null };
+  var traiter = { liste: 'action_requise', jours: 7, page: 0, parPage: 10, demande: 0 };
+  var corpsApercu = $('[data-apercu-corps]');
+  var messageApercu = $('[data-apercu-message]');
+
+  function texteErreurApercu(err) {
+    if (err && err.code === 'non-autorise') return 'Accès refusé : votre rôle ne permet pas de voir la vue générale.';
+    if (err && err.code === 'absent') {
+      return 'La vue générale n’est pas encore installée : lancez outils/supabase-tableau-de-bord.sql dans Supabase ' +
+             '(SQL Editor), puis « Actualiser ».';
+    }
+    if (err && err.code === 'reseau') return 'Connexion impossible : les chiffres n’ont pas pu être chargés. Vérifiez la connexion, puis « Actualiser ».';
+    return messageErreur(err);
+  }
+
+  function chargerApercu() {
+    if (!peut('shipments.view')) return Promise.resolve();
+    var numero = ++etatApercu.demande;
+    clearTimeout(etatApercu.prevu);
+    etatApercu.prevu = null;
+    etatApercu.charge = Date.now();
+    corpsApercu.setAttribute('aria-busy', 'true');
+    if (!etatApercu.donnees) $('[data-apercu-etat]').textContent = 'Chargement des chiffres…';
+    chargerTraiter();
+    var o = { periode: etatApercu.periode, debut: etatApercu.debut, fin: etatApercu.fin, jours: traiter.jours };
+    // La vue filtrée (vue_generale_filtree) est la vue générale entière, ses colis
+    // découpés par les filtres. Une base qui ne l'a pas encore : vue_generale, sans filtres.
+    var lecture = etatFiltres.disponible
+      ? API.admin.vueGeneraleFiltree(Object.assign({ filtres: etatFiltres.valeurs }, o)).catch(function (err) {
+        if (!err || err.code !== 'absent') throw err;
+        etatFiltres.disponible = false;
+        etatFiltres.valeurs = {};
+        return API.admin.vueGenerale(o);
+      })
+      : API.admin.vueGenerale(o);
+    return lecture
+      .then(function (v) {
+        if (numero !== etatApercu.demande) return;
+        etatApercu.donnees = v;
+        messageApercu.hidden = true;
+        corpsApercu.hidden = false;
+        afficherApercu(v);
+      }).catch(function (err) {
+        if (numero !== etatApercu.demande) return;
+        etatApercu.charge = 0;
+        messageApercu.textContent = texteErreurApercu(err);
+        messageApercu.hidden = false;
+        // Des chiffres déjà affichés restent, avec l'erreur au-dessus ; sinon rien plutôt que des zéros faux
+        corpsApercu.hidden = !etatApercu.donnees;
+        if (!etatApercu.donnees) $('[data-apercu-etat]').textContent = '';
+      }).then(function () {
+        if (numero === etatApercu.demande) corpsApercu.removeAttribute('aria-busy');
+      });
+  }
+
+  function rafraichirApercu() {
+    if (etatApercu.prevu) return;
+    var attente = Math.max(0, 15000 - (Date.now() - etatApercu.charge));
+    etatApercu.prevu = setTimeout(function () {
+      etatApercu.prevu = null;
+      if (!etatDirect.pause && (etat.vue === 'apercu' || notificationsActives())) chargerApercu();
+    }, attente);
+  }
+
+  // Les pictogrammes des chiffres clés (traits, 24 × 24) : des constantes, jamais une donnée
+  var PICTOS = {
+    colis: '<path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>',
+    livre: '<circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 5-5.5"/>',
+    route: '<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+    alerte: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+    horloge: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    clients: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    nouveau: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+    facture: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/>',
+    argent: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/>',
+    portefeuille: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+    scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/>'
+  };
+  function picto(nom) {
+    return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" ' +
+           'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + PICTOS[nom] + '</svg>';
+  }
+
+  function kpis(nom, cartes) {
+    var zone = $('[data-kpis="' + nom + '"]');
+    zone.textContent = '';
+    cartes.forEach(function (k) {
+      var carte = el(k.action ? 'button' : 'div', 'gs-kpi' + (k.ton ? ' gs-kpi--' + k.ton : ''));
+      if (k.action) {
+        carte.type = 'button';
+        carte.addEventListener('click', k.action);
+      }
+      if (k.picto && PICTOS[k.picto]) {
+        var pastille = el('span', 'gs-kpi__picto gs-kpi__picto--' + (k.teinte || 'bleu'));
+        pastille.innerHTML = picto(k.picto);
+        carte.appendChild(pastille);
+      }
+      carte.appendChild(el('span', 'gs-kpi__libelle', k.libelle));
+      carte.appendChild(el('strong', 'gs-kpi__valeur', k.valeur));
+      if (k.sous) carte.appendChild(el('span', 'gs-kpi__sous', k.sous));
+      zone.appendChild(carte);
+    });
+  }
+
+  function partie(nom, visible) {
+    $$('[data-apercu-partie="' + nom + '"]').forEach(function (n) { n.hidden = !visible; });
+  }
+
+  /* ---- La vue générale, dessinée ---------------------------------------------------
+     La mise en page vient de la maquette Claude Design (GoShip Dashboard), aux couleurs
+     du logo : bleu nuit, orange, bleu. Chaque chiffre est celui de vue_generale ; les
+     comptes qui voient les rapports reçoivent en plus, des Analytics, la comparaison à
+     la période précédente, les routes et les clients actifs. La page ne fait aucun
+     total : elle place, compare deux chiffres de la base, ou se tait. Les blocs de la
+     maquette dont la base n'a pas la donnée (marge, agences, filtres par mode de
+     transport) n'ont pas été repris. */
+
+  // Les couleurs des statuts : celles des pastilles de site.css
+  var COULEURS_STATUTS = { recu: '#0d2b6b', emballe: '#6d28d9', embarque: '#1f5fe0', distribution: '#d97706',
+                           succursale: '#ea580c', disponible: '#0f766e', livre: '#16a34a', incident: '#dc2626' };
+  var CHAINE = ['recu', 'emballe', 'embarque', 'distribution', 'succursale', 'disponible', 'livre'];
+  var etatVG = { analytics: null, demande: 0, frais: false };
+
+  // Une variation (comparerValeurs de la base) : flèche, pourcentage, couleur neutre
+  function badgeVariation(cmp) {
+    if (!cmp || typeof cmp !== 'object') return null;
+    var v = variation(cmp, entier);
+    var b = el('span', 'gs-vg__variation gs-vg__variation--' + (cmp.tendance || 'stable'), v.texte);
+    b.title = 'Période précédente : ' + (typeof cmp.precedent === 'number' ? O.nombre(cmp.precedent) : cmp.precedent);
+    return b;
+  }
+
+  function texteComparaison() {
+    var s = etatVG.analytics && etatVG.analytics.synthese, v = etatApercu.donnees;
+    var prec = (v && v.comparaison && v.comparaison.precedente) || (s && s.periode && s.periode.precedente);
+    return prec ? 'par rapport au ' + jourLisible(prec.debut, true) + ' – ' + jourLisible(prec.fin, true) : '';
+  }
+
+  function vgKpis(v) {
+    var c = v.colis || {}, s = etatVG.analytics && etatVG.analytics.synthese;
+    // Filtrée ou non, la comparaison de la vue filtrée vaut celle des Analytics (essai-analytics)
+    var m = v.comparaison || (s && s.mesures) || {};
+    var zone = $('[data-vg-kpis]');
+    zone.textContent = '';
+    [
+      { picto: 'colis', teinte: 'orange', libelle: 'Colis reçus', valeur: entier(c.recus_periode), cmp: m.recus,
+        sous: 'sur la période' },
+      { picto: 'livre', teinte: 'vert', libelle: 'Colis livrés', valeur: entier(c.livres_periode), cmp: m.livres,
+        sous: 'sur la période' },
+      { picto: 'route', teinte: 'bleu', libelle: 'En cours', valeur: entier(c.actifs),
+        sous: 'maintenant · ' + pluriel(c.total, 'colis au total', 'colis au total'),
+        action: function () { viderFiltresColis(); filtrerParStatut('actifs'); } },
+      { picto: 'colis', teinte: 'marine', libelle: 'Poids reçu', valeur: O.nombre(Number(c.poids_periode) || 0) + ' lb', cmp: m.poids,
+        sous: 'sur la période' }
+    ].forEach(function (k) {
+      var carte = el(k.action ? 'button' : 'div', 'gs-vg__kpi');
+      if (k.action) { carte.type = 'button'; carte.addEventListener('click', k.action); }
+      var tete = el('div', 'gs-vg__kpi-tete');
+      var textes = el('div');
+      textes.appendChild(el('span', 'gs-vg__libelle', k.libelle));
+      textes.appendChild(el('strong', 'gs-vg__kpi-valeur', k.valeur));
+      tete.appendChild(textes);
+      var pastille = el('span', 'gs-vg__picto gs-vg__picto--' + k.teinte);
+      pastille.innerHTML = picto(k.picto);
+      tete.appendChild(pastille);
+      carte.appendChild(tete);
+      var pied = el('p', 'gs-vg__kpi-pied');
+      var b = k.cmp && badgeVariation(k.cmp);
+      if (b) {
+        pied.appendChild(b);
+        pied.appendChild(document.createTextNode(' ' + texteComparaison()));
+      } else {
+        pied.appendChild(document.createTextNode(k.sous));
+      }
+      carte.appendChild(pied);
+      zone.appendChild(carte);
+    });
+  }
+
+  // Une bulle qui suit la souris ou le clavier au-dessus d'un graphique
+  function bulle(zone) {
+    var b = zone.querySelector('.gs-vg__bulle');
+    if (!b) { b = el('div', 'gs-vg__bulle'); b.hidden = true; b.setAttribute('aria-hidden', 'true'); zone.appendChild(b); }
+    return b;
+  }
+  function montrerBulle(zone, cible, lignes) {
+    var b = bulle(zone);
+    b.textContent = '';
+    lignes.forEach(function (l, i) {
+      var p = el('p', i ? 'gs-vg__bulle-ligne' : 'gs-vg__bulle-titre');
+      if (l.couleur) { var puce = el('i', 'gs-vg__puce'); puce.style.background = l.couleur; p.appendChild(puce); }
+      p.appendChild(el('span', '', l.nom));
+      if (l.valeur != null) p.appendChild(el('strong', '', l.valeur));
+      b.appendChild(p);
+    });
+    b.hidden = false;
+    var z = zone.getBoundingClientRect(), r = cible.getBoundingClientRect();
+    var x = r.left - z.left + r.width / 2;
+    b.style.left = Math.max(8, Math.min(z.width - b.offsetWidth - 8, x - b.offsetWidth / 2)) + 'px';
+    b.style.top = Math.max(0, r.top - z.top - b.offsetHeight - 10) + 'px';
+  }
+  function cacherBulle(zone) { var b = zone.querySelector('.gs-vg__bulle'); if (b) b.hidden = true; }
+
+  // Des graduations lisibles : 0, puis 4 paliers ronds jusqu'au maximum
+  function graduations(max) {
+    if (!(max > 0)) return [0];
+    var brut = max / 4, puissance = Math.pow(10, Math.floor(Math.log(brut) / Math.LN10)), pas = puissance;
+    [1, 2, 2.5, 5, 10].some(function (f) { pas = f * puissance; return pas >= brut; });
+    if (pas < 1 && max >= 1) pas = 1;
+    var t = [];
+    for (var x = 0; x <= max + pas * 0.001 || t.length < 2; x += pas) t.push(Math.round(x * 100) / 100);
+    return t;
+  }
+
+  // Les colis reçus jour par jour : une barre par jour, la plus haute en orange
+  function vgJours(v) {
+    var c = v.colis || {}, jours = c.par_jour || [];
+    var legende = $('[data-vg-jours-legende]');
+    legende.textContent = '';
+    [['Reçus', entier(c.recus_periode), '#f4600d'], ['Livrés', entier(c.livres_periode), '#1f5fe0']].forEach(function (x) {
+      var s = el('span', 'gs-vg__legende-item');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = x[2];
+      s.appendChild(puce);
+      s.appendChild(document.createTextNode(x[0] + ' : ' + x[1]));
+      legende.appendChild(s);
+    });
+    var zone = $('[data-vg-jours-graphe]');
+    zone.textContent = '';
+    var max = 0, pic = -1;
+    jours.forEach(function (j, i) {
+      var n = Math.max(Number(j.recus) || 0, Number(j.livres) || 0);
+      if (n > max) max = n;
+      if ((Number(j.recus) || 0) > (pic < 0 ? 0 : Number(jours[pic].recus) || 0)) pic = i;
+    });
+    if (!jours.length || !max) { zone.appendChild(el('p', 'gs-vg__vide', 'Aucun colis reçu ni livré sur cette période.')); return; }
+    var echelle = graduations(max), haut = echelle[echelle.length - 1];
+    var cadre = el('div', 'gs-vg__barres');
+    cadre.setAttribute('role', 'img');
+    cadre.setAttribute('aria-label', 'Colis reçus par jour, du ' + jourLisible(jours[0].jour) + ' au ' +
+      jourLisible(jours[jours.length - 1].jour) + ' : ' + entier(c.recus_periode) + ' reçus, ' + entier(c.livres_periode) + ' livrés.');
+    var axe = el('div', 'gs-vg__axe-y');
+    echelle.slice().reverse().forEach(function (t) { axe.appendChild(el('span', '', O.nombre(t))); });
+    cadre.appendChild(axe);
+    var plan = el('div', 'gs-vg__plan' + (jours.length > 40 ? ' gs-vg__plan--dense' : ''));
+    echelle.forEach(function (t) {
+      var ligne = el('i', 'gs-vg__grille');
+      ligne.style.bottom = (t / haut * 100) + '%';
+      plan.appendChild(ligne);
+    });
+    var actif = null;
+    function activer(col, j) {
+      if (actif) actif.classList.remove('is-actif');
+      actif = col;
+      col.classList.add('is-actif');
+      montrerBulle(zone, col.querySelector('.gs-vg__barre') || col, [
+        { nom: jourLisible(j.jour) }, { nom: 'Reçus', valeur: entier(j.recus), couleur: '#f4600d' },
+        { nom: 'Livrés', valeur: entier(j.livres), couleur: '#1f5fe0' }]);
+    }
+    jours.forEach(function (j, i) {
+      var col = el('div', 'gs-vg__colonne');
+      col.tabIndex = -1;
+      var barre = el('span', 'gs-vg__barre');
+      barre.style.height = Math.max(Number(j.recus) ? 2 : 0, (Number(j.recus) || 0) / haut * 100) + '%';
+      col.appendChild(barre);
+      if (Number(j.livres)) {
+        var point = el('span', 'gs-vg__livres');
+        point.style.bottom = ((Number(j.livres) || 0) / haut * 100) + '%';
+        col.appendChild(point);
+      }
+      col.addEventListener('mouseenter', function () { activer(col, j); });
+      if (i === pic) col.classList.add('is-pic');
+      plan.appendChild(col);
+    });
+    plan.addEventListener('mouseleave', function () {
+      if (actif) actif.classList.remove('is-actif');
+      actif = null;
+      cacherBulle(zone);
+    });
+    cadre.appendChild(plan);
+    zone.appendChild(cadre);
+    var dates = el('div', 'gs-vg__axe-x');
+    var n = jours.length, reperes = n <= 7 ? jours.map(function (_, i) { return i; }) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1];
+    reperes.forEach(function (i) {
+      var d = el('span', '', n <= 7 ? jourSemaine(jours[i].jour) : jourLisible(jours[i].jour, true));
+      dates.appendChild(d);
+    });
+    zone.appendChild(dates);
+  }
+
+  function jourSemaine(jour) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(jour || ''));
+    if (!m) return '';
+    return ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()] + ' ' + m[3];
+  }
+
+  // Le facturé jour par jour : une aire, et l'encaissé en pointillé
+  function vgFacture(v) {
+    var f = v.facturation;
+    if (!f) return;
+    var s = etatVG.analytics && etatVG.analytics.synthese;
+    $('[data-vg-facture-total]').textContent = argent(f.facture_periode);
+    var zv = $('[data-vg-facture-variation]');
+    zv.textContent = '';
+    var b = s && s.mesures && badgeVariation(s.mesures.facture);
+    if (b) zv.appendChild(b);
+    var zone = $('[data-vg-facture-graphe]');
+    zone.textContent = '';
+    var jours = f.par_jour || [], max = 0;
+    jours.forEach(function (j) { max = Math.max(max, Number(j.facture) || 0, Number(j.encaisse) || 0); });
+    var legende = el('p', 'gs-vg__legende');
+    [['Facturé', '#f4600d', argent(f.facture_periode)], ['Encaissé', '#1f5fe0', argent(f.encaisse_periode)]].forEach(function (x) {
+      var it = el('span', 'gs-vg__legende-item');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = x[1];
+      it.appendChild(puce);
+      it.appendChild(document.createTextNode(x[0] + ' : ' + x[2]));
+      legende.appendChild(it);
+    });
+    zone.appendChild(legende);
+    if (!jours.length || !max) { zone.appendChild(el('p', 'gs-vg__vide', 'Rien de facturé ni d’encaissé sur cette période.')); return; }
+    var L = 600, H = 200, n = jours.length;
+    function x(i) { return n === 1 ? L / 2 : i / (n - 1) * L; }
+    function y(val) { return H - 6 - (Number(val) || 0) / max * (H - 16); }
+    function trace(cle) { return jours.map(function (j, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(j[cle]).toFixed(1); }).join(' '); }
+    var dessin = svg('svg', { viewBox: '0 0 ' + L + ' ' + H, preserveAspectRatio: 'none', class: 'gs-vg__aire',
+      role: 'img', 'aria-label': 'Facturé ' + argent(f.facture_periode) + ' et encaissé ' + argent(f.encaisse_periode) +
+      ', du ' + jourLisible(jours[0].jour) + ' au ' + jourLisible(jours[n - 1].jour) + '.' });
+    var defs = svg('defs');
+    var grad = svg('linearGradient', { id: 'vg-degrade-facture', x1: 0, y1: 0, x2: 0, y2: 1 });
+    grad.appendChild(svg('stop', { offset: '0%', 'stop-color': '#f4600d', 'stop-opacity': '.28' }));
+    grad.appendChild(svg('stop', { offset: '100%', 'stop-color': '#f4600d', 'stop-opacity': '0' }));
+    defs.appendChild(grad);
+    dessin.appendChild(defs);
+    dessin.appendChild(svg('path', { d: trace('facture') + ' L' + x(n - 1).toFixed(1) + ' ' + H + ' L' + x(0).toFixed(1) + ' ' + H + ' Z',
+                                     fill: 'url(#vg-degrade-facture)' }));
+    dessin.appendChild(svg('path', { d: trace('facture'), class: 'gs-vg__trait gs-vg__trait--facture' }));
+    dessin.appendChild(svg('path', { d: trace('encaisse'), class: 'gs-vg__trait gs-vg__trait--encaisse' }));
+    var cadre = el('div', 'gs-vg__aire-cadre');
+    cadre.appendChild(dessin);
+    var repere = el('i', 'gs-vg__repere');
+    repere.hidden = true;
+    cadre.appendChild(repere);
+    var cibles = el('div', 'gs-vg__cibles');
+    jours.forEach(function (j, i) {
+      var t = el('span', 'gs-vg__cible');
+      t.addEventListener('mouseenter', function () {
+        repere.hidden = false;
+        repere.style.left = (n === 1 ? 50 : i / (n - 1) * 100) + '%';
+        montrerBulle(zone, t, [{ nom: jourLisible(j.jour) }, { nom: 'Facturé', valeur: argent(j.facture), couleur: '#f4600d' },
+          { nom: 'Encaissé', valeur: argent(j.encaisse), couleur: '#1f5fe0' }]);
+      });
+      cibles.appendChild(t);
+    });
+    cibles.addEventListener('mouseleave', function () { repere.hidden = true; cacherBulle(zone); });
+    cadre.appendChild(cibles);
+    zone.appendChild(cadre);
+    var dates = el('div', 'gs-vg__axe-x');
+    (n <= 7 ? jours.map(function (_, i) { return i; }) : [0, Math.round((n - 1) / 3), Math.round((n - 1) * 2 / 3), n - 1]).forEach(function (i) {
+      dates.appendChild(el('span', '', n <= 7 ? jourSemaine(jours[i].jour) : jourLisible(jours[i].jour, true)));
+    });
+    zone.appendChild(dates);
+  }
+
+  // Le règlement des factures de la période : payé contre facturé, en couronne graduée
+  function vgAnneau(v) {
+    var f = v.facturation;
+    if (!f) return;
+    var zone = $('[data-vg-anneau]');
+    zone.textContent = '';
+    var facture = Number(f.facture_periode) || 0, paye = Number(f.paye_sur_periode) || 0;
+    var part = facture > 0 ? Math.min(1, paye / facture) : null;
+    var N = 72, R = 88, dessin = svg('svg', { viewBox: '0 0 220 220', class: 'gs-vg__couronne', 'aria-hidden': 'true' });
+    for (var i = 0; i < N; i++) {
+      var a = (i / N) * Math.PI * 2 - Math.PI / 2, dedans = part != null && i < Math.round(part * N);
+      dessin.appendChild(svg('line', { x1: (110 + Math.cos(a) * (R - 14)).toFixed(1), y1: (110 + Math.sin(a) * (R - 14)).toFixed(1),
+        x2: (110 + Math.cos(a) * R).toFixed(1), y2: (110 + Math.sin(a) * R).toFixed(1),
+        class: dedans ? 'gs-vg__graduation gs-vg__graduation--pleine' : 'gs-vg__graduation' }));
+    }
+    zone.appendChild(dessin);
+    var centre = el('div', 'gs-vg__anneau-centre');
+    centre.appendChild(el('strong', '', part == null ? '—' : O.nombre(Math.round(part * 1000) / 10) + ' %'));
+    centre.appendChild(el('span', '', part == null ? 'aucune facture sur la période' : 'du facturé déjà payé'));
+    zone.appendChild(centre);
+    zone.setAttribute('role', 'img');
+    zone.setAttribute('aria-label', part == null ? 'Aucune facture émise sur la période.'
+      : argent(paye) + ' payés sur ' + argent(facture) + ' facturés sur la période.');
+    var dl = $('[data-vg-encaissement]');
+    dl.textContent = '';
+    [['Facturé', argent(f.facture_periode), pluriel(f.emises_periode, 'facture', 'factures')],
+     ['Payé', argent(f.paye_sur_periode), 'sur ces factures'],
+     ['Reste dû', argent(f.solde_sur_periode), 'sur ces factures'],
+     ['Encaissé', argent(f.encaisse_periode), pluriel(f.paiements_periode, 'paiement', 'paiements')]].forEach(function (x) {
+      var d = el('div');
+      d.appendChild(el('dt', '', x[0]));
+      d.appendChild(el('dd', '', x[1]));
+      d.appendChild(el('dd', 'gs-vg__chiffre-sous', x[2]));
+      dl.appendChild(d);
+    });
+  }
+
+  // Les clients : ce que vue_generale sait, et les Analytics s'il y en a
+  function vgClients(v) {
+    var cl = v.clients;
+    if (!cl) return;
+    var a = etatVG.analytics && etatVG.analytics.clients;
+    var zone = $('[data-vg-clients]');
+    zone.textContent = '';
+    var grand = el('p', 'gs-vg__clients-grand');
+    grand.appendChild(el('strong', '', entier(cl.nouveaux_periode)));
+    var b = a && badgeVariation(a.nouveaux);
+    if (b) grand.appendChild(b);
+    zone.appendChild(grand);
+    zone.appendChild(el('p', 'gs-vg__clients-sous', (Number(cl.nouveaux_periode) > 1 ? 'nouveaux clients' : 'nouveau client') +
+      ' sur la période · ' + pluriel(cl.total, 'client inscrit', 'clients inscrits')));
+    if (a && a.actifs) {
+      var actifs = el('p', 'gs-vg__clients-ligne');
+      actifs.appendChild(el('span', '', 'Actifs sur la période'));
+      actifs.appendChild(el('strong', '', entier(a.actifs.actuel)));
+      var ba = badgeVariation(a.actifs);
+      if (ba) actifs.appendChild(ba);
+      zone.appendChild(actifs);
+    }
+    var total = Number(cl.total) || 0, enCours = Number(cl.avec_colis_en_cours) || 0;
+    var jauge = el('div', 'gs-vg__jauge');
+    var rempli = el('span', 'gs-vg__jauge-plein');
+    rempli.style.width = total ? Math.round(enCours / total * 100) + '%' : '0%';
+    jauge.appendChild(rempli);
+    var texte = el('p', 'gs-vg__jauge-texte');
+    texte.appendChild(el('strong', '', total ? O.nombre(Math.round(enCours / total * 1000) / 10) + ' %' : '—'));
+    texte.appendChild(document.createTextNode(' ' + pluriel(enCours, 'client a', 'clients ont') + ' un colis en cours'));
+    jauge.appendChild(texte);
+    zone.appendChild(jauge);
+  }
+
+  // À surveiller : les chiffres qui demandent une action, chacun mène à sa liste
+  function vgSurveiller(v) {
+    var c = v.colis || {}, f = v.facturation, zone = $('[data-vg-surveiller]');
+    zone.textContent = '';
+    var sansFacture = (v.alertes || []).filter(function (a) { return a.code === 'colis_sans_facture'; })[0];
+    var cases = [
+      { nom: 'Action requise', valeur: entier(c.action_requise), sous: 'colis, maintenant', couleur: '#dc2626', vif: c.action_requise > 0,
+        action: function () { choisirListe('action_requise'); } },
+      { nom: 'Sans mouvement', valeur: entier(c.sans_mouvement), sous: 'depuis ' + v.jours_sans_mouvement + ' j ou plus', couleur: '#d97706',
+        vif: c.sans_mouvement > 0, action: function () { choisirListe('sans_mouvement'); } }
+    ];
+    if (f) {
+      cases.push({ nom: 'À encaisser', valeur: argent(f.a_encaisser), sous: pluriel(f.ouvertes, 'facture ouverte', 'factures ouvertes'),
+        couleur: '#f4600d', action: function () { choisirFactures('a_payer'); } });
+      cases.push({ nom: 'En retard', valeur: argent(f.montant_en_retard), sous: pluriel((f.etats || {}).en_retard, 'facture échue', 'factures échues'),
+        couleur: '#b91c1c', vif: (f.etats || {}).en_retard > 0, action: function () { choisirFactures('en_retard'); } });
+      cases.push({ nom: 'Clients avec solde', valeur: entier(f.clients_avec_solde), sous: 'maintenant', couleur: '#1f5fe0',
+        action: function () { choisirVue('clients'); } });
+    }
+    if (peut('invoices.view')) {
+      cases.push({ nom: 'Colis sans facture', valeur: entier(sansFacture ? sansFacture.nombre : 0), sous: 'sur aucune facture active',
+        couleur: '#6d28d9', action: actionAlerte('colis_sans_facture') });
+    }
+    cases.forEach(function (x) {
+      var li = el('li');
+      var bouton = el(x.action ? 'button' : 'div', 'gs-vg__surveiller-case' + (x.vif ? ' is-vif' : ''));
+      if (x.action) { bouton.type = 'button'; bouton.addEventListener('click', x.action); }
+      var nom = el('span', 'gs-vg__surveiller-nom');
+      var puce = el('i', 'gs-vg__puce gs-vg__puce--halo'); puce.style.background = x.couleur; puce.style.color = x.couleur;
+      nom.appendChild(puce);
+      nom.appendChild(document.createTextNode(x.nom));
+      bouton.appendChild(nom);
+      bouton.appendChild(el('strong', 'gs-vg__surveiller-valeur', x.valeur));
+      bouton.appendChild(el('span', 'gs-vg__surveiller-sous', x.sous));
+      li.appendChild(bouton);
+      zone.appendChild(li);
+    });
+  }
+
+  // Les colis par statut, maintenant : un anneau et sa légende
+  function vgStatuts(v) {
+    var c = v.colis || {}, statuts = c.statuts || {}, total = Number(c.total) || 0;
+    var zone = $('[data-vg-donut]');
+    zone.textContent = '';
+    var R = 70, P = 2 * Math.PI * R, dessin = svg('svg', { viewBox: '0 0 200 200', class: 'gs-vg__anneau-statuts', 'aria-hidden': 'true' });
+    dessin.appendChild(svg('circle', { cx: 100, cy: 100, r: R, class: 'gs-vg__anneau-fond' }));
+    var deja = 0;
+    Object.keys(STATUTS).forEach(function (k) {
+      var n = Number(statuts[k]) || 0;
+      if (!n || !total) return;
+      var long = n / total * P, ecart = Object.keys(statuts).filter(function (x) { return statuts[x] > 0; }).length > 1 ? 2 : 0;
+      dessin.appendChild(svg('circle', { cx: 100, cy: 100, r: R, fill: 'none', stroke: COULEURS_STATUTS[k], 'stroke-width': 22,
+        'stroke-dasharray': Math.max(0.5, long - ecart).toFixed(2) + ' ' + (P - Math.max(0.5, long - ecart)).toFixed(2),
+        'stroke-dashoffset': (-deja + P / 4).toFixed(2) }));
+      deja += long;
+    });
+    zone.appendChild(dessin);
+    var centre = el('div', 'gs-vg__donut-centre');
+    centre.appendChild(el('strong', '', entier(total)));
+    centre.appendChild(el('span', '', 'colis'));
+    zone.appendChild(centre);
+    zone.setAttribute('role', 'img');
+    zone.setAttribute('aria-label', entier(total) + ' colis : ' + Object.keys(STATUTS).map(function (k) {
+      return STATUTS[k] + ' ' + entier(statuts[k]);
+    }).join(', ') + '.');
+    var liste = $('[data-vg-statuts]');
+    liste.textContent = '';
+    Object.keys(STATUTS).forEach(function (k) {
+      var n = Number(statuts[k]) || 0;
+      var li = el('li');
+      var b = el('button', 'gs-vg__statut');
+      b.type = 'button';
+      b.addEventListener('click', function () { viderFiltresColis(); filtrerParStatut(k); });
+      var nom = el('span', 'gs-vg__statut-nom');
+      var puce = el('i', 'gs-vg__puce gs-vg__puce--carre'); puce.style.background = COULEURS_STATUTS[k];
+      nom.appendChild(puce);
+      nom.appendChild(document.createTextNode(STATUTS[k]));
+      b.appendChild(nom);
+      b.appendChild(el('span', 'gs-vg__statut-nombre', entier(n)));
+      b.appendChild(el('strong', 'gs-vg__statut-part', total ? Math.round(n / total * 100) + ' %' : '—'));
+      li.appendChild(b);
+      liste.appendChild(li);
+    });
+  }
+
+  // La chaîne logistique : les sept étapes de GoShip, dans l'ordre du colis
+  function vgChaine(v) {
+    var c = v.colis || {}, statuts = c.statuts || {}, total = Number(c.total) || 0;
+    $('[data-vg-chaine-total]').textContent = 'Miami → Haïti / République dominicaine · ' + pluriel(total, 'colis', 'colis') +
+      (Number(c.action_requise) ? ' · ' + entier(c.action_requise) + ' en action requise' : '');
+    var liste = $('[data-vg-chaine]');
+    liste.textContent = '';
+    CHAINE.forEach(function (k, i) {
+      var n = Number(statuts[k]) || 0;
+      var li = el('li', 'gs-vg__etape' + (k === 'livre' ? ' gs-vg__etape--fin' : ''));
+      var b = el('button', 'gs-vg__etape-bouton');
+      b.type = 'button';
+      b.addEventListener('click', function () { viderFiltresColis(); filtrerParStatut(k); });
+      b.appendChild(el('span', 'gs-vg__etape-rang', String(i + 1)));
+      b.appendChild(el('span', 'gs-vg__etape-nom', STATUTS[k]));
+      b.appendChild(el('strong', 'gs-vg__etape-nombre', entier(n)));
+      var piste = el('span', 'gs-vg__etape-piste');
+      var plein = el('span', 'gs-vg__etape-plein');
+      plein.style.width = total ? Math.max(n ? 3 : 0, Math.round(n / total * 100)) + '%' : '0%';
+      piste.appendChild(plein);
+      b.appendChild(piste);
+      li.appendChild(b);
+      liste.appendChild(li);
+    });
+  }
+
+  function vgActivite(v) {
+    partie('activite', !!v.activite);
+    if (!v.activite) return;
+    var corps = $('[data-lignes="activite"]');
+    corps.textContent = '';
+    var lignes = v.activite.slice(0, 8);
+    lignes.forEach(function (e) {
+      var tr = el('tr');
+      if (e.numero) FICHES.set(tr, { numero: e.numero });
+      var tdNum = cellule('Colis');
+      var numero = el('button', 'gs-lien-bouton gs-cellule-num', e.numero || '—');
+      numero.type = 'button';
+      numero.setAttribute('aria-label', 'Ouvrir le colis ' + (e.numero || ''));
+      if (e.numero) numero.addEventListener('click', function () { ouvrirColisParNumero(e.numero); });
+      tdNum.appendChild(numero);
+      tr.appendChild(tdNum);
+      cellulePleine(tr, 'Client', e.client || '—').classList.add('gs-vg__insecable');
+      // L'événement, dans la couleur du statut qu'il a donné au colis
+      var tdEv = cellule('Événement');
+      var etiquette = el('span', 'gs-badge gs-badge--' + (e.statut || 'recu'), e.libelle || libelleTypeEvenement(e.type_evenement));
+      etiquette.title = [e.auteur ? 'par ' + e.auteur : '', SOURCES[e.source] ? 'via ' + SOURCES[e.source] : '',
+                         e.corrige ? 'annulé par une correction' : ''].filter(Boolean).join(' · ');
+      tdEv.appendChild(etiquette);
+      if (e.corrige) tdEv.appendChild(el('span', 'gs-cellule-sous', 'annulé par une correction'));
+      tr.appendChild(tdEv);
+      cellulePleine(tr, 'Lieu', e.lieu || '—');
+      var tdDate = cellulePleine(tr, 'Date', jourLisible(String(e.cree_le || '').slice(0, 10), true) + ' · ' + heure(e.cree_le));
+      tdDate.classList.add('gs-vg__insecable');
+      tdDate.title = O.date(e.cree_le, true);
+      corps.appendChild(tr);
+    });
+    $('[data-vide="activite"]').hidden = lignes.length > 0;
+    $('.gs-tableau--activite').closest('.gs-tableau-cadre').hidden = !lignes.length;
+  }
+
+  /* ---- Les destinations : une carte schématique de Miami aux Grandes Antilles ------
+     Les villes viennent des colis (analytics_routes) ; seules celles dont on connaît la
+     position sont placées, les autres restent dans la liste « Villes de destination ».
+     Les côtes sont un simple repère visuel, pas une carte exacte. */
+  var GEO_VILLES = {
+    'miami': [-80.19, 25.76], 'port-au-prince': [-72.34, 18.54], 'petion-ville': [-72.29, 18.51], 'delmas': [-72.3, 18.55],
+    'carrefour': [-72.4, 18.54], 'croix-des-bouquets': [-72.2, 18.58], 'cap-haitien': [-72.2, 19.76], 'gonaives': [-72.69, 19.45],
+    'les cayes': [-73.75, 18.19], 'jacmel': [-72.53, 18.23], 'jeremie': [-74.12, 18.65], 'saint-marc': [-72.7, 19.11],
+    'port-de-paix': [-72.83, 19.94], 'hinche': [-72.01, 19.15], 'fort-liberte': [-71.84, 19.66], 'ouanaminthe': [-71.73, 19.55],
+    'miragoane': [-73.09, 18.45], 'leogane': [-72.63, 18.51], 'petit-goave': [-72.87, 18.43], 'mirebalais': [-72.1, 18.83],
+    'santo domingo': [-69.93, 18.49], 'santiago': [-70.69, 19.45], 'santiago de los caballeros': [-70.69, 19.45],
+    'la romana': [-68.97, 18.43], 'san pedro de macoris': [-69.3, 18.46], 'puerto plata': [-70.69, 19.79],
+    'higuey': [-68.71, 18.62], 'punta cana': [-68.37, 18.58], 'san francisco de macoris': [-70.25, 19.3],
+    'la vega': [-70.53, 19.22], 'bani': [-70.33, 18.28], 'barahona': [-71.1, 18.21], 'moca': [-70.52, 19.39],
+    'boca chica': [-69.61, 18.45], 'san cristobal': [-70.1, 18.42], 'dajabon': [-71.71, 19.55]
+  };
+  var CAPITALES = { HT: [-72.34, 18.54], DO: [-69.93, 18.49] };
+  var COTES = [
+    // Floride (le sud de la péninsule)
+    [[-80.3, 27.4], [-80.03, 26.7], [-80.1, 25.9], [-80.35, 25.3], [-80.8, 25.15], [-81.1, 25.15], [-81.35, 25.8], [-81.8, 26.1],
+     [-82.1, 26.6], [-82.5, 27.1], [-82.7, 27.4]],
+    // Cuba
+    [[-84.95, 21.87], [-84.0, 22.75], [-82.35, 23.14], [-81.58, 23.05], [-81.2, 23.2], [-80.0, 22.95], [-79.47, 22.53],
+     [-78.4, 22.5], [-77.1, 21.55], [-76.1, 21.1], [-75.0, 20.7], [-74.13, 20.25], [-75.2, 19.9], [-75.82, 20.0],
+     [-77.73, 19.83], [-77.12, 20.34], [-77.99, 20.71], [-78.9, 21.2], [-79.98, 21.8], [-80.45, 22.1], [-81.1, 22.1],
+     [-81.9, 22.2], [-82.3, 22.7], [-83.3, 22.2], [-84.3, 21.9]],
+    // Jamaïque
+    [[-78.37, 18.27], [-77.9, 18.52], [-77.1, 18.43], [-76.35, 18.18], [-76.2, 17.95], [-76.8, 17.93], [-77.2, 17.72],
+     [-77.85, 17.87], [-78.2, 18.2]],
+    // Hispaniola : Haïti à l'ouest, la République dominicaine à l'est
+    [[-73.4, 19.8], [-72.83, 19.94], [-72.2, 19.78], [-71.84, 19.7], [-71.65, 19.87], [-70.95, 19.9], [-70.69, 19.8],
+     [-70.08, 19.65], [-69.9, 19.64], [-69.2, 19.35], [-69.15, 19.3], [-69.38, 19.06], [-69.05, 18.98], [-68.33, 18.61],
+     [-68.37, 18.5], [-68.85, 18.37], [-68.97, 18.42], [-69.3, 18.45], [-69.9, 18.47], [-70.35, 18.25], [-70.73, 18.43],
+     [-71.08, 18.2], [-71.24, 17.9], [-71.42, 17.6], [-71.74, 18.03], [-72.53, 18.23], [-73.0, 18.18], [-73.75, 18.19],
+     [-73.92, 18.08], [-74.45, 18.33], [-74.42, 18.56], [-74.12, 18.65], [-73.8, 18.55], [-73.09, 18.45], [-72.87, 18.43],
+     [-72.63, 18.51], [-72.34, 18.55], [-72.42, 18.73], [-72.7, 19.11], [-72.69, 19.45], [-73.05, 19.63]],
+    // Porto Rico
+    [[-67.27, 18.37], [-65.62, 18.37], [-65.6, 18.0], [-67.18, 17.95]]
+  ];
+  function sansAccents(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+  }
+  function projeter(lonlat) {
+    // Équirectangulaire, bornes -85,5 → -64,5 et 17 → 27 (cos 22° pour les longitudes)
+    return [(lonlat[0] + 85.5) / 21 * 1000, (27 - lonlat[1]) / 10 * 540];
+  }
+
+  function vgRoutes() {
+    var r = (etatApercu.donnees && etatApercu.donnees.routes) || (etatVG.analytics && etatVG.analytics.routes);
+    $$('[data-vg-partie="routes"]').forEach(function (n) { n.hidden = !r; });
+    if (!r) return;
+    $('[data-vg-origine]').textContent = 'Départ : ' + (r.origine || 'Miami (Medley), FL');
+    var pays = r.pays || [];
+    var liste = $('[data-vg-pays]');
+    liste.textContent = '';
+    pays.forEach(function (p) {
+      var li = el('li');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = p.pays === 'DO' ? '#1f5fe0' : '#f4600d';
+      li.appendChild(puce);
+      li.appendChild(el('strong', '', entier(p.colis)));
+      li.appendChild(el('span', '', 'vers ' + nomPays(p.pays)));
+      var b = badgeVariation({ actuel: p.colis, precedent: p.colis_precedents,
+        variation_pct: p.colis_precedents ? Math.round((p.colis - p.colis_precedents) * 1000 / p.colis_precedents) / 10 : null,
+        tendance: p.colis > p.colis_precedents ? 'hausse' : (p.colis < p.colis_precedents ? 'baisse' : 'stable') });
+      if (b) li.appendChild(b);
+      liste.appendChild(li);
+    });
+    if (!pays.length) liste.appendChild(el('li', 'gs-vg__vide', 'Aucun colis reçu sur la période.'));
+
+    // La carte
+    var zone = $('[data-vg-carte]');
+    zone.textContent = '';
+    var dessin = svg('svg', { viewBox: '0 0 1000 540', class: 'gs-vg__carte-svg', role: 'img',
+      'aria-label': 'Carte schématique des destinations : ' + (pays.map(function (p) { return entier(p.colis) + ' vers ' + nomPays(p.pays); }).join(', ') || 'aucun colis') + '.' });
+    var defs = svg('defs');
+    var motif = svg('pattern', { id: 'vg-points', width: 18, height: 18, patternUnits: 'userSpaceOnUse' });
+    motif.appendChild(svg('circle', { cx: 2, cy: 2, r: 1.3, class: 'gs-vg__carte-point' }));
+    defs.appendChild(motif);
+    dessin.appendChild(defs);
+    dessin.appendChild(svg('rect', { x: 0, y: 0, width: 1000, height: 540, fill: 'url(#vg-points)' }));
+    COTES.forEach(function (c) {
+      dessin.appendChild(svg('path', { class: 'gs-vg__terre', d: c.map(function (p, i) {
+        var q = projeter(p); return (i ? 'L' : 'M') + q[0].toFixed(1) + ' ' + q[1].toFixed(1);
+      }).join(' ') + ' Z' }));
+    });
+    var origine = projeter(GEO_VILLES.miami), maxPays = 0;
+    pays.forEach(function (p) { maxPays = Math.max(maxPays, Number(p.colis) || 0); });
+    pays.forEach(function (p) {
+      if (!CAPITALES[p.pays] || !p.colis) return;
+      var q = projeter(CAPITALES[p.pays]), mx = (origine[0] + q[0]) / 2 + 60, my = Math.min(origine[1], q[1]) - 40;
+      dessin.appendChild(svg('path', { class: 'gs-vg__arc gs-vg__arc--' + p.pays, d: 'M' + origine[0].toFixed(1) + ' ' + origine[1].toFixed(1) +
+        ' Q' + mx.toFixed(1) + ' ' + my.toFixed(1) + ' ' + q[0].toFixed(1) + ' ' + q[1].toFixed(1) }));
+    });
+    // Les villes connues
+    var villes = r.villes || [], maxVille = 0;
+    villes.forEach(function (v) { maxVille = Math.max(maxVille, Number(v.colis) || 0); });
+    villes.forEach(function (v) {
+      var geo = GEO_VILLES[sansAccents(v.ville)];
+      if (!geo) return;
+      var q = projeter(geo), rayon = 5 + (maxVille ? v.colis / maxVille : 0) * 12;
+      var g = svg('g', { class: 'gs-vg__ville gs-vg__ville--' + v.pays });
+      g.appendChild(svg('circle', { cx: q[0].toFixed(1), cy: q[1].toFixed(1), r: (rayon * 1.9).toFixed(1), class: 'gs-vg__halo' }));
+      g.appendChild(svg('circle', { cx: q[0].toFixed(1), cy: q[1].toFixed(1), r: rayon.toFixed(1), class: 'gs-vg__rond-ville' }));
+      var titre = svg('title');
+      titre.textContent = v.ville + ' : ' + pluriel(v.colis, 'colis', 'colis');
+      g.appendChild(titre);
+      dessin.appendChild(g);
+    });
+    // Miami, le départ
+    var gm = svg('g', { class: 'gs-vg__depart' });
+    gm.appendChild(svg('circle', { cx: origine[0].toFixed(1), cy: origine[1].toFixed(1), r: 16, class: 'gs-vg__halo' }));
+    gm.appendChild(svg('circle', { cx: origine[0].toFixed(1), cy: origine[1].toFixed(1), r: 8, class: 'gs-vg__rond-ville' }));
+    dessin.appendChild(gm);
+    zone.appendChild(dessin);
+    // Les étiquettes en HTML : elles gardent leur taille quand la carte rétrécit
+    function etiquette(texte, lonlat, classe) {
+      var q = projeter(lonlat), e = el('span', 'gs-vg__etiquette' + (classe ? ' ' + classe : ''), texte);
+      e.style.left = (q[0] / 10) + '%';
+      e.style.top = (q[1] / 5.4) + '%';
+      zone.appendChild(e);
+    }
+    etiquette('Miami', GEO_VILLES.miami, 'gs-vg__etiquette--depart');
+    pays.forEach(function (p) {
+      if (CAPITALES[p.pays] && p.colis) etiquette(nomPays(p.pays) + ' · ' + entier(p.colis), CAPITALES[p.pays], 'gs-vg__etiquette--' + p.pays);
+    });
+
+    // Les routes (pays × service)
+    var corps = $('[data-lignes="routes"]');
+    corps.textContent = '';
+    (r.routes || []).forEach(function (x) {
+      var tr = el('tr');
+      var tdRoute = cellule('Route');
+      tdRoute.appendChild(el('span', 'gs-cellule-principale', 'Miami → ' + nomPays(x.pays)));
+      tdRoute.appendChild(el('span', 'gs-cellule-sous', nomService(x.service)));
+      tr.appendChild(tdRoute);
+      cellulePleine(tr, 'Colis', entier(x.colis));
+      cellulePleine(tr, 'Livrés', entier(x.livres));
+      cellulePleine(tr, 'Délai moyen', duree(x.delai_moyen_h));
+      cellulePleine(tr, 'Facturé', argent(x.facture));
+      var tdTaux = cellule('Taux de livraison');
+      var taux = el('div', 'gs-vg__taux');
+      var piste = el('span', 'gs-vg__taux-piste');
+      var plein = el('span', 'gs-vg__taux-plein');
+      plein.style.width = Math.max(0, Math.min(100, Number(x.taux_livre) || 0)) + '%';
+      piste.appendChild(plein);
+      taux.appendChild(piste);
+      taux.appendChild(el('strong', '', pourcent(x.taux_livre)));
+      tdTaux.appendChild(taux);
+      tr.appendChild(tdTaux);
+      corps.appendChild(tr);
+    });
+    var vide = !(r.routes || []).length;
+    $('[data-vide="routes"]').hidden = !vide;
+    $('.gs-tableau--routes').closest('.gs-tableau-cadre').hidden = vide;
+
+    // Les villes
+    var lv = $('[data-vg-villes]');
+    lv.textContent = '';
+    villes.forEach(function (v) {
+      var li = el('li', 'gs-vg__ville-ligne');
+      var tete = el('div', 'gs-vg__ville-tete');
+      var nom = el('span', 'gs-vg__ville-nom');
+      var puce = el('i', 'gs-vg__puce'); puce.style.background = v.pays === 'DO' ? '#1f5fe0' : '#f4600d';
+      nom.appendChild(puce);
+      nom.appendChild(el('strong', '', v.ville));
+      nom.appendChild(el('span', '', nomPays(v.pays)));
+      tete.appendChild(nom);
+      tete.appendChild(el('strong', 'gs-vg__ville-nombre', pluriel(v.colis, 'colis', 'colis')));
+      li.appendChild(tete);
+      var piste = el('span', 'gs-vg__taux-piste');
+      var plein = el('span', 'gs-vg__taux-plein');
+      plein.style.width = maxVille ? Math.round(v.colis / maxVille * 100) + '%' : '0%';
+      piste.appendChild(plein);
+      li.appendChild(piste);
+      lv.appendChild(li);
+    });
+    if (!villes.length) lv.appendChild(el('li', 'gs-vg__vide', 'Aucune ville de destination sur la période.'));
+    $('[data-vg-villes-note]').textContent = r.sans_ville ? pluriel(r.sans_ville, 'colis sans ville', 'colis sans ville') + ' de destination' : 'les dix premières';
+  }
+
+  // Les Analytics de la vue générale : seulement pour les comptes qui voient les rapports,
+  // gardées une minute (lireAnalytics). Une erreur n'efface rien : la vue reste entière.
+  function chargerAnalyticsApercu() {
+    if (!peut('reports.view')) { etatVG.analytics = null; vgRoutes(); return; }
+    var numero = ++etatVG.demande, frais = etatVG.frais;
+    etatVG.frais = false;
+    var o = { periode: etatApercu.periode, debut: etatApercu.debut, fin: etatApercu.fin };
+    function lire(module, plus) {
+      var options = Object.assign({}, o, plus || {});
+      // « Actualiser » veut des chiffres de maintenant : on oublie la réponse gardée
+      if (frais) delete etatAnalytics.memoire[module + '|' + JSON.stringify(Object.assign({ periode: etatAnalytics.periode,
+        debut: etatAnalytics.debut, fin: etatAnalytics.fin }, options))];
+      return lireAnalytics(module, options).catch(function () { return null; });
+    }
+    // La vue filtrée apporte ses routes : inutile de les relire
+    var routes = etatApercu.donnees && etatApercu.donnees.routes ? Promise.resolve(null) : lire('routes');
+    Promise.all([lire('synthese'), routes, lire('clients', { parPage: 1 })]).then(function (r) {
+      if (numero !== etatVG.demande || !etatApercu.donnees) return;
+      etatVG.analytics = { synthese: r[0], routes: r[1], clients: r[2] };
+      var v = etatApercu.donnees;
+      vgKpis(v);
+      vgFacture(v);
+      vgClients(v);
+      vgRoutes();
+    });
+  }
+
+  function afficherApercu(v) {
+    var p = v.periode || {};
+    $('[data-apercu-etat]').textContent = (p.debut === p.fin ? 'Le ' + jourLisible(p.debut) : 'Du ' + jourLisible(p.debut) +
+      ' au ' + jourLisible(p.fin)) + ' (jours de Santo Domingo) · chiffres de ' + heure(v.genere_le);
+
+    vgKpis(v);
+    partie('facturation', !!v.facturation);
+    vgFacture(v);
+    vgAnneau(v);
+    vgJours(v);
+    partie('clients', !!v.clients);
+    vgClients(v);
+    vgSurveiller(v);
+    vgActivite(v);
+    vgStatuts(v);
+    vgChaine(v);
+    vgRoutes();
+    majCloche(v.alertes || []);
+    majFiltres(v);
+    majDirect();
+    revelerCartes();
+    chargerAnalyticsApercu();
+
+    partie('scanner', !!v.scanner);
+    if (v.scanner) {
+      var s = v.scanner, d = s.dernier;
+      kpis('scanner', [
+        { picto: 'scan', teinte: 'orange', libelle: 'Opérations aujourd’hui', valeur: entier(s.aujourdhui), sous: 'enregistrées au poste de scan' },
+        { picto: 'scan', teinte: 'bleu', libelle: 'Sur la période', valeur: entier(s.periode), sous: 'opérations enregistrées' },
+        { picto: 'horloge', teinte: 'marine', libelle: 'Dernier scan', valeur: d ? O.date(d.cree_le, true) : 'Aucun',
+          sous: d ? [d.numero, libelleTypeEvenement(d.type_evenement), d.auteur ? 'par ' + d.auteur : ''].filter(Boolean).join(' · ') : 'aucune opération encore' }
+      ]);
+      repartition($('[data-scan-employes]'), (s.par_employe || []).map(function (x) {
+        return { libelle: x.nom + (x.role && ROLES[x.role] ? ' (' + ROLES[x.role].toLowerCase() + ')' : ''), nombre: x.nombre };
+      }), 'Aucune opération sur la période.');
+      repartition($('[data-scan-operations]'), (s.par_operation || []).map(function (x) {
+        return { libelle: x.libelle, nombre: x.nombre };
+      }), 'Aucune opération sur la période.');
+      grapheJours($('[data-graphe="scans"] [data-graphe-zone]'), s.par_jour, [
+        { nom: 'Opérations', cle: 'nombre', classe: 'gs-graphe--scans', total: s.periode, format: entier }
+      ]);
+    }
+
+    partie('paiements_recents', !!v.paiements_recents);
+    if (v.paiements_recents) {
+      var corpsPaiements = $('[data-lignes="paiements-recents"]');
+      corpsPaiements.textContent = '';
+      v.paiements_recents.forEach(function (x) {
+        var tr = el('tr');
+        FICHES.set(tr, { paiement: x });
+        cellulePleine(tr, 'Reçu le', O.date(x.paye_le, true));
+        var tdClient = cellule('Client');
+        tdClient.appendChild(el('span', 'gs-cellule-principale', (x.client && x.client.nom_complet) || '—'));
+        tdClient.appendChild(el('span', 'gs-cellule-sous', (x.client && x.client.code) || ''));
+        tr.appendChild(tdClient);
+        var tdFacture = cellule('Facture');
+        var lien = el('button', 'gs-lien-bouton gs-cellule-num', x.facture || '—');
+        lien.type = 'button';
+        lien.addEventListener('click', function () { ouvrirFactureParId(x.facture_id); });
+        tdFacture.appendChild(lien);
+        tr.appendChild(tdFacture);
+        cellulePleine(tr, 'Moyen', MOYENS[x.moyen] || x.moyen || '—');
+        cellulePleine(tr, 'Montant', argent(x.montant_usd)).classList.add('gs-cellule-montant');
+        corpsPaiements.appendChild(tr);
+      });
+      $('[data-vide="paiements-recents"]').hidden = v.paiements_recents.length > 0;
+      $('.gs-tableau--paiements').closest('.gs-tableau-cadre').hidden = !v.paiements_recents.length;
+    }
+  }
+
+  function cellulePleine(tr, libelle, texte) {
+    var td = cellule(libelle);
+    td.textContent = texte;
+    tr.appendChild(td);
+    return td;
+  }
+
+  function choisirFactures(etatFactures) {
+    var liste = $('[data-filtre-factures]');
+    liste.value = etatFactures;
+    liste.dispatchEvent(new Event('change', { bubbles: true }));
+    choisirVue('factures');
+  }
+
+  // La période : une liste, et deux dates pour « Personnalisée »
+  var choixPeriode = $('[data-apercu-periode]');
+  choixPeriode.addEventListener('change', function () {
+    var perso = choixPeriode.value === 'personnalise';
+    $('[data-apercu-dates]').hidden = !perso;
+    if (perso) {
+      var debut = $('[data-apercu-debut]'), fin = $('[data-apercu-fin]');
+      if (!debut.value && etatApercu.donnees) debut.value = etatApercu.donnees.periode.debut;
+      if (!fin.value && etatApercu.donnees) fin.value = etatApercu.donnees.periode.fin;
+      debut.focus();
+      return;
+    }
+    etatApercu.periode = choixPeriode.value;
+    chargerApercu();
+  });
+  $('[data-action="apercu-appliquer"]').addEventListener('click', function () {
+    var debut = $('[data-apercu-debut]').value, fin = $('[data-apercu-fin]').value;
+    if (!debut || !fin) { toast('Choisissez une date de début et une date de fin.', true); return; }
+    if (fin < debut) { toast('La date de fin est avant la date de début.', true); return; }
+    etatApercu.periode = 'personnalise';
+    etatApercu.debut = debut;
+    etatApercu.fin = fin;
+    chargerApercu();
+  });
+  $('[data-action="apercu-actualiser"]').addEventListener('click', function () {
+    etatVG.frais = true;
+    chargerApercu();
+    chargerStatistiques();
+  });
+  $('[data-action="vg-clients"]').addEventListener('click', function () { choisirVue('clients'); });
+  $('[data-action="vg-tous-colis"]').addEventListener('click', function () { viderFiltresColis(); choisirVue('colis'); });
+
+  /* ---- Les filtres de la vue générale ----------------------------------------------
+     vue_generale_filtree (outils/supabase-analytics.sql). Des listes fixes :
+       Pays         Haïti, Santo Domingo (République dominicaine), USA
+       Destination  les villes que les colis vers le pays choisi portent vraiment
+                    (options_filtres, avec leur pays), rangées par département ou
+                    province quand assets/js/lieux.js les connaît ; aucune ville
+                    inventée : une ville sans colis n'apparaît pas
+       Mode         Aérienne, Maritime, Terrestre
+       Statut       les huit étapes, ou « En cours »
+       Agence       USA (au dépôt de Miami : reçu, emballé), Haïti, Santo Domingo
+                    (arrivé dans le pays : centre de distribution, succursale,
+                    disponible) ; la règle vit dans colis_filtre, pas ici
+     Chaque choix porte le nombre de colis que la base lui compte (options_filtres).
+     Les filtres découpent ce qui se compte en colis ; l'argent, les clients, le poste de
+     scan et les colis à traiter restent entiers, et le disent. Gardés le temps de la
+     visite seulement : un tableau de bord rouvert montre tout. */
+  var etatFiltres = { valeurs: {}, disponible: true };
+  var formFiltres = $('[data-vg-filtres]');
+  var LIBELLES_FILTRES = { pays: 'Tous', ville: 'Toutes', service: 'Tous', statut: 'Tous', agence: 'Toutes' };
+  var PAYS_FILTRE = [['HT', 'Haïti'], ['DO', 'Santo Domingo'], ['US', 'USA']];
+  var MODES_FILTRE = [['aerien', 'Aérienne'], ['maritime', 'Maritime'], ['terrestre', 'Terrestre']];
+  var AGENCES_FILTRE = [['US', 'USA'], ['HT', 'Haïti'], ['DO', 'Santo Domingo']];
+  var LIEUX = window.GoshipLieux || { REGIONS: {} };
+  // Les cartes que les filtres ne découpent pas
+  var PARTIES_ENTIERES = '[data-apercu-partie="facturation"], [data-apercu-partie="clients"], ' +
+    '[data-apercu-partie="scanner"], [data-apercu-partie="paiements_recents"], [data-vg-bloc="traiter"], [data-vg-bloc="surveiller"]';
+
+  function filtresActifs() {
+    return Object.keys(etatFiltres.valeurs).some(function (k) { return etatFiltres.valeurs[k]; });
+  }
+
+  // La même mise en forme que la base (filtres_colis) : casse et espaces ignorés
+  function cleVille(v) { return String(v || '').trim().toLowerCase(); }
+
+  // choix : des options { valeur, libelle, colis } ou des groupes { groupe, choix: [...] }.
+  // zeros : afficher aussi « (0) » (le filtre Statut l'a toujours fait)
+  function remplirFiltre(cle, choix, invite, zeros) {
+    var liste = $('[data-vg-filtre="' + cle + '"]', formFiltres);
+    var garde = etatFiltres.valeurs[cle] || '';
+    liste.textContent = '';
+    liste.add(new Option(invite || LIBELLES_FILTRES[cle], ''));
+    var vus = {};
+    function option(x, parent) {
+      vus[x.valeur] = true;
+      var o = new Option(x.libelle + (x.colis != null && (zeros || x.colis) ? ' (' + entier(x.colis) + ')' : ''), x.valeur);
+      parent.appendChild(o);
+    }
+    choix.forEach(function (x) {
+      if (!x.groupe) { option(x, liste); return; }
+      if (!x.choix.length) return;
+      var g = document.createElement('optgroup');
+      g.label = x.groupe;
+      x.choix.forEach(function (y) { option(y, g); });
+      liste.appendChild(g);
+    });
+    // Un choix qui n'a plus de colis reste affiché tant qu'il est choisi
+    if (garde && !vus[garde]) liste.add(new Option(garde, garde));
+    liste.value = garde;
+    liste.closest('.gs-vg__filtre').classList.toggle('is-actif', !!garde);
+  }
+
+  // Les villes du pays choisi : celles des colis. Une base d'avant le 27/09/2026 ne dit
+  // pas le pays de chaque ville : lieux.js le reconnaît pour Haïti et la République
+  // dominicaine, et une ville qu'il ne connaît pas reste proposée, à part.
+  var REGION_DE = {};
+  Object.keys(LIEUX.REGIONS).forEach(function (p) {
+    Object.keys(LIEUX.REGIONS[p]).forEach(function (r) {
+      LIEUX.REGIONS[p][r].forEach(function (v) { REGION_DE[p + '|' + cleVille(v)] = r; });
+    });
+  });
+  function paysConnu(valeur) {
+    return REGION_DE['HT|' + valeur] ? 'HT' : (REGION_DE['DO|' + valeur] ? 'DO' : null);
+  }
+  function villesDuPays(pays, villesBase) {
+    var groupes = {}, incertaines = [];
+    villesBase.forEach(function (x) {
+      var p = x.pays || paysConnu(x.valeur);
+      var choix = { valeur: x.valeur, libelle: x.libelle, colis: x.colis };
+      if (!p) { incertaines.push(choix); return; }
+      if (p !== pays) return;
+      var g = REGION_DE[pays + '|' + x.valeur] || 'Autres villes';
+      (groupes[g] = groupes[g] || []).push(choix);
+    });
+    function trier(t) { return t.sort(function (a, b) { return a.libelle.localeCompare(b.libelle, 'fr'); }); }
+    var noms = Object.keys(groupes).sort(function (a, b) {
+      return a === 'Autres villes' ? 1 : b === 'Autres villes' ? -1 : a.localeCompare(b, 'fr');
+    });
+    // Un seul groupe (les USA, ou une base qui ne range pas) : une liste simple
+    var r = noms.length === 1 && !incertaines.length ? trier(groupes[noms[0]])
+      : noms.map(function (g) { return { groupe: g, choix: trier(groupes[g]) }; });
+    if (incertaines.length) r.push({ groupe: 'Pays non précisé', choix: trier(incertaines) });
+    return r;
+  }
+
+  function nombreDe(liste, valeur) {
+    var x = (liste || []).filter(function (y) { return y.valeur === valeur; })[0];
+    return x ? x.colis : 0;
+  }
+
+  function majFiltres(v) {
+    var o = v.options;
+    var actifs = filtresActifs();
+    var agencesConnues = !!(o && o.agences);
+    $$('select', formFiltres).forEach(function (s) { s.disabled = !etatFiltres.disponible || !o; });
+    if (o) {
+      remplirFiltre('pays', PAYS_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.pays, x[0]) }; }));
+      var pays = etatFiltres.valeurs.pays;
+      var villes = pays ? villesDuPays(pays, o.villes || []) : [];
+      remplirFiltre('ville', villes, !pays ? 'Choisir un pays' : (villes.length ? 'Toutes' : 'Aucune ville dans les colis'));
+      $('[data-vg-filtre="ville"]', formFiltres).disabled = !etatFiltres.disponible || !pays;
+      remplirFiltre('service', MODES_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.services, x[0]) }; }));
+      // « En cours » n'a pas de nombre : ce serait une somme faite dans la page
+      remplirFiltre('statut', [{ valeur: 'actifs', libelle: 'En cours (tous sauf livrés)', colis: null }].concat(
+        CHAINE.concat(['incident']).map(function (k) {
+          var x = (o.statuts || []).filter(function (y) { return y.valeur === k; })[0];
+          return { valeur: k, libelle: STATUTS[k], colis: x ? x.colis : 0 };
+        })), null, true);
+      remplirFiltre('agence', AGENCES_FILTRE.map(function (x) { return { valeur: x[0], libelle: x[1], colis: nombreDe(o.agences, x[0]) }; }));
+      // Une base d'avant le 27/09/2026 ne connaît pas l'agence : le filtre attend sa mise à jour
+      $('[data-vg-filtre="agence"]', formFiltres).disabled = !etatFiltres.disponible || !agencesConnues;
+    }
+    $('[data-action="vg-filtres-effacer"]').hidden = !actifs;
+    var c = v.colis || {};
+    $('[data-vg-filtres-total]').textContent = actifs
+      ? pluriel(c.total, 'colis correspond', 'colis correspondent') + ' aux filtres'
+      : pluriel(c.total, 'colis', 'colis') + ' dans la vue';
+    var note = $('[data-vg-filtres-note]');
+    var attente = o && !agencesConnues;
+    if (!etatFiltres.disponible) {
+      note.textContent = 'Filtres indisponibles : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).';
+    } else if (actifs) {
+      note.textContent = 'Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, ' +
+        'poste de scan et colis à traiter restent entiers.';
+    } else if (attente) {
+      note.textContent = 'Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).';
+    }
+    note.hidden = !(actifs || !etatFiltres.disponible || attente);
+    $$(PARTIES_ENTIERES).forEach(function (n) { n.classList.toggle('is-entier', actifs); });
+    document.body.classList.toggle('is-vg-filtree', actifs);
+  }
+
+  formFiltres.addEventListener('change', function (e) {
+    var cle = e.target.getAttribute('data-vg-filtre');
+    if (!cle) return;
+    if (e.target.value) etatFiltres.valeurs[cle] = e.target.value; else delete etatFiltres.valeurs[cle];
+    e.target.closest('.gs-vg__filtre').classList.toggle('is-actif', !!e.target.value);
+    // Un autre pays : la destination choisie n'est plus la sienne
+    if (cle === 'pays') delete etatFiltres.valeurs.ville;
+    chargerApercu();
+  });
+  formFiltres.addEventListener('submit', function (e) { e.preventDefault(); });
+  $('[data-action="vg-filtres-effacer"]').addEventListener('click', function () {
+    etatFiltres.valeurs = {};
+    $$('select', formFiltres).forEach(function (s) {
+      s.value = '';
+      s.closest('.gs-vg__filtre').classList.remove('is-actif');
+    });
+    chargerApercu();
+  });
+
+  /* ---- Le direct --------------------------------------------------------------------
+     Les changements que la base signale (API.surveiller) rechargent la vue générale, au
+     plus toutes les quinze secondes. Sans connexion en direct, la vue se relit chaque
+     minute tant qu'elle est à l'écran. « Suspendre le direct » fige les chiffres affichés
+     (le bouton « Actualiser » les relit quand même). Rien n'est simulé. */
+  var etatDirect = { pause: false, connecte: false };
+  function majDirect() {
+    var zone = $('[data-vg-direct-etat]');
+    var texte = etatDirect.pause ? 'En pause'
+      : (etatDirect.connecte ? 'En direct' : 'Mise à jour chaque minute');
+    zone.className = 'gs-vg__direct-etat gs-vg__direct-etat--' + (etatDirect.pause ? 'pause' : (etatDirect.connecte ? 'direct' : 'minute'));
+    zone.lastChild.textContent = texte;
+    var b = $('[data-action="vg-direct"]');
+    b.setAttribute('aria-pressed', String(!etatDirect.pause));
+    $('[data-vg-direct-texte]').textContent = etatDirect.pause ? 'Reprendre le direct' : 'Suspendre le direct';
+    var pastille = $('[data-direct]');
+    pastille.classList.toggle('is-pause', etatDirect.pause);
+    $('.gs-direct__texte', pastille).textContent = etatDirect.pause ? 'En pause' : 'En direct';
+    majDepuis();
+  }
+  // « Mis à jour il y a… » : l'heure des chiffres affichés (genere_le de la base)
+  function majDepuis() {
+    var v = etatApercu.donnees, zone = $('[data-vg-direct-maj]');
+    if (!v || !v.genere_le) { zone.textContent = ''; return; }
+    var minutes = Math.max(0, Math.floor((Date.now() - new Date(v.genere_le).getTime()) / 60000));
+    zone.textContent = minutes < 1 ? 'Mis à jour à l’instant' : 'Mis à jour il y a ' + pluriel(minutes, 'minute', 'minutes');
+  }
+  setInterval(function () {
+    majDepuis();
+    if (etatDirect.pause || etatDirect.connecte || etat.vue !== 'apercu' || document.hidden) return;
+    if (etatApercu.donnees && Date.now() - etatApercu.charge > 58000) chargerApercu();
+  }, 30000);
+  $('[data-action="vg-direct"]').addEventListener('click', function () {
+    etatDirect.pause = !etatDirect.pause;
+    majDirect();
+    if (!etatDirect.pause) chargerApercu();
+    toast(etatDirect.pause ? 'Direct suspendu : les chiffres restent ceux affichés.' : 'Direct repris.');
+  });
+
+  /* ---- La disposition de la vue générale ---------------------------------------------
+     Quels blocs, dans quel ordre : une préférence de cet appareil. Les blocs sont
+     déplacés dans la page (pas seulement à l'écran) : le clavier et les lecteurs d'écran
+     les parcourent dans le même ordre que les yeux. Un bloc que le rôle ne peut pas voir
+     reste caché, coché ou non. */
+  var CLE_DISPOSITION = 'gse-tableau-disposition';
+  var BLOCS_VG = [
+    ['chiffres', 'Chiffres clés et facturé'], ['jours', 'Colis par jour et règlement des factures'],
+    ['carte', 'Destinations et clients'], ['surveiller', 'À surveiller'], ['activite', 'Dernière activité et colis par statut'],
+    ['chaine', 'Chaîne logistique'], ['routes', 'Routes et villes'], ['traiter', 'Colis à traiter'],
+    ['scanner', 'Poste de scan'], ['paiements', 'Derniers paiements reçus']
+  ];
+  var IDS_BLOCS = BLOCS_VG.map(function (b) { return b[0]; });
+  function lireDisposition() {
+    var lu = {};
+    try { lu = JSON.parse(localStorage.getItem(CLE_DISPOSITION) || '{}') || {}; } catch (e) { lu = {}; }
+    var ordre = (Array.isArray(lu.ordre) ? lu.ordre : []).filter(function (id, i, t) {
+      return IDS_BLOCS.indexOf(id) >= 0 && t.indexOf(id) === i;
+    });
+    IDS_BLOCS.forEach(function (id) { if (ordre.indexOf(id) < 0) ordre.push(id); });
+    var caches = (Array.isArray(lu.caches) ? lu.caches : []).filter(function (id) { return IDS_BLOCS.indexOf(id) >= 0; });
+    return { ordre: ordre, caches: caches };
+  }
+  var disposition = lireDisposition();
+  function ecrireDisposition() {
+    try { localStorage.setItem(CLE_DISPOSITION, JSON.stringify(disposition)); } catch (e) { /* navigation privée */ }
+  }
+  function appliquerDisposition() {
+    var corps = $('[data-apercu-corps]');
+    disposition.ordre.forEach(function (id) {
+      var bloc = $('[data-vg-bloc="' + id + '"]', corps);
+      if (!bloc) return;
+      corps.appendChild(bloc);
+      bloc.classList.toggle('is-masque', disposition.caches.indexOf(id) >= 0);
+    });
+  }
+  var dlgDisposition = $('[data-dialogue="disposition"]');
+  function dessinerDisposition(focus) {
+    var liste = $('[data-disposition-liste]', dlgDisposition);
+    liste.textContent = '';
+    disposition.ordre.forEach(function (id, i) {
+      var nom = BLOCS_VG.filter(function (b) { return b[0] === id; })[0][1];
+      var li = el('li', 'gs-disposition__ligne');
+      var etiquette = el('label', 'gs-disposition__nom');
+      var coche = el('input');
+      coche.type = 'checkbox';
+      coche.checked = disposition.caches.indexOf(id) < 0;
+      coche.addEventListener('change', function () {
+        disposition.caches = disposition.caches.filter(function (x) { return x !== id; });
+        if (!coche.checked) disposition.caches.push(id);
+        ecrireDisposition();
+        appliquerDisposition();
+      });
+      etiquette.appendChild(coche);
+      etiquette.appendChild(el('span', '', nom));
+      li.appendChild(etiquette);
+      [['haut', -1, 'Monter'], ['bas', 1, 'Descendre']].forEach(function (s) {
+        var b = el('button', 'gs-disposition__fleche');
+        b.type = 'button';
+        b.setAttribute('aria-label', s[2] + ' « ' + nom + ' »');
+        b.innerHTML = s[1] < 0 ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+        var j = i + s[1];
+        b.disabled = j < 0 || j >= disposition.ordre.length;
+        b.addEventListener('click', function () {
+          disposition.ordre.splice(i, 1);
+          disposition.ordre.splice(j, 0, id);
+          ecrireDisposition();
+          appliquerDisposition();
+          dessinerDisposition({ id: id, sens: s[0] });
+        });
+        b.setAttribute('data-bloc', id);
+        b.setAttribute('data-sens', s[0]);
+        li.appendChild(b);
+      });
+      liste.appendChild(li);
+    });
+    if (focus) {
+      var cible = $('[data-bloc="' + focus.id + '"][data-sens="' + focus.sens + '"]', liste);
+      if (cible && cible.disabled) cible = $('[data-bloc="' + focus.id + '"]:not([disabled])', liste);
+      if (cible) cible.focus();
+    }
+  }
+  function ouvrirDisposition() {
+    fermerPanneaux(null);
+    dessinerDisposition();
+    choisirVue('apercu');
+    dlgDisposition.showModal();
+  }
+  function dispositionDefaut() {
+    disposition = { ordre: IDS_BLOCS.slice(), caches: [] };
+    try { localStorage.removeItem(CLE_DISPOSITION); } catch (e) { /* navigation privée */ }
+    appliquerDisposition();
+    if (dlgDisposition.open) dessinerDisposition();
+    toast('Disposition par défaut rétablie.');
+  }
+  $$('[data-action="personnaliser"]').forEach(function (b) { b.addEventListener('click', ouvrirDisposition); });
+  $$('[data-action="disposition-defaut"]').forEach(function (b) {
+    b.addEventListener('click', function () { fermerPanneaux(null); dispositionDefaut(); });
+  });
+  appliquerDisposition();
+
+  /* ---- Les apparitions au défilement et le relief -------------------------------------
+     Une carte glisse et apparaît la première fois qu'elle entre à l'écran ; les fonds
+     (carte, carte sombre, menu) bougent un peu moins vite que la page. Désactivés par
+     le réglage « Animations » ou quand le système demande moins d'animations (CSS). */
+  var observateur = 'IntersectionObserver' in window ? new IntersectionObserver(function (entrees) {
+    entrees.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('is-vu');
+      observateur.unobserve(e.target);
+    });
+  }, { rootMargin: '0px 0px -6% 0px', threshold: 0.06 }) : null;
+  function revelerCartes() {
+    if (!observateur) return;
+    $$('.gs-vg__rangee').forEach(function (r) {
+      $$('.gs-vg__carte', r).forEach(function (c, i) { c.style.setProperty('--rang', i); });
+    });
+    $$('.gs-vg__carte:not(.is-vu), .gs-vg__filtres:not(.is-vu)').forEach(function (n) { observateur.observe(n); });
+  }
+  if (observateur) document.documentElement.classList.add('gs-revele');
+  var reliefPrevu = false;
+  window.addEventListener('scroll', function () {
+    if (reliefPrevu) return;
+    reliefPrevu = true;
+    requestAnimationFrame(function () {
+      reliefPrevu = false;
+      document.documentElement.style.setProperty('--defil', String(Math.round(window.scrollY)));
+    });
+  }, { passive: true });
+
+  $('[data-action="menu-finances"]').addEventListener('click', function () {
+    choisirVue('analytics');
+    choisirModule('finances');
+  });
+
+  /* ---- Les colis à traiter ----------------------------------------------------- */
+  var DEFINITIONS_TRAITER = {
+    action_requise: 'Colis au statut « Action requise » : le client ou l’équipe doit agir. Les plus anciens d’abord ; la note dit pourquoi.',
+    sans_mouvement: 'Colis pas encore livrés, sans aucun événement (scan, changement de statut, correction) depuis {n} jours ou plus. Les plus anciens d’abord.'
+  };
+
+  function choisirListe(liste) {
+    traiter.liste = liste;
+    traiter.page = 0;
+    $$('[data-traiter-liste]').forEach(function (r) { r.checked = r.value === liste; });
+    choisirVue('apercu');
+    chargerTraiter();
+    var bloc = $('#apercu-traiter-titre');
+    if (bloc && bloc.scrollIntoView) bloc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function chargerTraiter() {
+    if (!peut('shipments.view')) return Promise.resolve();
+    var numero = ++traiter.demande;
+    var corps = $('[data-lignes="traiter"]');
+    var vide = $('[data-vide="traiter"]');
+    $('[data-traiter-definition]').textContent = DEFINITIONS_TRAITER[traiter.liste].replace('{n}', traiter.jours);
+    corps.closest('.gs-tableau-cadre').setAttribute('aria-busy', 'true');
+    return API.admin.colisATraiter(traiter.liste, { jours: traiter.jours, page: traiter.page, parPage: traiter.parPage })
+      .then(function (r) {
+        if (numero !== traiter.demande) return;
+        if (!r.lignes.length && traiter.page > 0 && r.total > 0) {
+          traiter.page = Math.ceil(r.total / traiter.parPage) - 1;
+          return chargerTraiter();
+        }
+        afficherTraiter(r);
+      }).catch(function (err) {
+        if (numero !== traiter.demande) return;
+        corps.textContent = '';
+        corps.closest('.gs-tableau-cadre').hidden = true;
+        vide.textContent = texteErreurApercu(err);
+        vide.hidden = false;
+        $('[data-pagination="traiter"]').hidden = true;
+      }).then(function () { corps.closest('.gs-tableau-cadre').removeAttribute('aria-busy'); });
+  }
+
+  function afficherTraiter(r) {
+    var corps = $('[data-lignes="traiter"]');
+    corps.textContent = '';
+    (r.lignes || []).forEach(function (x) {
+      var tr = el('tr');
+      if (x.numero) FICHES.set(tr, { numero: x.numero });
+      var tdNum = cellule('Colis');
+      tdNum.appendChild(el('span', 'gs-cellule-num', x.numero));
+      if (x.description) tdNum.appendChild(el('span', 'gs-cellule-sous', x.description));
+      tr.appendChild(tdNum);
+      var tdClient = cellule('Client');
+      tdClient.appendChild(el('span', 'gs-cellule-principale', x.client ? x.client.nom_complet || '—' : 'Client supprimé'));
+      if (x.client) tdClient.appendChild(el('span', 'gs-cellule-sous', [x.client.code, x.client.telephone].filter(Boolean).join(' · ')));
+      tr.appendChild(tdClient);
+      var tdStatut = cellule('Statut');
+      tdStatut.appendChild(badge(x.statut));
+      if (x.lieu) tdStatut.appendChild(el('span', 'gs-cellule-sous', x.lieu));
+      tr.appendChild(tdStatut);
+      var tdEv = cellule('Dernier événement');
+      var ev = x.action || x.dernier_evenement;
+      if (ev) {
+        tdEv.appendChild(el('span', '', libelleTypeEvenement(ev.type_evenement) + ' · ' + O.date(ev.cree_le, true)));
+        var details = [ev.note ? '« ' + ev.note + ' »' : '', ev.auteur ? 'par ' + ev.auteur : ''].filter(Boolean).join(' · ');
+        if (details) tdEv.appendChild(el('span', 'gs-cellule-sous', details));
+      } else {
+        tdEv.appendChild(el('span', 'gs-cellule-sous', 'Reçu le ' + O.date(x.recu_le, true)));
+      }
+      tr.appendChild(tdEv);
+      var tdDepuis = cellule('Depuis');
+      var jours = Number(x.jours) || 0;
+      tdDepuis.appendChild(el('span', 'gs-cellule-principale', jours ? pluriel(jours, 'jour', 'jours') : 'aujourd’hui'));
+      tr.appendChild(tdDepuis);
+      var tdActions = el('td', 'gs-cellule-actions');
+      var ouvrir = el('button', 'gs-bouton gs-bouton--petit gs-bouton--sombre', 'Ouvrir');
+      ouvrir.type = 'button';
+      ouvrir.setAttribute('aria-label', 'Ouvrir le colis ' + x.numero);
+      ouvrir.addEventListener('click', function () { ouvrirColisParNumero(x.numero); });
+      tdActions.appendChild(ouvrir);
+      tr.appendChild(tdActions);
+      corps.appendChild(tr);
+    });
+    var vide = $('[data-vide="traiter"]');
+    vide.hidden = (r.lignes || []).length > 0;
+    vide.textContent = traiter.liste === 'action_requise' ? 'Aucun colis en « action requise ».'
+      : 'Aucun colis sans mouvement depuis ' + traiter.jours + ' jours.';
+    corps.closest('.gs-tableau-cadre').hidden = !(r.lignes || []).length;
+    paginer('traiter', traiter, r.total, function () { chargerTraiter(); });
+  }
+
+  $$('[data-traiter-liste]').forEach(function (r) {
+    r.addEventListener('change', function () { if (r.checked) choisirListe(r.value); });
+  });
+  $('[data-traiter-jours]').addEventListener('change', function (e) {
+    traiter.jours = Number(e.target.value) || 7;
+    traiter.page = 0;
+    // Le chiffre « Sans mouvement » de la vue générale suit le même réglage
+    chargerApercu();
+  });
+
+  /* ---- La recherche rapide ------------------------------------------------------
+     La base cherche (recherche_rapide) : numéro de colis ou son début, suivi
+     du vendeur, code-barres, QR d'étiquette, code client, nom, fin du
+     téléphone, e-mail, numéro de facture. Rien n'est filtré dans la page. */
+  var formRapide = $('form[data-form="recherche-rapide"]');
+  var champRapide = $('[data-rapide-texte]');
+  var zoneRapide = $('[data-rapide-resultats]');
+  var demandeRapide = 0, delaiRapide = null;
+
+  function fermerRapide() {
+    ++demandeRapide;
+    zoneRapide.hidden = true;
+    zoneRapide.textContent = '';
+  }
+
+  function chercherRapide(texte) {
+    texte = String(texte || '').trim();
+    clearTimeout(delaiRapide);
+    if (texte.length < 2) { fermerRapide(); return; }
+    var numero = ++demandeRapide;
+    zoneRapide.hidden = false;
+    zoneRapide.setAttribute('aria-busy', 'true');
+    API.admin.rechercheRapide(texte).then(function (r) {
+      if (numero !== demandeRapide) return;
+      afficherRapide(r);
+    }).catch(function (err) {
+      if (numero !== demandeRapide) return;
+      zoneRapide.textContent = '';
+      zoneRapide.appendChild(teteRapide('Recherche impossible'));
+      zoneRapide.appendChild(el('p', 'gs-rapide__message', err.code === 'absent'
+        ? 'La recherche rapide attend outils/supabase-tableau-de-bord.sql dans Supabase (SQL Editor).' : texteErreurApercu(err)));
+    }).then(function () { zoneRapide.removeAttribute('aria-busy'); });
+  }
+
+  function teteRapide(titre) {
+    var tete = el('div', 'gs-rapide__tete');
+    tete.appendChild(el('h2', 'gs-rapide__titre', titre));
+    var fermer = el('button', 'gs-lien-bouton', 'Fermer');
+    fermer.type = 'button';
+    fermer.addEventListener('click', function () { fermerRapide(); champRapide.focus(); });
+    tete.appendChild(fermer);
+    return tete;
+  }
+
+  function carteRapide(lignes, actions) {
+    var li = el('li', 'gs-rapide__carte');
+    lignes.forEach(function (l) { if (l) li.appendChild(l); });
+    if (actions.length) {
+      var zone = el('div', 'gs-rapide__actions');
+      actions.forEach(function (a) {
+        var b = el('button', 'gs-bouton gs-bouton--petit ' + (a.classe || 'gs-bouton--contour'), a.texte);
+        b.type = 'button';
+        b.addEventListener('click', a.faire);
+        zone.appendChild(b);
+      });
+      li.appendChild(zone);
+    }
+    return li;
+  }
+
+  function ligneTexte(classe, morceaux) {
+    var texte = morceaux.filter(Boolean).join(' · ');
+    return texte ? el('p', classe, texte) : null;
+  }
+
+  function afficherRapide(r) {
+    zoneRapide.textContent = '';
+    var colis = r.colis || [], clients = r.clients || [], factures = r.factures || [];
+    var n = colis.length + clients.length + factures.length;
+    zoneRapide.appendChild(teteRapide(n ? pluriel(n, 'résultat', 'résultats') + ' pour « ' + r.texte + ' »'
+                                        : 'Aucun résultat pour « ' + r.texte + ' »'));
+    if (!n) {
+      zoneRapide.appendChild(el('p', 'gs-rapide__message', 'Essayez le numéro complet du colis ou de la facture, le code GSE du client, ' +
+        'le début de son nom ou les 4 derniers chiffres de son téléphone.'));
+      return;
+    }
+    function section(titre, elements) {
+      if (!elements.length) return;
+      zoneRapide.appendChild(el('h3', 'gs-rapide__section', titre));
+      var liste = el('ul', 'gs-rapide__liste');
+      elements.forEach(function (x) { liste.appendChild(x); });
+      zoneRapide.appendChild(liste);
+    }
+    section('Colis', colis.map(function (c) {
+      var tete = el('p', 'gs-rapide__ligne-tete');
+      tete.appendChild(el('strong', 'gs-cellule-num', c.numero));
+      tete.appendChild(badge(c.statut));
+      var ev = c.dernier_evenement;
+      var facture = c.facture;
+      var ligneFacture = null;
+      if (facture) {
+        ligneFacture = el('p', 'gs-rapide__ligne');
+        ligneFacture.appendChild(document.createTextNode('Facture ' + facture.numero + ' · '));
+        ligneFacture.appendChild(badgeFacture(facture.etat));
+        ligneFacture.appendChild(document.createTextNode(' · solde ' + argent(facture.solde_usd)));
+      } else if (peut('invoices.view')) {
+        ligneFacture = el('p', 'gs-rapide__ligne', 'Sur aucune facture active');
+      }
+      var actions = [{ texte: 'Ouvrir', classe: 'gs-bouton--sombre', faire: function () { ouvrirColisParNumero(c.numero); } }];
+      if (facture) actions.push({ texte: 'Voir la facture', faire: function () { ouvrirFactureParId(facture.id); } });
+      return carteRapide([
+        tete,
+        ligneTexte('gs-rapide__ligne', [c.client ? c.client.nom_complet + ' (' + c.client.code + ')' : 'Client supprimé',
+          [c.destination, PAYS[c.pays_destination]].filter(Boolean).join(', '),
+          c.poids_lb != null ? O.nombre(Number(c.poids_lb)) + ' lb' : 'poids non renseigné', c.description]),
+        ev ? ligneTexte('gs-rapide__ligne gs-cellule-sous', ['Dernier événement : ' + libelleTypeEvenement(ev.type_evenement),
+          O.date(ev.cree_le, true), ev.lieu, ev.auteur ? 'par ' + ev.auteur : '']) : null,
+        ligneFacture
+      ], actions);
+    }));
+    section('Clients', clients.map(function (cl) {
+      var tete = el('p', 'gs-rapide__ligne-tete');
+      tete.appendChild(el('strong', '', cl.nom_complet || '—'));
+      tete.appendChild(el('span', 'gs-cellule-num', cl.code || ''));
+      var actions = [{ texte: 'Ses colis', faire: function () { fermerRapide(); filtrerParClient(cl); } }];
+      if (peut('shipments.create')) actions.push({ texte: '+ Colis', faire: function () { ouvrirColis({ code: cl.code }); } });
+      return carteRapide([
+        tete,
+        ligneTexte('gs-rapide__ligne', [cl.telephone, [cl.ville, PAYS[cl.pays] || cl.pays].filter(Boolean).join(', '), cl.email]),
+        ligneTexte('gs-rapide__ligne gs-cellule-sous', [pluriel(cl.colis_en_cours, 'colis en cours', 'colis en cours'),
+          cl.solde_usd == null ? '' : (Number(cl.solde_usd) > 0 ? 'solde ' + argent(cl.solde_usd) : 'rien à payer')])
+      ], actions);
+    }));
+    section('Factures', factures.map(function (f) {
+      var tete = el('p', 'gs-rapide__ligne-tete');
+      tete.appendChild(el('strong', 'gs-cellule-num', f.numero));
+      tete.appendChild(badgeFacture(f.etat));
+      return carteRapide([
+        tete,
+        ligneTexte('gs-rapide__ligne', [f.client && f.client.nom_complet, f.client && f.client.code, O.date(f.cree_le)]),
+        ligneTexte('gs-rapide__ligne gs-cellule-sous', ['total ' + argent(f.montant_usd), 'payé ' + argent(f.paye_usd),
+          'solde ' + argent(f.solde_usd)])
+      ], [{ texte: 'Ouvrir', classe: 'gs-bouton--sombre', faire: function () { ouvrirFactureParId(f.id); } }]);
+    }));
+  }
+
+  formRapide.addEventListener('submit', function (e) {
+    e.preventDefault();
+    chercherRapide(champRapide.value);
+  });
+  champRapide.addEventListener('input', function () {
+    clearTimeout(delaiRapide);
+    var texte = champRapide.value;
+    delaiRapide = setTimeout(function () { chercherRapide(texte); }, 400);
+  });
+  champRapide.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { champRapide.value = ''; fermerRapide(); }
+  });
+
+  /* ---- Le cadre : horloge, menu, panneaux de la barre du haut -----------------
+     Rien ici ne lit ni n'écrit une donnée de la base : c'est la présentation
+     de ce que les autres parties de ce fichier chargent déjà. */
+
+  // Les préférences d'affichage, gardées sur cet appareil seulement
+  var CLE_REGLAGES = 'gse-tableau-reglages';
+  var REGLAGES_DEFAUT = { periode: '30j', parPage: 25, jours: 7, menuReduit: false, secondes: false, notifications: true,
+                         apparence: 'clair', animations: true };
+  var PERIODES_REGLAGES = ['aujourdhui', '7j', '30j', 'mois', 'mois_precedent', 'annee'];
+  function lireReglages() {
+    var r = Object.assign({}, REGLAGES_DEFAUT), lu = {};
+    try { lu = JSON.parse(localStorage.getItem(CLE_REGLAGES) || '{}') || {}; } catch (e) { lu = {}; }
+    if (PERIODES_REGLAGES.indexOf(lu.periode) >= 0) r.periode = lu.periode;
+    if (TAILLES_PAGE.indexOf(Number(lu.parPage)) >= 0) r.parPage = Number(lu.parPage);
+    if ([3, 7, 14, 30].indexOf(Number(lu.jours)) >= 0) r.jours = Number(lu.jours);
+    r.menuReduit = lu.menuReduit === true;
+    r.secondes = lu.secondes === true;
+    r.notifications = lu.notifications !== false;
+    if (['clair', 'sombre', 'systeme'].indexOf(lu.apparence) >= 0) r.apparence = lu.apparence;
+    r.animations = lu.animations !== false;
+    return r;
+  }
+  function ecrireReglages() {
+    try { localStorage.setItem(CLE_REGLAGES, JSON.stringify(reglages)); } catch (e) { /* navigation privée : tant pis */ }
+  }
+  var reglages = lireReglages();
+
+  // L'apparence : claire, sombre, ou celle du système (suivie quand elle change).
+  // apparence.js l'a déjà posée avant le premier affichage ; ceci la tient à jour.
+  var requeteSombre = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function appliquerApparence() {
+    var sombre = reglages.apparence === 'sombre' ||
+      (reglages.apparence === 'systeme' && !!requeteSombre && requeteSombre.matches);
+    var html = document.documentElement;
+    html.setAttribute('data-apparence', sombre ? 'sombre' : 'clair');
+    if (reglages.animations) html.removeAttribute('data-animations'); else html.setAttribute('data-animations', 'non');
+    var meta = $('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', sombre ? '#050d1f' : '#061a3f');
+    $$('[data-apparence-choix]').forEach(function (r) { r.checked = r.value === reglages.apparence; });
+  }
+  if (requeteSombre) {
+    var suivreSysteme = function () { if (reglages.apparence === 'systeme') appliquerApparence(); };
+    if (requeteSombre.addEventListener) requeteSombre.addEventListener('change', suivreSysteme);
+    else if (requeteSombre.addListener) requeteSombre.addListener(suivreSysteme);
+  }
+  appliquerApparence();
+
+  // La date et l'heure de cet appareil, toujours visibles en haut de l'écran
+  var horloge = { date: $('[data-horloge-date]'), court: $('[data-horloge-date-courte]'), heure: $('[data-horloge-heure]'), jour: '' };
+  function majHorloge() {
+    var t = new Date();
+    var jour = t.getFullYear() + '-' + deux(t.getMonth() + 1) + '-' + deux(t.getDate());
+    if (jour !== horloge.jour) {
+      horloge.jour = jour;
+      try {
+        var long = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(t);
+        horloge.date.textContent = long.charAt(0).toUpperCase() + long.slice(1);
+        horloge.court.textContent = new Intl.DateTimeFormat('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }).format(t);
+      } catch (e) {
+        horloge.date.textContent = horloge.court.textContent = deux(t.getDate()) + '/' + deux(t.getMonth() + 1) + '/' + t.getFullYear();
+      }
+    }
+    var texte = deux(t.getHours()) + ':' + deux(t.getMinutes()) + (reglages.secondes ? ':' + deux(t.getSeconds()) : '');
+    if (horloge.heure.textContent !== texte) {
+      horloge.heure.textContent = texte;
+      horloge.heure.setAttribute('datetime', jour + 'T' + deux(t.getHours()) + ':' + deux(t.getMinutes()));
+    }
+  }
+  majHorloge();
+  setInterval(majHorloge, 1000);
+
+  // Le menu : un tiroir sur téléphone et tablette, réductible sur ordinateur
+  var burger = $('[data-action="ouvrir-menu"]');
+  var voile = $('.gs-td__voile');
+  function ouvrirMenu() {
+    document.body.classList.add('is-menu-ouvert');
+    voile.hidden = false;
+    burger.setAttribute('aria-expanded', 'true');
+    var actif = $('[data-onglet-vue][aria-selected="true"]');
+    if (actif) actif.focus();
+  }
+  function fermerMenu() {
+    if (!document.body.classList.contains('is-menu-ouvert')) return;
+    document.body.classList.remove('is-menu-ouvert');
+    voile.hidden = true;
+    burger.setAttribute('aria-expanded', 'false');
+  }
+  burger.addEventListener('click', function () {
+    if (document.body.classList.contains('is-menu-ouvert')) fermerMenu(); else ouvrirMenu();
+  });
+  voile.addEventListener('click', fermerMenu);
+  $('[data-action="replier-menu"]').addEventListener('click', function () {
+    majReglage('menuReduit', !reglages.menuReduit);
+  });
+
+  // Les deux panneaux de la barre : les alertes (cloche) et le compte
+  var deroulants = [
+    { bouton: $('[data-action="alertes"]'), panneau: $('[data-panneau-alertes]') },
+    { bouton: $('[data-action="menu-affichage"]'), panneau: $('[data-menu-affichage]') },
+    { bouton: $('[data-action="menu-compte"]'), panneau: $('[data-menu-compte]') }
+  ];
+  function fermerPanneaux(sauf) {
+    deroulants.forEach(function (d) {
+      if (d === sauf) return;
+      d.panneau.hidden = true;
+      d.bouton.setAttribute('aria-expanded', 'false');
+    });
+  }
+  deroulants.forEach(function (d) {
+    d.bouton.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var ouvrir = d.panneau.hidden;
+      fermerPanneaux(d);
+      d.panneau.hidden = !ouvrir;
+      d.bouton.setAttribute('aria-expanded', String(ouvrir));
+      // La cloche lit les alertes de la vue générale : chargées si elles ne le sont pas encore
+      if (ouvrir && d.panneau.hasAttribute('data-panneau-alertes') && !etatApercu.donnees) chargerApercu();
+    });
+    d.panneau.addEventListener('click', function (e) { e.stopPropagation(); });
+  });
+  document.addEventListener('click', function () { fermerPanneaux(null); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    fermerPanneaux(null);
+    fermerMenu();
+  });
+  $$('[data-menu-compte] .gs-td__lien, [data-menu-affichage] .gs-td__lien').forEach(function (b) {
+    b.addEventListener('click', function () { fermerPanneaux(null); });
+  });
+  $$('[data-apparence-choix]').forEach(function (r) {
+    r.addEventListener('change', function () { if (r.checked) majReglage('apparence', r.value); });
+  });
+
+  // Ce que fait « Voir » sur une alerte, dans la vue générale comme sous la cloche
+  function actionAlerte(code) {
+    return {
+      action_requise: function () { choisirListe('action_requise'); },
+      sans_mouvement: function () { choisirListe('sans_mouvement'); },
+      factures_en_retard: function () { choisirFactures('en_retard'); },
+      colis_sans_facture: peut('reports.view')
+        ? function () { choisirVue('factures'); $('[data-action="controler-factures"]').click(); } : null
+    }[code] || null;
+  }
+
+  function majCloche(alertes) {
+    annoncerAlertes(alertes);
+    var compteur = $('[data-alertes-nombre]');
+    compteur.textContent = String(alertes.length);
+    compteur.hidden = !alertes.length;
+    compteur.classList.toggle('is-critique', alertes.some(function (a) { return a.gravite === 'critique'; }));
+    var liste = $('[data-alertes-cloche]');
+    liste.textContent = '';
+    alertes.forEach(function (a) {
+      var li = el('li', 'gs-alerte-ligne gs-alerte-ligne--' + a.gravite);
+      li.appendChild(el('span', 'gs-alerte-ligne__texte', a.message));
+      var aller = actionAlerte(a.code);
+      if (aller) {
+        var b = el('button', 'gs-lien-bouton', 'Voir');
+        b.type = 'button';
+        b.addEventListener('click', function () { fermerPanneaux(null); aller(); });
+        li.appendChild(b);
+      }
+      liste.appendChild(li);
+    });
+    if (!alertes.length) liste.appendChild(el('li', 'gs-alerte-ligne gs-alerte-ligne--ok', 'Aucune alerte critique.'));
+  }
+  $('[data-alertes-cloche]').appendChild(el('li', 'gs-alerte-ligne', 'Chargement des alertes…'));
+
+  /* ---- Les réglages --------------------------------------------------------------- */
+  var dlgReglages = $('[data-dialogue="reglages"]');
+  var rubriques = $$('[data-reglages-rubrique]', dlgReglages);
+
+  // Les préférences s'appliquent au tableau de bord : période, listes, menu, horloge
+  function appliquerReglages() {
+    etatApercu.periode = reglages.periode;
+    etatApercu.debut = etatApercu.fin = '';
+    choixPeriode.value = reglages.periode;
+    $('[data-apercu-dates]').hidden = true;
+    etat.colis.parPage = etat.clients.parPage = traiter.parPage = reglages.parPage;
+    etat.colis.page = etat.clients.page = traiter.page = 0;
+    traiter.jours = reglages.jours;
+    $('[data-traiter-jours]').value = String(reglages.jours);
+    appliquerMenu();
+  }
+  function appliquerMenu() {
+    document.body.classList.toggle('is-menu-reduit', reglages.menuReduit);
+    var b = $('[data-action="replier-menu"]');
+    b.setAttribute('aria-pressed', String(reglages.menuReduit));
+    b.setAttribute('aria-label', reglages.menuReduit ? 'Déplier le menu' : 'Réduire le menu');
+    b.title = b.getAttribute('aria-label');
+  }
+
+  function majReglage(cle, valeur) {
+    reglages[cle] = valeur;
+    ecrireReglages();
+    if (cle === 'periode') {
+      etatApercu.periode = valeur;
+      etatApercu.debut = etatApercu.fin = '';
+      choixPeriode.value = valeur;
+      $('[data-apercu-dates]').hidden = true;
+      chargerApercu();
+    } else if (cle === 'parPage') {
+      etat.colis.parPage = etat.clients.parPage = traiter.parPage = valeur;
+      etat.colis.page = etat.clients.page = traiter.page = 0;
+      chargerColis();
+      if (peut('clients.view')) chargerClients();
+      chargerTraiter();
+    } else if (cle === 'jours') {
+      traiter.jours = valeur;
+      traiter.page = 0;
+      $('[data-traiter-jours]').value = String(valeur);
+      chargerApercu();
+    } else if (cle === 'menuReduit') {
+      appliquerMenu();
+      var controle = $('[data-reglage="menuReduit"]', dlgReglages);
+      if (controle) controle.checked = valeur;
+    } else if (cle === 'secondes') {
+      majHorloge();
+    } else if (cle === 'notifications' && valeur) {
+      demanderNotifications();
+    } else if (cle === 'apparence' || cle === 'animations') {
+      appliquerApparence();
+      var choix = $('[data-reglage="' + cle + '"]', dlgReglages);
+      if (choix && choix.type !== 'checkbox') choix.value = valeur;
+    }
+  }
+
+  function choisirRubrique(nom) {
+    rubriques.forEach(function (b) {
+      var actif = b.getAttribute('data-reglages-rubrique') === nom;
+      b.setAttribute('aria-selected', String(actif));
+      b.tabIndex = actif ? 0 : -1;
+    });
+    $$('[data-reglages-section]', dlgReglages).forEach(function (s) {
+      s.hidden = s.getAttribute('data-reglages-section') !== nom;
+    });
+  }
+  rubriques.forEach(function (b) {
+    b.addEventListener('click', function () { choisirRubrique(b.getAttribute('data-reglages-rubrique')); });
+    b.addEventListener('keydown', function (e) {
+      var sens = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!sens) return;
+      e.preventDefault();
+      var visibles = rubriques.filter(function (o) { return !o.hasAttribute('data-interdit'); });
+      var autre = visibles[(visibles.indexOf(b) + sens + visibles.length) % visibles.length];
+      autre.focus();
+      choisirRubrique(autre.getAttribute('data-reglages-rubrique'));
+    });
+  });
+
+  function reglageScanner(cle, defaut) {
+    try { var v = localStorage.getItem('gse-scan-' + cle); return v === null ? defaut : v; } catch (e) { return defaut; }
+  }
+
+  function ouvrirReglages() {
+    fermerPanneaux(null);
+    fermerMenu();
+    $$('[data-reglage]', dlgReglages).forEach(function (c) {
+      var cle = c.getAttribute('data-reglage');
+      if (c.type === 'checkbox') c.checked = !!reglages[cle]; else c.value = String(reglages[cle]);
+    });
+    $('[data-reglages-role]', dlgReglages).textContent = ROLES[droits.role] || '—';
+    $('[data-reglages-permissions]', dlgReglages).textContent = pluriel(droits.permissions.length, 'permission', 'permissions');
+    $('[data-reglages-mode]', dlgReglages).textContent = API.mode === 'demo'
+      ? 'Démonstration : données enregistrées dans ce navigateur seulement' : 'Base de données en ligne (Supabase)';
+    if (BUREAU) {
+      $('[data-bureau-info]', dlgReglages).textContent = 'GoShip Express ' + BUREAU.version + ' pour ' +
+        ({ windows: 'Windows', macos: 'macOS', linux: 'Linux' }[BUREAU.plateforme] || BUREAU.plateforme) + ' — chargement…';
+      BUREAU.sessionChiffree().then(function (oui) {
+        $('[data-bureau-info]', dlgReglages).textContent = 'GoShip Express ' + BUREAU.version + ' pour ' +
+          ({ windows: 'Windows', macos: 'macOS', linux: 'Linux' }[BUREAU.plateforme] || BUREAU.plateforme) +
+          (oui ? ' · session chiffrée par le système' : ' · session gardée en mémoire (reconnexion à chaque lancement)');
+      }).catch(function () { /* l'information reste générale */ });
+    }
+    $('[data-reglages-direct]', dlgReglages).textContent = $('[data-direct]').hidden
+      ? 'Inactives : les listes se mettent à jour à chaque action et avec « Actualiser »' : 'Actives';
+    var mode = reglageScanner('mode', '');
+    var type = mode && API.regles.typesEvenement[mode];
+    $('[data-reglages-scan-mode]', dlgReglages).textContent = type ? 'Rapide : « ' + type.libelle + ' » à chaque scan'
+      : 'Consulter, puis choisir l’opération';
+    $('[data-reglages-scan-lieu]', dlgReglages).textContent = reglageScanner('lieu', '') || 'Non renseigné';
+    $('[data-reglages-scan-son]', dlgReglages).textContent = reglageScanner('son', 'oui') === 'oui' ? 'Activé' : 'Coupé';
+    choisirRubrique('affichage');
+    dlgReglages.showModal();
+  }
+  $$('[data-action="ouvrir-reglages"]').forEach(function (b) { b.addEventListener('click', ouvrirReglages); });
+
+  $$('[data-reglage]', dlgReglages).forEach(function (c) {
+    c.addEventListener('change', function () {
+      var cle = c.getAttribute('data-reglage');
+      majReglage(cle, c.type === 'checkbox' ? c.checked : (cle === 'periode' || cle === 'apparence' ? c.value : Number(c.value)));
+    });
+  });
+  $('[data-action="reglages-defaut"]', dlgReglages).addEventListener('click', function () {
+    reglages = Object.assign({}, REGLAGES_DEFAUT);
+    ecrireReglages();
+    appliquerReglages();
+    appliquerApparence();
+    majHorloge();
+    $$('[data-reglage]', dlgReglages).forEach(function (c) {
+      var cle = c.getAttribute('data-reglage');
+      if (c.type === 'checkbox') c.checked = !!reglages[cle]; else c.value = String(reglages[cle]);
+    });
+    chargerApercu();
+    chargerColis();
+    if (peut('clients.view')) chargerClients();
+    toast('Affichage par défaut rétabli.');
+  });
+  $('[data-action="reglages-equipe"]', dlgReglages).addEventListener('click', function () {
+    dlgReglages.close();
+    choisirVue('equipe');
+    var roles = $('details.gs-roles');
+    if (roles) roles.open = true;
+  });
+  $('[data-action="reglages-scanner"]', dlgReglages).addEventListener('click', function () {
+    dlgReglages.close();
+    $('[data-onglet-vue="scanner"]').click();
+  });
+
+  /* ---- Le poste de travail : raccourcis, réseau, session, application de bureau --
+     Les raccourcis marchent aussi dans un navigateur. Le reste ne sert que dans
+     l'application GoShip Express pour Windows et macOS (bureau/), qui donne
+     window.GoshipBureau : commandes du menu, notifications du système. Tout
+     passe par les mêmes fonctions que les boutons : rien de métier ici. */
+  var POSTE = window.GoshipBureau || null;
+  var BUREAU_CONTRAT_MIN = 1;      // le pont dont ce tableau de bord a besoin (bureau/src/pont.js)
+  var BUREAU = POSTE && POSTE.contrat >= BUREAU_CONTRAT_MIN ? POSTE : null;
+  function tableauOuvert() { return !$('[data-ecran="tableau"]').hidden; }
+
+  function ouvrirRecherche() {
+    if (!tableauOuvert()) return;
+    fermerPanneaux(null);
+    fermerMenu();
+    champRapide.focus();
+    champRapide.select();
+  }
+  function ouvrirScanner() {
+    if (!tableauOuvert()) return;
+    var onglet = $('[data-onglet-vue="scanner"]');
+    if (!onglet || onglet.hasAttribute('data-interdit')) {
+      toast('Vous n’avez pas la permission d’utiliser le poste de scan.', true);
+      return;
+    }
+    onglet.click();
+  }
+  // Ctrl+K (⌘K) : recherche rapide ; Ctrl+Maj+S (⌘⇧S) : poste de scan. La lettre
+  // tapée d'abord (AZERTY comme QWERTY), la position de la touche sinon.
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || document.querySelector('dialog[open]')) return;
+    var touche = String(e.key || '').toLowerCase();
+    if (!/^[a-z]$/.test(touche)) touche = { KeyK: 'k', KeyS: 's' }[e.code] || touche;
+    if (touche === 'k' && !e.shiftKey) { e.preventDefault(); ouvrirRecherche(); }
+    else if (touche === 's' && e.shiftKey) { e.preventDefault(); ouvrirScanner(); }
+  });
+
+  // Réseau coupé : le dire, et ne rien laisser croire enregistré ; au retour, tout recharger
+  var bandeauHorsLigne = $('[data-hors-ligne]');
+  function majConnexion() {
+    var coupe = navigator.onLine === false;
+    var etaitCoupe = !bandeauHorsLigne.hidden;
+    bandeauHorsLigne.hidden = !coupe;
+    if (etaitCoupe && !coupe && tableauOuvert()) {
+      toast('Connexion rétablie : les données sont actualisées.');
+      toutRecharger('connexion');
+    }
+  }
+  window.addEventListener('online', majConnexion);
+  window.addEventListener('offline', majConnexion);
+  majConnexion();
+
+  // Session terminée sans « Déconnexion » (jeton expiré ou révoqué) : retour à la
+  // connexion, avec la raison. Rien n'est effacé côté serveur.
+  API.surSessionPerdue(function () {
+    if (deconnexionVoulue || !tableauOuvert()) return;
+    arreterSurveillance();
+    arreterSurveillance = function () {};
+    $$('dialog[open]').forEach(function (d) { d.close(); });
+    $('[data-barre-connecte]').hidden = true;
+    ecran('connexion');
+    erreurFormulaire(formConnexion, 'Votre session a expiré : reconnectez-vous. Rien n’a été perdu, les données sont sur le serveur.');
+    notificationSysteme('Session expirée', 'Reconnectez-vous pour continuer.', 'session');
+  });
+
+  // Notifications du système, dans l'application de bureau : une alerte qui
+  // apparaît ou grossit (les alertes de la vue générale, rien d'autre) pendant
+  // que la fenêtre n'est pas au premier plan. Jamais à la première lecture.
+  var alertesConnues = null;
+  function notificationsActives() { return !!(BUREAU && reglages.notifications && 'Notification' in window); }
+  function demanderNotifications() {
+    if (notificationsActives() && Notification.permission === 'default') Notification.requestPermission();
+  }
+  function notificationSysteme(titre, texte, etiquette, action) {
+    if (!notificationsActives() || Notification.permission !== 'granted') return;
+    try {
+      var n = new Notification(titre, { body: texte, tag: etiquette });
+      n.onclick = function () { window.focus(); if (action) action(); };
+    } catch (e) { BUREAU.journal('erreur', 'notification impossible : ' + e.message); }
+  }
+  function annoncerAlertes(alertes) {
+    var avant = alertesConnues;
+    alertesConnues = {};
+    alertes.forEach(function (a) { alertesConnues[a.code] = Number(a.nombre) || 1; });
+    if (!avant || document.hasFocus()) return;
+    alertes.forEach(function (a) {
+      if (a.gravite === 'info' || (avant[a.code] || 0) >= (Number(a.nombre) || 1)) return;
+      notificationSysteme(a.gravite === 'critique' ? 'GoShip Express — action requise' : 'GoShip Express', a.message,
+               'alerte-' + a.code, actionAlerte(a.code));
+    });
+  }
+
+  if (BUREAU) {
+    BUREAU.surCommande(function (nom) {
+      if (nom === 'recherche') ouvrirRecherche();
+      else if (nom === 'scanner') ouvrirScanner();
+      else if (nom === 'reglages' && tableauOuvert()) ouvrirReglages();
+    });
+    $$('[data-bureau-seulement]').forEach(function (n) { n.hidden = false; });
+    demanderNotifications();
+  } else if (POSTE) {
+    $('[data-bureau-ancien]').hidden = false;
+  }
+
+  /* ---- Analytics ------------------------------------------------------------------
+     Ce qui s'est passé et comment cela évolue (outils/supabase-analytics.sql).
+     La base compte tout, sur les vraies tables, et compare chaque période à la
+     précédente ; la page met en forme, sans rien additionner. Chargé à
+     l'ouverture d'une rubrique et sur « Actualiser », jamais en direct : une
+     réponse est gardée une minute pour passer d'une rubrique à l'autre sans
+     recompter, et « Actualiser » l'oublie. */
+  var etatAnalytics = { module: 'synthese', periode: '30j', debut: '', fin: '', decoupage: 'jour', tri: 'colis',
+                        page: 0, parPage: 25, demande: 0, memoire: {}, tables: [], titre: '' };
+  var corpsAnalytics = $('[data-analytics-corps]');
+  var messageAnalytics = $('[data-analytics-message]');
+  var ongletsAnalytics = $$('[data-analytics-module]');
+  var NOMS_MODULES = { synthese: 'Synthèse', expeditions: 'Expéditions', operations: 'Opérations', clients: 'Clients',
+                       finances: 'Finances', routes: 'Routes et destinations', scanner: 'Scanner', qualite: 'Qualité des données' };
+  var PAYS_NOMS = { HT: 'Haïti', DO: 'République dominicaine', US: 'États-Unis' };
+
+  // Une réponse de la base, gardée une minute (même module, mêmes réglages)
+  function lireAnalytics(module, options) {
+    var o = Object.assign({ periode: etatAnalytics.periode, debut: etatAnalytics.debut, fin: etatAnalytics.fin }, options || {});
+    var cle = module + '|' + JSON.stringify(o);
+    var garde = etatAnalytics.memoire[cle];
+    if (garde && Date.now() - garde.t < 60000) return Promise.resolve(garde.r);
+    return API.admin.analytics(module, o).then(function (r) {
+      etatAnalytics.memoire[cle] = { t: Date.now(), r: r };
+      return r;
+    });
+  }
+
+  function texteErreurAnalytics(err) {
+    if (err && err.code === 'non-autorise') {
+      return 'Accès refusé : les Analytics sont réservées aux comptes qui voient les rapports (gérant, administrateur).';
+    }
+    if (err && err.code === 'absent') {
+      return 'Les Analytics ne sont pas encore installées : lancez outils/supabase-analytics.sql dans Supabase (SQL Editor), puis « Actualiser ».';
+    }
+    if (err && err.code === 'reseau') return 'Connexion impossible : les données n’ont pas pu être chargées. Vérifiez la connexion, puis « Actualiser ».';
+    return 'Impossible de calculer ces statistiques. ' + messageErreur(err);
+  }
+
+  // ---- Mise en forme : jamais de NaN, d'Infinity ni d'undefined à l'écran
+  function nombreOuTiret(n, format) { return n == null || !isFinite(Number(n)) ? '—' : format(Number(n)); }
+  function pourcent(n) { return nombreOuTiret(n, function (x) { return O.nombre(x) + ' %'; }); }
+  function duree(h) {
+    return nombreOuTiret(h, function (x) {
+      return x < 48 ? O.nombre(Math.round(x * 10) / 10) + ' h' : O.nombre(Math.round(x / 24 * 10) / 10) + ' j';
+    });
+  }
+  function poidsLb(n) { return nombreOuTiret(n, function (x) { return O.nombre(x) + ' lb'; }); }
+  function nomPays(code) { return PAYS_NOMS[code] || code || '—'; }
+  function nomService(code) { return SERVICES[code] || code || '—'; }
+  function nomStatut(code) { return STATUTS[code] || code || '—'; }
+  function nomMoyen(code) { return MOYENS[code] || code || '—'; }
+  function caseLisible(c, court) {
+    if (etatAnalytics.decoupage === 'mois') {
+      try { return new Intl.DateTimeFormat('fr-FR', { month: court ? 'short' : 'long', year: 'numeric' }).format(new Date(c.jour + 'T12:00:00Z')); }
+      catch (e) { return c.jour.slice(0, 7); }
+    }
+    if (etatAnalytics.decoupage === 'semaine') return (court ? '' : 'semaine du ') + jourLisible(c.debut, court);
+    return jourLisible(c.jour, court);
+  }
+
+  // Une comparaison : « +12,5 % », « nouveau », ou « stable » — et le chiffre d'avant
+  function variation(cmp, format) {
+    if (!cmp) return { texte: '—', classe: '' };
+    var sens = cmp.tendance === 'hausse' ? '↗' : (cmp.tendance === 'baisse' ? '↘' : '→');
+    var texte;
+    if (cmp.variation_pct != null) texte = (cmp.variation_pct > 0 ? '+' : '') + O.nombre(cmp.variation_pct) + ' %';
+    else if (Number(cmp.actuel)) texte = 'nouveau';
+    else texte = 'stable';
+    return { texte: sens + ' ' + texte, classe: 'gs-variation--' + (cmp.tendance || 'stable'),
+             precedent: 'avant : ' + format(cmp.precedent) };
+  }
+
+  function carte(libelle, cmp, format, note) {
+    var c = el('div', 'gs-kpi gs-kpi--analytics');
+    c.appendChild(el('span', 'gs-kpi__libelle', libelle));
+    c.appendChild(el('strong', 'gs-kpi__valeur', cmp && typeof cmp === 'object' ? format(cmp.actuel) : format(cmp)));
+    if (cmp && typeof cmp === 'object') {
+      var v = variation(cmp, format);
+      var ligne = el('span', 'gs-kpi__sous');
+      ligne.appendChild(el('span', 'gs-variation ' + v.classe, v.texte));
+      ligne.appendChild(document.createTextNode(' · ' + v.precedent));
+      c.appendChild(ligne);
+    }
+    if (note) c.appendChild(el('span', 'gs-kpi__sous', note));
+    return c;
+  }
+
+  function grille(cartes) {
+    var g = el('div', 'gs-kpis');
+    cartes.forEach(function (c) { g.appendChild(c); });
+    return g;
+  }
+
+  function section(titre, aide) {
+    var s = el('section', 'gs-apercu__bloc gs-analytics__section');
+    s.appendChild(el('h2', 'gs-apercu__titre', titre));
+    if (aide) s.appendChild(el('p', 'gs-apercu__note', aide));
+    corpsAnalytics.appendChild(s);
+    return s;
+  }
+
+  // Un tableau lisible, gardé pour l'export : colonnes [{ titre, valeur(ligne), brut(ligne), nombre }]
+  function tableau(parent, titre, colonnes, lignes, vide) {
+    etatAnalytics.tables.push({ titre: titre, colonnes: colonnes, lignes: lignes });
+    if (!lignes.length) {
+      parent.appendChild(el('p', 'gs-admin-vide', vide || 'Aucune donnée disponible pour cette période.'));
+      return;
+    }
+    var cadre = el('div', 'gs-tableau-cadre');
+    var t = el('table', 'gs-tableau gs-tableau--analytics');
+    var cap = el('caption', 'gs-invisible', titre);
+    t.appendChild(cap);
+    var tete = el('tr');
+    colonnes.forEach(function (c) {
+      var th = el('th', c.nombre ? 'gs-nombre' : '', c.titre);
+      th.scope = 'col';
+      tete.appendChild(th);
+    });
+    var thead = el('thead');
+    thead.appendChild(tete);
+    t.appendChild(thead);
+    var tbody = el('tbody');
+    lignes.forEach(function (l) {
+      var tr = el('tr');
+      colonnes.forEach(function (c) {
+        var td = cellule(c.titre);
+        if (c.nombre) td.className = 'gs-nombre';
+        td.textContent = c.valeur(l);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    t.appendChild(tbody);
+    cadre.appendChild(t);
+    parent.appendChild(cadre);
+  }
+
+  // Une phrase qui décrit, sans expliquer : « a augmenté de 18 % par rapport à la période précédente »
+  function phrase(libelle, cmp, format) {
+    if (!cmp) return null;
+    var a = format(cmp.actuel), b = format(cmp.precedent);
+    if (cmp.tendance === 'stable') return libelle + ' : stable (' + a + ').';
+    if (cmp.variation_pct == null) return libelle + ' : ' + a + ', contre aucun sur la période précédente.';
+    return libelle + ' : ' + (cmp.tendance === 'hausse' ? 'en hausse' : 'en baisse') + ' de ' +
+           O.nombre(Math.abs(cmp.variation_pct)) + ' % par rapport à la période précédente (' + a + ' contre ' + b + ').';
+  }
+
+  function definitions(parent, liste) {
+    var d = el('details', 'gs-definitions');
+    d.appendChild(el('summary', '', 'Définitions et sources'));
+    var dl = el('dl');
+    liste.forEach(function (x) {
+      dl.appendChild(el('dt', '', x[0]));
+      dl.appendChild(el('dd', '', x[1]));
+    });
+    d.appendChild(dl);
+    parent.appendChild(d);
+  }
+
+  function serieGraphe(parent, titre, cases, series) {
+    var fig = el('figure', 'gs-graphe gs-analytics__graphe');
+    fig.appendChild(el('figcaption', 'gs-graphe__titre', titre));
+    var zone = el('div', 'gs-graphe__zone');
+    fig.appendChild(zone);
+    parent.appendChild(fig);
+    grapheJours(zone, cases, series, caseLisible);
+  }
+
+  // Un tableau qui double un graphique (une ligne par jour, semaine, mois ou
+  // statut) : replié dessous ; l'export CSV et l'impression le reprennent en entier
+  function detailSerie(parent, nombre, texte) {
+    var d = el('details', 'gs-definitions gs-analytics__detail');
+    d.appendChild(el('summary', '', (texte || 'Voir le détail, période par période') + ' (' + nombre + ' ligne' + (nombre > 1 ? 's' : '') + ')'));
+    parent.appendChild(d);
+    return d;
+  }
+
+  function repartitionAvecPart(parent, lignes, total) {
+    var ul = el('ul', 'gs-repartition');
+    parent.appendChild(ul);
+    repartition(ul, lignes.map(function (l) {
+      return { libelle: l.libelle + (total ? ' — ' + O.nombre(Math.round(l.nombre * 1000 / total) / 10) + ' %' : ''),
+               nombre: l.nombre, pastille: l.pastille };
+    }), 'Aucune donnée disponible pour cette période.');
+  }
+
+  /* ---- Les rubriques ----------------------------------------------------------- */
+  var RUBRIQUES = {
+    synthese: function () {
+      return lireAnalytics('synthese').then(function (s) {
+        var m = s.mesures;
+        var colis = section('Colis', 'Période choisie comparée à la période précédente de même longueur.');
+        colis.appendChild(grille([
+          carte('Colis reçus', m.recus, entier), carte('Expédiés (embarqués)', m.expedies, entier),
+          carte('Rendus disponibles', m.disponibles, entier), carte('Livrés', m.livres, entier),
+          carte('Passés en action requise', m.actions_requises, entier), carte('Poids reçu', m.poids, poidsLb)]));
+        var cl = section('Clients');
+        cl.appendChild(grille([carte('Clients inscrits (fin de période)', s.clients_total, entier),
+                               carte('Nouveaux clients', m.nouveaux_clients, entier)]));
+        var fi = section('Argent', 'Facturé et encaissé ne se confondent pas : l’un est ce qui a été demandé, l’autre ce qui est entré.');
+        fi.appendChild(grille([carte('Facturé', m.facture, argent), carte('Encaissé', m.encaisse, argent),
+                               carte('Reste sur les factures de la période', m.reste, argent, 'dû aujourd’hui'),
+                               carte('Créances en fin de période', s.creances_fin, argent)]));
+        var tend = section('Tendances', 'Des faits chiffrés, sans explication : les causes ne se lisent pas dans les données.');
+        var ul = el('ul', 'gs-tendances');
+        [phrase('Colis reçus', m.recus, entier), phrase('Colis livrés', m.livres, entier),
+         phrase('Nouveaux clients', m.nouveaux_clients, entier), phrase('Facturé', m.facture, argent),
+         phrase('Encaissé', m.encaisse, argent), phrase('Créances en fin de période', s.creances_fin, argent),
+         phrase('Opérations au scanner', m.scans, entier)].filter(Boolean).forEach(function (t) { ul.appendChild(el('li', '', t)); });
+        tend.appendChild(ul);
+        var st = section('Colis par statut, maintenant', 'Le stock actuel, les huit statuts du système — les mêmes chiffres que la vue générale.');
+        repartitionAvecPart(st, Object.keys(STATUTS).map(function (k) {
+          return { libelle: STATUTS[k], nombre: s.maintenant.statuts[k] || 0, pastille: k };
+        }), s.maintenant.total);
+        tableau(detailSerie(st, 8, 'Voir le tableau'), 'Colis par statut, maintenant', [
+          { titre: 'Statut', valeur: function (l) { return l.nom; } },
+          { titre: 'Colis', nombre: true, valeur: function (l) { return entier(l.n); }, brut: function (l) { return l.n; } }],
+          Object.keys(STATUTS).map(function (k) { return { nom: STATUTS[k], n: s.maintenant.statuts[k] || 0 }; }));
+        definitions(corpsAnalytics, [
+          ['Colis reçus', 'Colis dont la réception à Miami (date saisie à l’arrivée) tombe dans la période. Source : colis.'],
+          ['Expédiés, rendus disponibles, livrés, action requise', 'Colis passés à ce statut pendant la période, chacun une fois, sans les étapes annulées par une correction. Source : les événements (colis_historique).'],
+          ['Facturé', 'Total des factures émises pendant la période, hors annulées ; montants arrêtés à la création (un changement de tarif ne les modifie pas).'],
+          ['Encaissé', 'Paiements valides reçus pendant la période, quelle que soit la facture. Source : paiements.'],
+          ['Créances en fin de période', 'Ce qui restait dû à la fin de la période, reconstitué à partir des factures et des paiements datés.'],
+          ['Période précédente', 'Même nombre de jours juste avant ; « ce mois » : le mois précédent aux mêmes dates ; « cette année » : l’année précédente aux mêmes dates.'],
+          ['Pourcentage', 'Absent quand la période précédente vaut zéro : on écrit « nouveau » plutôt qu’un pourcentage infini.']]);
+      });
+    },
+
+    expeditions: function () {
+      return Promise.all([lireAnalytics('serie', { granularite: etatAnalytics.decoupage }), lireAnalytics('synthese')]).then(function (r) {
+        var se = r[0], s = r[1], m = s.mesures;
+        var haut = section('Volume');
+        haut.appendChild(grille([carte('Colis reçus', m.recus, entier), carte('Livrés', m.livres, entier),
+                                 carte('Poids total', m.poids, poidsLb),
+                                 carte('Poids moyen', s.moyennes.poids_moyen, poidsLb, 'colis pesés seulement'),
+                                 carte('Prix moyen d’un colis', s.moyennes.prix_moyen, function (x) { return x == null ? '—' : argent(x); },
+                                       'prix arrêté à l’enregistrement'),
+                                 carte('Facture moyenne', s.moyennes.revenu_moyen_facture, function (x) { return x == null ? '—' : argent(x); })]));
+        var g = section('Colis reçus et livrés');
+        serieGraphe(g, 'Colis reçus et livrés, ' + { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[se.granularite],
+                    se.cases, [{ nom: 'Reçus', cle: 'recus', classe: 'gs-graphe--serie1', total: m.recus.actuel, format: entier },
+                               { nom: 'Livrés', cle: 'livres', classe: 'gs-graphe--serie2', total: m.livres.actuel, format: entier }]);
+        tableau(detailSerie(g, se.cases.length), 'Volume par période', [
+          { titre: 'Période', valeur: function (c) { return c.debut === c.fin ? jourLisible(c.debut) : jourLisible(c.debut) + ' → ' + jourLisible(c.fin); } },
+          { titre: 'Colis reçus', nombre: true, valeur: function (c) { return entier(c.recus); }, brut: function (c) { return c.recus; } },
+          { titre: 'Poids', nombre: true, valeur: function (c) { return poidsLb(c.poids); }, brut: function (c) { return c.poids; } },
+          { titre: 'Expédiés', nombre: true, valeur: function (c) { return entier(c.expedies); }, brut: function (c) { return c.expedies; } },
+          { titre: 'Livrés', nombre: true, valeur: function (c) { return entier(c.livres); }, brut: function (c) { return c.livres; } },
+          { titre: 'Facturé', nombre: true, valeur: function (c) { return argent(c.facture); }, brut: function (c) { return c.facture; } },
+          { titre: 'Encaissé', nombre: true, valeur: function (c) { return argent(c.encaisse); }, brut: function (c) { return c.encaisse; } }],
+          se.cases);
+        var st = section('Colis par statut, maintenant');
+        repartitionAvecPart(st, Object.keys(STATUTS).map(function (k) {
+          return { libelle: STATUTS[k], nombre: s.maintenant.statuts[k] || 0, pastille: k };
+        }), s.maintenant.total);
+        definitions(corpsAnalytics, [
+          ['Découpage', 'Par jour, par semaine (du lundi au dimanche) ou par mois, en jours de Santo Domingo. La première et la dernière case peuvent être partielles.'],
+          ['Livrés, expédiés', 'Un colis compte le jour de sa première arrivée à l’étape pendant la période : la somme des cases vaut le total.'],
+          ['Prix moyen', 'Moyenne des prix enregistrés sur les colis reçus (poids × tarif du jour de l’enregistrement).']]);
+      });
+    },
+
+    operations: function () {
+      return lireAnalytics('operations').then(function (o) {
+        var d = o.durees;
+        var ETAPES = [['reception_expedition', 'Reçu → Embarqué (entrepôt de Miami)'], ['expedition_disponible', 'Embarqué → Disponible (acheminement)'],
+                      ['disponible_livraison', 'Disponible → Livré (retrait)'], ['reception_livraison', 'Reçu → Livré (total)']];
+        var s1 = section('Temps de traitement', 'Tirés des événements réels. Une étape compte dans la période où elle s’achève. Les valeurs extrêmes restent dans les chiffres et sont signalées.');
+        repartition((function () { var ul = el('ul', 'gs-repartition'); s1.appendChild(ul); return ul; })(),
+                    ETAPES.filter(function (e) { return d[e[0]].nombre; }).map(function (e) {
+                      return { libelle: e[1] + ' — médiane ' + duree(d[e[0]].mediane_h), nombre: d[e[0]].mediane_h };
+                    }), 'Aucune étape achevée pendant cette période.');
+        tableau(s1, 'Temps de traitement', [
+          { titre: 'Étape', valeur: function (e) { return e[1]; } },
+          { titre: 'Colis', nombre: true, valeur: function (e) { return entier(d[e[0]].nombre); }, brut: function (e) { return d[e[0]].nombre; } },
+          { titre: 'Moyenne', nombre: true, valeur: function (e) { return duree(d[e[0]].moyenne_h); }, brut: function (e) { return d[e[0]].moyenne_h; } },
+          { titre: 'Médiane', nombre: true, valeur: function (e) { return duree(d[e[0]].mediane_h); }, brut: function (e) { return d[e[0]].mediane_h; } },
+          { titre: 'Minimum', nombre: true, valeur: function (e) { return duree(d[e[0]].minimum_h); }, brut: function (e) { return d[e[0]].minimum_h; } },
+          { titre: 'Maximum', nombre: true, valeur: function (e) { return duree(d[e[0]].maximum_h); }, brut: function (e) { return d[e[0]].maximum_h; } },
+          { titre: 'Valeurs extrêmes', nombre: true, valeur: function (e) { return entier(d[e[0]].extremes); }, brut: function (e) { return d[e[0]].extremes; } },
+          { titre: 'Durées négatives', nombre: true, valeur: function (e) { return entier(d[e[0]].negatives); }, brut: function (e) { return d[e[0]].negatives; } }],
+          ETAPES.filter(function (e) { return d[e[0]].nombre || d[e[0]].negatives; }), 'Aucune étape achevée pendant cette période.');
+        var s2 = section('Livraison');
+        s2.appendChild(grille([
+          carte('Livrés pendant la période', o.livraison.livres, entier),
+          carte('Taux de livraison de la cohorte', o.livraison.taux_cohorte, pourcent,
+                entier(o.livraison.cohorte_livres) + ' livrés sur ' + entier(o.livraison.cohorte_recus) + ' reçus pendant la période'),
+          carte('Même taux, période précédente', o.livraison.taux_cohorte_precedente, pourcent),
+          carte('Délai médian Reçu → Livré', d.reception_livraison.mediane_h, duree, 'moyenne : ' + duree(d.reception_livraison.moyenne_h))]));
+        var s3 = section('Transitions de statut', 'Chaque changement de statut de la période et le temps passé dans le statut quitté.');
+        tableau(s3, 'Transitions de statut', [
+          { titre: 'Transition', valeur: function (t) { return nomStatut(t.de) + ' → ' + nomStatut(t.vers); } },
+          { titre: 'Nombre', nombre: true, valeur: function (t) { return entier(t.nombre); }, brut: function (t) { return t.nombre; } },
+          { titre: 'Durée moyenne', nombre: true, valeur: function (t) { return duree(t.moyenne_h); }, brut: function (t) { return t.moyenne_h; } },
+          { titre: 'Durée médiane', nombre: true, valeur: function (t) { return duree(t.mediane_h); }, brut: function (t) { return t.mediane_h; } }],
+          o.transitions, 'Aucun changement de statut pendant cette période.');
+        s3.appendChild(el('p', 'gs-apercu__note', 'Anomalies : ' + pluriel(o.anomalies.corrections, 'correction', 'corrections') + ' et ' +
+                          pluriel(o.anomalies.retours_en_arriere, 'retour en arrière', 'retours en arrière') + ' pendant la période.'));
+        var s4 = section('Colis sans progression, maintenant', 'Colis pas encore livrés, selon le temps écoulé depuis leur dernier événement. Des repères de lecture : l’alerte officielle reste le réglage « sans mouvement » de la vue générale, où se trouve la liste.');
+        var sm = o.sans_mouvement;
+        repartitionAvecPart(s4, [{ libelle: 'Moins de 24 h', nombre: sm.moins_24h }, { libelle: '24 à 48 h', nombre: sm.de_24_a_48h },
+                                 { libelle: '48 à 72 h', nombre: sm.de_48_a_72h }, { libelle: '72 h à 7 jours', nombre: sm.de_72h_a_7j },
+                                 { libelle: 'Plus de 7 jours', nombre: sm.plus_de_7j }], sm.actifs);
+        var ar = o.action_requise;
+        var s5 = section('Action requise');
+        s5.appendChild(grille([carte('Colis passés en action requise', ar.entrees, entier), carte('En action requise maintenant', ar.en_cours, entier),
+                               carte('Durée moyenne dans l’état', ar.duree_episodes.moyenne_h, duree,
+                                     pluriel(ar.duree_episodes.nombre, 'épisode terminé', 'épisodes terminés') + ' · médiane ' + duree(ar.duree_episodes.mediane_h)),
+                               carte('Clients concernés', ar.clients, entier)]));
+        tableau(s5, 'Action requise par destination', [
+          { titre: 'Destination', valeur: function (x) { return nomPays(x.pays); } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          ar.par_destination, 'Aucun colis passé en action requise pendant cette période.');
+        s5.appendChild(el('p', 'gs-apercu__note', 'Le motif d’une action requise est une note en texte libre : aucune cause n’est classée. Les notes les plus fréquentes, telles qu’elles ont été écrites :'));
+        tableau(s5, 'Notes les plus fréquentes', [
+          { titre: 'Note', valeur: function (x) { return x.note; } },
+          { titre: 'Fois', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          ar.notes, 'Aucune note.');
+        definitions(corpsAnalytics, [
+          ['Départ d’un colis', 'Sa réception à Miami (date et heure saisies à l’arrivée) ; chaque étape suivante est la première arrivée au statut, non annulée par une correction.'],
+          ['Taux de livraison de la cohorte', 'Parmi les colis reçus pendant la période, la part livrée aujourd’hui. Une période récente a naturellement un taux plus bas : ses colis sont encore en route.'],
+          ['Valeurs extrêmes', 'Au-delà de Q3 + 1,5 × l’écart interquartile (dès 4 valeurs). Gardées dans la moyenne et le maximum.'],
+          ['Durées négatives', 'Date de réception saisie après l’événement : comptées à part, hors statistiques.']]);
+      });
+    },
+
+    clients: function () {
+      return lireAnalytics('clients', { tri: etatAnalytics.tri, page: etatAnalytics.page, parPage: etatAnalytics.parPage }).then(function (c) {
+        var s1 = section('Clients');
+        s1.appendChild(grille([carte('Inscrits (fin de période)', c.total_fin, entier), carte('Nouveaux', c.nouveaux, entier),
+                               carte('Actifs', c.actifs, entier, 'au moins un colis reçu pendant la période'),
+                               carte('Inactifs', c.inactifs, entier, 'inscrits, sans colis reçu pendant la période'),
+                               carte('Colis par client actif', c.colis_par_client_actif, function (x) { return x == null ? '—' : O.nombre(x); })]));
+        var s2 = section('Activité des clients actifs', 'Des seuils fixes, affichés tels quels : ce n’est pas une note ni un classement.');
+        tableau(s2, 'Segments', [
+          { titre: 'Activité', valeur: function (x) { return { petite: 'Petite', moyenne: 'Moyenne', forte: 'Forte' }[x.segment] || x.segment; } },
+          { titre: 'Définition', valeur: function (x) { return x.definition; } },
+          { titre: 'Clients', nombre: true, valeur: function (x) { return entier(x.clients); }, brut: function (x) { return x.clients; } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } }], c.segments);
+        var s3 = section('Clients les plus actifs');
+        var outils = el('div', 'gs-admin-outils');
+        var choix = el('select', 'gs-admin-filtre');
+        choix.setAttribute('aria-label', 'Trier les clients');
+        [['colis', 'Par nombre de colis'], ['poids', 'Par poids'], ['facture', 'Par montant facturé'], ['paye', 'Par montant payé'], ['solde', 'Par solde']]
+          .forEach(function (x) { var op = new Option(x[1], x[0]); op.selected = x[0] === etatAnalytics.tri; choix.add(op); });
+        choix.addEventListener('change', function () { etatAnalytics.tri = choix.value; etatAnalytics.page = 0; afficherAnalytics(); });
+        outils.appendChild(choix);
+        s3.appendChild(outils);
+        tableau(s3, 'Clients les plus actifs', [
+          { titre: 'Client', valeur: function (x) { return (x.nom_complet || '—') + ' (' + (x.code || '—') + ')'; } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Poids', nombre: true, valeur: function (x) { return poidsLb(x.poids); }, brut: function (x) { return x.poids; } },
+          { titre: 'Facturé', nombre: true, valeur: function (x) { return argent(x.facture); }, brut: function (x) { return x.facture; } },
+          { titre: 'Payé', nombre: true, valeur: function (x) { return argent(x.paye); }, brut: function (x) { return x.paye; } },
+          { titre: 'Solde (maintenant)', nombre: true, valeur: function (x) { return argent(x.solde); }, brut: function (x) { return x.solde; } },
+          { titre: 'Dernière activité', valeur: function (x) { return x.derniere_activite ? O.date(x.derniere_activite, true) : '—'; } }],
+          c.lignes, 'Aucun client actif pendant cette période.');
+        var pages = el('div', 'gs-pagination');
+        s3.appendChild(pages);
+        paginer(pages, etatAnalytics, c.total_liste, afficherAnalytics);
+        definitions(corpsAnalytics, [
+          ['Client actif', 'Au moins un colis reçu à Miami pendant la période.'],
+          ['Liste', 'Les clients qui ont reçu un colis, reçu une facture ou payé pendant la période. Facturé et payé : pendant la période ; solde : aujourd’hui, toutes factures.']]);
+      });
+    },
+
+    finances: function () {
+      return Promise.all([lireAnalytics('finances'), lireAnalytics('serie', { granularite: etatAnalytics.decoupage })]).then(function (r) {
+        var f = r[0], se = r[1], cr = f.creances;
+        var s1 = section('Facturé et encaissé', 'Le facturé est ce qui a été demandé ; l’encaissé, l’argent réellement reçu. Les deux ne se confondent jamais.');
+        s1.appendChild(grille([carte('Facturé', f.facture, argent), carte('Encaissé', f.encaisse, argent),
+                               carte('Reste sur les factures de la période', f.reste, argent, 'dû aujourd’hui'),
+                               carte('Factures émises', f.factures_emises, entier),
+                               carte('Dont transport', f.transport, argent), carte('Dont frais de service', f.frais_service, argent)]));
+        serieGraphe(s1, 'Facturé et encaissé, ' + { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[se.granularite], se.cases,
+                    [{ nom: 'Facturé', cle: 'facture', classe: 'gs-graphe--serie1', total: f.facture.actuel, format: argent },
+                     { nom: 'Encaissé', cle: 'encaisse', classe: 'gs-graphe--serie2', total: f.encaisse.actuel, format: argent }]);
+        tableau(detailSerie(s1, se.cases.length), 'Facturé, encaissé et dû par période', [
+          { titre: 'Période', valeur: function (c) { return c.debut === c.fin ? jourLisible(c.debut) : jourLisible(c.debut) + ' → ' + jourLisible(c.fin); } },
+          { titre: 'Factures', nombre: true, valeur: function (c) { return entier(c.factures); }, brut: function (c) { return c.factures; } },
+          { titre: 'Facturé', nombre: true, valeur: function (c) { return argent(c.facture); }, brut: function (c) { return c.facture; } },
+          { titre: 'Encaissé', nombre: true, valeur: function (c) { return argent(c.encaisse); }, brut: function (c) { return c.encaisse; } },
+          { titre: 'Dû en fin de période', nombre: true, valeur: function (c) { return argent(c.creances_fin); }, brut: function (c) { return c.creances_fin; } }],
+          se.cases);
+        var s2 = section('Créances, maintenant');
+        s2.appendChild(grille([carte('À recouvrer', cr.total, argent, pluriel(cr.factures, 'facture ouverte', 'factures ouvertes')),
+                               carte('Impayées', cr.impayees, entier, 'rien reçu'), carte('Payées en partie', cr.partielles, entier),
+                               carte('En retard', cr.montant_en_retard, argent, pluriel(cr.en_retard, 'facture échue', 'factures échues')),
+                               carte('Non échues', cr.non_echues, entier), carte('Sans échéance', cr.sans_echeance, entier),
+                               carte('Créances en fin de période', f.creances_fin, argent)]));
+        var TRANCHES = { '0_30': '0 à 30 jours', '31_60': '31 à 60 jours', '61_90': '61 à 90 jours', '90_plus': 'Plus de 90 jours' };
+        tableau(s2, 'Âge des créances (depuis l’émission)', [
+          { titre: 'Âge', valeur: function (t) { return TRANCHES[t.tranche] || t.tranche; } },
+          { titre: 'Factures', nombre: true, valeur: function (t) { return entier(t.factures); }, brut: function (t) { return t.factures; } },
+          { titre: 'Montant dû', nombre: true, valeur: function (t) { return argent(t.montant); }, brut: function (t) { return t.montant; } }], cr.age);
+        var s3 = section('Encaissé par moyen de paiement');
+        tableau(s3, 'Encaissé par moyen de paiement', [
+          { titre: 'Moyen', valeur: function (x) { return nomMoyen(x.moyen); } },
+          { titre: 'Paiements', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } },
+          { titre: 'Montant', nombre: true, valeur: function (x) { return argent(x.montant); }, brut: function (x) { return x.montant; } }],
+          f.par_moyen, 'Aucun paiement reçu pendant cette période.');
+        var s4 = section('Dépenses, dettes et résultat');
+        s4.appendChild(el('p', 'gs-analytics__non-suivi', 'Non suivis par le système : aucune dépense ni dette n’y est enregistrée. Aucun résultat ni bénéfice n’est donc calculé — l’encaissé n’est pas un bénéfice.'));
+        definitions(corpsAnalytics, [
+          ['Facturé', 'Factures émises pendant la période, hors annulées ; montant arrêté à la création. Transport = total − frais de service.'],
+          ['Encaissé', 'Paiements valides reçus pendant la période ; un paiement annulé n’y est jamais.'],
+          ['Dû en fin de période', 'Factures émises avant la fin, moins celles annulées, moins les paiements reçus, plus ceux annulés — tous datés. Maintenant, il vaut « à encaisser » de la vue générale.'],
+          ['Âge des créances', 'Jours écoulés depuis l’émission de chaque facture encore ouverte. En retard : échéance dépassée et solde restant.']]);
+      });
+    },
+
+    routes: function () {
+      return lireAnalytics('routes').then(function (r) {
+        var s1 = section('Routes', 'Origine unique : l’entrepôt de ' + r.origine + ' — la base n’enregistre pas d’autre origine. Seules les routes réellement utilisées apparaissent, pour les colis reçus pendant la période.');
+        tableau(s1, 'Routes', [
+          { titre: 'Route', valeur: function (x) { return 'Miami → ' + nomPays(x.pays) + ' · ' + nomService(x.service); } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Période précédente', nombre: true, valeur: function (x) { return entier(x.colis_precedents); }, brut: function (x) { return x.colis_precedents; } },
+          { titre: 'Poids', nombre: true, valeur: function (x) { return poidsLb(x.poids); }, brut: function (x) { return x.poids; } },
+          { titre: 'Transport facturé', nombre: true, valeur: function (x) { return argent(x.facture); }, brut: function (x) { return x.facture; } },
+          { titre: 'Livrés', nombre: true, valeur: function (x) { return entier(x.livres) + ' (' + pourcent(x.taux_livre) + ')'; }, brut: function (x) { return x.livres; } },
+          { titre: 'Délai moyen Reçu → Livré', nombre: true, valeur: function (x) { return duree(x.delai_moyen_h); }, brut: function (x) { return x.delai_moyen_h; } }],
+          r.routes, 'Aucun colis reçu pendant cette période.');
+        var s2 = section('Pays de destination');
+        tableau(s2, 'Pays de destination', [
+          { titre: 'Pays', valeur: function (x) { return nomPays(x.pays); } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Période précédente', nombre: true, valeur: function (x) { return entier(x.colis_precedents); }, brut: function (x) { return x.colis_precedents; } },
+          { titre: 'Évolution', nombre: true, valeur: function (x) { var v = variation({ actuel: x.colis, precedent: x.colis_precedents,
+              variation_pct: x.colis_precedents ? Math.round((x.colis - x.colis_precedents) * 1000 / x.colis_precedents) / 10 : null,
+              tendance: x.colis > x.colis_precedents ? 'hausse' : (x.colis < x.colis_precedents ? 'baisse' : 'stable') }, entier); return v.texte; } }],
+          r.pays, 'Aucun colis sur ces deux périodes.');
+        var s3 = section('Villes les plus fréquentes', 'La ville de livraison saisie, telle quelle. ' + pluriel(r.sans_ville, 'colis sans ville indiquée', 'colis sans ville indiquée') + '.');
+        tableau(s3, 'Villes les plus fréquentes', [
+          { titre: 'Ville', valeur: function (x) { return x.ville + ' (' + nomPays(x.pays) + ')'; } },
+          { titre: 'Colis', nombre: true, valeur: function (x) { return entier(x.colis); }, brut: function (x) { return x.colis; } },
+          { titre: 'Période précédente', nombre: true, valeur: function (x) { return entier(x.colis_precedents); }, brut: function (x) { return x.colis_precedents; } }],
+          r.villes, 'Aucune ville indiquée.');
+        definitions(corpsAnalytics, [
+          ['Route', 'Miami → pays de destination, par service (aérien, maritime, terrestre).'],
+          ['Transport facturé', 'Lignes des colis de la route sur des factures non annulées ; les frais de service, comptés par facture, n’y sont pas.'],
+          ['Livrés, taux', 'Colis de la route livrés aujourd’hui, rapportés aux colis reçus pendant la période.']]);
+      });
+    },
+
+    scanner: function () {
+      return Promise.all([lireAnalytics('scanner'), lireAnalytics('serie', { granularite: etatAnalytics.decoupage })]).then(function (r) {
+        var s = r[0], se = r[1];
+        var s1 = section('Opérations au poste de scan', 'Une opération compte quand le scan l’a enregistrée. Les scans refusés, illisibles ou sans suite ne sont pas enregistrés : ils ne peuvent pas être comptés.');
+        s1.appendChild(grille([carte('Opérations', s.total, entier), carte('Colis scannés', s.colis, entier),
+                               carte('Jours avec des scans', s.jours_actifs, entier),
+                               carte('Intervalle médian entre deux opérations', s.intervalle_minutes.mediane,
+                                     function (x) { return x == null ? '—' : O.nombre(x) + ' min'; }, 'même compte, même jour')]));
+        serieGraphe(s1, 'Opérations, ' + { jour: 'par jour', semaine: 'par semaine', mois: 'par mois' }[se.granularite], se.cases,
+                    [{ nom: 'Opérations', cle: 'scans', classe: 'gs-graphe--serie1', total: s.total.actuel, format: entier }]);
+        var s2 = section('Par opération');
+        tableau(s2, 'Par opération', [
+          { titre: 'Opération', valeur: function (x) { return x.libelle; } },
+          { titre: 'Nombre', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          s.par_operation, 'Aucune opération pendant cette période.');
+        var s3 = section('Par compte', 'Dans l’ordre alphabétique : pour comprendre l’activité, pas pour classer les personnes.');
+        tableau(s3, 'Par compte', [
+          { titre: 'Compte', valeur: function (x) { return x.nom + (x.role && ROLES[x.role] ? ' (' + ROLES[x.role].toLowerCase() + ')' : ''); } },
+          { titre: 'Opérations', nombre: true, valeur: function (x) { return entier(x.operations); }, brut: function (x) { return x.operations; } },
+          { titre: 'Jours', nombre: true, valeur: function (x) { return entier(x.jours); }, brut: function (x) { return x.jours; } }],
+          s.par_compte, 'Aucune opération pendant cette période.');
+        var s4 = section('Par lieu');
+        tableau(s4, 'Par lieu', [
+          { titre: 'Lieu du poste', valeur: function (x) { return x.lieu || 'Lieu non indiqué'; } },
+          { titre: 'Opérations', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          s.par_lieu, 'Aucune opération pendant cette période.');
+      });
+    },
+
+    qualite: function () {
+      return lireAnalytics('qualite').then(function (q) {
+        var s1 = section('Indicateurs de qualité', 'Sur toute la base. Rien n’est corrigé ni caché : chaque ligne dit combien de données sont en cause.');
+        tableau(s1, 'Indicateurs de qualité', [
+          { titre: 'Indicateur', valeur: function (x) { return x.libelle; } },
+          { titre: 'Conformes', nombre: true, valeur: function (x) { return entier(x.ok) + ' sur ' + entier(x.total); }, brut: function (x) { return x.ok; } },
+          { titre: 'Part', nombre: true, valeur: function (x) { return x.total ? pourcent(Math.round(x.ok * 1000 / x.total) / 10) : 'Aucune donnée'; },
+            brut: function (x) { return x.total ? Math.round(x.ok * 1000 / x.total) / 10 : ''; } }], q.indicateurs);
+        var s2 = section('Anomalies');
+        tableau(s2, 'Anomalies', [
+          { titre: 'Anomalie', valeur: function (x) { return x.libelle; } },
+          { titre: 'Nombre', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }], q.anomalies);
+        var s3 = section('Facturation', 'Le rapport d’anomalies de facturation (bouton « Contrôler » de l’onglet Factures), compté par type.');
+        tableau(s3, 'Anomalies de facturation', [
+          { titre: 'Type', valeur: function (x) { return x.type.replace(/_/g, ' '); } },
+          { titre: 'Gravité', valeur: function (x) { return x.gravite; } },
+          { titre: 'Nombre', nombre: true, valeur: function (x) { return entier(x.nombre); }, brut: function (x) { return x.nombre; } }],
+          q.facturation, 'Aucune anomalie de facturation.');
+      });
+    }
+  };
+
+  function afficherAnalytics() {
+    if (!peut('reports.view')) return Promise.resolve();
+    var numero = ++etatAnalytics.demande;
+    var module = etatAnalytics.module;
+    corpsAnalytics.setAttribute('aria-busy', 'true');
+    messageAnalytics.hidden = true;
+    $('[data-analytics-etat]').textContent = 'Chargement des données…';
+    // Le découpage ne sert qu'aux rubriques qui ont une série dans le temps
+    $('[data-analytics-decoupage]').closest('label').hidden = ['expeditions', 'finances', 'scanner'].indexOf(module) < 0;
+    return lireAnalytics('synthese').then(function (s) {
+      if (numero !== etatAnalytics.demande) return;
+      etatAnalytics.titre = NOMS_MODULES[module];
+      var p = s.periode;
+      $('[data-analytics-etat]').textContent = (module === 'qualite' ? 'Toute la base · ' : '') +
+        (p.debut === p.fin ? 'Le ' + jourLisible(p.debut) : 'Du ' + jourLisible(p.debut) + ' au ' + jourLisible(p.fin)) +
+        ', comparé ' + (p.precedente.debut === p.precedente.fin ? 'au ' + jourLisible(p.precedente.debut)
+          : 'du ' + jourLisible(p.precedente.debut) + ' au ' + jourLisible(p.precedente.fin)) +
+        ' · jours de Santo Domingo · chiffres de ' + heure(s.genere_le);
+      var temporaire = el('div');
+      var vrai = corpsAnalytics;
+      corpsAnalytics = temporaire;
+      etatAnalytics.tables = [];
+      return RUBRIQUES[module]().then(function () {
+        corpsAnalytics = vrai;
+        if (numero !== etatAnalytics.demande) return;
+        corpsAnalytics.textContent = '';
+        while (temporaire.firstChild) corpsAnalytics.appendChild(temporaire.firstChild);
+      }, function (err) { corpsAnalytics = vrai; throw err; });
+    }).catch(function (err) {
+      if (numero !== etatAnalytics.demande) return;
+      corpsAnalytics.textContent = '';
+      etatAnalytics.tables = [];
+      messageAnalytics.textContent = texteErreurAnalytics(err);
+      messageAnalytics.hidden = false;
+      $('[data-analytics-etat]').textContent = '';
+    }).then(function () {
+      if (numero === etatAnalytics.demande) corpsAnalytics.removeAttribute('aria-busy');
+    });
+  }
+
+  function choisirModule(module) {
+    etatAnalytics.module = module;
+    etatAnalytics.page = 0;
+    ongletsAnalytics.forEach(function (b) {
+      var actif = b.getAttribute('data-analytics-module') === module;
+      b.setAttribute('aria-selected', String(actif));
+      b.tabIndex = actif ? 0 : -1;
+    });
+    afficherAnalytics();
+  }
+  ongletsAnalytics.forEach(function (b) {
+    b.addEventListener('click', function () { choisirModule(b.getAttribute('data-analytics-module')); });
+    b.addEventListener('keydown', function (e) {
+      var sens = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!sens) return;
+      e.preventDefault();
+      var autre = ongletsAnalytics[(ongletsAnalytics.indexOf(b) + sens + ongletsAnalytics.length) % ongletsAnalytics.length];
+      autre.focus();
+      choisirModule(autre.getAttribute('data-analytics-module'));
+    });
+  });
+
+  var choixPeriodeAnalytics = $('[data-analytics-periode]');
+  choixPeriodeAnalytics.addEventListener('change', function () {
+    var perso = choixPeriodeAnalytics.value === 'personnalise';
+    $('[data-analytics-dates]').hidden = !perso;
+    if (perso) { $('[data-analytics-debut]').focus(); return; }
+    etatAnalytics.periode = choixPeriodeAnalytics.value;
+    etatAnalytics.debut = etatAnalytics.fin = '';
+    etatAnalytics.page = 0;
+    afficherAnalytics();
+  });
+  $('[data-action="analytics-appliquer"]').addEventListener('click', function () {
+    var debut = $('[data-analytics-debut]').value, fin = $('[data-analytics-fin]').value;
+    if (!debut || !fin) { toast('Choisissez une date de début et une date de fin.', true); return; }
+    if (fin < debut) { toast('La date de fin est avant la date de début.', true); return; }
+    etatAnalytics.periode = 'personnalise';
+    etatAnalytics.debut = debut;
+    etatAnalytics.fin = fin;
+    etatAnalytics.page = 0;
+    afficherAnalytics();
+  });
+  $('[data-analytics-decoupage]').addEventListener('change', function (e) {
+    etatAnalytics.decoupage = e.target.value;
+    afficherAnalytics();
+  });
+  $('[data-action="analytics-actualiser"]').addEventListener('click', function () {
+    etatAnalytics.memoire = {};
+    afficherAnalytics();
+  });
+
+  /* ---- Export : un seul mécanisme, les tableaux affichés -----------------------
+     CSV avec point-virgule, virgule décimale et marque UTF-8 : Excel l'ouvre tel
+     quel. Pour le PDF, l'impression A4 existante (impression.js) : « Enregistrer
+     au format PDF » dans la fenêtre d'impression. Rien de plus que ce que la
+     page montre, donc rien de plus que ce que reports.view permet. */
+  function celluleCsv(v) {
+    var t = typeof v === 'number' ? String(v).replace('.', ',') : String(v == null ? '' : v);
+    return /[;"\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function periodeTexte() { return $('[data-analytics-etat]').textContent; }
+  $('[data-action="analytics-csv"]').addEventListener('click', function () {
+    if (!etatAnalytics.tables.length) { toast('Rien à exporter : chargez d’abord une rubrique.', true); return; }
+    var lignes = [['Goship Express — Analytics — ' + etatAnalytics.titre], [periodeTexte()], []];
+    etatAnalytics.tables.forEach(function (t) {
+      lignes.push([t.titre]);
+      lignes.push(t.colonnes.map(function (c) { return c.titre; }));
+      t.lignes.forEach(function (l) {
+        lignes.push(t.colonnes.map(function (c) { return c.brut ? c.brut(l) : c.valeur(l); }));
+      });
+      lignes.push([]);
+    });
+    var texte = '﻿' + lignes.map(function (l) { return l.map(celluleCsv).join(';'); }).join('\r\n');
+    var lien = el('a');
+    lien.href = URL.createObjectURL(new Blob([texte], { type: 'text/csv;charset=utf-8' }));
+    lien.download = 'goship-analytics-' + etatAnalytics.module + '-' + aujourdhuiTexte() + '.csv';
+    document.body.appendChild(lien);
+    lien.click();
+    setTimeout(function () { URL.revokeObjectURL(lien.href); lien.remove(); }, 1000);
+  });
+  function aujourdhuiTexte() {
+    var t = new Date();
+    return t.getFullYear() + '-' + deux(t.getMonth() + 1) + '-' + deux(t.getDate());
+  }
+  $('[data-action="analytics-imprimer"]').addEventListener('click', function () {
+    if (!corpsAnalytics.children.length) { toast('Rien à imprimer : chargez d’abord une rubrique.', true); return; }
+    var feuille = el('div', 'gs-rapport');
+    feuille.appendChild(el('h1', '', 'Goship Express — Analytics : ' + etatAnalytics.titre));
+    feuille.appendChild(el('p', 'gs-rapports__periode', periodeTexte()));
+    var copie = corpsAnalytics.cloneNode(true);
+    $$('select, button, .gs-pagination', copie).forEach(function (n) { n.remove(); });
+    $$('details', copie).forEach(function (n) { n.open = true; });
+    feuille.appendChild(copie);
+    IMP.imprimer(feuille, { titre: 'Analytics — ' + etatAnalytics.titre, papier: 'A4', marge: '12mm' }).catch(function () {
+      toast('Impression impossible : autorisez les fenêtres de ce site.', true);
+    });
+  });
+
+  /* ---- La fiche d'une ligne ----------------------------------------------------------
+     Un clic (ou Entrée) sur une ligne de n'importe quel tableau ouvre sa fiche
+     (<dialog data-dialogue="fiche">). Un colis y montre tout ce que la liste en sait, son
+     parcours en sept étapes (datées par son historique, lu dans la base) et ses actions :
+     « Mettre à jour », « Voir la facture », « Étiquette », « Voir le client ». Les autres
+     lignes (clients, factures, équipe, vue générale, analytics…) montrent leurs colonnes,
+     titre compris, et les boutons de la ligne, qui font exactement ce qu'ils font dans la
+     ligne. Un bouton, un lien, une case ou une liste de la ligne gardent leur rôle : ils
+     n'ouvrent pas la fiche. Rien ne se calcule ici : la fiche relit ce qui est affiché. */
+  var dlgFiche = $('[data-dialogue="fiche"]');
+  var FICHES = new WeakMap();
+  var champsFiche = $('[data-fiche-champs]', dlgFiche);
+  var actionsFiche = $('[data-fiche-actions]', dlgFiche);
+  var liensFiche = $('[data-fiche-liens]', dlgFiche);
+  var parcoursFiche = $('[data-fiche-parcours]', dlgFiche);
+  var sectionsFiche = $('[data-fiche-sections]', dlgFiche);
+  var suiteFiche = $('[data-fiche-suite]', dlgFiche);
+  var grilleFiche = champsFiche;
+  var ficheColisId = null;
+  var ficheDemande = 0;
+  var CODES = window.GoshipCodes;
+
+  function preparerFiche(type, titre, sousTitre, badgeNoeud) {
+    $('[data-fiche-type]', dlgFiche).textContent = type;
+    $('[data-fiche-titre]', dlgFiche).textContent = titre || '—';
+    var b = $('[data-fiche-badge]', dlgFiche);
+    b.textContent = '';
+    if (badgeNoeud) b.appendChild(badgeNoeud);
+    var st = $('[data-fiche-sous-titre]', dlgFiche);
+    st.textContent = sousTitre || '';
+    st.hidden = !sousTitre;
+    champsFiche.textContent = '';
+    sectionsFiche.textContent = '';
+    suiteFiche.textContent = '';
+    grilleFiche = champsFiche;
+    actionsFiche.textContent = '';
+    liensFiche.textContent = '';
+    parcoursFiche.hidden = true;
+    ficheColisId = null;
+    ficheDemande++;
+  }
+
+  // Une section titrée (« Destinataire », « Historique »…) : les champs suivants y vont.
+  // apres : sous le parcours du colis plutôt qu'au-dessus
+  function sectionFiche(titre, apres) {
+    var s = el('section', 'gs-fiche__section');
+    s.appendChild(el('h3', '', titre));
+    grilleFiche = el('dl', 'gs-fiche__grille');
+    s.appendChild(grilleFiche);
+    (apres ? suiteFiche : sectionsFiche).appendChild(s);
+    return s;
+  }
+
+  // Une liste chargée à l'ouverture (colis d'un client, historique…) : « Chargement… »,
+  // puis ses lignes, ou une phrase si elle est vide ou indisponible. demande : la fiche
+  // pour laquelle on charge (une autre fiche ouverte entre-temps ne reçoit rien).
+  function listeFiche(section, charger, vide) {
+    var ol = el('ul', 'gs-fiche__liste');
+    var attente = el('p', 'gs-fiche__attente', 'Chargement…');
+    section.appendChild(attente);
+    section.appendChild(ol);
+    var demande = ficheDemande;
+    charger().then(function (lignes) {
+      if (demande !== ficheDemande) return;
+      attente.remove();
+      if (!lignes.length) section.appendChild(el('p', 'gs-fiche__attente', vide));
+      lignes.forEach(function (l) { ol.appendChild(l); });
+    }).catch(function (err) {
+      if (demande !== ficheDemande) return;
+      attente.textContent = messageErreur(err);
+    });
+  }
+
+  // Une ligne de liste : un texte principal, un détail, et, si elle mène quelque part, un bouton
+  function ligneListe(principal, detail, droite, action) {
+    var li = el('li', 'gs-fiche__ligne');
+    var corps = el(action ? 'button' : 'div', 'gs-fiche__ligne-corps');
+    if (action) { corps.type = 'button'; corps.addEventListener('click', action); }
+    var g = el('span', 'gs-fiche__ligne-texte');
+    g.appendChild(el('span', 'gs-fiche__valeur', principal));
+    if (detail) g.appendChild(el('span', 'gs-fiche__sous', detail));
+    corps.appendChild(g);
+    if (droite) corps.appendChild(typeof droite === 'string' ? el('span', 'gs-fiche__ligne-droite', droite) : droite);
+    li.appendChild(corps);
+    return li;
+  }
+
+  // Un champ : un libellé et une ou plusieurs lignes de texte (vides ignorées)
+  function champFiche(libelle, lignes, large) {
+    lignes = (Array.isArray(lignes) ? lignes : [lignes]).filter(function (l) { return l != null && String(l).trim() !== ''; });
+    if (!lignes.length) return;
+    var bloc = el('div', 'gs-fiche__champ' + (large ? ' gs-fiche__champ--large' : ''));
+    bloc.appendChild(el('dt', '', libelle));
+    var dd = el('dd');
+    lignes.forEach(function (l, i) { dd.appendChild(el('span', i ? 'gs-fiche__sous' : 'gs-fiche__valeur', l)); });
+    bloc.appendChild(dd);
+    grilleFiche.appendChild(bloc);
+  }
+
+  // Un bouton de la fiche : fermer la fiche, puis agir (sauf « garder » : l'impression)
+  function boutonFiche(texte, classe, action, garder) {
+    var b = el('button', 'gs-bouton ' + (classe || 'gs-bouton--contour'), texte);
+    b.type = 'button';
+    b.addEventListener('click', function () {
+      if (!garder) dlgFiche.close();
+      action(b);
+    });
+    return b;
+  }
+
+  function montrerFiche() {
+    if (!dlgFiche.open) dlgFiche.showModal();
+    var premier = $('.gs-fiche__actions .gs-bouton', dlgFiche) || $('[data-action="fermer"]', dlgFiche);
+    premier.focus();
+  }
+
+  /* Le colis : ce que la liste en sait (colis_details), par sections ; le parcours et
+     l'historique complet se lisent à l'ouverture (API.admin.historique). Un champ que la
+     base ne connaît pas n'est pas affiché. */
+  function heure(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+  function ouvrirFicheColis(colis) {
+    preparerFiche('Détail du colis', colis.numero, colis.description || '', badge(colis.statut));
+    ficheColisId = colis.id;
+    var recu = colis.recu_le || colis.cree_le;
+    var poids = colis.poids_lb != null && colis.poids_lb !== '' ? Number(colis.poids_lb) : null;
+
+    sectionFiche('Informations générales');
+    champFiche('N° de colis', colis.numero);
+    champFiche('Date de réception', O.date(recu));
+    champFiche('Heure de réception', heure(recu));
+    // La date à laquelle le colis a été saisi dans le système (celle de l'étiquette)
+    champFiche('Enregistré le', colis.cree_le ? O.date(colis.cree_le, true) : '');
+    champFiche('Statut', STATUTS[colis.statut] || colis.statut);
+    champFiche('Lieu actuel', colis.lieu || '—');
+    champFiche('Mis à jour', O.date(colis.maj_le, true));
+    // Le code-barres de l'étiquette (Code 128 du numéro), dessiné comme sur l'étiquette
+    if (CODES && CODES.code128) {
+      try {
+        var bloc = el('div', 'gs-fiche__champ gs-fiche__champ--large');
+        bloc.appendChild(el('dt', '', 'Code-barres'));
+        var dd = el('dd', 'gs-fiche__codebarre');
+        dd.appendChild(CODES.code128(colis.numero, { hauteur: 44, titre: colis.numero }));
+        dd.appendChild(el('span', 'gs-fiche__sous', colis.numero));
+        bloc.appendChild(dd);
+        grilleFiche.appendChild(bloc);
+      } catch (e) { /* un numéro illisible en Code 128 : pas de code-barres */ }
+    }
+
+    sectionFiche('Destinataire (client)');
+    champFiche('Nom', colis.nom_client || 'Client supprimé');
+    champFiche('Code client', colis.code_client);
+    champFiche('Téléphone', colis.telephone_client);
+    champFiche('E-mail', colis.email_client);
+    champFiche('Adresse', colis.adresse_client, true);
+    champFiche('Ville', [colis.ville_client, colis.region_client].filter(Boolean).join(', '));
+    champFiche('Pays', PAYS[colis.pays_client] || colis.pays_client);
+
+    sectionFiche('Expéditeur (magasin)');
+    champFiche('Nom', colis.expediteur || 'Non renseigné');
+    champFiche('N° de suivi du vendeur', colis.suivi_transporteur);
+    var grilleExp = grilleFiche;
+
+    sectionFiche('Colis');
+    champFiche('Contenu', colis.description);
+    champFiche('Poids', poids != null ? [O.nombre(poids) + ' lb', O.nombre(Math.round(poids * 0.45359237 * 10) / 10) + ' kg'] : '—');
+    champFiche('Mode de transport', SERVICES[colis.service] || colis.service);
+    champFiche('Destination', [colis.destination || 'Ville à compléter', PAYS[colis.pays_destination]].filter(Boolean).join(', '));
+    champFiche('Adresse de livraison', colis.adresse_livraison, true);
+    if (colis.prix_usd != null && colis.prix_usd !== '') {
+      champFiche('Prix du transport', [argent(colis.prix_usd),
+        colis.prix_fixe_usd != null && colis.prix_fixe_usd !== '' ? 'Prix fixé à la main'
+          : (colis.tarif_lb_usd != null ? argent(colis.tarif_lb_usd).replace(' $', ' $/lb') : '')]);
+    }
+    champFiche('Message pour le client', colis.note, true);
+
+    // Les actions : celles que le rôle permet ; la base vérifie de toute façon
+    if (peut('shipments.change_status')) {
+      var maj = boutonFiche('Mettre à jour', 'gs-bouton--plein', function () { ouvrirStatut([colis.id], colis); });
+      maj.setAttribute('aria-label', 'Mettre à jour le statut du colis ' + colis.numero);
+      actionsFiche.appendChild(maj);
+    }
+    if (peut('shipments.edit')) {
+      actionsFiche.appendChild(boutonFiche('Modifier', 'gs-bouton--contour', function () { ouvrirColis({ colis: colis }); }));
+    }
+    if (peut('invoices.view')) {
+      var fac = boutonFactureDuColis(colis);
+      fac.className = 'gs-bouton gs-bouton--contour';
+      fac.addEventListener('click', function () { dlgFiche.close(); });
+      actionsFiche.appendChild(fac);
+    }
+    actionsFiche.appendChild(boutonEtiquette(colis, 'gs-bouton gs-bouton--contour'));
+    if (colis.client_id && peut('clients.view')) {
+      liensFiche.appendChild(boutonFiche('Voir le client', 'gs-lien-bouton', function () {
+        choisirVue('clients');
+        var r = $('[data-recherche="clients"]');
+        r.value = colis.code_client || colis.nom_client || '';
+        r.dispatchEvent(new Event('input', { bubbles: true }));
+      }));
+    }
+    if (colis.client_id) {
+      liensFiche.appendChild(boutonFiche('Ses colis', 'gs-lien-bouton', function () {
+        filtrerParClient({ id: colis.client_id, code: colis.code_client, nom_complet: colis.nom_client });
+      }));
+    }
+    parcoursColis(colis, null);
+    var hist = sectionFiche('Historique', true);
+    var ol = el('ol', 'gs-chrono');
+    var attente = el('p', 'gs-fiche__attente', 'Chargement…');
+    hist.appendChild(attente);
+    hist.appendChild(ol);
+    montrerFiche();
+    // Le parcours daté et l'historique : tous les événements, tels que la base les a gardés
+    var demande = ficheDemande;
+    API.admin.historique(colis.id).then(function (h) {
+      if (demande !== ficheDemande) return;
+      h = h || [];
+      parcoursColis(colis, h);
+      attente.remove();
+      O.remplirHistorique(ol, h, { notes: true, libelle: libelleEvenement });
+      if (!h.length) hist.appendChild(el('p', 'gs-fiche__attente', 'Aucun événement pour l’instant.'));
+      // Le lieu de réception : celui de son premier événement
+      var premier = h.filter(function (x) { return x.lieu; })[0];
+      if (premier) {
+        var g = grilleFiche;
+        grilleFiche = grilleExp;
+        champFiche('Lieu de réception', premier.lieu);
+        grilleFiche = g;
+      }
+    }).catch(function (err) {
+      if (demande === ficheDemande) attente.textContent = messageErreur(err);
+    });
+  }
+
+  // Les sept étapes : faites, en cours, à venir. « Action requise » n'est pas une étape :
+  // le parcours reste sur la dernière étape atteinte, et l'alerte dit pourquoi.
+  function parcoursColis(colis, historique) {
+    var dates = {}, derniere = null;
+    (historique || []).forEach(function (h) {
+      if (CHAINE.indexOf(h.statut) >= 0) {
+        if (!dates[h.statut] || h.cree_le > dates[h.statut]) dates[h.statut] = h.cree_le;
+        derniere = h.statut;
+      }
+    });
+    var ici = CHAINE.indexOf(colis.statut);
+    if (ici < 0) ici = derniere ? CHAINE.indexOf(derniere) : -1;
+    var ol = $('[data-fiche-etapes]', dlgFiche);
+    ol.textContent = '';
+    CHAINE.forEach(function (k, i) {
+      var li = el('li', 'gs-fiche__etape ' + (i < ici ? 'is-fait' : i === ici ? 'is-actuel' : 'is-avenir'));
+      if (i === ici) li.setAttribute('aria-current', 'step');
+      li.appendChild(el('span', 'gs-fiche__point'));
+      li.appendChild(el('span', 'gs-fiche__etape-nom', STATUTS[k]));
+      li.appendChild(el('span', 'gs-fiche__etape-date', dates[k] ? O.date(dates[k], true) : ''));
+      ol.appendChild(li);
+    });
+    var alerte = $('[data-fiche-alerte]', dlgFiche);
+    alerte.hidden = colis.statut !== 'incident';
+    alerte.textContent = colis.statut === 'incident' ? 'Action requise' + (colis.note ? ' : ' + colis.note : '') : '';
+    parcoursFiche.hidden = false;
+  }
+
+  /* Toute autre ligne : ses colonnes (libellé de la cellule, ou titre de la colonne) et
+     ses boutons, qui déclenchent ceux de la ligne */
+  function textesCellule(td) {
+    var enfants = Array.prototype.filter.call(td.children, function (n) { return !n.matches('.gs-bouton, input, select'); });
+    // Un élément fait de plusieurs pastilles (statuts d'un client…) : ses morceaux, séparés
+    var lignes = enfants.length ? enfants.map(function (n) {
+      return n.children.length > 1 && !n.matches('span.gs-cellule-sous, span.gs-cellule-principale')
+        ? Array.prototype.map.call(n.children, function (x) { return x.textContent.trim(); }).filter(Boolean).join(' · ')
+        : n.textContent.trim();
+    }) : [td.textContent.trim()];
+    return lignes.filter(Boolean);
+  }
+
+  // Ce qu'est une ligne, selon son tableau (sinon la légende du tableau, le titre de sa
+  // carte ou celui de l'onglet)
+  var TYPES_FICHE = { clients: 'Client', factures: 'Facture', equipe: 'Membre de l’équipe', paiements: 'Paiement reçu',
+                      routes: 'Route', activite: 'Activité récente', traiter: 'Colis à traiter' };
+  function typeDeLigne(table) {
+    var m = /gs-tableau--([a-z]+)/.exec(table.className);
+    if (m && TYPES_FICHE[m[1]]) return TYPES_FICHE[m[1]];
+    if (table.caption && table.caption.textContent.trim()) return table.caption.textContent.trim();
+    var carte = table.closest('.gs-vg__carte, section');
+    var titre = carte && $('h2, h3', carte);
+    if (titre && titre.textContent.trim()) return titre.textContent.trim();
+    var vue = table.closest('[data-vue]');
+    var onglet = vue && $('[data-onglet-vue="' + vue.getAttribute('data-vue') + '"] .gs-td__libelle');
+    return onglet ? onglet.textContent.trim() : 'Détail';
+  }
+
+  function ouvrirFicheLigne(tr) {
+    var table = tr.closest('table');
+    var titres = $$('thead th', table).map(function (th) { return th.textContent.trim(); });
+    var colonnes = [], boutons = [];
+    Array.prototype.forEach.call(tr.cells, function (td, i) {
+      if (td.classList.contains('gs-tableau__case')) return;
+      $$('button, a[href]', td).forEach(function (b) { if (!b.disabled && !b.hidden && b.textContent.trim()) boutons.push(b); });
+      if (td.classList.contains('gs-cellule-actions')) return;
+      var lignes = textesCellule(td);
+      if (lignes.length) colonnes.push({ libelle: td.getAttribute('data-libelle') || titres[i] || '', lignes: lignes });
+    });
+    if (!colonnes.length) return;
+    // La première colonne fait le titre ; les autres, les champs
+    var tete = colonnes.shift();
+    preparerFiche(typeDeLigne(table), tete.lignes[0], tete.lignes.slice(1).join(' · '), null);
+    colonnes.forEach(function (c) { champFiche(c.libelle, c.lignes); });
+    copierBoutons(boutons);
+    montrerFiche();
+  }
+
+  // Des boutons d'action dans la fiche : même taille que les autres ; la fiche se ferme
+  // après l'action, sauf une impression (data-imprimer)
+  function ajouterActions(boutons) {
+    boutons.forEach(function (b, i) {
+      var danger = b.classList.contains('gs-bouton--danger');
+      b.className = 'gs-bouton ' + (danger ? 'gs-bouton--danger' : i === 0 ? 'gs-bouton--plein' : 'gs-bouton--contour');
+      if (!b.hasAttribute('data-imprimer')) b.addEventListener('click', function () { dlgFiche.close(); });
+      actionsFiche.appendChild(b);
+    });
+  }
+  function copierBoutons(boutons) {
+    boutons.forEach(function (b, i) {
+      // Un lien de la ligne (numéro de facture…) devient « Ouvrir … »
+      var texte = b.classList.contains('gs-bouton') ? b.textContent.trim()
+        : (b.getAttribute('aria-label') || 'Ouvrir ' + b.textContent.trim());
+      // Une impression (data-imprimer) laisse la fiche ouverte
+      var copie = boutonFiche(texte, i === 0 ? 'gs-bouton--plein' : 'gs-bouton--contour', function () { b.click(); },
+                              b.hasAttribute('data-imprimer'));
+      if (b.getAttribute('aria-label')) copie.setAttribute('aria-label', b.getAttribute('aria-label'));
+      actionsFiche.appendChild(copie);
+    });
+  }
+
+  /* La facture : ce que la liste en a lu (lignes et paiements compris), montants par
+     API.outils.totauxFacture comme partout ; ses actions sont celles de sa ligne. */
+  function ouvrirFicheFacture(facture) {
+    var client = facture.clients || {};
+    var t = O.totauxFacture(facture);
+    preparerFiche('Facture', facture.numero, client.nom_complet || '', badgeFacture(t.etat));
+    sectionFiche('Informations générales');
+    champFiche('N° de facture', facture.numero);
+    champFiche('Créée le', O.date(facture.cree_le, true));
+    champFiche('Montant rectifié le', facture.rectifiee_le ? O.date(facture.rectifiee_le, true) : '');
+    champFiche('À payer avant le', facture.echeance_le ? O.date(facture.echeance_le) : '');
+    champFiche('Payée le', facture.payee_le ? O.date(facture.payee_le, true) : '');
+    champFiche('Moyen', facture.moyen ? (MOYENS[facture.moyen] || facture.moyen) : '');
+    champFiche('Lien de paiement', facture.lien_paiement, true);
+    champFiche('Motif', t.etat === 'annulee' ? facture.motif_annulation : '', true);
+    champFiche('Note pour le client', facture.note, true);
+    sectionFiche('Client');
+    champFiche('Nom', client.nom_complet);
+    champFiche('Code client', client.code);
+    champFiche('Téléphone', client.telephone);
+    champFiche('E-mail', client.email);
+    champFiche('Ville', [client.ville, PAYS[client.pays] || client.pays].filter(Boolean).join(', '));
+    sectionFiche('Montants');
+    champFiche('Total colis', argent(t.colis));
+    champFiche('Frais de service', argent(t.frais));
+    champFiche('Grand total', argent(t.grandTotal));
+    champFiche('Déjà payé', argent(t.paye));
+    champFiche('Reste à payer', argent(t.balance));
+    var lignes = facture.facture_lignes || [];
+    if (lignes.length) {
+      var sl = sectionFiche('Colis facturés');
+      var ul = el('ul', 'gs-fiche__liste');
+      lignes.forEach(function (l) {
+        var c = l.colis || {};
+        ul.appendChild(ligneListe(c.numero || l.libelle || '—',
+          [c.description || (c.numero ? l.libelle : ''), l.poids_lb != null ? O.nombre(Number(l.poids_lb)) + ' lb' : '']
+            .filter(Boolean).join(' · '),
+          argent(l.montant_usd),
+          c.numero ? function () { ouvrirColisParNumero(c.numero); } : null));
+      });
+      sl.appendChild(ul);
+    }
+    var paiements = facture.paiements || [];
+    if (paiements.length) {
+      var sp = sectionFiche('Paiements');
+      var up = el('ul', 'gs-fiche__liste');
+      paiements.forEach(function (x) {
+        up.appendChild(ligneListe(argent(x.montant_usd) + ' · ' + (MOYENS[x.moyen] || x.moyen || ''),
+          [O.date(x.paye_le, true), x.reference ? 'réf. ' + x.reference : '', x.annule_le ? 'Annulé le ' + O.date(x.annule_le) : '']
+            .filter(Boolean).join(' · '), null, null));
+      });
+      sp.appendChild(up);
+    }
+    ajouterActions(actionsFacture(facture));
+    montrerFiche();
+  }
+
+  /* Le client : ce que la liste en sait, puis ses derniers colis, ses factures et leurs
+     paiements, lus à l'ouverture (et seulement si le rôle peut les voir). */
+  function ouvrirFicheClient(client) {
+    preparerFiche('Client', client.nom_complet || client.code, client.code || '', null);
+    sectionFiche('Informations personnelles');
+    champFiche('Identifiant', client.code);
+    champFiche('Nom', client.nom_complet);
+    champFiche('Inscrit le', client.cree_le ? O.date(client.cree_le) : '');
+    champFiche('Langue', LANGUES[client.langue] || client.langue);
+    sectionFiche('Coordonnées');
+    champFiche('Téléphone', client.telephone);
+    champFiche('E-mail', client.email);
+    champFiche('Adresse', client.adresse, true);
+    champFiche('Ville', [client.ville, client.region].filter(Boolean).join(', '));
+    champFiche('Pays', PAYS[client.pays] || client.pays);
+    // Le sexe et le type de document, donnés à l'inscription : lus à l'ouverture, un champ que la
+    // base ne connaît pas (ou que le client n'a pas donné) n'est pas affiché
+    if (client.id && API.admin.identiteClient) {
+      listeFiche(sectionFiche('Identité'), function () {
+        return API.admin.identiteClient(client.id).then(function (v) {
+          var lignes = [];
+          if (v.sexe) lignes.push(ligneListe('Sexe', v.sexe === 'F' ? 'Féminin' : 'Masculin', null, null));
+          if (v.type_document) lignes.push(ligneListe('Document', v.type_document === 'cedula' ? 'Cédula' : 'Passeport', null, null));
+          // Le numéro : seulement pour qui a clients.edit (la base le refuse aux autres) ; refusé, rien
+          return API.admin.numeroDocument(client.id).then(function (n) {
+            if (n) lignes.push(ligneListe('Numéro', n, null, null));
+            return lignes;
+          }, function () { return lignes; });
+        });
+      }, 'Non renseigné.');
+    }
+    sectionFiche('Situation');
+    champFiche('Colis en cours', client.colis_en_cours != null ? String(client.colis_en_cours) : '');
+    champFiche('Poids en cours', Number(client.poids_en_cours) ? O.nombre(Number(client.poids_en_cours)) + ' lb' : '');
+    if (peut('invoices.view') && etat.clients.finances && !etat.clients.sansChiffres) {
+      champFiche('Facturé', argent(client.facture_usd));
+      champFiche('Payé', argent(client.paye_usd));
+      champFiche('Solde', argent(client.solde_usd));
+    }
+    champFiche('Dernière activité', client.derniere_activite ? O.date(client.derniere_activite, true) : '');
+    if (peut('shipments.view') && client.id) {
+      listeFiche(sectionFiche('Derniers colis'), function () {
+        return API.admin.colis({ clientId: client.id, statut: '', parPage: 10 }).then(function (r) {
+          return (r.lignes || []).map(function (c) {
+            return ligneListe(c.numero, [c.description, O.date(c.recu_le || c.cree_le)].filter(Boolean).join(' · '),
+                              badge(c.statut), function () { ouvrirFicheColis(c); });
+          });
+        });
+      }, 'Aucun colis enregistré.');
+    }
+    if (peut('invoices.view') && client.id) {
+      var secFactures = sectionFiche('Factures');
+      var secPaiements = peut('payments.view') ? sectionFiche('Paiements') : null;
+      var lecture = API.admin.factures({ client_id: client.id, etat: '', parPage: 20 });
+      listeFiche(secFactures, function () {
+        return lecture.then(function (r) {
+          return (r.lignes || []).map(function (f) {
+            var tf = O.totauxFacture(f);
+            return ligneListe(f.numero || '—', [argent(tf.grandTotal), O.date(f.cree_le)].join(' · '), badgeFacture(tf.etat),
+                              function () { dlgFiche.close(); choisirVue('factures'); ouvrirFacture(f); });
+          });
+        });
+      }, 'Aucune facture.');
+      if (secPaiements) {
+        listeFiche(secPaiements, function () {
+          return lecture.then(function (r) {
+            var tous = [];
+            (r.lignes || []).forEach(function (f) {
+              (f.paiements || []).forEach(function (x) { tous.push({ p: x, facture: f.numero }); });
+            });
+            tous.sort(function (a, b) { return new Date(b.p.paye_le) - new Date(a.p.paye_le); });
+            return tous.map(function (x) {
+              return ligneListe(argent(x.p.montant_usd) + ' · ' + (MOYENS[x.p.moyen] || x.p.moyen || ''),
+                [O.date(x.p.paye_le, true), 'Facture ' + x.facture, x.p.annule_le ? 'Annulé le ' + O.date(x.p.annule_le) : '']
+                  .filter(Boolean).join(' · '), null, null);
+            });
+          });
+        }, 'Aucun paiement reçu pour l’instant.');
+      }
+    }
+    ajouterActions(actionsClient(client));
+    montrerFiche();
+  }
+
+  /* Un paiement reçu (vue générale) : ce que la base en rend, et sa facture */
+  function ouvrirFichePaiement(x) {
+    preparerFiche('Paiement reçu', argent(x.montant_usd), (x.client && x.client.nom_complet) || '', null);
+    champFiche('Reçu le', O.date(x.paye_le, true));
+    champFiche('Client', [(x.client && x.client.nom_complet) || '—', x.client && x.client.code]);
+    champFiche('Facture', x.facture);
+    champFiche('Moyen', MOYENS[x.moyen] || x.moyen);
+    champFiche('Montant', argent(x.montant_usd));
+    if (x.facture_id) {
+      actionsFiche.appendChild(boutonFiche('Voir la facture', 'gs-bouton--plein', function () { ouvrirFactureParId(x.facture_id); }));
+    }
+    montrerFiche();
+  }
+
+  // Une facture connue par son identifiant (ligne d'un rapport) : sa fiche, sans changer d'onglet
+  function ouvrirFicheFactureParId(id) {
+    API.admin.factures({ id: id, etat: '', parPage: 1 }).then(function (r) {
+      var facture = (r.lignes || [])[0];
+      if (!facture) { toast('Cette facture n’existe plus.', true); return; }
+      ouvrirFicheFacture(facture);
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  }
+
+  // Le clic sur une ligne : la fiche du colis si la ligne en est un, sinon la fiche générique
+  function ouvrirFicheDe(tr) {
+    var d = FICHES.get(tr);
+    if (d && d.colis) { ouvrirFicheColis(d.colis); return; }
+    if (d && d.facture) { ouvrirFicheFacture(d.facture); return; }
+    if (d && d.client) { ouvrirFicheClient(d.client); return; }
+    if (d && d.paiement) { ouvrirFichePaiement(d.paiement); return; }
+    if (d && d.rapport) { ouvrirFicheRapport(d.rapport); return; }
+    if (d && d.factureId) { ouvrirFicheFactureParId(d.factureId); return; }
+    if (tr.hasAttribute('data-id') && tr.closest('.gs-tableau--colis')) {
+      var colis = etat.colis.lignes.filter(function (l) { return l.id === tr.getAttribute('data-id'); })[0];
+      if (colis) { ouvrirFicheColis(colis); return; }
+    }
+    if (d && d.numero) { ouvrirColisParNumero(d.numero); return; }
+    ouvrirFicheLigne(tr);
+  }
+
+  function ligneCliquable(cible) {
+    if (cible.closest('button, a, input, select, textarea, label, summary, details, [data-fiche-ignorer]')) return null;
+    var tr = cible.closest('tbody tr');
+    if (!tr || tr.closest('dialog') || !tr.closest('[data-vue]') || tr.cells.length < 2) return null;
+    if (tr.closest('.gs-tableau--roles')) return null;
+    return tr;
+  }
+  document.addEventListener('click', function (e) {
+    var tr = ligneCliquable(e.target);
+    if (!tr) return;
+    // Un texte qu'on sélectionne à la souris n'est pas un clic
+    var sel = window.getSelection && window.getSelection();
+    if (sel && String(sel).trim() && tr.contains(sel.anchorNode)) return;
+    ouvrirFicheDe(tr);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.matches || !e.target.matches('tbody tr.is-cliquable')) return;
+    e.preventDefault();
+    ouvrirFicheDe(e.target);
+  });
+  // Les lignes se désignent (curseur, focus au clavier) dès qu'elles apparaissent
+  function marquerLignes(racine) {
+    $$('tbody tr', racine).forEach(function (tr) {
+      if (tr.classList.contains('is-cliquable') || tr.cells.length < 2 || tr.closest('dialog, .gs-tableau--roles')) return;
+      tr.classList.add('is-cliquable');
+      tr.tabIndex = 0;
+      tr.title = tr.title || 'Ouvrir la fiche';
+    });
+  }
+  if (window.MutationObserver) {
+    new MutationObserver(function (mutations) {
+      mutations.forEach(function (m) { if (m.target.nodeType === 1) marquerLignes(m.target); });
+    }).observe($('.gs-admin-body') || document.body, { childList: true, subtree: true });
+  }
+  marquerLignes(document);
+
+  // Le poste de scan demande la fiche complète du colis scanné (scanner.js)
+  document.addEventListener('goship:fiche-colis', function (e) {
+    if (e.detail && e.detail.numero) ouvrirColisParNumero(e.detail.numero);
+  });
+
+  // Le journal du poste de scan : un scan ouvre la fiche de son colis
+  var journalScan = $('[data-scan-journal]');
+  if (journalScan) {
+    journalScan.addEventListener('click', function (e) {
+      var li = e.target.closest('li[data-numero]');
+      if (li) ouvrirColisParNumero(li.getAttribute('data-numero'));
+    });
+    journalScan.addEventListener('keydown', function (e) {
+      var li = e.target.closest && e.target.closest('li[data-numero]');
+      if (li && e.key === 'Enter') ouvrirColisParNumero(li.getAttribute('data-numero'));
+    });
+  }
+
+  /* ---- Les rapports (onglet « Rapport », outils/supabase-rapports.sql) -----------------
+     Une période, des filtres et les données à inclure → API.admin.donneesRapport
+     (rapport_donnees), qui compte tout dans la base et rend les lignes page par page : la
+     page ne fait que placer, jamais d'addition. Un rapport enregistré n'est que sa
+     définition (nom, type, période en dates, filtres, données) : l'ouvrir relit les
+     chiffres du jour. Imprimer et « PDF » passent par impression.js (cadre à part, A4,
+     pied de page numéroté) ; le PDF est celui de la fenêtre d'impression (« Enregistrer
+     au format PDF ») ou de l'application de bureau : aucune bibliothèque de plus.
+     Voir, imprimer : reports.view ; enregistrer : reports.create ; modifier : reports.edit ;
+     supprimer : reports.delete. Les boutons suivent peut(), la base revérifie tout.
+     Heures et jours : ceux de Santo Domingo, comme les bornes de la période. */
+  var TYPES_RAPPORT = { complet: 'Rapport complet', colis: 'Colis', factures: 'Factures', paiements: 'Paiements',
+                        clients: 'Clients', evenements: 'Événements', activite: 'Activité du système' };
+  var PERIODES_RAPPORT = { aujourdhui: 'Aujourd\'hui', journalier: 'Journalier', hebdomadaire: 'Hebdomadaire',
+                           mensuel: 'Mensuel', trimestriel: 'Trimestriel', annuel: 'Annuel',
+                           personnalise: 'Période personnalisée' };
+  var REFERENCES_RAPPORT = { journalier: 'Le jour', hebdomadaire: 'Semaine du', mensuel: 'Mois du',
+                             trimestriel: 'Trimestre du', annuel: 'Année du', personnalise: 'Du' };
+  var STATUTS_RAPPORT = { attente: 'En attente (reçu, emballé)', transit: 'En transit', disponible: 'Disponible',
+                          livre: 'Livré', incident: 'Action requise' };
+  var ETATS_RAPPORT = { payee: 'Payé', impayee: 'Impayé', annulee: 'Annulé', supprimee: 'Supprimé' };
+  var SECTIONS_RAPPORT = { finances: 'Statistiques financières', colis: 'Colis', evenements: 'Événements des colis',
+                           factures: 'Factures', paiements: 'Paiements', clients: 'Clients', activite: 'Activités' };
+  var ORDRE_RAPPORT = ['finances', 'colis', 'evenements', 'factures', 'paiements', 'clients', 'activite'];
+  var SECTIONS_DU_TYPE = { complet: ORDRE_RAPPORT, colis: ['colis', 'evenements'], factures: ['finances', 'factures'],
+                           paiements: ['finances', 'paiements'], clients: ['clients'], evenements: ['evenements'],
+                           activite: ['activite'] };
+  var ORIGINES_PAIEMENT = { saisie: 'Saisi', creation: 'À la création', reprise: 'Repris' };
+  var ACTIONS_JOURNAL = {
+    'colis.creation': 'Création d’un colis', 'colis.modification': 'Modification d’un colis',
+    'colis.statut': 'Changement de statut', 'colis.correction': 'Correction d’une étape',
+    'colis.suppression': 'Suppression d’un colis', 'client.creation': 'Création d’un client',
+    'client.modification': 'Modification d’un client', 'client.role': 'Changement de rôle',
+    'utilisateur.role': 'Changement de rôle', 'client.suppression': 'Suppression d’un client',
+    'facture.creation': 'Création d’une facture', 'facture.modification': 'Modification d’une facture',
+    'facture.paiement': 'Paiement d’une facture', 'facture.annulation': 'Annulation d’une facture',
+    'facture.regroupement': 'Regroupement de factures', 'facture.suppression': 'Suppression d’une facture',
+    'facture.sortie_regroupement': 'Colis sortis d’un regroupement',
+    'facture.frais_appliques': 'Frais de service ajoutés', 'facture.frais_retires': 'Frais de service retirés',
+    'client.suppression_demandee': 'Compte supprimé par le client',
+    'paiement.enregistrement': 'Paiement encaissé', 'paiement.annulation': 'Annulation d’un paiement',
+    'paiement.reprise': 'Paiement repris', 'rapport.creation': 'Création d’un rapport',
+    'rapport.modification': 'Modification d’un rapport', 'rapport.suppression': 'Suppression d’un rapport',
+    'notification.preference': 'Préférence de notification', 'notification.regle': 'Règle de notification',
+    'notification.test': 'Essai de notification'
+  };
+  var ENTITES_JOURNAL = { colis: 'Colis', client: 'Client', facture: 'Facture', paiement: 'Paiement',
+                          rapport: 'Rapport', notification: 'Notification' };
+  var CHAMPS_JOURNAL = {
+    statut: 'Statut', montant_usd: 'Montant', montant_paye_usd: 'Payé', frais_service_usd: 'Frais de service',
+    prix_usd: 'Prix', poids_lb: 'Poids', tarif_lb_usd: 'Tarif', numero: 'N°', role: 'Rôle', code: 'Code', champs: 'Champs',
+    moyen: 'Moyen', nom: 'Nom', type: 'Type', periode: 'Période', debut: 'Début', fin: 'Fin', filtres: 'Filtres',
+    sections: 'Données', role_createur: 'Rôle', cree_le: 'Créé le', reference: 'Référence', paye_le: 'Payé le',
+    origine: 'Origine', payee_le: 'Payée le', service: 'Mode', pays_destination: 'Pays', suivi_transporteur: 'Suivi vendeur',
+    description: 'Description', expediteur: 'Expéditeur', destination: 'Destination', recu_le: 'Reçu le', lieu: 'Lieu',
+    note: 'Note', email: 'E-mail', motif: 'Motif', facture: 'Facture', adresse_livraison: 'Adresse de livraison',
+    prix_fixe_usd: 'Prix fixé à la main', echeance_le: 'À payer avant le'
+  };
+  // Les identifiants internes ne disent rien à un lecteur : le numéro, le code ou le nom suffisent
+  var CACHES_JOURNAL = /(^|_)id$|^cree_par$|^cle_idempotence$/;
+  // Une page de lignes à l'écran ; jusqu'à 2 000 par partie dans le document imprimé
+  var LIGNES_ECRAN = 25, LIGNES_DOCUMENT = 2000;
+
+  var formFiltresRapport = $('[data-rapport-filtres]');
+  var zoneResultat = $('[data-rapport-resultat]');
+  var corpsRapports = $('[data-lignes="rapports"]');
+  var dlgRapport = $('[data-dialogue="rapport"]');
+  var formRapport = $('form[data-form="rapport"]', dlgRapport);
+  var dlgSupprimerRapport = $('[data-dialogue="supprimer-rapport"]');
+  var etatRapports = { liste: { page: 0, parPage: 25, recherche: '' }, charge: false, rapport: null, definition: null,
+                       donnees: null, demande: 0, edite: null, aSupprimer: null };
+
+  // « 2026-09-12T14:05:00Z » → « 12 sept. 2026, 10:05 », à l'heure de Santo Domingo
+  function dateRapport(iso, avecHeure) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var o = { timeZone: 'America/Santo_Domingo', day: 'numeric', month: 'short', year: 'numeric' };
+    if (avecHeure) { o.hour = '2-digit'; o.minute = '2-digit'; o.hourCycle = 'h23'; }
+    try { return new Intl.DateTimeFormat('fr-FR', o).format(d); } catch (e) { return O.date(iso, avecHeure); }
+  }
+  function heureRapport(iso) {
+    if (!iso) return '';
+    try {
+      return new Intl.DateTimeFormat('fr-FR', { timeZone: 'America/Santo_Domingo', hour: '2-digit', minute: '2-digit',
+                                                hourCycle: 'h23' }).format(new Date(iso));
+    } catch (e) { return heure(iso); }
+  }
+  function periodeRapportTexte(r) {
+    return r.debut === r.fin ? 'Le ' + jourLisible(r.debut) : 'Du ' + jourLisible(r.debut) + ' au ' + jourLisible(r.fin);
+  }
+  function traduitRapport(t) {
+    return window.GoshipLangueTableau ? window.GoshipLangueTableau.traduire(t) : t;
+  }
+  function sectionsDe(def) {
+    return def.sections && def.sections.length ? def.sections : (SECTIONS_DU_TYPE[def.type] || ORDRE_RAPPORT);
+  }
+  // Ce que la base reçoit : un rapport enregistré garde SES dates (un « Aujourd'hui » du 3
+  // reste le 3), un aperçu suit sa période
+  function parametresRapport(def, rapport, limite) {
+    var p = { type: def.type || 'complet', filtres: def.filtres || {}, sections: sectionsDe(def), limite: limite };
+    if (rapport) { p.periode = 'personnalise'; p.debut = rapport.debut; p.fin = rapport.fin; }
+    else { p.periode = def.periode; p.debut = def.debut || null; p.fin = def.fin || null; }
+    return p;
+  }
+
+  // Le champ « date » suit le type de période : le jour, la semaine, le mois… qui la contient
+  function majChampsPeriode(form, libelle) {
+    var p = form.elements.periode.value;
+    var champDebut = $('[data-rapport-debut-champ]', form), champFin = $('[data-rapport-fin-champ]', form);
+    if (champDebut) champDebut.hidden = p === 'aujourdhui';
+    if (champFin) champFin.hidden = p !== 'personnalise';
+    if (libelle) libelle.textContent = REFERENCES_RAPPORT[p] || 'Du';
+  }
+  function definitionDuFormulaire(form) {
+    var f = form.elements;
+    var def = { periode: f.periode.value, debut: f.debut.value || null, fin: f.fin.value || null, type: f.type.value,
+                filtres: {} };
+    if (f.statut_colis.value) def.filtres.statut_colis = f.statut_colis.value;
+    if (f.etat_facture.value) def.filtres.etat_facture = f.etat_facture.value;
+    if (def.periode !== 'personnalise') def.fin = null;
+    if (def.periode === 'aujourdhui') def.debut = null;
+    return def;
+  }
+  // Même règle que la base (rapport_bornes) pour le message immédiat ; c'est la base qui décide
+  function bornesAvant(def) {
+    try { return O.bornesRapport(def.periode, def.debut, def.fin); } catch (e) { return { erreur: messageErreur(e) }; }
+  }
+
+  function montrerDatesFiltres() {
+    var b = bornesAvant(definitionDuFormulaire(formFiltresRapport));
+    $('[data-rapport-dates]').textContent = b.erreur ? '' : periodeRapportTexte(b) + ' (jours de Santo Domingo)';
+  }
+  formFiltresRapport.elements.periode.addEventListener('change', function () {
+    majChampsPeriode(formFiltresRapport, $('[data-rapport-debut-libelle]'));
+    montrerDatesFiltres();
+  });
+  ['debut', 'fin'].forEach(function (n) { formFiltresRapport.elements[n].addEventListener('change', montrerDatesFiltres); });
+  formFiltresRapport.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var def = definitionDuFormulaire(formFiltresRapport);
+    var b = bornesAvant(def);
+    if (b.erreur) { messageRapport(b.erreur); return; }
+    afficherRapport(def, null);
+  });
+
+  function messageRapport(texte) {
+    var m = $('[data-rapport-message]');
+    m.textContent = texte || '';
+    m.hidden = !texte;
+  }
+
+  function ouvrirVueRapports() {
+    if (!etatRapports.charge) {
+      etatRapports.charge = true;
+      formFiltresRapport.elements.debut.value = O.aujourdhui();
+      majChampsPeriode(formFiltresRapport, $('[data-rapport-debut-libelle]'));
+      montrerDatesFiltres();
+    }
+    chargerRapports();
+    if (peut('audit_logs.view')) chargerModifs();
+  }
+
+  /* L'historique des modifications (audit_logs.view) ----------------------------------
+     Les colis et les factures : qui a changé quoi, quand, l'avant, l'après et le motif
+     (historique_modifications, outils/supabase-corrections.sql). La section n'apparaît
+     qu'aux administrateurs, et la base refuse la lecture à tout autre compte. Le
+     client, lui, ne voit jamais ce journal : son espace lit les colis et les factures
+     tels qu'ils sont maintenant. */
+  var formModifs = $('[data-modifs-filtres]');
+  var corpsModifs = $('[data-lignes="modifs"]');
+  var etatModifs = { page: 0, parPage: 25, auteurs: false };
+
+  // Un jour du calendrier de Santo Domingo (UTC−4, sans heure d'été) en instant :
+  // « 2026-10-12 » → minuit là-bas ; la fin est exclue, d'où le lendemain
+  function instantSD(jour, lendemain) {
+    if (!jour) return null;
+    var d = new Date(jour + 'T00:00:00-04:00');
+    if (isNaN(d.getTime())) return null;
+    if (lendemain) d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString();
+  }
+
+  function chargerModifs() {
+    var f = formModifs.elements;
+    var message = $('[data-modifs-message]');
+    message.hidden = true;
+    return API.admin.historiqueModifications({
+      recherche: f.recherche.value.trim(), debut: instantSD(f.debut.value), fin: instantSD(f.fin.value, true),
+      entite: f.entite.value, auteur: f.auteur.value || null, page: etatModifs.page, parPage: etatModifs.parPage
+    }).then(afficherModifs).catch(function (err) {
+      corpsModifs.textContent = '';
+      message.textContent = messageErreur(err);
+      message.hidden = false;
+    });
+  }
+
+  function celluleModif(tr, libelle, contenu) {
+    var td = el('td', 'gs-modifs__cellule');
+    td.setAttribute('data-libelle', libelle);
+    (Array.isArray(contenu) ? contenu : [contenu]).forEach(function (ligne) {
+      if (ligne && ligne.nodeType) td.appendChild(ligne);
+      else if (ligne) td.appendChild(el('span', 'gs-modifs__ligne', ligne));
+    });
+    tr.appendChild(td);
+    return td;
+  }
+
+  function afficherModifs(r) {
+    var choix = formModifs.elements.auteur;
+    if (!etatModifs.auteurs) {
+      etatModifs.auteurs = true;
+      (r.auteurs || []).forEach(function (a) {
+        choix.add(new Option((a.nom || 'Compte supprimé') + (a.role ? ' · ' + (ROLES[a.role] || a.role) : ''), a.id));
+      });
+    }
+    corpsModifs.textContent = '';
+    (r.lignes || []).forEach(function (j) {
+      var tr = el('tr');
+      celluleModif(tr, 'Date', dateRapport(j.cree_le, true));
+      // Le numéro mène à toutes les modifications de ce colis ou de cette facture
+      var objet = el('button', 'gs-lien-bouton', (ENTITES_JOURNAL[j.entite] || j.entite) + ' ' + (j.reference || ''));
+      objet.type = 'button';
+      objet.title = 'Toutes les modifications de cet objet';
+      objet.addEventListener('click', function () {
+        formModifs.elements.recherche.value = j.reference || '';
+        formModifs.elements.entite.value = j.entite;
+        etatModifs.page = 0;
+        chargerModifs();
+      });
+      celluleModif(tr, 'Objet', objet).setAttribute('data-fiche-ignorer', '');
+      celluleModif(tr, 'Action', ACTIONS_JOURNAL[j.action] || j.action);
+      celluleModif(tr, 'Par', [j.auteur || '—', j.role_auteur ? ROLES[j.role_auteur] || j.role_auteur : '']);
+      celluleModif(tr, 'Avant', valeursJournal(j.avant));
+      celluleModif(tr, 'Après', valeursJournal(j.apres));
+      celluleModif(tr, 'Motif', j.motif || '—');
+      corpsModifs.appendChild(tr);
+    });
+    var vide = $('[data-vide="modifs"]');
+    vide.textContent = 'Aucune modification pour ces critères.';
+    vide.hidden = (r.lignes || []).length > 0;
+    paginer('modifs', etatModifs, r.total, chargerModifs);
+  }
+
+  formModifs.addEventListener('submit', function (e) {
+    e.preventDefault();
+    etatModifs.page = 0;
+    chargerModifs();
+  });
+
+  /* La liste des rapports enregistrés ------------------------------------------------- */
+  var rechercheRapports = $('[data-recherche="rapports"]');
+  var minuteurRechercheRapports = null;
+  rechercheRapports.addEventListener('input', function () {
+    clearTimeout(minuteurRechercheRapports);
+    minuteurRechercheRapports = setTimeout(function () {
+      etatRapports.liste.recherche = rechercheRapports.value.trim();
+      etatRapports.liste.page = 0;
+      chargerRapports();
+    }, 300);
+  });
+
+  function chargerRapports() {
+    var p = etatRapports.liste;
+    return API.admin.rapports({ recherche: p.recherche, page: p.page, parPage: p.parPage }).then(function (r) {
+      afficherListeRapports(r.lignes || [], r.total || 0);
+    }).catch(function (err) {
+      corpsRapports.textContent = '';
+      var vide = $('[data-vide="rapports"]');
+      vide.textContent = messageErreur(err);
+      vide.hidden = false;
+    });
+  }
+
+  function badgeRapport(r) {
+    return el('span', 'gs-badge gs-badge--' + (r.statut === 'clos' ? 'livre' : 'disponible'),
+              r.statut === 'clos' ? 'Période close' : 'Période en cours');
+  }
+
+  // Un petit bouton d'action de la ligne (icône + texte court)
+  function actionRapport(texte, titre, action, classe) {
+    var b = el('button', 'gs-lien-bouton gs-rapports__action' + (classe ? ' ' + classe : ''), texte);
+    b.type = 'button';
+    b.title = titre;
+    b.setAttribute('aria-label', titre);
+    b.addEventListener('click', function (e) { e.stopPropagation(); action(b); });
+    return b;
+  }
+
+  function actionsDuRapport(r, conteneur, dansFiche) {
+    var liste = [
+      ['Voir', 'Voir le rapport ' + r.nom, function () { if (dansFiche) dlgFiche.close(); afficherRapport(r, r); }],
+      ['Détails', 'Détails du rapport ' + r.nom, function () { ouvrirFicheRapport(r); }],
+      ['Imprimer', 'Imprimer le rapport ' + r.nom, function (b) { imprimerRapport(r, r, b, false); }],
+      ['PDF', 'PDF du rapport ' + r.nom, function (b) { imprimerRapport(r, r, b, true); }]
+    ];
+    if (peut('reports.edit')) liste.push(['Modifier', 'Modifier le rapport ' + r.nom, function () { if (dansFiche) dlgFiche.close(); ouvrirFormulaireRapport(r); }]);
+    if (peut('reports.delete')) liste.push(['Supprimer', 'Supprimer le rapport ' + r.nom, function () { if (dansFiche) dlgFiche.close(); demanderSuppressionRapport(r); }, 'gs-lien-bouton--danger']);
+    liste.forEach(function (a) {
+      if (dansFiche && a[0] === 'Détails') return;
+      conteneur.appendChild(actionRapport(a[0], a[1], a[2], a[3]));
+    });
+  }
+
+  function afficherListeRapports(lignes, total) {
+    corpsRapports.textContent = '';
+    var vide = $('[data-vide="rapports"]');
+    vide.textContent = etatRapports.liste.recherche ? 'Aucun rapport ne porte ce nom.'
+      : 'Aucun rapport enregistré. Choisissez une période, affichez-la, puis enregistrez-la ; ou « Créer un rapport ».';
+    vide.hidden = lignes.length > 0;
+    lignes.forEach(function (r) {
+      var tr = el('tr');
+      FICHES.set(tr, { rapport: r });
+      var nom = el('td');
+      nom.setAttribute('data-libelle', 'Rapport');
+      nom.appendChild(el('strong', '', r.nom));
+      tr.appendChild(nom);
+      var type = el('td', '', TYPES_RAPPORT[r.type] || r.type);
+      type.setAttribute('data-libelle', 'Type');
+      tr.appendChild(type);
+      var per = el('td');
+      per.setAttribute('data-libelle', 'Période');
+      per.appendChild(el('span', '', PERIODES_RAPPORT[r.periode] || r.periode));
+      per.appendChild(el('span', 'gs-cellule-sous', periodeRapportTexte(r)));
+      tr.appendChild(per);
+      var par = el('td');
+      par.setAttribute('data-libelle', 'Créé par');
+      par.appendChild(el('span', '', r.cree_par_nom || '—'));
+      if (r.role_createur) par.appendChild(el('span', 'gs-cellule-sous', ROLES[r.role_createur] || r.role_createur));
+      tr.appendChild(par);
+      var cree = el('td', '', dateRapport(r.cree_le, true));
+      cree.setAttribute('data-libelle', 'Date de création');
+      tr.appendChild(cree);
+      var st = el('td');
+      st.setAttribute('data-libelle', 'Statut');
+      st.appendChild(badgeRapport(r));
+      tr.appendChild(st);
+      var act = el('td', 'gs-rapports__actions');
+      act.setAttribute('data-libelle', 'Actions');
+      act.setAttribute('data-fiche-ignorer', '');
+      actionsDuRapport(r, act, false);
+      tr.appendChild(act);
+      corpsRapports.appendChild(tr);
+    });
+    paginer('rapports', etatRapports.liste, total, chargerRapports);
+  }
+
+  /* Le rapport affiché : cartes, puis chaque partie --------------------------------------- */
+  function afficherRapport(def, rapport) {
+    messageRapport('');
+    var demande = ++etatRapports.demande;
+    etatRapports.rapport = rapport;
+    etatRapports.definition = { nom: def.nom || '', type: def.type || 'complet', periode: def.periode, debut: def.debut,
+                                fin: def.fin, filtres: def.filtres || {}, sections: sectionsDe(def) };
+    var bouton = $('[data-rapport-afficher]');
+    var fin = attente(bouton, 'Chargement…');
+    etatRapports.parametres = parametresRapport(etatRapports.definition, rapport, LIGNES_ECRAN);
+    return API.admin.donneesRapport(etatRapports.parametres).then(function (d) {
+      if (demande !== etatRapports.demande) return;
+      etatRapports.donnees = d;
+      dessinerRapport(d);
+    }).catch(function (err) {
+      if (demande !== etatRapports.demande) return;
+      messageRapport(messageErreur(err));
+    }).then(fin);
+  }
+
+  function carteRapport(zone, nomPicto, teinte, libelle, valeur, sous) {
+    var c = el('div', 'gs-kpi');
+    if (nomPicto && PICTOS[nomPicto]) {
+      var p = el('span', 'gs-kpi__picto gs-kpi__picto--' + (teinte || 'bleu'));
+      p.innerHTML = picto(nomPicto);
+      c.appendChild(p);
+    }
+    c.appendChild(el('span', 'gs-kpi__libelle', libelle));
+    c.appendChild(el('strong', 'gs-kpi__valeur', valeur));
+    if (sous) c.appendChild(el('span', 'gs-kpi__sous', sous));
+    zone.appendChild(c);
+  }
+
+  // Les cartes : ce que les parties du rapport comptent, tel que la base l'a compté
+  function cartesRapport(zone, d) {
+    var s = d.statistiques || {}, sec = d.sections || [];
+    var a = function (x) { return sec.indexOf(x) >= 0; };
+    if (a('colis') || a('evenements')) {
+      var c = s.colis || {};
+      carteRapport(zone, 'colis', 'bleu', 'Colis', entier(c.total), [
+        pluriel(c.attente, 'en attente', 'en attente'), pluriel(c.transit, 'en transit', 'en transit'),
+        pluriel(c.disponible, 'disponible', 'disponibles'), pluriel(c.livre, 'livré', 'livrés'),
+        pluriel(c.incident, 'action requise', 'actions requises'), pluriel(c.supprimes, 'supprimé', 'supprimés')].join(' · '));
+    }
+    if (a('finances') || a('factures') || a('paiements')) {
+      var f = s.factures || {}, p = s.paiements || {};
+      carteRapport(zone, 'facture', 'bleu', 'Factures', entier(f.total), [
+        pluriel(f.payees, 'payée', 'payées'), pluriel(f.impayees, 'impayée', 'impayées'),
+        pluriel(f.annulees, 'annulée', 'annulées')].join(' · '));
+      carteRapport(zone, 'argent', 'vert', 'Payé', argent(f.montant_paye), 'Facturé : ' + argent(f.montant_facture));
+      carteRapport(zone, 'horloge', 'orange', 'Impayé', argent(f.montant_impaye), pluriel(f.impayees, 'facture', 'factures'));
+      carteRapport(zone, 'alerte', 'rouge', 'Annulé', entier(f.annulees), argent(f.montant_annule));
+      carteRapport(zone, 'alerte', 'marine', 'Supprimées', entier(f.supprimees), argent(f.montant_supprime));
+      carteRapport(zone, 'portefeuille', 'vert', 'Encaissé pendant la période', argent(p.encaisse),
+                   pluriel(p.nombre, 'paiement', 'paiements'));
+    }
+    if (a('clients')) {
+      var cl = s.clients || {};
+      carteRapport(zone, 'clients', 'bleu', 'Clients actifs', entier(cl.actifs), pluriel(cl.nouveaux, 'nouveau', 'nouveaux'));
+    }
+    if (a('activite')) {
+      var ac = s.activite || {};
+      carteRapport(zone, 'scan', 'bleu', 'Activité', entier(ac.total), pluriel(ac.suppressions, 'suppression', 'suppressions'));
+    }
+  }
+
+  // Les colonnes de chaque partie : un titre et la valeur d'une ligne (texte), les mêmes à
+  // l'écran et sur papier
+  function valeurJournal(k, x) {
+    if (x == null || x === '') return '—';
+    if (k === 'statut') return STATUTS[x] || ETATS_FACTURE[x] || x;
+    if (/_usd$/.test(k)) return argent(x);
+    if (k === 'role' || k === 'role_createur') return ROLES[x] || x;
+    if (k === 'moyen') return MOYENS[x] || x;
+    if (k === 'origine') return ORIGINES_PAIEMENT[x] || x;
+    if (k === 'service') return SERVICES[x] || x;
+    if (k === 'pays_destination') return PAYS[x] || x;
+    if (k === 'type') return TYPES_RAPPORT[x] || x;
+    if (k === 'periode') return PERIODES_RAPPORT[x] || x;
+    if (k === 'poids_lb') return String(x).replace('.', ',') + ' lb';
+    if (k === 'sections' && Array.isArray(x)) return x.map(function (s) { return SECTIONS_RAPPORT[s] || s; }).join(', ');
+    if (k === 'filtres' && typeof x === 'object') {
+      return [STATUTS_RAPPORT[x.statut_colis], ETATS_RAPPORT[x.etat_facture]].filter(Boolean).join(', ') || 'Tous';
+    }
+    if (k === 'debut' || k === 'fin' || k === 'echeance_le') return jourLisible(x);
+    if (/_le$/.test(k)) return dateRapport(x, true);
+    if (Array.isArray(x)) return x.join(', ');
+    if (typeof x === 'object') return JSON.stringify(x);
+    return String(x);
+  }
+  // L'avant ou l'après d'une ligne du journal : « Libellé : valeur », une par ligne
+  function valeursJournal(v) {
+    if (!v || typeof v !== 'object') return '';
+    return Object.keys(v).filter(function (k) { return !CACHES_JOURNAL.test(k); }).map(function (k) {
+      return (CHAMPS_JOURNAL[k] || k) + ' : ' + valeurJournal(k, v[k]);
+    });
+  }
+
+  var COLONNES_RAPPORT = {
+    colis: [
+      ['N° colis', function (l) { return l.numero; }],
+      ['Reçu le', function (l) { return dateRapport(l.recu_le, true); }],
+      ['Client', function (l) { return [l.client_nom, l.client_code].filter(Boolean).join(' · ') || '—'; }],
+      ['Expéditeur', function (l) { return l.expediteur || ''; }],
+      ['Description', function (l) { return l.description || ''; }],
+      ['Poids', function (l) { return l.poids_lb != null ? String(l.poids_lb).replace('.', ',') + ' lb' : ''; }],
+      ['Prix', function (l) { return l.prix_usd != null ? argent(l.prix_usd) : ''; }],
+      ['Mode', function (l) { return SERVICES[l.service] || l.service || ''; }],
+      ['Destination', function (l) { return [l.destination, PAYS[l.pays_destination]].filter(Boolean).join(', '); }],
+      ['Statut', function (l) { return STATUTS[l.statut] || l.statut; }],
+      ['Livré le', function (l) { return dateRapport(l.livre_le, true); }],
+      ['Créé par', function (l) { return l.cree_par || ''; }]
+    ],
+    evenements: [
+      ['Date', function (l) { return dateRapport(l.cree_le); }],
+      ['Heure', function (l) { return heureRapport(l.cree_le); }],
+      ['Colis', function (l) { return l.numero; }],
+      ['Événement', function (l) { return libelleEvenement(l.statut, { type_evenement: l.type_evenement, corrige: l.annule }); }],
+      ['Ancien statut', function (l) { return l.statut_precedent ? (STATUTS[l.statut_precedent] || l.statut_precedent) : ''; }],
+      ['Nouveau statut', function (l) { return STATUTS[l.statut] || l.statut; }],
+      ['Lieu', function (l) { return l.lieu || ''; }],
+      ['Utilisateur', function (l) { return l.auteur || ''; }],
+      ['Note', function (l) { return l.note || ''; }]
+    ],
+    factures: [
+      ['N° facture', function (l) { return l.numero; }],
+      ['Émise le', function (l) { return dateRapport(l.cree_le, true); }],
+      ['Client', function (l) { return [l.client_nom, l.client_code].filter(Boolean).join(' · ') || '—'; }],
+      ['Montant', function (l) { return argent(l.montant_usd); }],
+      ['Payé', function (l) { return argent(l.paye); }],
+      ['Solde', function (l) { return argent(l.solde); }],
+      ['État', function (l) { return ETATS_FACTURE[l.etat] || l.etat; }],
+      ['Moyen', function (l) { return MOYENS[l.moyen] || l.moyen || ''; }],
+      ['Annulation', function (l) {
+        return l.statut === 'annulee' ? [dateRapport(l.annulee_le), l.motif_annulation,
+                                         l.remplacee_par ? 'Remplacée par ' + l.remplacee_par : ''].filter(Boolean).join(' · ') : '';
+      }],
+      ['Créée par', function (l) { return l.cree_par || ''; }]
+    ],
+    supprimees: [
+      ['Supprimée le', function (l) { return dateRapport(l.supprimee_le, true); }],
+      ['N° facture', function (l) { return l.numero || '—'; }],
+      ['Montant', function (l) { return l.montant_usd != null ? argent(l.montant_usd) : '—'; }],
+      ['Statut avant', function (l) { return ETATS_FACTURE[l.statut] || l.statut || ''; }],
+      ['Utilisateur', function (l) { return l.auteur || ''; }]
+    ],
+    paiements: [
+      ['Date', function (l) { return dateRapport(l.paye_le, true); }],
+      ['Facture', function (l) { return l.facture_numero || ''; }],
+      ['Client', function (l) { return [l.client_nom, l.client_code].filter(Boolean).join(' · ') || '—'; }],
+      ['Montant', function (l) { return argent(l.montant_usd); }],
+      ['Moyen', function (l) { return MOYENS[l.moyen] || l.moyen || ''; }],
+      ['Référence', function (l) { return l.reference || ''; }],
+      ['Origine', function (l) { return ORIGINES_PAIEMENT[l.origine] || l.origine || ''; }],
+      ['État', function (l) { return l.annule_le ? 'Annulé le ' + dateRapport(l.annule_le) + (l.motif_annulation ? ' · ' + l.motif_annulation : '') : 'Valide'; }],
+      ['Saisi par', function (l) { return l.saisi_par || ''; }]
+    ],
+    clients: [
+      ['Code', function (l) { return l.code || ''; }],
+      ['Nom', function (l) { return l.nom || ''; }],
+      ['Pays / ville', function (l) { return [l.ville, PAYS[l.pays]].filter(Boolean).join(', '); }],
+      ['Inscrit le', function (l) { return dateRapport(l.cree_le) + (l.nouveau ? ' · nouveau' : ''); }],
+      ['Colis', function (l) { return entier(l.colis); }],
+      ['Facturé', function (l) { return argent(l.facture); }],
+      ['Payé', function (l) { return argent(l.paye); }],
+      ['Solde actuel', function (l) { return argent(l.solde); }]
+    ],
+    activite: [
+      ['Date', function (l) { return dateRapport(l.cree_le); }],
+      ['Heure', function (l) { return heureRapport(l.cree_le); }],
+      ['Utilisateur', function (l) { return l.auteur ? l.auteur + (l.auteur_role && ROLES[l.auteur_role] ? ' (' + ROLES[l.auteur_role] + ')' : '') : 'Système'; }],
+      ['Action', function (l) { return ACTIONS_JOURNAL[l.action] || l.action; }],
+      ['Élément', function (l) { return ENTITES_JOURNAL[l.entite] || l.entite; }],
+      ['Référence', function (l) { return l.reference || ''; }],
+      ['Ancienne valeur', function (l) { return valeursJournal(l.avant); }],
+      ['Nouvelle valeur', function (l) { return valeursJournal(l.apres); }]
+    ]
+  };
+  var VIDE_RAPPORT = 'Aucune donnée disponible pour cette période.';
+
+  function tableRapport(cle, lignes, pourPapier) {
+    var cadre = el('div', pourPapier ? 'gs-rapport-doc__cadre' : 'gs-tableau-cadre');
+    var t = el('table', pourPapier ? 'gs-rapport-doc__table' : 'gs-tableau gs-tableau--rapport');
+    var tete = el('thead'), tr = el('tr');
+    COLONNES_RAPPORT[cle].forEach(function (c) {
+      var th = el('th', '', pourPapier ? traduitRapport(c[0]) : c[0]);
+      th.scope = 'col';
+      tr.appendChild(th);
+    });
+    tete.appendChild(tr);
+    t.appendChild(tete);
+    var corps = el('tbody');
+    lignes.forEach(function (l) { corps.appendChild(ligneRapport(cle, l, pourPapier)); });
+    t.appendChild(corps);
+    cadre.appendChild(t);
+    return { cadre: cadre, corps: corps };
+  }
+  function ligneRapport(cle, l, pourPapier) {
+    var tr = el('tr');
+    if (!pourPapier) {
+      // Un colis ou une facture de la liste ouvre sa fiche, comme dans leurs onglets
+      if (cle === 'colis' || cle === 'evenements') FICHES.set(tr, { numero: l.numero });
+      else if (cle === 'factures' && l.id) FICHES.set(tr, { factureId: l.id });
+      else if (cle === 'paiements' && l.facture_id) FICHES.set(tr, { factureId: l.facture_id });
+    }
+    COLONNES_RAPPORT[cle].forEach(function (c) {
+      var v = c[1](l);
+      var td = el('td', '', Array.isArray(v) ? '' : pourPapier ? traduitRapport(v) : v);
+      // Plusieurs valeurs (l'avant et l'après du journal) : une par ligne, chacune traduisible
+      if (Array.isArray(v)) {
+        v.forEach(function (x) { td.appendChild(el('span', 'gs-rapports__valeur', pourPapier ? traduitRapport(x) : x)); });
+      }
+      td.setAttribute('data-libelle', pourPapier ? traduitRapport(c[0]) : c[0]);
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function dessinerRapport(d) {
+    var def = etatRapports.definition, r = etatRapports.rapport;
+    zoneResultat.hidden = false;
+    $('[data-rapport-type]', zoneResultat).textContent = (TYPES_RAPPORT[def.type] || 'Rapport') +
+      ' · ' + (PERIODES_RAPPORT[def.periode] || def.periode);
+    $('[data-rapport-titre]', zoneResultat).textContent = r ? r.nom : 'Aperçu (non enregistré)';
+    $('[data-rapport-periode-texte]', zoneResultat).textContent =
+      periodeRapportTexte(d.periode) + ' (jours de Santo Domingo)' +
+      (d.periode.en_cours ? ' · période en cours : les chiffres peuvent encore changer' : '');
+    $('[data-action="rapport-details"]', zoneResultat).hidden = !r;
+    $('[data-action="rapport-modifier"]', zoneResultat).hidden = !r;
+    $('[data-action="rapport-enregistrer"]', zoneResultat).hidden = !!r;
+    var kpis = $('[data-rapport-kpis]', zoneResultat);
+    kpis.textContent = '';
+    cartesRapport(kpis, d);
+    var zone = $('[data-rapport-sections]', zoneResultat);
+    zone.textContent = '';
+    (d.sections || []).forEach(function (cle) { zone.appendChild(sectionEcran(cle, d)); });
+    if (zoneResultat.scrollIntoView) zoneResultat.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  // Les chiffres de la partie « Statistiques financières » : ceux de la base, en lignes
+  function lignesFinances(d) {
+    var f = (d.statistiques || {}).factures || {}, p = (d.statistiques || {}).paiements || {};
+    return [
+      ['Factures émises', entier(f.total)], ['Payées', entier(f.payees)], ['Impayées', entier(f.impayees)],
+      ['dont en retard', entier(f.en_retard)], ['Annulées', entier(f.annulees)], ['dont regroupées', entier(f.regroupees)],
+      ['Supprimées (hors total)', entier(f.supprimees)],
+      ['Montant facturé (hors annulées)', argent(f.montant_facture)], ['Montant payé', argent(f.montant_paye)],
+      ['Montant impayé', argent(f.montant_impaye)], ['Montant annulé', argent(f.montant_annule)],
+      ['Montant des factures supprimées', argent(f.montant_supprime)],
+      ['Encaissé pendant la période', argent(p.encaisse)], ['Paiements valides', entier(p.nombre)],
+      ['Paiements annulés', entier(p.annules) + ' · ' + argent(p.montant_annule)],
+      ['Restait dû à la fin de la période', argent(p.creances_fin)]
+    ];
+  }
+  function blocFinances(d, pourPapier) {
+    var T = pourPapier ? traduitRapport : function (x) { return x; };
+    var bloc = el('div', pourPapier ? 'gs-rapport-doc__finances' : 'gs-rapports__finances');
+    var dl = el('dl', pourPapier ? 'gs-rapport-doc__chiffres' : 'gs-rapports__chiffres');
+    lignesFinances(d).forEach(function (x) {
+      var ligne = el('div');
+      ligne.appendChild(el('dt', '', T(x[0])));
+      ligne.appendChild(el('dd', '', x[1]));
+      dl.appendChild(ligne);
+    });
+    bloc.appendChild(dl);
+    var moyens = ((d.statistiques || {}).paiements || {}).par_moyen || [];
+    if (moyens.length) {
+      var t = el('table', pourPapier ? 'gs-rapport-doc__table' : 'gs-tableau gs-tableau--rapport');
+      var tr = el('tr');
+      ['Moyen', 'Paiements', 'Montant'].forEach(function (x) { var th = el('th', '', T(x)); th.scope = 'col'; tr.appendChild(th); });
+      var tete = el('thead');
+      tete.appendChild(tr);
+      t.appendChild(tete);
+      var corps = el('tbody');
+      moyens.forEach(function (m) {
+        var l = el('tr');
+        [T(MOYENS[m.moyen] || m.moyen), entier(m.nombre), argent(m.montant)].forEach(function (v) { l.appendChild(el('td', '', v)); });
+        corps.appendChild(l);
+      });
+      t.appendChild(corps);
+      var moyensBloc = el('div');
+      moyensBloc.appendChild(el('p', pourPapier ? 'gs-rapport-doc__sous-titre' : 'gs-rapports__sous-titre', T('Encaissé par moyen de paiement')));
+      var cadre = el('div', pourPapier ? 'gs-rapport-doc__cadre' : 'gs-tableau-cadre');
+      cadre.appendChild(t);
+      moyensBloc.appendChild(cadre);
+      bloc.appendChild(moyensBloc);
+    }
+    return bloc;
+  }
+
+  // Une partie à l'écran : son titre, son total, une page de lignes et sa pagination
+  // (les pages suivantes se lisent dans la base, partie seule)
+  function sectionEcran(cle, d) {
+    var s = el('section', 'gs-rapports__partie');
+    var titre = el('h4', 'gs-rapports__partie-titre', SECTIONS_RAPPORT[cle] || cle);
+    s.appendChild(titre);
+    if (cle === 'finances') { s.appendChild(blocFinances(d, false)); return s; }
+    var partie = (d.donnees || {})[cle] || { total: 0, lignes: [] };
+    titre.appendChild(el('span', 'gs-rapports__total', pluriel(partie.total, 'ligne', 'lignes')));
+    var vide = el('p', 'gs-admin-vide', VIDE_RAPPORT);
+    vide.hidden = partie.total > 0;
+    s.appendChild(vide);
+    var t = tableRapport(cle, partie.lignes || [], false);
+    t.cadre.hidden = !partie.total;
+    s.appendChild(t.cadre);
+    var pag = el('div', 'gs-pagination');
+    s.appendChild(pag);
+    var p = { page: 0, parPage: LIGNES_ECRAN };
+    function recharger() {
+      var params = Object.assign({}, etatRapports.parametres, { section: cle, limite: p.parPage, decalage: p.page * p.parPage });
+      var demande = etatRapports.demande;
+      API.admin.donneesRapport(params).then(function (r) {
+        if (demande !== etatRapports.demande) return;
+        var x = (r.donnees || {})[cle] || { total: 0, lignes: [] };
+        t.corps.textContent = '';
+        x.lignes.forEach(function (l) { t.corps.appendChild(ligneRapport(cle, l, false)); });
+        paginer(pag, p, x.total, recharger);
+      }).catch(function (err) { toast(messageErreur(err), true); });
+    }
+    paginer(pag, p, partie.total, recharger);
+    if (cle === 'factures' && partie.supprimees && partie.supprimees.total) {
+      s.appendChild(el('h5', 'gs-rapports__sous-titre', 'Factures supprimées (hors total)'));
+      s.appendChild(tableRapport('supprimees', partie.supprimees.lignes, false).cadre);
+    }
+    return s;
+  }
+
+  $('[data-action="rapport-fermer"]').addEventListener('click', function () {
+    zoneResultat.hidden = true;
+    etatRapports.demande++;
+    etatRapports.rapport = null;
+  });
+  $('[data-action="rapport-enregistrer"]').addEventListener('click', function () {
+    ouvrirFormulaireRapport(null, etatRapports.definition);
+  });
+  $('[data-action="rapport-details"]').addEventListener('click', function () {
+    if (etatRapports.rapport) ouvrirFicheRapport(etatRapports.rapport);
+  });
+  $('[data-action="rapport-modifier"]').addEventListener('click', function () {
+    if (etatRapports.rapport) ouvrirFormulaireRapport(etatRapports.rapport);
+  });
+  $('[data-action="rapport-imprimer"]').addEventListener('click', function () {
+    imprimerRapport(etatRapports.definition, etatRapports.rapport, this, false);
+  });
+  $('[data-action="rapport-pdf"]').addEventListener('click', function () {
+    imprimerRapport(etatRapports.definition, etatRapports.rapport, this, true);
+  });
+
+  /* Créer, modifier ------------------------------------------------------------------ */
+  function nomProposeRapport(def) {
+    var b = bornesAvant(def);
+    if (b.erreur) return '';
+    var mois = function (j) {
+      return ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre',
+              'Novembre', 'Décembre'][Number(j.slice(5, 7)) - 1] + ' ' + j.slice(0, 4);
+    };
+    var quoi = def.periode === 'mensuel' ? 'Rapport mensuel - ' + mois(b.debut)
+      : def.periode === 'annuel' ? 'Rapport annuel - ' + b.debut.slice(0, 4)
+      : def.periode === 'trimestriel' ? 'Rapport trimestriel - T' + (Math.floor((Number(b.debut.slice(5, 7)) - 1) / 3) + 1) + ' ' + b.debut.slice(0, 4)
+      : def.periode === 'hebdomadaire' ? 'Rapport hebdomadaire - ' + jourLisible(b.debut)
+      : def.periode === 'personnalise' ? 'Rapport - ' + jourLisible(b.debut) + ' au ' + jourLisible(b.fin)
+      : 'Rapport journalier - ' + jourLisible(b.debut);
+    return quoi;
+  }
+  function cocherSections(liste) {
+    $$('input[name="sections"]', formRapport).forEach(function (c) { c.checked = liste.indexOf(c.value) >= 0; });
+  }
+  function majDatesFormulaire(normaliser) {
+    var f = formRapport.elements, p = f.periode.value;
+    f.debut.disabled = p === 'aujourdhui';
+    f.fin.disabled = p !== 'personnalise';
+    var aide = $('[data-rapport-dlg-dates]', formRapport);
+    var b = bornesAvant({ periode: p, debut: f.debut.value || null, fin: p === 'personnalise' ? f.fin.value || null : null });
+    if (b.erreur) { aide.textContent = b.erreur; return; }
+    // Hors période personnalisée, la date choisie est ramenée au début de son jour, sa
+    // semaine, son mois… et la fin suit
+    if (normaliser && p !== 'personnalise') { f.debut.value = b.debut; f.fin.value = b.fin; }
+    aide.textContent = periodeRapportTexte(b) + ' (jours de Santo Domingo)';
+  }
+  formRapport.elements.periode.addEventListener('change', function () { majDatesFormulaire(true); });
+  formRapport.elements.debut.addEventListener('change', function () { majDatesFormulaire(true); });
+  formRapport.elements.fin.addEventListener('change', function () { majDatesFormulaire(false); });
+  formRapport.elements.type.addEventListener('change', function () {
+    cocherSections(SECTIONS_DU_TYPE[formRapport.elements.type.value] || ORDRE_RAPPORT);
+  });
+
+  function ouvrirFormulaireRapport(rapport, depart) {
+    etatRapports.edite = rapport || null;
+    var def = rapport || depart || definitionDuFormulaire(formFiltresRapport);
+    var f = formRapport.elements;
+    formRapport.reset();
+    erreurFormulaire(formRapport, '');
+    $('[data-rapport-dlg-titre]', formRapport).textContent = rapport ? 'Modifier le rapport' : 'Créer un rapport';
+    $('[data-rapport-dlg-valider]', formRapport).textContent = rapport ? 'Enregistrer les modifications' : 'Générer le rapport';
+    f.type.value = def.type || 'complet';
+    f.periode.value = def.periode || 'mensuel';
+    var b = bornesAvant(def);
+    f.debut.value = rapport ? rapport.debut : (b.debut || def.debut || O.aujourdhui());
+    f.fin.value = rapport ? rapport.fin : (b.fin || def.fin || '');
+    f.statut_colis.value = (def.filtres || {}).statut_colis || '';
+    f.etat_facture.value = (def.filtres || {}).etat_facture || '';
+    cocherSections(sectionsDe(def));
+    majDatesFormulaire(!rapport);
+    f.nom.value = rapport ? rapport.nom : nomProposeRapport(def);
+    dlgRapport.showModal();
+    f.nom.focus();
+  }
+  $('[data-action="rapport-creer"]').addEventListener('click', function () { ouvrirFormulaireRapport(null); });
+
+  formRapport.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = formRapport.elements;
+    var def = { nom: f.nom.value.trim(), type: f.type.value, periode: f.periode.value,
+                debut: f.periode.value === 'aujourdhui' ? null : f.debut.value || null,
+                fin: f.periode.value === 'personnalise' ? f.fin.value || null : null,
+                filtres: {}, sections: $$('input[name="sections"]:checked', formRapport).map(function (c) { return c.value; }) };
+    if (f.statut_colis.value) def.filtres.statut_colis = f.statut_colis.value;
+    if (f.etat_facture.value) def.filtres.etat_facture = f.etat_facture.value;
+    if (!def.nom) { erreurFormulaire(formRapport, 'Donnez un nom au rapport.'); f.nom.focus(); return; }
+    if (!def.sections.length) { erreurFormulaire(formRapport, 'Choisissez au moins une donnée à inclure.'); return; }
+    var b = bornesAvant(def);
+    if (b.erreur) { erreurFormulaire(formRapport, b.erreur); return; }
+    erreurFormulaire(formRapport, '');
+    var edite = etatRapports.edite;
+    var fin = attente($('[data-rapport-dlg-valider]', formRapport), edite ? 'Enregistrement…' : 'Génération…');
+    (edite ? API.admin.modifierRapport(edite.id, def) : API.admin.creerRapport(def)).then(function (r) {
+      dlgRapport.close();
+      toast(edite ? 'Rapport modifié.' : 'Rapport enregistré.');
+      chargerRapports();
+      return afficherRapport(r, r);
+    }).catch(function (err) {
+      erreurFormulaire(formRapport, messageErreur(err));
+    }).then(fin);
+  });
+
+  /* Supprimer : le rapport enregistré seulement -------------------------------------- */
+  var formSupprimerRapport = $('form[data-form="supprimer-rapport"]', dlgSupprimerRapport);
+  function demanderSuppressionRapport(r) {
+    etatRapports.aSupprimer = r;
+    erreurFormulaire(formSupprimerRapport, '');
+    $('[data-supprimer-rapport-nom]', dlgSupprimerRapport).textContent = r.nom;
+    dlgSupprimerRapport.showModal();
+    $('[data-action="fermer"].gs-bouton', dlgSupprimerRapport).focus();
+  }
+  formSupprimerRapport.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var r = etatRapports.aSupprimer;
+    if (!r) return;
+    var fin = attente($('[data-supprimer-rapport-valider]', formSupprimerRapport), 'Suppression…');
+    API.admin.supprimerRapport(r.id).then(function () {
+      dlgSupprimerRapport.close();
+      toast('Rapport supprimé. Les colis, factures et paiements restent intacts.');
+      if (etatRapports.rapport && etatRapports.rapport.id === r.id) {
+        zoneResultat.hidden = true;
+        etatRapports.rapport = null;
+      }
+      chargerRapports();
+    }).catch(function (err) {
+      erreurFormulaire(formSupprimerRapport, messageErreur(err));
+    }).then(fin);
+  });
+
+  /* Les détails : la fiche du rapport (tout ce qui sert à le générer) ----------------- */
+  function ouvrirFicheRapport(r) {
+    preparerFiche('Rapport', r.nom, periodeRapportTexte(r) + ' (jours de Santo Domingo)', badgeRapport(r));
+    sectionFiche('Rapport');
+    champFiche('Type', TYPES_RAPPORT[r.type] || r.type);
+    champFiche('Période', PERIODES_RAPPORT[r.periode] || r.periode);
+    champFiche('Du', jourLisible(r.debut));
+    champFiche('Au', jourLisible(r.fin));
+    sectionFiche('Filtres');
+    champFiche('Statut du colis', STATUTS_RAPPORT[(r.filtres || {}).statut_colis] || 'Tous');
+    champFiche('Paiement / facture', ETATS_RAPPORT[(r.filtres || {}).etat_facture] || 'Tous');
+    sectionFiche('Données incluses');
+    champFiche('Données', (r.sections || []).map(function (s) { return SECTIONS_RAPPORT[s] || s; }), true);
+    sectionFiche('Création');
+    champFiche('Créé par', [r.cree_par_nom || '—', ROLES[r.role_createur] || r.role_createur]);
+    champFiche('Créé le', dateRapport(r.cree_le, true));
+    if (r.modifie_le) champFiche('Modifié le', [dateRapport(r.modifie_le, true), r.modifie_par_nom]);
+    var stats = sectionFiche('Statistiques', true);
+    var demande = ficheDemande;
+    var attenteStats = el('p', 'gs-fiche__attente', 'Chargement…');
+    stats.appendChild(attenteStats);
+    API.admin.donneesRapport({ periode: 'personnalise', debut: r.debut, fin: r.fin, type: r.type, filtres: r.filtres,
+                               sections: r.sections, limite: 1 }).then(function (d) {
+      if (demande !== ficheDemande) return;
+      attenteStats.remove();
+      var grille = $('dl', stats);
+      var s = d.statistiques || {};
+      var ajout = function (libelle, valeur) {
+        var bloc = el('div', 'gs-fiche__champ');
+        bloc.appendChild(el('dt', '', libelle));
+        var dd = el('dd');
+        dd.appendChild(el('span', 'gs-fiche__valeur', valeur));
+        bloc.appendChild(dd);
+        grille.appendChild(bloc);
+      };
+      ajout('Colis', entier((s.colis || {}).total));
+      ajout('Factures', entier((s.factures || {}).total));
+      ajout('Payé', argent((s.factures || {}).montant_paye));
+      ajout('Impayé', argent((s.factures || {}).montant_impaye));
+      ajout('Annulé', argent((s.factures || {}).montant_annule));
+      ajout('Encaissé pendant la période', argent((s.paiements || {}).encaisse));
+      ajout('Clients actifs', entier((s.clients || {}).actifs));
+      ajout('Activité', entier((s.activite || {}).total));
+      stats.appendChild(el('p', 'gs-fiche__attente', 'Calculé le ' + dateRapport(d.genere_le, true) + ', sur les données actuelles.'));
+    }).catch(function (err) {
+      if (demande === ficheDemande) attenteStats.textContent = messageErreur(err);
+    });
+    actionsDuRapport(r, actionsFiche, true);
+    $$('.gs-rapports__action', actionsFiche).forEach(function (b, i) {
+      b.className = 'gs-bouton ' + (b.classList.contains('gs-lien-bouton--danger') ? 'gs-bouton--danger'
+        : i === 0 ? 'gs-bouton--plein' : 'gs-bouton--contour');
+    });
+    montrerFiche();
+  }
+
+  /* Le document imprimé (A4) : en-tête au logo, cartes, parties, pied numéroté --------- */
+  function orientationRapport(def) {
+    var choix = $('[data-rapport-orientation]').value;
+    if (choix === 'portrait' || choix === 'paysage') return choix;
+    // Les tableaux larges (colis, étapes, factures, paiements, activité) passent en paysage
+    return sectionsDe(def).some(function (s) { return s !== 'finances' && s !== 'clients'; }) ? 'paysage' : 'portrait';
+  }
+
+  function documentRapport(def, rapport, d) {
+    var T = traduitRapport;
+    var doc = el('div', 'gs-rapport-doc');
+    var tete = el('header', 'gs-rapport-doc__tete');
+    var logo = el('img', 'gs-rapport-doc__logo');
+    logo.src = new URL('assets/img/logo-goship.png', document.baseURI).href;
+    logo.alt = 'Goship Express';
+    tete.appendChild(logo);
+    var id = el('div', 'gs-rapport-doc__identite');
+    id.appendChild(el('p', 'gs-rapport-doc__entreprise', 'Goship Express'));
+    id.appendChild(el('h1', 'gs-rapport-doc__titre', rapport ? rapport.nom : T('Rapport') + ' — ' + T(TYPES_RAPPORT[def.type] || '')));
+    var infos = el('dl', 'gs-rapport-doc__infos');
+    [['Type', T(TYPES_RAPPORT[def.type] || def.type) + ' · ' + T(PERIODES_RAPPORT[def.periode] || def.periode)],
+     ['Période', T(periodeRapportTexte(d.periode) + ' (jours de Santo Domingo)')],
+     ['Filtres', [T(STATUTS_RAPPORT[(def.filtres || {}).statut_colis] || 'Tous'),
+                  T(ETATS_RAPPORT[(def.filtres || {}).etat_facture] || 'Tous')].join(' · ')],
+     ['Généré le', T(dateRapport(d.genere_le, true)) + (d.genere_par ? ' · ' + d.genere_par : '')]].forEach(function (x) {
+      var ligne = el('div');
+      ligne.appendChild(el('dt', '', T(x[0])));
+      ligne.appendChild(el('dd', '', x[1]));
+      infos.appendChild(ligne);
+    });
+    id.appendChild(infos);
+    tete.appendChild(id);
+    doc.appendChild(tete);
+    if (d.periode.en_cours) doc.appendChild(el('p', 'gs-rapport-doc__note', T('Période en cours : les chiffres peuvent encore changer.')));
+
+    var cartes = el('div', 'gs-rapport-doc__cartes');
+    cartesRapport(cartes, d);
+    $$('.gs-kpi__picto', cartes).forEach(function (n) { n.remove(); });
+    $$('.gs-kpi__libelle, .gs-kpi__sous', cartes).forEach(function (n) { n.textContent = T(n.textContent); });
+    doc.appendChild(cartes);
+
+    (d.sections || []).forEach(function (cle) {
+      var s = el('section', 'gs-rapport-doc__section');
+      s.appendChild(el('h2', 'gs-rapport-doc__section-titre', T(SECTIONS_RAPPORT[cle] || cle)));
+      if (cle === 'finances') { s.appendChild(blocFinances(d, true)); doc.appendChild(s); return; }
+      var partie = (d.donnees || {})[cle] || { total: 0, lignes: [] };
+      if (!partie.total) {
+        s.appendChild(el('p', 'gs-rapport-doc__vide', T(VIDE_RAPPORT)));
+      } else {
+        s.appendChild(tableRapport(cle, partie.lignes, true).cadre);
+        s.appendChild(el('p', 'gs-rapport-doc__compte', partie.lignes.length < partie.total
+          ? T('Les ' + entier(partie.lignes.length) + ' premières lignes sur ' + entier(partie.total) +
+              ' — affinez la période ou les filtres pour le reste.')
+          : T(pluriel(partie.total, 'ligne', 'lignes'))));
+      }
+      if (cle === 'factures' && partie.supprimees && partie.supprimees.total) {
+        s.appendChild(el('h3', 'gs-rapport-doc__sous-titre', T('Factures supprimées (hors total)')));
+        s.appendChild(tableRapport('supprimees', partie.supprimees.lignes, true).cadre);
+      }
+      doc.appendChild(s);
+    });
+    var pied = el('footer', 'gs-rapport-doc__pied');
+    pied.appendChild(el('span', '', 'Goship Express · ' + T('Généré le') + ' ' + T(dateRapport(d.genere_le, true)) +
+                                    (d.genere_par ? ' · ' + d.genere_par : '')));
+    doc.appendChild(pied);
+    return doc;
+  }
+
+  // Lit tout le rapport (2 000 lignes par partie au plus), dessine le document, l'envoie à
+  // l'imprimante ; pour « PDF », la même fenêtre, où l'on choisit « Enregistrer au format PDF »
+  function imprimerRapport(def, rapport, bouton, pdf) {
+    if (!def) return;
+    if (!IMP) { toast("L'impression demande le fichier assets/js/impression.js.", true); return; }
+    var params = parametresRapport(def, rapport, LIGNES_DOCUMENT);
+    var fin = bouton ? attente(bouton, 'Préparation…') : function () {};
+    API.admin.donneesRapport(params).then(function (d) {
+      var doc = documentRapport(def, rapport, d);
+      var nom = (rapport ? rapport.nom : 'Rapport ' + (TYPES_RAPPORT[def.type] || '')) + ' ' + d.periode.debut +
+                (d.periode.fin !== d.periode.debut ? ' ' + d.periode.fin : '');
+      var pied = 'Goship Express · ' + traduitRapport('Généré le') + ' ' + traduitRapport(dateRapport(d.genere_le, true)) +
+                 (d.genere_par ? ' · ' + d.genere_par : '');
+      if (pdf) toast(traduitRapport('Dans la fenêtre qui s’ouvre, choisissez « Enregistrer au format PDF ».'));
+      return IMP.imprimer(doc, {
+        titre: nom.replace(/[\\/:*?"<>|]+/g, '-'), papier: orientationRapport(def) === 'paysage' ? 'A4 landscape' : 'A4',
+        marge: '14mm 12mm 16mm', pied: pied, numeroter: traduitRapport('Page'),
+        langue: window.GoshipLangueTableau ? window.GoshipLangueTableau.langue() : 'fr'
+      });
+    }).catch(function (err) { toast(messageErreur(err), true); }).then(fin);
+  }
+
+  // admin.html#rapports ouvre le tableau de bord sur les rapports (si le rôle le permet :
+  // choisirVue retombe sinon sur la vue générale)
+  if (location.hash === '#rapports') {
+    var ecranTableau = $('[data-ecran="tableau"]');
+    var allerRapports = function () {
+      if (ecranTableau && !ecranTableau.hidden) { choisirVue('rapports'); return true; }
+      return false;
+    };
+    if (!allerRapports() && ecranTableau && window.MutationObserver) {
+      var obsRapports = new MutationObserver(function () { if (allerRapports()) obsRapports.disconnect(); });
+      obsRapports.observe(ecranTableau, { attributes: true, attributeFilter: ['hidden'] });
+    }
+  }
+
+  /* ---- Démonstration --------------------------------------------------------- */
+  $('[data-action="exemples"]').addEventListener('click', function () {
+    API.admin.exemples().then(function () {
+      toast('Exemples ajoutés : 3 clients et 7 colis.');
+      chargerStatistiques();
+      chargerColis();
+      chargerClients();
+    }).catch(function (err) { toast(messageErreur(err), true); });
+  });
+  $('[data-action="effacer-demo"]').addEventListener('click', function () {
+    if (!window.confirm('Effacer tous les comptes et colis de la démonstration ?')) return;
+    API.admin.effacerDemo().then(function () { location.reload(); });
+  });
+
+  demarrer();
+})();

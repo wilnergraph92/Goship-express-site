@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com https://gpfdyslysqjmojgzggib.supabase.co; connect-src 'self' https://gpfdyslysqjmojgzggib.supabase.co wss://gpfdyslysqjmojgzggib.supabase.co">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crear una cuenta — Goship Express</title>
+<meta name="description" content="Abra su cuenta Goship Express: su código de cliente, su dirección de recepción en Florida y el seguimiento de sus paquetes en tiempo real.">
+<meta name="theme-color" content="#061a3f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Goship Express">
+<meta property="og:locale" content="es_DO">
+<meta property="og:title" content="Crear una cuenta — Goship Express">
+<meta property="og:description" content="Abra su cuenta Goship Express: su código de cliente, su dirección de recepción en Florida y el seguimiento de sus paquetes en tiempo real.">
+<link rel="icon" href="../favicon.ico?v=2026-09-28" sizes="32x32">
+<link rel="icon" href="../assets/img/favicon-32.png?v=2026-09-28" type="image/png" sizes="32x32">
+<link rel="icon" href="../assets/img/favicon-64.png?v=2026-09-28" type="image/png" sizes="64x64">
+<link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png?v=2026-09-28">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://images.unsplash.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script src="../assets/js/config.js" defer></script>
+<script src="../assets/js/site.js" defer></script>
+<script src="../assets/js/fond.js" defer></script>
+<script src="../assets/js/api.js" defer></script>
+<script src="../assets/js/lieux.js" defer></script>
+<script src="../assets/js/compte.js" defer></script>
+</head>
+<body>
+<div class="gs-page">
+<a class="gs-skip" href="#contenu-principal">Ir al contenido</a>
+
+<div style="background:#030f2b;color:#94a7cc;font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.1em;text-transform:uppercase">
+  <div class="gs-bandeau__ligne" style="max-width:1320px;margin:0 auto;padding:12px 28px;display:flex;flex-wrap:wrap;gap:10px 30px;align-items:center;justify-content:space-between">
+    <span class="gs-bandeau-info" style="display:flex;align-items:center;gap:10px"><span style="width:6px;height:6px;background:var(--accent);display:block"></span>8140 NW 74th Ave, Unit 3, Apt 46780, Medley, Florida 33166</span>
+    <div class="gs-bandeau__actions" style="display:flex;flex-wrap:wrap;gap:8px 26px;align-items:center">
+      <span class="gs-bandeau-info" style="color:#dde5f8">goshipexpressllc@gmail.com</span>
+      <span class="gs-bandeau-info">Lun–Sáb · 8:00–18:00</span>
+      <span style="color:var(--accent)">Cotización en 2 h</span>
+      <a class="gs-bandeau-compte" href="connexion.html" data-session="non"><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Iniciar sesión</a>
+      <a class="gs-bandeau-compte" href="mon-compte.html" data-session="oui" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Mi cuenta</a>
+      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Crear cuenta</a>
+    </div>
+  </div>
+</div>
+
+<header class="gs-header" data-header style="position:sticky;top:0;z-index:60;background:rgba(6,26,63,.95);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.1)">
+  <div class="gs-header__bar" style="max-width:1320px;margin:0 auto;padding:14px 28px;display:flex;flex-wrap:wrap;align-items:center;gap:14px 28px;justify-content:space-between">
+    <a class="gs-logo" aria-label="Goship Express — Inicio" href="index.html" style="display:flex;align-items:center;flex:none">
+      <span style="display:flex;align-items:center;background:#fff;border-radius:13px;padding:8px 14px;box-shadow:0 10px 26px -14px rgba(0,0,0,.7)">
+        <img src="../assets/img/logo-goship.png" alt="GOShip Express — Freight &amp; Cargo" width="360" height="120" style="display:block;height:40px;width:auto">
+      </span>
+    </a>
+    <div class="gs-mobile-actions">
+      <!--langues:mobile--><details class="gs-lang gs-lang--compact" data-lang-menu>
+        <summary class="gs-lang__btn" aria-label="Idioma: Español"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span class="gs-lang__label">Idioma</span><span class="gs-lang__chev" aria-hidden="true"></span></summary>
+        <ul class="gs-lang__list">
+          <li><a href="../en/inscription.html" hreflang="en" lang="en"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span>English</span></a></li>
+          <li><a href="inscription.html" hreflang="es" lang="es" aria-current="true"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span>Español</span></a></li>
+          <li><a href="../inscription.html" hreflang="fr" lang="fr"><img class="gs-flag" src="../assets/img/drapeaux/fr.svg" alt="" width="30" height="20"><span>Français</span></a></li>
+          <li><a href="../ht/inscription.html" hreflang="ht" lang="ht"><img class="gs-flag" src="../assets/img/drapeaux/ht.svg" alt="" width="30" height="20"><span>Kreyòl</span></a></li>
+        </ul>
+      </details><!--/langues-->
+      <a class="gs-call" href="tel:+18495386262" aria-label="Llamar a Goship Express al +1 849 538-6262">☎</a>
+      <button class="gs-burger" type="button" data-menu-toggle aria-expanded="false" aria-controls="menu-principal" aria-label="Abrir el menú"><span></span><span></span><span></span></button>
+    </div>
+    <nav class="gs-nav" id="menu-principal" aria-label="Navegación principal" style="display:flex;align-items:center;gap:30px;flex-wrap:wrap;font-size:15px;font-weight:600">
+      <a href="index.html" class="hv-accent" style="color:#dde5f8">Inicio</a>
+      <a href="a-propos.html" class="hv-accent" style="color:#dde5f8">Nosotros</a>
+      <a href="nos-services.html" class="hv-accent" style="color:#dde5f8">Servicios</a>
+      <a href="blog.html" class="hv-accent" style="color:#dde5f8">Blog</a>
+      <a href="contacts.html" class="hv-accent" style="color:#dde5f8">Contacto</a>
+    </nav>
+    <div class="gs-actions" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px">
+      <!--langues:desktop--><details class="gs-lang" data-lang-menu>
+        <summary class="gs-lang__btn" aria-label="Idioma: Español"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span class="gs-lang__label">Idioma</span><span class="gs-lang__chev" aria-hidden="true"></span></summary>
+        <ul class="gs-lang__list">
+          <li><a href="../en/inscription.html" hreflang="en" lang="en"><img class="gs-flag" src="../assets/img/drapeaux/gb.svg" alt="" width="30" height="20"><span>English</span></a></li>
+          <li><a href="inscription.html" hreflang="es" lang="es" aria-current="true"><img class="gs-flag" src="../assets/img/drapeaux/es.svg" alt="" width="30" height="20"><span>Español</span></a></li>
+          <li><a href="../inscription.html" hreflang="fr" lang="fr"><img class="gs-flag" src="../assets/img/drapeaux/fr.svg" alt="" width="30" height="20"><span>Français</span></a></li>
+          <li><a href="../ht/inscription.html" hreflang="ht" lang="ht"><img class="gs-flag" src="../assets/img/drapeaux/ht.svg" alt="" width="30" height="20"><span>Kreyòl</span></a></li>
+        </ul>
+      </details><!--/langues-->
+      <a class="gs-header-phone" href="tel:+18495386262" style="display:flex;align-items:center;gap:11px;color:#fff;white-space:nowrap">
+        <span style="display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:rgba(244,96,13,.18);border:1px solid rgba(244,96,13,.5);color:var(--accent);font-size:16px">☎</span>
+        <span style="display:flex;flex-direction:column;line-height:1.25">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#95a5ca">LLÁMENOS</span>
+          <span style="font-weight:700;font-size:15px">+1 849 538-6262</span>
+        </span>
+      </a>
+      <a class="gs-connexion-mobile" href="connexion.html" data-session="non">Iniciar sesión</a>
+      <a href="inscription.html" class="gs-cta hv-fill-cta" data-session="non" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Crear cuenta</a>
+      <a href="mon-compte.html" class="gs-cta hv-fill-cta" data-session="oui" hidden style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Mi cuenta</a>
+    </div>
+  </div>
+</header>
+
+<main id="contenu-principal" tabindex="-1">
+
+<section class="gs-compte" data-no-reveal>
+  <div class="gs-compte__wrap">
+    <div class="gs-carte-auth">
+      <div class="gs-carte-auth__tete">
+        <div class="gs-carte-auth__marque">
+          <span class="gs-carte-auth__icone"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>
+          <span class="gs-carte-auth__surtitre">Nuevo cliente</span>
+        </div>
+        <h1>Cree su cuenta</h1>
+        <p>Complete sus datos para recibir su código de cliente y seguir sus paquetes más fácilmente.</p>
+      </div>
+
+      <ul class="gs-atouts">
+        <li><span class="gs-atouts__ico gs-atouts__ico--vert"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.5 2.5 2.5 5-5.5"/></svg></span>Registro rápido</li>
+        <li><span class="gs-atouts__ico gs-atouts__ico--bleu"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span>Cuenta segura</li>
+        <li><span class="gs-atouts__ico gs-atouts__ico--ciel"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>Región y ciudad</li>
+      </ul>
+
+      <div class="gs-carte-auth__corps">
+        <div class="gs-alerte gs-alerte--info" data-espace-ferme hidden>
+          <strong>El área de clientes abre muy pronto.</strong> Mientras tanto, abra su cuenta con un asesor por WhatsApp: <a data-lien-wa="wa-inscription" href="https://wa.me/18495386262" target="_blank" rel="noopener">escribir por WhatsApp</a>.
+        </div>
+
+        <div class="gs-social" data-social hidden>
+          <button type="button" class="gs-social__bouton" data-action="connexion-sociale" data-fournisseur="google" hidden>
+            <svg class="gs-social__logo" viewBox="0 0 48 48" width="20" height="20" aria-hidden="true" focusable="false"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            <span>Continuar con Google</span>
+          </button>
+          <p class="gs-form__erreur" data-social-erreur role="alert" hidden></p>
+          <p class="gs-social__ou"><span>o</span></p>
+        </div>
+
+        <div class="gs-methode" data-methode>
+          <p class="gs-methode__titre">Elija su método de registro</p>
+          <p class="gs-methode__texte" data-methode-texte="formulaire">Complete directamente el formulario a continuación.</p>
+          <p class="gs-methode__texte" data-methode-texte="choix" hidden>Dos formas de abrir su cuenta Goship Express.</p>
+          <div class="gs-methode__choisie" data-methode-choisie>
+            <div>
+              <strong>Registro con el formulario</strong>
+              <span>Indique todos los datos solicitados.</span>
+            </div>
+            <button type="button" class="gs-lien-bouton" data-action="methodes" aria-expanded="false">Volver</button>
+          </div>
+          <div class="gs-methode__liste" data-methode-liste hidden>
+            <button type="button" class="gs-methode__option" data-action="methode-formulaire">
+              <span class="gs-methode__pictogramme"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg></span>
+              <span class="gs-methode__libelle"><strong>Registro con el formulario</strong><span>Indique todos los datos solicitados.</span></span>
+              <span class="gs-chevron" aria-hidden="true"></span>
+            </button>
+            <a class="gs-methode__option" data-lien-wa="wa-inscription" href="https://wa.me/18495386262" target="_blank" rel="noopener">
+              <span class="gs-methode__pictogramme gs-methode__pictogramme--wa"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg></span>
+              <span class="gs-methode__libelle"><strong>Registro por WhatsApp</strong><span>Un asesor abre su cuenta con usted.</span></span>
+              <span class="gs-chevron" aria-hidden="true"></span>
+            </a>
+          </div>
+        </div>
+
+        <form class="gs-form" data-form="inscription" novalidate>
+          <input class="gs-hp" type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <div class="gs-form__grille">
+            <div class="gs-champ">
+              <label for="ins-nom">Nombre completo<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-nom" name="nom_complet" autocomplete="name" required minlength="3" maxlength="120" placeholder="Ingrese su nombre completo">
+            </div>
+            <div class="gs-champ">
+              <label for="ins-naissance">Fecha de nacimiento<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-naissance" name="date_naissance" type="text" inputmode="numeric" autocomplete="bday" required maxlength="10" pattern="[0-9]{2}/[0-9]{2}/[0-9]{4}" placeholder="dd/mm/aaaa" data-naissance>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-sexe">Sexo<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-sexe" name="sexe" required>
+                <option value="">Seleccione su sexo</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-document">Documento<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-document" name="type_document" required>
+                <option value="">Seleccione un documento</option>
+                <option value="passeport">Pasaporte</option>
+                <option value="cedula">Cédula</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-numero-document" data-libelle-document>Número del documento<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-numero-document" name="numero_document" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" required maxlength="24" disabled placeholder="Elija primero un documento" data-numero-document>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-parrain">Código de patrocinio (opcional)</label>
+              <input id="ins-parrain" name="code_parrainage" autocomplete="off" autocapitalize="characters" maxlength="24" spellcheck="false" data-parrain aria-describedby="ins-parrain-aide">
+              <p class="gs-champ__aide" id="ins-parrain-aide">¿Le invitó un amigo? Escriba su código: ya está rellenado si llegó por su enlace.</p>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-pays">País<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-pays" name="pays" required data-pays>
+                <option value="">Seleccione un país</option>
+                <option value="HT">Haití</option>
+                <option value="DO">República Dominicana</option>
+                <option value="US">Estados Unidos</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-region">Región<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-region" name="region" required data-region>
+                <option value="">Seleccione una región</option>
+              </select>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-ville">Ciudad<span class="gs-requis" aria-hidden="true">*</span></label>
+              <select id="ins-ville" name="ville" required data-ville>
+                <option value="">Seleccione una ciudad</option>
+              </select>
+              <input class="gs-champ__autre" name="ville_autre" autocomplete="address-level2" required maxlength="80" placeholder="Ingrese su ciudad" aria-label="Ciudad" data-ville-autre hidden disabled>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-adresse">Dirección<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-adresse" name="adresse" autocomplete="street-address" required minlength="3" maxlength="200" placeholder="Ingrese su dirección">
+            </div>
+            <div class="gs-champ">
+              <label for="ins-tel">Teléfono<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-tel" name="telephone" type="tel" autocomplete="tel" required maxlength="40" placeholder="Ingrese su teléfono" data-telephone>
+            </div>
+            <div class="gs-champ">
+              <label for="ins-email">Correo electrónico<span class="gs-requis" aria-hidden="true">*</span></label>
+              <input id="ins-email" name="email" type="email" autocomplete="email" required maxlength="160" placeholder="Ingrese su correo" spellcheck="false">
+            </div>
+            <div class="gs-champ">
+              <label for="ins-mdp">Contraseña<span class="gs-requis" aria-hidden="true">*</span></label>
+              <div class="gs-mdp">
+                <input id="ins-mdp" name="mot_de_passe" type="password" autocomplete="new-password" required minlength="6" maxlength="72" placeholder="Ingrese su contraseña" aria-describedby="ins-mdp-aide">
+                <button type="button" class="gs-mdp__oeil" data-action="voir-mdp" aria-label="Mostrar la contraseña" aria-pressed="false"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+              </div>
+              <p class="gs-champ__aide" id="ins-mdp-aide">Mínimo 6 caracteres.</p>
+            </div>
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Suscribirse</button>
+          <p class="gs-form__mention">Al crear una cuenta, acepta nuestros <a href="termes-et-conditions.html">términos y condiciones</a> y nuestra <a href="confidentialite.html">política de privacidad</a>.</p>
+        </form>
+
+        <div class="gs-alerte gs-alerte--succes" data-confirmation hidden tabindex="-1">
+          <strong>Revise su correo</strong>
+          <p data-confirmation-texte></p>
+        </div>
+
+        <p class="gs-carte-auth__pied">¿Ya tiene una cuenta? <a href="connexion.html">Iniciar sesión</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<template data-textes>
+  <p data-t="statut-recu">Recibido</p>
+  <p data-t="statut-emballe">Embalado</p>
+  <p data-t="statut-embarque">Embarcado</p>
+  <p data-t="statut-distribution">Centro de distribución</p>
+  <p data-t="statut-succursale">Transferido a la sucursal</p>
+  <p data-t="statut-disponible">Disponible</p>
+  <p data-t="statut-livre">Entregado</p>
+  <p data-t="statut-incident">Acción requerida</p>
+  <p data-t="etape-1">Recibido</p>
+  <p data-t="etape-2">Embalado</p>
+  <p data-t="etape-3">Embarcado</p>
+  <p data-t="etape-4">Distribución</p>
+  <p data-t="etape-5">Sucursal</p>
+  <p data-t="etape-6">Disponible</p>
+  <p data-t="etape-7">Entregado</p>
+  <p data-t="service-aerien">Aéreo</p>
+  <p data-t="service-maritime">Marítimo</p>
+  <p data-t="service-terrestre">Terrestre</p>
+  <p data-t="pays-HT">Haití</p>
+  <p data-t="pays-DO">República Dominicana</p>
+  <p data-t="pays-US">Estados Unidos</p>
+  <p data-t="maj">Actualizado el {date}</p>
+  <p data-t="etape-sur">Etapa {n} de {total}</p>
+  <p data-t="etape-une">1 etapa</p>
+  <p data-t="etapes">{n} etapas</p>
+  <p data-t="suivi-vendeur">Seguimiento del vendedor: {numero}</p>
+  <p data-t="recu-le">Recibido en Miami el {date}</p>
+  <p data-t="expediteur">Suplidor: {nom}</p>
+  <p data-t="erreur-identifiants">Correo o contraseña incorrectos.</p>
+  <p data-t="erreur-email-existe">Ya existe una cuenta con esta dirección de correo. Inicie sesión o elija «¿Olvidó su contraseña?».</p>
+  <p data-t="erreur-mot-de-passe-faible">Contraseña demasiado débil: use al menos 6 caracteres, con letras y números.</p>
+  <p data-t="erreur-meme-mot-de-passe">Elija una contraseña distinta de la anterior.</p>
+  <p data-t="erreur-email-invalide">Esta dirección de correo no es válida.</p>
+  <p data-t="erreur-non-confirme">Primero confirme su dirección de correo con el enlace que le enviamos.</p>
+  <p data-t="erreur-inscriptions-fermees">El registro en línea está cerrado por el momento. Escríbanos por WhatsApp para abrir su cuenta.</p>
+  <p data-t="erreur-trop-de-tentatives">Demasiados intentos. Espere unos minutos e inténtelo de nuevo.</p>
+  <p data-t="erreur-lien-invalide">Este enlace ya no es válido. Solicite uno nuevo.</p>
+  <p data-t="erreur-social-annule">Inicio de sesión con Google cancelado. Vuelva a intentarlo o use su correo electrónico y su contraseña.</p>
+  <p data-t="erreur-social-echec">El inicio de sesión con Google no se completó. Vuelva a intentarlo en un momento o use su correo electrónico y su contraseña.</p>
+  <p data-t="erreur-non-autorise">Su sesión ha caducado. Vuelva a iniciar sesión.</p>
+  <p data-t="erreur-reseau">No se pudo conectar. Verifique su conexión a Internet e inténtelo de nuevo.</p>
+  <p data-t="erreur-inconnu">Se produjo un error. Inténtelo de nuevo en un momento.</p>
+  <p data-t="champ-requis">Este campo es obligatorio.</p>
+  <p data-t="champ-naissance">Escriba una fecha de nacimiento válida, con el formato dd/mm/aaaa (día, mes, año).</p>
+  <p data-t="numero-passeport">Número del pasaporte</p>
+  <p data-t="numero-cedula">Número de la cédula</p>
+  <p data-t="numero-passeport-ex">Ej. AB1234567</p>
+  <p data-t="numero-cedula-ex">Ej. 001-1234567-8</p>
+  <p data-t="numero-aucun">Número del documento</p>
+  <p data-t="numero-aucun-ex">Elija primero un documento</p>
+  <p data-t="champ-numero-passeport">Escriba el número de su pasaporte (letras y números, de 5 a 20 caracteres).</p>
+  <p data-t="champ-numero-cedula">Escriba el número de su cédula (solo dígitos, de 6 a 15).</p>
+  <p data-t="champ-naissance-futur">La fecha de nacimiento no puede estar en el futuro.</p>
+  <p data-t="erreur-naissance-requise">Indique su fecha de nacimiento.</p>
+  <p data-t="erreur-naissance-invalide">Esta fecha de nacimiento no es válida. Compruebe el día, el mes y el año.</p>
+  <p data-t="erreur-naissance-verrouillee">Su fecha de nacimiento ya está guardada. Para corregirla, escríbanos: nuestro equipo se encargará.</p>
+  <p data-t="erreur-inscription-refusee">No se pudo guardar su registro. Compruebe sus datos, en particular su fecha de nacimiento, y vuelva a intentarlo.</p>
+  <p data-t="naissance-ok">Fecha de nacimiento guardada ✓</p>
+  <p data-t="adresse-manquante">Complete su perfil (nombre y código de cliente) para obtener su dirección completa: no podemos componerla sin ellos.</p>
+  <p data-t="champ-email">Ingrese una dirección de correo válida.</p>
+  <p data-t="champ-mdp">Mínimo 6 caracteres.</p>
+  <p data-t="champ-tel">Ingrese un número de teléfono válido.</p>
+  <p data-t="champ-nom">Ingrese su nombre y apellido.</p>
+  <p data-t="champ-confirmation">Las dos contraseñas no coinciden.</p>
+  <p data-t="attente-inscription">Creando la cuenta…</p>
+  <p data-t="attente-connexion">Iniciando sesión…</p>
+  <p data-t="attente-envoi">Enviando…</p>
+  <p data-t="attente-enregistrement">Guardando…</p>
+  <p data-t="mdp-afficher">Mostrar la contraseña</p>
+  <p data-t="mdp-masquer">Ocultar la contraseña</p>
+  <p data-t="region-choisir">Seleccione una región</p>
+  <p data-t="region-pays">Primero elija un país</p>
+  <p data-t="ville-choisir">Seleccione una ciudad</p>
+  <p data-t="ville-autre">Otra ciudad…</p>
+  <p data-t="ville-saisir">Ingrese su ciudad</p>
+  <p data-t="wa-inscription">Hola Goship Express, quisiera abrir mi cuenta de cliente.</p>
+  <p data-t="wa-aide">Hola Goship Express, tengo una pregunta sobre mi cuenta de cliente {code}.</p>
+  <p data-t="copie-ok">Copiado ✓</p>
+  <p data-t="copie-echec">No se pudo copiar</p>
+  <p data-t="confirmation-email">¡Ya casi! Enviamos un correo a {email}. Haga clic en el enlace que contiene para activar su cuenta y recibir su código de cliente.</p>
+  <p data-t="demo-lien">Modo de demostración: no se envía ningún correo. Abra directamente el enlace de restablecimiento:</p>
+  <p data-t="profil-ok">Datos guardados ✓</p>
+  <p data-t="demo-bandeau">Modo de demostración: mientras no se configure Supabase, las cuentas y los paquetes se guardan solo en este navegador.</p>
+  <p data-t="facture-a_payer">Por pagar</p>
+  <p data-t="facture-payee">Pagada</p>
+  <p data-t="facture-annulee">Anulada</p>
+  <p data-t="facture-partielle">Pagada en parte</p>
+  <p data-t="facture-en_retard">Vencida</p>
+  <p data-t="facture-total">Total {montant}</p>
+  <p data-t="facture-paye">Pagado {montant}</p>
+  <p data-t="facture-reste">Saldo pendiente {montant}</p>
+  <p data-t="facture-paiement">{montant} recibidos el {date}</p>
+  <p data-t="facture-etablie">Emitida el {date}</p>
+  <p data-t="facture-echeance">a pagar antes del {date}</p>
+  <p data-t="facture-payee-le">pagada el {date}</p>
+  <p data-t="facture-colis">Paquete {numero}</p>
+  <p data-t="facture-transport">Transporte</p>
+  <p data-t="facture-moyen-paypal">Pagada con PayPal</p>
+  <p data-t="facture-moyen-banque">Pagada por transferencia bancaria</p>
+  <p data-t="facture-moyen-azul">Pagada con Azul</p>
+  <p data-t="facture-moyen-moncash">Pagada con MonCash</p>
+  <p data-t="facture-moyen-natcash">Pagada con NatCash</p>
+  <p data-t="facture-moyen-especes">Pagada en efectivo</p>
+  <p data-t="facture-moyen-transfert">Pagada por transferencia de dinero</p>
+  <p data-t="moyen-paypal">PayPal</p>
+  <p data-t="moyen-banque">Transferencia bancaria</p>
+  <p data-t="moyen-azul">Azul</p>
+  <p data-t="moyen-moncash">MonCash</p>
+  <p data-t="moyen-natcash">NatCash</p>
+  <p data-t="moyen-especes">Efectivo</p>
+  <p data-t="moyen-transfert">Transferencia de dinero</p>
+  <p data-t="moyen-autre">Otro medio</p>
+  <p data-t="factures-total">{n} por pagar</p>
+  <p data-t="solde-retard">De los cuales {montant} vencidos.</p>
+  <p data-t="solde-echeance">Próximo vencimiento: {date}.</p>
+  <p data-t="canal-email">Correo electrónico</p>
+  <p data-t="canal-whatsapp">WhatsApp</p>
+  <p data-t="canal-push">Notificación en el teléfono</p>
+  <p data-t="message-recu">Paquete recibido en Miami</p>
+  <p data-t="message-disponible">Paquete disponible</p>
+  <p data-t="message-bienvenue">Bienvenido a Goship Express</p>
+  <p data-t="message-maj">Seguimiento del paquete actualizado</p>
+  <p data-t="message-autre">Mensaje de Goship Express</p>
+  <p data-t="admin-avis">Esta es una cuenta del equipo de Goship Express.</p>
+  <p data-t="admin-lien">Abrir el panel de control</p>
+  <p data-t="points-un">1 punto</p>
+  <p data-t="points-n">{n} puntos</p>
+  <p data-t="points-titre">GOPOINTS</p>
+  <p data-t="points-ferme">El programa GOPOINTS no está abierto por el momento.</p>
+  <p data-t="points-offres">Canjear mis puntos</p>
+  <p data-t="points-echanger">Canjear</p>
+  <p data-t="points-historique">Últimos movimientos</p>
+  <p data-t="mouvement-gain">Puntos ganados</p>
+  <p data-t="mouvement-utilisation">Puntos utilizados</p>
+  <p data-t="mouvement-expiration">Puntos vencidos</p>
+  <p data-t="mouvement-correction">Corrección</p>
+  <p data-t="mouvement-annulation">Anulación</p>
+  <p data-t="points-ok">Canje realizado: su beneficio está registrado ✓</p>
+  <p data-t="points-deja">Este canje ya estaba registrado.</p>
+  <p data-t="conditions">Condiciones</p>
+  <p data-t="bienvenue-titre">Oferta de bienvenida</p>
+  <p data-t="bienvenue-a_debloquer">Por desbloquear</p>
+  <p data-t="bienvenue-en_attente">En espera de validación</p>
+  <p data-t="bienvenue-obtenu">Obtenido</p>
+  <p data-t="bienvenue-expire">Vencido</p>
+  <p data-t="bienvenue-fin">Hasta el {date}</p>
+  <p data-t="bienvenue-avantage">Su beneficio: {avantage}</p>
+  <p data-t="bienvenue-etape-compte">Cuenta creada</p>
+  <p data-t="bienvenue-etape-colis_recu">Primer paquete recibido en Miami</p>
+  <p data-t="bienvenue-etape-facture_payee">Primera factura pagada</p>
+  <p data-t="bienvenue-attente">Su beneficio se confirmará tras verificar la operación. Nada es suyo antes de esa confirmación.</p>
+  <p data-t="refer-titre">GOship Refer</p>
+  <p data-t="refer-cta">INVITAR A UN AMIGO</p>
+  <p data-t="refer-texte">Invite a un amigo a descubrir GoShip Express. Cuando su amigo cree su cuenta y realice su primera transacción calificante, podremos recompensarlos a ambos según las condiciones del programa.</p>
+  <p data-t="refer-inactif">El patrocinio no está abierto por el momento.</p>
+  <p data-t="refer-avantage-parrain">Su beneficio: {avantage}</p>
+  <p data-t="refer-avantage-filleul">El beneficio de su amigo: {avantage}</p>
+  <p data-t="refer-code">Su código de patrocinio</p>
+  <p data-t="refer-copier-code">Copiar el código</p>
+  <p data-t="refer-copier-lien">Copiar el enlace</p>
+  <p data-t="refer-copie">Copiado ✓</p>
+  <p data-t="refer-invitations">Invitaciones compartidas</p>
+  <p data-t="refer-inscrits">Amigos inscritos</p>
+  <p data-t="refer-attente">En espera de su primera operación</p>
+  <p data-t="refer-valides">Patrocinios validados</p>
+  <p data-t="refer-recompenses">Sus beneficios de patrocinio</p>
+  <p data-t="avantage-en_attente">En espera de validación</p>
+  <p data-t="avantage-obtenue">Obtenido</p>
+  <p data-t="avantage-utilisee">Utilizado</p>
+  <p data-t="avantage-annulee">Anulado</p>
+  <p data-t="avantage-expiree">Vencido</p>
+  <p data-t="refer-j-ai-un-code">Tengo un código de patrocinio</p>
+  <p data-t="refer-code-champ">Código de patrocinio</p>
+  <p data-t="refer-code-envoyer">Usar este código</p>
+  <p data-t="refer-code-ok">Código de patrocinio guardado ✓</p>
+  <p data-t="refer-partage-titre">GoShip Express</p>
+  <p data-t="refer-partage-message">Únete a mí en GoShip Express con mi código {code}: {lien}</p>
+  <p data-t="pref-ok">Preferencia guardada ✓</p>
+  <p data-t="erreur-OFFER_UNAVAILABLE">Esta oferta no está disponible.</p>
+  <p data-t="erreur-OFFER_OUT_OF_STOCK">Esta oferta está agotada.</p>
+  <p data-t="erreur-OFFER_LIMIT_REACHED">Ya usó esta oferta el número de veces permitido.</p>
+  <p data-t="erreur-INSUFFICIENT_POINTS">Sus puntos no alcanzan.</p>
+  <p data-t="erreur-DUPLICATE_OPERATION">Este canje ya se hizo.</p>
+  <p data-t="erreur-INVALID_REFERRAL_CODE">Este código de patrocinio no existe. Compruébelo.</p>
+  <p data-t="erreur-SELF_REFERRAL">No puede usar su propio código de patrocinio.</p>
+  <p data-t="erreur-ALREADY_REFERRED">Ya hay un código de patrocinio registrado en su cuenta.</p>
+  <p data-t="erreur-REFERRAL_INACTIVE">El patrocinio no está abierto por el momento: este código no puede usarse.</p>
+  <p data-t="erreur-REFERRAL_TOO_LATE">Es demasiado tarde para añadir un código de patrocinio: su primera operación ya se realizó o el plazo ha vencido.</p>
+  <p data-t="erreur-REFERRAL_CYCLE">Este patrocinio no es posible.</p>
+  <p data-t="erreur-copie">La copia no funcionó. Seleccione el texto y cópielo a mano.</p>
+</template>
+</main>
+
+<footer style="color: #a4b3d6; padding: clamp(56px,7vw,92px) 28px 0; background-color: #101114">
+  <div style="max-width:1320px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(215px,100%),1fr));gap:40px">
+    <div style="min-width:0;max-width:340px">
+      <span style="display: inline-flex; align-items: center; border-radius: 14px; padding: 12px 16px; background-color: #F4600C">
+        <img src="../assets/img/logo-goship-blanc.png" alt="GOShip Express — Freight &amp; Cargo" width="420" height="147" style="display:block;height:46px;width:auto">
+      </span>
+      <p style="margin-top:20px;font-size:14.5px;line-height:1.7">Transporte, recepción y entrega de paquetes entre Estados Unidos, Santo Domingo y Haití. Soluciones simples, rápidas y adaptadas a sus necesidades.</p>
+      <div style="margin-top:22px;display:flex;gap:10px">
+        <a href="https://www.facebook.com/goshipexpress" aria-label="Facebook" class="hv-fill-accent" target="_blank" rel="noopener" style="display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: rgba(255,255,255,.07); color: #FFFFFF; font-size: 13px; font-weight: 700"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true" focusable="false"><path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></svg></a>
+        
+        <a href="https://www.instagram.com/goshipexpressllc" aria-label="Instagram" class="hv-fill-accent" target="_blank" rel="noopener" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true" focusable="false"><path d="M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077"/></svg></a><a href="https://www.tiktok.com/@goshipexpress.net" aria-label="TikTok" class="hv-fill-accent" target="_blank" rel="noopener" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg></a>
+        <a href="https://wa.me/18495386262" aria-label="WhatsApp" class="hv-fill-accent" target="_blank" rel="noopener" style="display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.07);color:#dde5f8;font-size:13px;font-weight:700"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Servicios</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="index.html#adresse" class="hv-accent" style="color:#a4b3d6">Dirección de recepción EE. UU.</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Consolidación de paquetes</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Flete marítimo</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Flete aéreo exprés</a>
+        <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Despacho de aduanas</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navegación</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <a href="index.html" class="hv-accent" style="color:#a4b3d6">Inicio</a>
+        <a href="a-propos.html" class="hv-accent" style="color:#a4b3d6">Nosotros</a>
+        <a href="nos-services.html" class="hv-accent" style="color:#a4b3d6">Servicios</a>
+        <a href="blog.html" class="hv-accent" style="color:#a4b3d6">Blog</a>
+        <a href="contacts.html" class="hv-accent" style="color:#a4b3d6">Contacto</a>
+      </div>
+    </div>
+    <div style="min-width:0">
+      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Contáctenos</h4>
+      <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
+        <span style="color:#dde5f8;font-weight:700">+1 849 538-6262</span>
+        <span style="word-break:break-word">goshipexpressllc@gmail.com</span>
+        <span>Lun–Sáb · 8:00–18:00</span>
+        <span>8140 NW 74th Ave, Unit 3, Apt 46780<br>Medley, Florida 33166</span>
+        <a href="contacts.html#contact" class="hv-fill-cta" style="margin-top:6px;display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;font-weight:700;padding:14px 20px;border-radius:11px;justify-self:start">Solicitar cotización<span style="width:8px;height:8px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span></a>
+      </div>
+    </div>
+  </div>
+  <div style="max-width:1320px;margin:clamp(40px,5vw,64px) auto 0;padding:24px 0 28px;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase">
+    <span>© 2026 Goship Express LLC · Todos los derechos reservados</span>
+    <span style="display:flex;flex-wrap:wrap;gap:12px 22px">
+      <a href="termes-et-conditions.html" class="hv-accent" style="color:#a4b3d6">Términos y condiciones</a>
+      <a href="marchandises-dangereuses.html" class="hv-accent" style="color:#a4b3d6">Mercancías peligrosas</a>
+      <a href="support.html" class="hv-accent" style="color:#a4b3d6">Soporte</a>
+      <a href="fermer-un-compte.html" class="hv-accent" style="color:#a4b3d6">Cerrar una cuenta</a>
+      <a href="confidentialite.html" class="hv-accent" style="color:#a4b3d6">Privacidad</a>
+    </span>
+  </div>
+  
+</footer>
+
+</div>
+</body>
+</html>

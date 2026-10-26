@@ -1,0 +1,326 @@
+/* ==========================================================================
+   Goship Express — étiquettes d'expédition et factures
+   ==========================================================================
+   Cette feuille ne sert qu'aux documents imprimés. Elle est chargée dans un
+   cadre à part par assets/js/impression.js, jamais par les pages du site :
+   elle n'alourdit donc aucune visite.
+
+   Polices du système, volontairement : un document qui part à l'imprimante ne
+   doit pas attendre le téléchargement d'une police, et une étiquette se lit
+   mieux dans un caractère ordinaire et large.
+
+   « print-color-adjust: exact » demande au navigateur de ne pas effacer les
+   aplats à l'impression : sans lui, le bandeau bleu de l'étiquette et le
+   tampon « Payée » sortiraient blancs.
+   ========================================================================== */
+/* L'orange du logo, relevé sur le fichier : #ff6a03. Il y en a deux, de la
+   même teinte, et pour une raison de lisibilité — l'orange vif est éclatant
+   mais peu contrasté. Il sert donc aux aplats et aux grands caractères ; le
+   même orange assombri sert aux petits textes, où le vif se lirait mal. */
+:root{--or:#ff6a03;--or-fonce:#c74a00;--or-pale:#fff1e4;--encre:#061a3f;--gris:#4a5878}
+
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+html,body{margin:0;padding:0;background:#fff;color:#061a3f;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  font-size:11pt;line-height:1.4}
+p,h1,h2,h3{margin:0}
+svg{display:block}
+
+
+/* --------------------------------------------------------------------------
+   L'étiquette d'expédition — 4 × 6 pouces
+   --------------------------------------------------------------------------
+   Dessinée pour une imprimante thermique directe — Y812BT et ses semblables :
+   203 dpi, noir ou blanc, aucun gris. Trois règles en découlent.
+
+   - **Aucun gris, aucune couleur pâle.** Le pilote les remplacerait par une
+     trame de points, qui brouille les petits textes sans rien économiser.
+     Ce qui distingue un texte d'un autre, ici, c'est sa taille et sa graisse.
+   - **Les aplats noirs restent petits.** À 180 mm/s, une grande surface noire
+     ralentit la machine, chauffe la tête et bave sur le papier. Seuls le
+     service et le pays en profitent : quelques centimètres carrés, mais ce
+     sont eux qu'on lit en triant les sacs.
+   - **Rien de plus fin qu'un point.** À 203 dpi, 1 pt fait moins de 3 points,
+     et un filet de 0,6 pt disparaît par endroits. D'où le 8 pt minimum et les
+     filets d'au moins 1 pt.
+
+   Le même dessin sort très bien d'une laser ou d'un jet d'encre : du noir sur
+   du blanc convient partout.
+   -------------------------------------------------------------------------- */
+.et{width:4in;height:6in;padding:4mm;display:flex;flex-direction:column;color:#000;
+  border:1pt solid #000;overflow:hidden;page-break-after:always;break-after:page}
+.et:last-child{page-break-after:auto;break-after:auto}
+
+.et__tete{display:flex;align-items:center;justify-content:space-between;gap:3mm;
+  padding-bottom:2mm;border-bottom:1.5pt solid #000}
+.et__marque{min-width:0}
+.et__logo{display:block;width:auto;height:12mm;font-size:12pt;font-weight:800}
+.et__sous{display:block;margin-top:1mm;font-size:8pt;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.et__service{flex:none;padding:1.4mm 3mm;background:#000;color:#fff;border-radius:1mm;
+  font-size:9.5pt;font-weight:800;letter-spacing:.1em}
+
+.et__bande{margin-top:3mm;text-align:center}
+.et__bande svg{width:100%;height:16mm}
+.et__numero{display:block;margin-top:.8mm;font-size:17pt;font-weight:800;letter-spacing:.06em}
+/* La date d'enregistrement du colis, sous son numéro : celle de la base, pas celle
+   de l'impression. En gras, au-dessus du plancher de 8 pt. */
+.et__date{display:block;margin-top:.5mm;font-size:10pt;font-weight:800;letter-spacing:.03em}
+
+/* « flex:1 » : c'est ce bloc qui absorbe le blanc restant. L'étiquette a une
+   hauteur fixe, et depuis que l'expéditeur n'y figure plus il en reste ; mieux
+   vaut le laisser sous l'adresse que sous le contenu du colis, pour que la
+   destination et le contenu tiennent ensemble en bas du papier. */
+.et__dest{flex:1;margin-top:2.4mm;padding-top:2.4mm;border-top:1pt solid #000;
+  display:flex;align-items:flex-start;gap:3mm}
+.et__qui{flex:1;min-width:0}
+.et__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.16em;
+  text-transform:uppercase}
+/* Une étiquette a une taille fixe : ce qui est trop long est coupé plutôt que
+   de pousser le reste hors du papier. On coupe le nom, l'adresse et le contenu
+   — jamais le numéro, le code-barres ni la destination, qui sont ce dont le
+   transporteur a besoin. */
+.et__coupe{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden}
+.et__personne{margin-top:.6mm;font-size:13pt;font-weight:800;line-height:1.2;-webkit-line-clamp:2;line-clamp:2}
+.et__adresse{font-size:10pt;line-height:1.35}
+.et__qui .et__adresse{-webkit-line-clamp:2;line-clamp:2}
+.et__ligne{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.et__code{white-space:nowrap}
+.et__tel{margin-top:.6mm;font-size:10pt;font-weight:700}
+.et__qui .et__libelle + .et__adresse{margin-top:.3mm}
+.et__qui .et__personne + .et__libelle{margin-top:1.4mm}
+.et__qr{flex:none;width:24mm;text-align:center}
+.et__qr svg{width:24mm;height:24mm}
+.et__qr-texte{display:block;margin-top:.8mm;font-size:7.5pt}
+
+/* Le pays en blanc sur noir : c'est le seul aplat un peu large de l'étiquette,
+   et c'est celui qui se voit d'un mètre quand on trie. */
+.et__vers{margin-top:2.4mm;display:flex;align-items:stretch;gap:0;
+  border:1.5pt solid #000;border-radius:1mm;overflow:hidden}
+.et__pays{flex:none;display:flex;align-items:center;justify-content:center;
+  min-width:19mm;padding:1.6mm 2mm;background:#000;color:#fff;
+  font-size:24pt;font-weight:900;line-height:1}
+/* Sur deux lignes au besoin : « Petite Rivière de l'Artibonite » ne tient pas
+   sur une seule, et c'est justement le mot qu'on ne doit jamais rogner. */
+/* La ville du colis, et le nom du pays dessous (le code seul, « DO », ne dit pas
+   tout à qui ne trie pas tous les jours). */
+.et__lieu{flex:1;min-width:0;align-self:center;padding:1mm 3mm}
+.et__ville{font-size:13pt;font-weight:800;letter-spacing:.03em;line-height:1.15;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  overflow:hidden}
+.et__ville--manque{font-size:11pt}
+.et__pays-nom{display:block;margin-top:.4mm;font-size:8pt;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Le contenu du colis, là où figurait l'expéditeur. Il suit la destination
+   au lieu d'être renvoyé en bas du papier : le blanc qui reste vaut mieux au
+   bord de l'étiquette qu'au milieu. */
+.et__pied{margin-top:2.4mm;padding-top:2.5mm;border-top:1pt dashed #000}
+.et__desc{font-size:10.5pt;font-weight:700;line-height:1.3;-webkit-line-clamp:2;line-clamp:2}
+.et__meta{font-size:9pt;line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+
+/* --------------------------------------------------------------------------
+   La facture — une page A4
+   -------------------------------------------------------------------------- */
+.fa{width:210mm;min-height:297mm;padding:12mm 14mm 8mm;display:flex;flex-direction:column;
+  page-break-after:always;break-after:page}
+.fa:last-child{page-break-after:auto;break-after:auto}
+
+.fa__tete{display:flex;align-items:flex-start;justify-content:space-between;gap:10mm;
+  padding-bottom:4.5mm;border-bottom:2.2pt solid var(--or)}
+.fa__logo{display:block;width:40mm;height:auto}
+.fa__emetteur{margin-top:2mm;white-space:pre-line;font-size:8.5pt;line-height:1.35;color:var(--gris)}
+.fa__titre{flex:none;text-align:right}
+.fa__titre h1{font-size:24pt;font-weight:900;letter-spacing:.02em;text-transform:uppercase;
+  color:var(--or)}
+.fa__numero{display:block;font-size:12pt;font-weight:700;color:#4a5878;letter-spacing:.04em}
+.fa__dates{margin:3mm 0 0;display:grid;grid-template-columns:auto auto;gap:.6mm 3mm;
+  justify-content:end;font-size:9pt}
+.fa__dates dt{color:#4a5878}
+.fa__dates dd{margin:0;font-weight:700}
+.fa__etat{display:inline-block;margin-top:3mm;padding:1.4mm 3.5mm;border-radius:1.5mm;
+  font-size:9.5pt;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.fa__etat--a_payer{background:var(--or-pale);color:var(--or-fonce);border:1.2pt solid var(--or)}
+.fa__etat--payee{background:#dff3e4;color:#14562a;border:1pt solid #1d7a3c}
+.fa__etat--annulee{background:#eef0f5;color:#4a5878;border:1pt solid #8a93ac}
+.fa__etat--partielle{background:#fdf3d8;color:#7a4b06;border:1pt solid #c98a12}
+.fa__etat--en_retard{background:#fde4e4;color:#8f1717;border:1.2pt solid #c42525}
+
+.fa__client{margin-top:6mm}
+.fa__libelle{display:block;font-size:7.5pt;font-weight:800;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--or-fonce)}
+.fa__personne{display:block;margin-top:1mm;font-size:13pt;font-weight:800}
+.fa__code{font-weight:700;letter-spacing:.03em}
+.fa__client p{font-size:10.5pt;line-height:1.35}
+
+.fa__lignes{margin-top:6mm;width:100%;border-collapse:collapse;font-size:10.5pt}
+.fa__lignes th,.fa__lignes td{padding:2.2mm 3mm;text-align:left;vertical-align:top}
+.fa__lignes thead th{background:var(--or);color:#fff;font-size:8.5pt;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase}
+.fa__lignes tbody tr{border-bottom:.8pt solid #f0d6c1}
+.fa__droite{text-align:right;white-space:nowrap}
+.fa__colis{color:#4a5878;letter-spacing:.03em;white-space:nowrap}
+.fa__lignes tfoot th{border-top:1.5pt solid #061a3f;font-size:11pt;font-weight:800}
+.fa__lignes tfoot .fa__total{border-top:1.5pt solid #061a3f;font-size:14pt;font-weight:900}
+.fa__centre{text-align:center;white-space:nowrap}
+.fa__desc{display:block}
+.fa__lignes .fa__colis{display:block;margin-top:.6mm;font-size:8.5pt}
+
+/* Les totaux, en tête de la colonne de droite. Une facture de plus de cinq
+   colis déborde sur une deuxième page : la coupure peut tomber n'importe où,
+   sauf au milieu de ce tableau-ci. */
+.fa__totaux{width:100%;border-collapse:collapse;font-size:10.5pt;
+  break-inside:avoid;page-break-inside:avoid}
+.fa__totaux th,.fa__totaux td{padding:1.4mm 3mm;text-align:left}
+.fa__totaux th{font-weight:600;color:#2d3850}
+.fa__totaux--grand th,.fa__totaux--grand td{border-top:1.6pt solid var(--or);font-size:12.5pt;
+  font-weight:900;color:var(--encre)}
+.fa__totaux--balance th,.fa__totaux--balance td{background:var(--or-pale);font-size:12pt;
+  font-weight:900;color:var(--or-fonce)}
+
+/* Le bas de la facture, en deux colonnes : comment payer à gauche, les
+   totaux et le paraphe à droite. Les moyens de paiement écrits en toutes
+   lettres prennent de la hauteur ; les mettre à côté des totaux, au lieu de
+   dessous, évite de pousser la facture sur une deuxième page. */
+.fa__reglement{margin-top:6mm;display:flex;align-items:flex-start;gap:8mm}
+.fa__paiement{flex:1;min-width:0;font-size:10.5pt;line-height:1.5}
+/* Les paragraphes du bloc lui-même, pas ceux des moyens de paiement : ces
+   derniers sont des listes de lignes, et respirer entre chacune les délierait. */
+.fa__paiement > p{margin-top:1mm}
+.fa__cote{flex:none;width:78mm}
+.fa__lien{font-weight:700;word-break:break-all;color:#1746a8}
+.fa__note{margin-top:3mm;padding:2.5mm 3mm;background:var(--or-pale);border-left:2.4pt solid var(--or);
+  font-size:10pt}
+
+/* Les moyens de paiement : du texte, rien d'autre. Ni cadre, ni colonnes, ni
+   filets — c'est ce qui se lit le plus vite, et une adresse longue peut alors
+   s'étaler sur toute la largeur au lieu d'être coupée en deux. */
+.fa__moyen{margin-top:4mm;font-size:10pt;line-height:1.45;
+  break-inside:avoid;page-break-inside:avoid}
+.fa__moyen-tete,.fa__moyen-ligne{margin:0;overflow-wrap:break-word}
+
+/* Sous les totaux : le code à scanner, puis notre paraphe — seul, car une
+   facture n'a pas à être contresignée pour être due. */
+.fa__paraphes{margin-top:9mm;display:flex;align-items:flex-start;gap:6mm;
+  break-inside:avoid;page-break-inside:avoid}
+.fa__qr{flex:none;width:22mm;text-align:center}
+.fa__qr svg{width:22mm;height:22mm}
+.fa__qr-texte{display:block;margin-top:1mm;font-size:7.5pt;color:#4a5878}
+.fa__paraphe{flex:1;min-width:0;text-align:center}
+.fa__signature{display:block;margin:0 auto;width:auto;height:11mm;max-width:100%;object-fit:contain}
+.fa__paraphe-vide{display:block;height:11mm}
+.fa__paraphe-trait{display:block;margin-top:1mm;border-top:1pt solid var(--encre)}
+.fa__paraphe-titre{display:block;margin-top:1.5mm;font-size:9pt;font-weight:800;color:#061a3f}
+.fa__paraphe-sous{display:block;margin-top:.5mm;font-size:8.5pt;color:#4a5878}
+
+.fa__pied{margin-top:auto;padding-top:3.5mm;border-top:1.4pt solid var(--or);
+  font-size:12pt;font-weight:800;line-height:1.4;color:var(--or-fonce);text-align:center}
+
+
+/* --------------------------------------------------------------------------
+   Le rapport Analytics (admin.html#analytics, « Imprimer / PDF ») : la
+   rubrique affichée, recopiée telle quelle. Les cartes deviennent une grille
+   serrée, les tableaux gardent leurs colonnes et les chiffres alignés à
+   droite ; rien n'est recalculé pour le papier.
+   -------------------------------------------------------------------------- */
+.gs-rapport{font-size:10pt;line-height:1.4}
+.gs-rapport h1{margin-bottom:1.5mm;padding-bottom:2mm;border-bottom:1.4pt solid var(--or);font-size:16pt}
+.gs-rapport h2{margin:5mm 0 1.5mm;font-size:12.5pt;break-after:avoid}
+.gs-rapport p{margin:0 0 2mm}
+.gs-rapport__periode{color:var(--gris)}
+.gs-rapport section{break-inside:auto}
+.gs-rapport .gs-apercu__note,.gs-rapport .gs-kpi__sous,.gs-rapport .gs-analytics__non-suivi{font-size:9pt;color:var(--gris)}
+.gs-rapport .gs-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2mm}
+.gs-rapport .gs-kpi{display:flex;flex-direction:column;gap:.8mm;padding:2.2mm 2.5mm;border:.6pt solid #cfd8e8;border-radius:2mm;break-inside:avoid}
+.gs-rapport .gs-kpi__libelle{font-size:8pt;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gris)}
+.gs-rapport .gs-kpi__valeur{font-size:13pt}
+.gs-rapport .gs-kpi__picto{display:none}
+.gs-rapport .gs-variation{font-weight:700;color:var(--encre)}
+.gs-rapport table{width:100%;margin:2mm 0 3mm;border-collapse:collapse;font-size:9pt}
+.gs-rapport caption{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.gs-rapport th,.gs-rapport td{padding:1.2mm 1.6mm;border-bottom:.5pt solid #d6ddec;text-align:left;vertical-align:top}
+.gs-rapport th{background:#eef2f8;font-weight:700}
+.gs-rapport tr{break-inside:avoid}
+.gs-rapport .gs-nombre{text-align:right;white-space:nowrap}
+.gs-rapport ul{margin:1mm 0 3mm;padding-left:5mm}
+.gs-rapport .gs-repartition{padding:0;list-style:none}
+.gs-rapport .gs-repartition__ligne{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;align-items:center;gap:3mm;padding:.6mm 0}
+.gs-rapport .gs-repartition__piste{display:block;height:2mm;border-radius:1mm;background:#eef2f8;overflow:hidden}
+.gs-rapport .gs-repartition__barre{display:block;height:100%;background:#1f5fe0}
+.gs-rapport .gs-graphe{margin:2mm 0 3mm;break-inside:avoid}
+.gs-rapport .gs-graphe__titre{font-weight:700}
+.gs-rapport .gs-graphe__legende{display:flex;flex-wrap:wrap;gap:1mm 5mm;margin:1mm 0;padding:0;list-style:none;font-size:9pt}
+.gs-rapport .gs-graphe__legende li{display:flex;align-items:center;gap:1.5mm}
+.gs-rapport .gs-graphe__puce{display:inline-block;width:2.5mm;height:2.5mm;border-radius:.6mm}
+.gs-rapport .gs-graphe__max{font-size:8pt;color:var(--gris)}
+.gs-rapport .gs-graphe__svg{width:100%;height:32mm}
+.gs-rapport .gs-graphe__axe{stroke:#9aa6bf;stroke-width:1}
+.gs-rapport .gs-graphe__dates{display:flex;justify-content:space-between;font-size:8pt;color:var(--gris)}
+.gs-rapport .gs-graphe--serie1,.gs-rapport .gs-graphe--recus,.gs-rapport .gs-graphe--facture,.gs-rapport .gs-graphe--scans{fill:#1f5fe0;background:#1f5fe0}
+.gs-rapport .gs-graphe--serie2,.gs-rapport .gs-graphe--livres,.gs-rapport .gs-graphe--encaisse{fill:#f4600d;background:#f4600d}
+.gs-rapport .gs-tendances li{margin-bottom:1mm}
+.gs-rapport details summary{font-weight:700;list-style:none}
+.gs-rapport dl{margin:1mm 0 0}
+.gs-rapport dt{margin-top:1.5mm;font-weight:700}
+.gs-rapport dd{margin:0;color:var(--gris)}
+.gs-rapport .gs-admin-vide{color:var(--gris);font-style:italic}
+.gs-rapport .gs-invisible{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+
+/* --------------------------------------------------------------------------
+   À l'écran, le document se voit centré sur fond gris : c'est l'aperçu
+   affiché dans le tableau de bord avant d'imprimer.
+   -------------------------------------------------------------------------- */
+@media screen{
+  body{padding:12px;background:#e7edf9}
+  .et,.fa,.gs-rapport{margin:0 auto 12px;background:#fff;box-shadow:0 10px 30px -18px rgba(6,26,63,.6)}
+}
+
+
+/* --------------------------------------------------------------------------
+   Le rapport (onglet « Rapport » du tableau de bord) — A4, portrait ou paysage
+   --------------------------------------------------------------------------
+   En-tête au logo, cartes des chiffres, une partie par donnée incluse, ses
+   tableaux au trait fin. L'en-tête des colonnes se répète en haut de chaque
+   page (thead), une ligne ne se coupe jamais en deux, un titre ne reste pas
+   seul en bas de page. Le pied (date, auteur, numéro de page) est imprimé
+   dans la marge du bas par la règle @page qu'écrit impression.js ; il est
+   aussi écrit à la fin du document, pour les navigateurs qui n'impriment pas
+   les marges de page.
+   -------------------------------------------------------------------------- */
+.gs-rapport-doc{font-size:9pt;line-height:1.35}
+.gs-rapport-doc__tete{display:flex;align-items:flex-start;gap:6mm;padding-bottom:3mm;border-bottom:1.4pt solid var(--or)}
+.gs-rapport-doc__logo{flex:none;width:42mm;height:auto}
+.gs-rapport-doc__identite{flex:1;min-width:0}
+.gs-rapport-doc__entreprise{font-size:8pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--or-fonce)}
+.gs-rapport-doc__titre{margin:.5mm 0 2mm;font-size:16pt;line-height:1.2}
+.gs-rapport-doc__infos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8mm 6mm;margin:0}
+.gs-rapport-doc__infos div{display:flex;gap:2mm}
+.gs-rapport-doc__infos dt{flex:none;font-weight:700;color:var(--gris)}
+.gs-rapport-doc__infos dd{margin:0}
+.gs-rapport-doc__note{margin:2mm 0 0;font-size:8.5pt;color:var(--or-fonce)}
+.gs-rapport-doc__cartes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2mm;margin:4mm 0 1mm}
+.gs-rapport-doc__cartes .gs-kpi{display:flex;flex-direction:column;gap:.6mm;padding:2mm 2.4mm;border:.6pt solid #cfd8e8;border-radius:2mm;break-inside:avoid}
+.gs-rapport-doc__cartes .gs-kpi__libelle{font-size:7.5pt;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gris)}
+.gs-rapport-doc__cartes .gs-kpi__valeur{font-size:13pt}
+.gs-rapport-doc__cartes .gs-kpi__sous{font-size:7.5pt;color:var(--gris)}
+.gs-rapport-doc__section{margin-top:5mm}
+.gs-rapport-doc__section-titre{margin:0 0 1.5mm;padding-bottom:1mm;border-bottom:.6pt solid #cfd8e8;font-size:12pt;break-after:avoid}
+.gs-rapport-doc__sous-titre{margin:3mm 0 1mm;font-size:10pt;font-weight:700;break-after:avoid}
+.gs-rapport-doc__table{width:100%;border-collapse:collapse;font-size:8pt}
+.gs-rapport-doc__table thead{display:table-header-group}
+.gs-rapport-doc__table th,.gs-rapport-doc__table td{padding:1mm 1.4mm;border-bottom:.4pt solid #d6ddec;text-align:left;vertical-align:top;overflow-wrap:break-word}
+/* Un en-tête, une heure, un montant ne se coupent jamais au milieu d'un mot */
+.gs-rapport-doc__table th{background:#eef2f8;font-weight:700;white-space:nowrap}
+.gs-rapport-doc__table tr{break-inside:avoid}
+.gs-rapport-doc__table .gs-rapports__valeur{display:block}
+.gs-rapport-doc__compte,.gs-rapport-doc__vide{margin:1mm 0 0;font-size:8pt;color:var(--gris)}
+.gs-rapport-doc__finances{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:5mm;align-items:start}
+.gs-rapport-doc__chiffres{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 5mm;margin:0}
+.gs-rapport-doc__chiffres div{display:flex;justify-content:space-between;gap:2mm;padding:.9mm 0;border-bottom:.4pt solid #e3e8f2;break-inside:avoid}
+.gs-rapport-doc__chiffres dt{color:var(--gris)}
+.gs-rapport-doc__chiffres dd{margin:0;font-weight:700;white-space:nowrap}
+.gs-rapport-doc__pied{margin-top:6mm;padding-top:2mm;border-top:.6pt solid #cfd8e8;font-size:8pt;color:var(--gris)}
