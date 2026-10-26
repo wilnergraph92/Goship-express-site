@@ -12,6 +12,28 @@
 # n'importe quelle profondeur (/en/…, /ht/…).
 ErrorDocument 404 /404.html
 
+# --- Les fichiers de travail ne sont jamais servis aux visiteurs ----------
+#  Ils ne sont pas envoyés, mais si l'un arrivait par erreur, il resterait
+#  caché. Le dossier .git est celui que Hostinger garde pour suivre la
+#  branche « hostinger ».
+#  Toujours « 404 », jamais « 403 » : un refus et un renvoi sur la même
+#  adresse (outils/supabase.sql) donnaient l'un ou l'autre au hasard sur
+#  Hostinger, et la surveillance attend 404. Les fichiers cachés (.htaccess,
+#  .git) restent refusés.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(outils|application-mobile|bureau|docs|\.git|\.github|\.claude)(/|$) - [R=404,L]
+  RewriteRule \.(sql|py|md|command|json|lock)$ - [R=404,L]
+</IfModule>
+<IfModule !mod_rewrite.c>
+  <FilesMatch "\.(sql|py|md|command|json|lock)$">
+    Require all denied
+  </FilesMatch>
+</IfModule>
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+
 # --- Adresses propres -----------------------------------------------------
 #  Le visiteur voit goshipexpress.net/nos-services, pas nos-services.html,
 #  et goshipexpress.net/en/, pas en/index.html. Les fichiers gardent leur
@@ -75,12 +97,3 @@ ErrorDocument 404 /404.html
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
 </IfModule>
-
-# --- Les fichiers de travail ne sont jamais servis aux visiteurs ----------
-#  Ils ne sont pas envoyés, mais si l'un arrivait par erreur, il resterait
-#  caché. Le dossier .git est celui que Hostinger garde pour suivre la
-#  branche « hostinger ».
-<FilesMatch "(^\.|\.(sql|py|md|command|json|lock)$)">
-  Require all denied
-</FilesMatch>
-RedirectMatch 404 ^/(outils|application-mobile|bureau|docs|\.git|\.github|\.claude)(/|$)
