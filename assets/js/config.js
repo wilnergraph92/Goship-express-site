@@ -57,7 +57,7 @@ window.GOSHIP_CONFIG = {
   carteEmail: 'goshipexpressllc@gmail.com',
   carteDevise: 'USD',
   appStoreLien: '',
-  googlePlayLien: '',
+  googlePlayLien: 'https://play.google.com/store/apps/details?id=com.goshipexpress.app',
   siteUrl: 'https://goshipexpress.net',
   googleAnalytics: 'G-KLV2HSF91C'
 };
