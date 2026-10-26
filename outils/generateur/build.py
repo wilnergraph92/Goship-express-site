@@ -1209,7 +1209,7 @@ LOCAL_BUSINESS = {
     'name': 'Goship Express LLC',
     'description': "Réception, consolidation, transport et livraison de colis entre les États-Unis, Santo Domingo et Haïti.",
     'telephone': '+1-849-538-6262',
-    'email': 'goshipexpressllc@gmail.com',
+    'email': 'infos@goshipexpress.net',
     'address': {
         '@type': 'PostalAddress',
         'streetAddress': '8140 NW 74th Ave, Unit 3, Apt 46780',

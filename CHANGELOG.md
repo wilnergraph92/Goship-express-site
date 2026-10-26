@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — infos@goshipexpress.net, l'adresse de contact du site (26/10/2026)
+
+Aucune migration. L'adresse affichée et cliquable du site passe de `goshipexpressllc@gmail.com` à `infos@goshipexpress.net` (boîte Hostinger du domaine) : bandeau du haut, pied de page, carte « E-mail » de Contacts, liens `mailto:` de Support, Confidentialité, Marchandises dangereuses, Fermer un compte, Termes et conditions, données structurées (JSON-LD), dans les 4 langues. Changé dans les sources (`build.py`, `outils/generateur/export/`, `outils/traductions/`) : `build.py` puis `traduire.py` ne changent plus aucun fichier. **L'adresse Gmail reste celle du compte PayPal** (`carteEmail` dans `config.js`, ligne PayPal de la facture dans `impression.js`) : elle n'est pas une adresse de contact.
+
 ## Non publié — l'application de bureau 1.0.1 ouvre goshipexpress.net (26/10/2026)
 
 Aucune migration. `bureau/config/environnements.json` : `production` = `https://goshipexpress.net/`. goshipexpress.net renvoyant `admin.html` vers `/admin`, l'application garde les deux adresses comme tableau de bord (`estTableau`) ; sans cela, elle aurait ouvert le navigateur à la place du tableau de bord. Le serveur d'essai fait la même redirection, et l'essai vérifie l'adresse de production. Version 1.0.1 : nouveaux installateurs (Actions > « Application de bureau »), à installer par-dessus la 1.0.0 ; la 1.0.0 continue d'ouvrir GitHub Pages.
