@@ -440,9 +440,16 @@ googlePlayLien: 'https://play.google.com/store/apps/details?id=com.goshipexpress
 ```
 
 Les boutons deviennent alors de vrais liens et affichent « Disponible sur » ; la phrase d'attente
-disparaît d'elle-même. Pensez aussi à remplacer les deux logos dessinés (`LOGO_PLAY` et
-`LOGO_POMME` dans `build.py`) par les **badges officiels** d'Apple et de Google : les deux
-boutiques les fournissent et demandent qu'on utilise les leurs dès que l'application est en ligne.
+disparaît d'elle-même. Les deux boutiques demandent qu'on utilise leurs **badges officiels** dès que
+l'application est en ligne.
+
+**Google Play : fait le 26/10/2026.** `googlePlayLien` est rempli ; `build.py` (relancé avec
+`traduire.py`) pose alors à la place du bouton dessiné le badge officiel de Google
+(`assets/img/boutiques/google-play-fr.png`, `-en`, `-es`, téléchargés tels quels depuis
+play.google.com/intl/en_us/badges ; Google n'en fait pas en créole, la page `ht/` garde le
+français), et la phrase d'attente ne parle plus que de l'App Store. **App Store** : le jour de la
+publication, remplir `appStoreLien`, puis faire de même avec le badge officiel d'Apple
+(`LOGO_POMME` dans `build.py`).
 
 **Avant le premier essai**, la base doit avoir reçu toute la chaîne des migrations (`outils/migrations.txt`) :
 les pré-alertes, les factures, les notifications du téléphone et `creer_prealerte` en font partie.
@@ -888,7 +895,7 @@ Côté site, les ajouts servent aussi dans le navigateur : raccourcis clavier, b
 ## À compléter
 
 - **Sécurité** : les cinq réglages Supabase de la section « Sécurité » — le plus urgent étant le *Site URL*, encore réglé sur `http://localhost:3000`, et la confirmation des adresses e-mail.
-- **Application mobile** : adresses des agences de Port-au-Prince et Santo Domingo, numéros de compte bancaire, Azul, MonCash et NatCash (`application-mobile/config.js`), puis publication sur les deux boutiques. Une fois publiée : `appStoreLien` et `googlePlayLien` dans `assets/js/config.js`, et les badges officiels des boutiques (voir « Sa promotion sur le site »).
+- **Application mobile** : adresses des agences de Port-au-Prince et Santo Domingo, numéros de compte bancaire, Azul, MonCash et NatCash (`application-mobile/config.js`), puis publication sur les deux boutiques. Google Play : en ligne et relié au site (badge officiel). App Store : une fois publiée, `appStoreLien` dans `assets/js/config.js` et le badge officiel d'Apple (voir « Sa promotion sur le site »).
 - **Paiement par carte** : contrat commerçant Azul demandé ; en attendant, les factures passent par PayPal (voir « Paiement des factures »).
 - **Espace client** : suivre les étapes « Activer l'espace client » ci-dessus (Supabase, puis e-mails de réinitialisation).
 - **Notifications** : configurer l'envoi des e-mails (Brevo) et, si vous le souhaitez, WhatsApp automatique (voir « Prévenir les clients »). Puis les deux réglages des e-mails de bienvenue (`site_url`, `courriel_logo`).
