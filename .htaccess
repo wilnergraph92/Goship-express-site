@@ -12,6 +12,17 @@
 # n'importe quelle profondeur (/en/…, /ht/…).
 ErrorDocument 404 /404.html
 
+# --- Une seule adresse : goshipexpress.net, sans « www » --------------------
+#  www.goshipexpress.net servait les mêmes pages : pour Google, deux sites en
+#  double ; pour le client, deux sessions (connecté sur l'un, pas sur l'autre).
+#  Renvoi définitif (301), adresse, paramètres et ancre gardés. En premier :
+#  les règles suivantes ne voient plus que le domaine nu.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_HOST} ^www\.goshipexpress\.net$ [NC]
+  RewriteRule ^ https://goshipexpress.net%{REQUEST_URI} [R=301,L,NE]
+</IfModule>
+
 # --- Les fichiers de travail ne sont jamais servis aux visiteurs ----------
 #  Ils ne sont pas envoyés, mais si l'un arrivait par erreur, il resterait
 #  caché. Le dossier .git est celui que Hostinger garde pour suivre la

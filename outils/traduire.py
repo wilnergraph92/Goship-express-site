@@ -29,9 +29,23 @@ from collections import Counter
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOSSIER_TRAD = os.path.join(RACINE, 'outils', 'traductions')
 
-# Adresse publique du site, par ex. 'https://www.goshipexpress.com'.
-# Une fois renseignée, les balises hreflang et le fichier sitemap.xml sont générés.
-SITE_URL = ''
+
+def adresse_du_site():
+    """Adresse publique du site : le réglage siteUrl de assets/js/config.js.
+
+    Une seule source, la même que celle des e-mails et des QR codes : changer de
+    domaine ne demande qu'une ligne. Vide (site pas encore en ligne) : ni balises
+    canonical / hreflang, ni sitemap.xml.
+    """
+    try:
+        with open(os.path.join(RACINE, 'assets', 'js', 'config.js'), encoding='utf-8') as f:
+            m = re.search(r"siteUrl:\s*'([^']*)'", f.read())
+        return m.group(1).strip().rstrip('/') if m else ''
+    except OSError:
+        return ''
+
+
+SITE_URL = adresse_du_site()
 
 LANGUES = {
     'fr': {'dossier': '', 'nom': 'Français', 'drapeau': 'fr', 'libelle': 'Langue',
@@ -427,16 +441,51 @@ def poser_selecteurs(src, langue, page, absolu=False):
     return re.sub(r'<!--langues:(desktop|mobile)-->.*?<!--/langues-->', repl, src, flags=re.S)
 
 
+def adresse_publique(langue, page):
+    """L'adresse que Google doit retenir : celle que goshipexpress.net affiche.
+
+    Le .htaccess renvoie nos-services.html vers nos-services et en/index.html vers
+    en/ (301) : donner à Google l'adresse en .html, c'est lui donner une adresse
+    qui redirige, qu'il ne garde pas.
+    """
+    chemin = url_page(langue, page)
+    if chemin == 'index.html':
+        chemin = ''
+    elif chemin.endswith('/index.html'):
+        chemin = chemin[:-len('index.html')]
+    elif chemin.endswith('.html'):
+        chemin = chemin[:-len('.html')]
+    return SITE_URL + '/' + chemin
+
+
 def poser_alternates(src, page):
     bloc = ''
-    if SITE_URL:
-        base = SITE_URL.rstrip('/') + '/'
-        liens = [f'<link rel="alternate" hreflang="{l}" href="{base}{url_page(l, page)}">' for l in ORDRE_MENU]
-        liens.append(f'<link rel="alternate" hreflang="x-default" href="{base}{page}">')
+    # Une page « noindex » (espace client) ne doit pas être montrée : rien à dire à
+    # Google sur ses traductions non plus
+    if SITE_URL and 'name="robots" content="noindex' not in src:
+        liens = [f'<link rel="alternate" hreflang="{l}" href="{adresse_publique(l, page)}">' for l in ORDRE_MENU]
+        liens.append(f'<link rel="alternate" hreflang="x-default" href="{adresse_publique("fr", page)}">')
         bloc = '\n'.join(liens)
     src = re.sub(r'\n?<!--alternates-->.*?<!--/alternates-->', '', src, flags=re.S)
     if bloc:
         src = src.replace('</head>', f'<!--alternates-->\n{bloc}\n<!--/alternates-->\n</head>', 1)
+    return src
+
+
+def poser_canonique(src, langue, page):
+    """L'adresse officielle de cette page dans cette langue.
+
+    Sans elle, Google voit le même site trois fois — goshipexpress.net, la copie de
+    secours de GitHub Pages et l'adresse en .html — et choisit seul laquelle montrer.
+    Une page « noindex » (espace client) n'en reçoit pas : elle ne doit pas être
+    montrée du tout.
+    """
+    src = re.sub(r'\n?<!--canonique-->.*?<!--/canonique-->', '', src, flags=re.S)
+    if SITE_URL and 'name="robots" content="noindex' not in src:
+        adresse = adresse_publique(langue, page)
+        bloc = (f'<link rel="canonical" href="{adresse}">\n'
+                f'<meta property="og:url" content="{adresse}">')
+        src = src.replace('</head>', f'<!--canonique-->\n{bloc}\n<!--/canonique-->\n</head>', 1)
     return src
 
 
@@ -519,6 +568,7 @@ def main():
     # 1. Pages françaises : sélecteur de langue et balises hreflang
     for p in pages:
         src = poser_alternates(poser_selecteurs(sources[p], 'fr', p), p)
+        src = poser_canonique(src, 'fr', p)
         ecrire_si_change(os.path.join(RACINE, p), src)
         sources[p] = src
     chemin_404 = os.path.join(RACINE, '404.html')
@@ -534,17 +584,29 @@ def main():
         for p in pages:
             src = Page(p, sources[p]).traduire(dico, manquants)
             src = adapter_sous_dossier(poser_selecteurs(src, langue, p), langue)
+            src = poser_canonique(src, langue, p)
             ecrire_si_change(os.path.join(RACINE, LANGUES[langue]['dossier'], p), src)
         rapport[langue] = manquants
 
-    # 3. Plan du site (si l'adresse publique est connue)
+    # 3. Plan du site (si l'adresse publique est connue) : chaque page dans chaque
+    #    langue, avec ses trois sœurs, pour que Google montre la bonne langue. Pas de
+    #    date de modification : le fichier changerait à chaque génération.
     if SITE_URL:
-        base = SITE_URL.rstrip('/') + '/'
         publiques = [p for p in pages if 'name="robots" content="noindex' not in sources[p]]
-        urls = ''.join(f'  <url><loc>{base}{url_page(l, p)}</loc></url>\n' for p in publiques for l in ORDRE_MENU)
+        urls = []
+        for p in publiques:
+            soeurs = ''.join(f'    <xhtml:link rel="alternate" hreflang="{l}" href="{adresse_publique(l, p)}"/>\n'
+                             for l in ORDRE_MENU)
+            soeurs += f'    <xhtml:link rel="alternate" hreflang="x-default" href="{adresse_publique("fr", p)}"/>\n'
+            for l in ORDRE_MENU:
+                urls.append(f'  <url>\n    <loc>{adresse_publique(l, p)}</loc>\n{soeurs}  </url>\n')
         ecrire_si_change(os.path.join(RACINE, 'sitemap.xml'),
                          '<?xml version="1.0" encoding="UTF-8"?>\n'
-                         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + '</urlset>\n')
+                         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+                         'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' + ''.join(urls) + '</urlset>\n')
+        ecrire_si_change(os.path.join(RACINE, 'robots.txt'),
+                         'User-agent: *\nAllow: /\nDisallow: /admin\n\n'
+                         f'Sitemap: {SITE_URL}/sitemap.xml\n')
 
     # 4. Les textes du tableau de bord : admin.html n'a pas de copie traduite, il se
     #    traduit à l'écran (assets/js/tableau-langue.js) avec les mêmes dictionnaires

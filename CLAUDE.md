@@ -41,6 +41,7 @@ bureau/                             app de bureau Windows/macOS (Electron) — j
 | `impression.js` | Étiquettes 4×6 et factures A4, en 4 langues |
 | `site.js` | Pages publiques, suivi de colis |
 | `fond.js` | Grille de points en arrière-plan des pages publiques (canvas fixe, réagit au curseur) — pas le tableau de bord |
+| `mesure.js` | Google Analytics 4, pages publiques seulement, si `googleAnalytics` est réglé ; page envoyée sans ses paramètres, jamais de numéro de colis. La CSP qui l'autorise est posée par `build.py` (`csp(mesure=True)`) |
 | `codes.js` | QR codes et codes-barres |
 | `scan-parser.js` | Lecture d'un code scanné (étiquette, QR, suivi vendeur) — aucune requête |
 | `scanner.js` | Onglet « Scanner » du tableau de bord (`admin.html#scanner`) |

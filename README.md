@@ -335,7 +335,25 @@ Les messages de l'espace client (statuts, erreurs…) figurent en bas de chaque 
 
 ### Nom de domaine
 
-Une fois l'adresse du site connue, renseignez-la dans `assets/js/config.js` (`siteUrl`, pour les liens des e-mails et des messages WhatsApp) et dans `outils/traduire.py` (`SITE_URL = 'https://www.votre-domaine.com'`), puis relancez l'outil : il ajoute les balises `hreflang` qui indiquent à Google les versions de chaque page, et crée le fichier `sitemap.xml` (sans les pages privées). Ajoutez ensuite la ligne `Sitemap: https://www.votre-domaine.com/sitemap.xml` dans `robots.txt`.
+L'adresse du site est **une seule ligne** : `siteUrl` dans `assets/js/config.js` (aujourd'hui `https://goshipexpress.net`). Elle sert aux liens des e-mails et des messages WhatsApp, et `outils/traduire.py` la lit pour le référencement. Après l'avoir changée, relancez `build.py` puis `traduire.py`.
+
+### Référencement Google
+
+`traduire.py` écrit, à partir de `siteUrl` :
+
+- dans chaque page publique, une balise `canonical` (l'adresse officielle de la page dans sa langue : `goshipexpress.net/en/nos-services`, sans `.html`), `og:url`, et les balises `hreflang` vers ses trois traductions. Google ne voit donc qu'un site, même si la copie de secours de GitHub Pages et les adresses en `.html` existent encore ;
+- `sitemap.xml` : les 23 pages publiques dans les 4 langues (92 adresses), chacune avec ses traductions. Les pages `noindex` (espace client, tableau de bord) n'y sont pas ;
+- `robots.txt`, avec la ligne `Sitemap:`.
+
+`.htaccess` renvoie `www.goshipexpress.net` vers `goshipexpress.net` (301), adresse et paramètres gardés.
+
+**À faire une fois, dans la [Google Search Console](https://search.google.com/search-console)** (compte Google de l'entreprise) : ajouter la propriété « Domaine » `goshipexpress.net` ; Google donne un enregistrement TXT `google-site-verification=…` à poser dans la zone DNS de Hostinger (à côté du SPF, sans le remplacer) ; puis, dans *Sitemaps*, envoyer `sitemap.xml`. Les premières pages apparaissent dans Google en quelques jours.
+
+### Mesure d'audience (Google Analytics 4)
+
+`assets/js/mesure.js`, chargé seulement quand `googleAnalytics` (« G-XXXXXXXXXX », dans *Analytics > Admin > Flux de données*) est rempli dans `config.js` — puis `build.py` et `traduire.py` relancés : ils autorisent Google dans la politique de sécurité **des pages publiques seulement** et ajoutent la section « Mesure d'audience du site » à la politique de confidentialité (4 langues). Le tableau de bord et l'espace client ne chargent jamais Google.
+
+Ce qui est mesuré : les pages vues, sans leurs paramètres (`?suivi=GSE-…` ne part jamais chez Google), et quatre gestes — `generate_lead` (clic WhatsApp, téléphone, e-mail, ou formulaire envoyé), `clic_inscription`, `suivi_colis` (une recherche de colis, sans le numéro). Rien n'est mesuré sur l'ordinateur ni sur GitHub Pages (seulement sur `siteUrl`), ni pour un visiteur qui active *Global Privacy Control* ou *Ne pas me suivre*. Signaux Google et publicité désactivés.
 
 ## Formulaires et WhatsApp
 
@@ -878,5 +896,5 @@ Côté site, les ajouts servent aussi dans le navigateur : raccourcis clavier, b
 - **Mise en production** : l'état GO / NO-GO et ses bloqueurs sont dans `docs/production/go-no-go.md`.
 - **Termes et conditions** : quatre valeurs n'ont jamais été renseignées dans le document d'origine — `[devise locale]`, `[pourcentage %]`, `[nombre de jours]` et `[montant maximal ou norme en vigueur]`.
 - **Instagram et TikTok** : les icônes du pied de page n'ont pas encore de lien (`href="#top"`).
-- **Nom de domaine** : voir « Nom de domaine » ci-dessus.
+- **Google** : vérifier `goshipexpress.net` dans la Search Console et y envoyer `sitemap.xml` ; coller l'identifiant Google Analytics dans `config.js` (voir « Référencement Google » et « Mesure d'audience »).
 - **Témoignages** : sans photo dans la maquette, Marie-Ange D. et Jean-Robert P. sont représentés par leurs initiales.
