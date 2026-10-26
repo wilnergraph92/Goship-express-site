@@ -59,5 +59,5 @@ window.GOSHIP_CONFIG = {
   appStoreLien: '',
   googlePlayLien: '',
   siteUrl: 'https://goshipexpress.net',
-  googleAnalytics: ''
+  googleAnalytics: 'G-KLV2HSF91C'
 };
