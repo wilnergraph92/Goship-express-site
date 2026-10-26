@@ -12,6 +12,40 @@
 # n'importe quelle profondeur (/en/…, /ht/…).
 ErrorDocument 404 /404.html
 
+# --- Adresses propres -----------------------------------------------------
+#  Le visiteur voit goshipexpress.net/nos-services, pas nos-services.html,
+#  et goshipexpress.net/en/, pas en/index.html. Les fichiers gardent leur
+#  nom : les liens des pages aussi (ils marchent ainsi sur l'ordinateur, en
+#  file:, et sur GitHub Pages). Une adresse en .html est renvoyée une fois
+#  vers l'adresse propre (301, que le navigateur retient ensuite), avec ses
+#  paramètres (?retour=…) et son ancre (#…, le jeton d'une connexion par
+#  e-mail compris).
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # THE_REQUEST est l'adresse tapée par le visiteur, pas celle que la règle
+  # du bas fabrique : sans cette condition, les deux règles se renverraient
+  # la page à l'infini.
+  RewriteCond %{THE_REQUEST} ^[A-Z]+\ /([^?\ ]*/)?index(\.html)?[?\ ]
+  RewriteRule ^(.*/)?index(\.html)?$ /$1 [R=301,L]
+
+  RewriteCond %{THE_REQUEST} ^[A-Z]+\ /([^?\ ]+)\.html[?\ ]
+  RewriteRule ^(.+)\.html$ /$1 [R=301,L]
+
+  # nos-services/ (barre en trop) : vers nos-services. Un vrai dossier (en/)
+  # garde sa barre.
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^(.+)/$ /$1 [R=301,L]
+
+  # L'adresse propre sert le fichier .html du même nom, sans que l'adresse
+  # affichée change. Seulement une adresse sans point ni barre finale : le
+  # résultat (….html) n'y répond plus, la règle ne peut pas tourner en rond.
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME}.html -f
+  RewriteRule ^([^.]*[^./])$ $1.html [L]
+</IfModule>
+
 # --- Cache ----------------------------------------------------------------
 #  Les pages, les scripts et les feuilles de style ne portent pas de numéro
 #  de version dans leur nom : une copie gardée une semaine montrerait une

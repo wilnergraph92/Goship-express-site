@@ -39,11 +39,13 @@ echec()  { echo "CRITIQUE  $1"; echecs=$((echecs + 1)); }
 averti() { echo "ATTENTION $1"; avertissements=$((avertissements + 1)); }
 tolerant() { if [ "${SURVEILLANCE_TOLERANTE:-}" = 1 ]; then averti "$1 (toléré avant publication)"; else echec "$1"; fi; }
 
-# Une page lente ou un CDN qui se met à jour : trois essais, 20 s d'écart
+# Une page lente ou un CDN qui se met à jour : trois essais, 20 s d'écart. Les
+# redirections sont suivies : goshipexpress.net renvoie index.html vers / et
+# connexion.html vers /connexion (.htaccess, « Adresses propres »).
 recuperer() {
   local url="$1" sortie="$2" code
   for essai in 1 2 3; do
-    code="$(curl -sS -o "$sortie" -w '%{http_code}' --max-time 20 "$url" 2>/dev/null || echo 000)"
+    code="$(curl -sSL -o "$sortie" -w '%{http_code}' --max-time 20 "$url" 2>/dev/null || echo 000)"
     [ "$code" = 200 ] && { echo 200; return; }
     [ "$essai" -lt 3 ] && sleep 20
   done
@@ -63,6 +65,10 @@ for page in index.html connexion.html mon-compte.html admin.html en/index.html h
   if [ "$code" = 200 ] && grep -qi '</html>' "$tmp/page"; then ok "$page ($code)"
   else echec "$page : code $code"; fi
 done
+# L'adresse propre, sans « .html » : celle que montrent les pages de goshipexpress.net
+code="$(recuperer "${SITE}nos-services" "$tmp/propre")"
+if [ "$code" = 200 ] && grep -qi '</html>' "$tmp/propre"; then ok "nos-services, sans .html ($code)"
+else echec "nos-services (adresse sans .html) : code $code"; fi
 code="$(recuperer "${SITE}assets/js/api.js" "$tmp/api")"
 if [ "$code" = 200 ] && grep -q 'GoshipAPI' "$tmp/api"; then ok "assets/js/api.js"; else echec "assets/js/api.js : code $code"; fi
 # Le tableau de bord : chacun de ses scripts est publié (un fichier oublié le casserait
