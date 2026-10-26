@@ -36,6 +36,17 @@
                  des e-mails et le lien des messages WhatsApp y mènent. Laissée
                  vide, c'est l'adresse du tableau de bord qui sert, sauf sur votre
                  ordinateur : les messages partent alors sans ce lien.
+                 C'est aussi l'adresse donnée à Google (balises canonical,
+                 sitemap.xml) : après l'avoir changée, relancez build.py puis
+                 traduire.py.
+
+   googleAnalytics  Identifiant de mesure Google Analytics 4 (« G-XXXXXXXXXX »,
+                 dans Analytics > Admin > Flux de données). Vide : aucune
+                 mesure. Rempli : les pages publiques le chargent, seulement sur
+                 siteUrl (jamais en local ni sur la copie GitHub Pages), jamais
+                 sur l'espace client ni le tableau de bord. Après l'avoir changé,
+                 relancez build.py puis traduire.py : la politique de sécurité
+                 des pages doit autoriser Google.
    ========================================================================== */
 window.GOSHIP_CONFIG = {
   whatsapp: '18495386262',
@@ -47,5 +58,6 @@ window.GOSHIP_CONFIG = {
   carteDevise: 'USD',
   appStoreLien: '',
   googlePlayLien: '',
-  siteUrl: 'https://goshipexpress.net'
+  siteUrl: 'https://goshipexpress.net',
+  googleAnalytics: ''
 };

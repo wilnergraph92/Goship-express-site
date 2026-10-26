@@ -229,29 +229,55 @@ TEXT_FONTS = ('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..12
 # à la ligne qui convient, sinon le navigateur le bloquera.
 # Voir README.md, « Sécurité ».
 
-def origine_supabase():
-    """Adresse du projet Supabase, lue dans assets/js/config.js du site construit."""
+def reglage(nom):
+    """Un réglage de assets/js/config.js du site construit ('' s'il manque)."""
     try:
         with open(os.path.join(OUT, 'assets/js/config.js'), encoding='utf-8') as f:
-            m = re.search(r"supabaseUrl:\s*'([^']*)'", f.read())
-        return m.group(1).strip().rstrip('/') if m else ''
+            m = re.search(nom + r":\s*'([^']*)'", f.read())
+        return m.group(1).strip() if m else ''
     except OSError:
         return ''
 
 
-def csp(entete=False):
+def origine_supabase():
+    """Adresse du projet Supabase, lue dans assets/js/config.js du site construit."""
+    return reglage('supabaseUrl').rstrip('/')
+
+
+def mesure_active():
+    """Google Analytics est-il réglé ? (googleAnalytics dans config.js, « G-… »)"""
+    return bool(re.fullmatch(r'G-[A-Z0-9]{4,20}', reglage('googleAnalytics')))
+
+
+# Les adresses de Google Analytics 4, telles que Google les documente pour une CSP
+# (« Use a Content Security Policy » de la documentation de gtag.js)
+GOOGLE_SCRIPTS = ['https://www.googletagmanager.com']
+GOOGLE_CONNEXIONS = ['https://*.google-analytics.com', 'https://*.analytics.google.com',
+                     'https://www.googletagmanager.com']
+GOOGLE_IMAGES = ['https://*.google-analytics.com', 'https://www.googletagmanager.com']
+
+
+def csp(entete=False, mesure=False):
+    """mesure : la page charge Google Analytics (pages publiques seulement, et
+    seulement si googleAnalytics est réglé). Le tableau de bord et l'espace client
+    gardent la règle stricte : aucun script venu d'ailleurs."""
     sb = origine_supabase()
+    scripts = ["'self'"]
     images = ["'self'", 'data:', 'https://images.unsplash.com']
     connexions = ["'self'"]
     if sb:
         images.append(sb)
         connexions += [sb, 'wss://' + sb.split('://', 1)[-1]]
+    if mesure and mesure_active():
+        scripts += GOOGLE_SCRIPTS
+        images += GOOGLE_IMAGES
+        connexions += GOOGLE_CONNEXIONS
     regles = [
         "default-src 'self'",
         "base-uri 'none'",
         "object-src 'none'",
         "form-action 'self'",
-        "script-src 'self'",
+        'script-src ' + ' '.join(scripts),
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         'img-src ' + ' '.join(images),
@@ -279,17 +305,22 @@ CONF_REPERE = ('      <div style="margin-top:clamp(26px,3vw,36px);padding:clamp(
                'Mises à jour de la politique de confidentialité</h3>')
 
 
+# Les briques des sections ajoutées à la politique de confidentialité, dans le style
+# des autres blocs de la page (carte blanche, puces orange)
+def puce(titre, texte):
+    return ('        <div style="display:flex;gap:14px;align-items:flex-start">\n'
+            '          <span style="flex:none;width:9px;height:9px;margin-top:9px;border-radius:50%;'
+            'background:var(--accent);display:block"></span>\n'
+            '          <p style="font-size:16px;line-height:1.7;color:#4a5878"><strong style="color:var(--ink);'
+            f'font-weight:700">{titre}</strong> {texte}</p>\n'
+            '        </div>\n')
+
+
+para = '        <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">{}</p>\n'
+
+
 def confidentialite_application():
-    """La section « Application mobile » de la politique de confidentialité, dans le
-    style des autres blocs de la page (carte blanche, puces orange)."""
-    def puce(titre, texte):
-        return ('        <div style="display:flex;gap:14px;align-items:flex-start">\n'
-                '          <span style="flex:none;width:9px;height:9px;margin-top:9px;border-radius:50%;'
-                'background:var(--accent);display:block"></span>\n'
-                '          <p style="font-size:16px;line-height:1.7;color:#4a5878"><strong style="color:var(--ink);'
-                f'font-weight:700">{titre}</strong> {texte}</p>\n'
-                '        </div>\n')
-    para = '        <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">{}</p>\n'
+    """La section « Application mobile » de la politique de confidentialité."""
     return (
         '      <div id="application" style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);'
         'border:1px solid #e7edf9;border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
@@ -324,6 +355,34 @@ def confidentialite_application():
                       "adresse e-mail, votre téléphone et votre adresse sont effacés, la connexion est bloquée et les "
                       "identifiants de notification sont supprimés. Les factures et l'historique des colis sont conservés "
                       "sans vos coordonnées, pour nos obligations comptables.")
+        + '      </div>\n')
+
+
+def confidentialite_mesure():
+    """La section « Mesure d'audience du site », posée seulement quand Google Analytics
+    est réglé (googleAnalytics dans config.js) : la page ne dit jamais qu'on mesure
+    quand on ne mesure pas, ni l'inverse. Ce qu'elle promet, assets/js/mesure.js le fait."""
+    return (
+        '      <div id="mesure" style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);'
+        'border:1px solid #e7edf9;border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+        '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+        "Mesure d'audience du site</h3>\n"
+        + para.format("Pour savoir combien de personnes visitent goshipexpress.net, quelles pages elles lisent et "
+                      "comment elles nous ont trouvés, les pages publiques du site utilisent Google Analytics (Google "
+                      "LLC). Il dépose des cookies de mesure dans votre navigateur et reçoit l'adresse de la page, la "
+                      "page d'où vous venez, la langue, le type d'appareil et une localisation approximative (pays, ville).")
+        + '        <div style="margin-top:22px;padding:clamp(20px,2.4vw,26px);background:#f4f6fa;border-radius:14px;'
+          'display:grid;gap:14px">\n'
+        + puce('Ce qui n\'est jamais envoyé :', "le contenu des formulaires, vos numéros de colis, et rien de votre "
+               "espace client, du tableau de bord ni de l'application : la mesure ne fonctionne que sur les pages "
+               "publiques du site.")
+        + puce('Pas de publicité :', "les signaux Google et la personnalisation des annonces sont désactivés.")
+        + puce('Refuser la mesure :', "activez « Global Privacy Control » ou « Ne pas me suivre » dans votre "
+               "navigateur : le site ne charge alors pas Google Analytics. Vous pouvez aussi effacer les cookies de "
+               "goshipexpress.net.")
+        + '      </div>\n'
+        + para.format("Google conserve ces données le temps réglé dans notre compte Google Analytics (deux mois par "
+                      "défaut, quatorze au plus), selon sa propre politique de confidentialité.")
         + '      </div>\n')
 
 
@@ -1112,7 +1171,8 @@ def page_specific(body, src, page):
     # (Google Play, App Store) exigent qu'elle le dise : identifiant de notification,
     # appareil photo, prestataires, suppression du compte depuis l'application et le site.
     if src == 'Confidentialite.dc.html':
-        body = replace_once(body, CONF_REPERE, confidentialite_application() + CONF_REPERE, page)
+        ajout = confidentialite_application() + (confidentialite_mesure() if mesure_active() else '')
+        body = replace_once(body, CONF_REPERE, ajout + CONF_REPERE, page)
 
     # Fermer un compte : la suppression depuis l'application (adresse demandée par Google Play)
     if src == 'Fermer-un-compte.dc.html':
@@ -1229,14 +1289,16 @@ LOCAL_BUSINESS = {
 }
 
 
-def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(), noindex=False):
+def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(), noindex=False, mesure=False):
+    """mesure : page publique, qui charge mesure.js (Google Analytics) s'il est réglé."""
     esc = attr_escape
+    mesure = mesure and mesure_active()
     lines = [
         '<!DOCTYPE html>',
         '<html lang="fr">',
         '<head>',
         '<meta charset="utf-8">',
-        f'<meta http-equiv="Content-Security-Policy" content="{csp()}">',
+        f'<meta http-equiv="Content-Security-Policy" content="{csp(mesure=mesure)}">',
         '<meta name="referrer" content="strict-origin-when-cross-origin">',
     ]
     if noindex:
@@ -1272,7 +1334,7 @@ def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(),
     if uses_icons:
         lines.append(f'<link rel="stylesheet" href="{ICON_FONT}">')
     lines.append(f'<link rel="stylesheet" href="{prefix}assets/css/site.css">')
-    for nom in ('config', 'site', 'fond') + tuple(scripts):
+    for nom in ('config', 'site', 'fond') + tuple(scripts) + (('mesure',) if mesure else ()):
         lines.append(f'<script src="{prefix}assets/js/{nom}.js" defer></script>')
     if jsonld:
         lines.append('<script type="application/ld+json">' + json.dumps(LOCAL_BUSINESS, ensure_ascii=False) + '</script>')
@@ -1349,7 +1411,8 @@ def convert(src, out, title=None, desc=None):
     uses_icons = 'Material Symbols Outlined' in body
     jsonld = out in ('index.html', 'contacts.html')
     scripts = ('api',) if 'data-form="track"' in body else ()
-    doc = (build_head(title, desc, OG_IMAGE_FIXE.get(out) or og_image_for(body), uses_icons, jsonld, scripts=scripts)
+    doc = (build_head(title, desc, OG_IMAGE_FIXE.get(out) or og_image_for(body), uses_icons, jsonld, scripts=scripts,
+                       mesure=True)
            + body.rstrip('\n') + '\n</body>\n</html>\n')
     with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
         f.write(doc)
@@ -1480,6 +1543,17 @@ HTACCESS = r'''# ===============================================================
 # n'importe quelle profondeur (/en/…, /ht/…).
 ErrorDocument 404 /404.html
 
+# --- Une seule adresse : goshipexpress.net, sans « www » --------------------
+#  www.goshipexpress.net servait les mêmes pages : pour Google, deux sites en
+#  double ; pour le client, deux sessions (connecté sur l'un, pas sur l'autre).
+#  Renvoi définitif (301), adresse, paramètres et ancre gardés. En premier :
+#  les règles suivantes ne voient plus que le domaine nu.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_HOST} ^www\.goshipexpress\.net$ [NC]
+  RewriteRule ^ https://goshipexpress.net%{REQUEST_URI} [R=301,L,NE]
+</IfModule>
+
 # --- Les fichiers de travail ne sont jamais servis aux visiteurs ----------
 #  Ils ne sont pas envoyés, mais si l'un arrivait par erreur, il resterait
 #  caché. Le dossier .git est celui que Hostinger garde pour suivre la
@@ -1576,7 +1650,10 @@ def write_entetes():
     Un hébergeur qui ne lit ni l'un ni l'autre ignore simplement ces fichiers :
     les pages gardent alors la protection inscrite dans leur propre en-tête.
     """
-    valeurs = [(nom, csp(entete=True) if valeur is None else valeur) for nom, valeur in ENTETES]
+    # mesure=True : l'en-tête vaut pour toutes les pages ; celles qui ne mesurent
+    # rien (tableau de bord, espace client) gardent leur propre règle, plus stricte,
+    # et le navigateur applique les deux à la fois.
+    valeurs = [(nom, csp(entete=True, mesure=True) if valeur is None else valeur) for nom, valeur in ENTETES]
 
     lignes = ['# En-têtes de sécurité (Netlify, Cloudflare Pages…). Voir README.md, « Sécurité ».',
               '/*']
