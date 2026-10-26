@@ -1632,12 +1632,34 @@ ErrorDocument 404 /404.html
 
 # --- En-têtes de sécurité -------------------------------------------------
 #  Seuls ceux qui ne peuvent rien casser sont actifs. La politique complète
-#  (CSP, HSTS, Permissions-Policy, dans _headers) attend un essai page par
-#  page : « camera=() » couperait le scan des codes-barres du tableau de
-#  bord, et la CSP n'a jamais été essayée sur le site réel.
+#  (CSP, Permissions-Policy, dans _headers) attend un essai page par page :
+#  « camera=() » couperait le scan des codes-barres du tableau de bord. La
+#  CSP de chaque page est déjà dans la page elle-même (balise meta).
+#
+#  Strict-Transport-Security : le navigateur qui a vu le site une fois ne
+#  l'ouvre plus qu'en https, pendant un an, même si on tape http:// ou si un
+#  réseau Wi-Fi piégé tente de le détourner. Sans includeSubDomains : les
+#  sous-domaines de Brevo (envoie.…) et ftp.… ne sont pas concernés.
+#  Sans preload : rien n'est inscrit dans les navigateurs, la règle reste
+#  réversible (max-age=0).
+#
+#  X-Frame-Options et frame-ancestors : aucun autre site ne peut afficher
+#  ces pages dans un cadre. Sans cela, une page piège pouvait montrer le
+#  tableau de bord, invisible, sous ses propres boutons, et faire cliquer
+#  un membre de l'équipe connecté sans qu'il le sache (« clickjacking »).
+#  SAMEORIGIN / 'self' et non DENY : le site garde le droit de s'afficher
+#  lui-même. Le cadre d'impression (impression.js) n'est pas concerné : il
+#  est rempli par le script, il ne charge aucune page. La CSP de l'en-tête
+#  ne porte que frame-ancestors, que la balise meta des pages ne peut pas
+#  porter, plus upgrade-insecure-requests que Hostinger envoyait déjà de
+#  lui-même (« Forcer HTTPS ») et que cette ligne remplace ; le navigateur
+#  applique l'en-tête et la balise meta ensemble.
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Content-Security-Policy "frame-ancestors 'self'; upgrade-insecure-requests"
 </IfModule>
 '''
 
