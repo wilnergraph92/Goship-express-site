@@ -108,10 +108,16 @@ else ok "aucune clé secrète dans config.js et api.js"; fi
 
 case "$SITE" in
   https://*)
-    # Les fichiers de travail ne sont pas servis (deploy.yml les retire)
+    # Les fichiers de travail ne sont pas servis (deploy.yml les retire). 404 ou
+    # 403 : le fichier n'est pas servi dans les deux cas. Le CDN de Hostinger
+    # refuse parfois (403) de lui-même une adresse en .sql, avant le serveur, qui
+    # répond 404 ; ce n'est pas une fuite.
     for f in CLAUDE.md README.md outils/supabase.sql outils/migrations.txt bureau/package.json docs/notifications.md; do
       code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE$f" 2>/dev/null || echo 000)"
-      if [ "$code" = 404 ]; then ok "$f non servi"; else tolerant "$f servi publiquement (code $code)"; fi
+      case "$code" in
+        404|403) ok "$f non servi ($code)" ;;
+        *) tolerant "$f servi publiquement (code $code)" ;;
+      esac
     done
     # HTTP redirige vers HTTPS
     http="http://${SITE#https://}"

@@ -20,7 +20,7 @@ résumé du passage, sans alerte).
 | Pages `index`, `connexion`, `mon-compte`, `admin`, `en/index`, `ht/index` | réponse ≠ 200 après 3 essais espacés de 20 s |
 | `api.js`, `config.js` publiés | absents, ou `config.js` sans base configurée |
 | Aucune clé secrète publiée | `sb_secret_…` ou un JWT de rôle `service_role` dans `config.js` / `api.js` |
-| Fichiers de travail non servis | `CLAUDE.md`, `README.md`, `outils/…sql`, `outils/migrations.txt`, `bureau/package.json`, `docs/…` répondent autre chose que 404 |
+| Fichiers de travail non servis | `CLAUDE.md`, `README.md`, `outils/…sql`, `outils/migrations.txt`, `bureau/package.json`, `docs/…` répondent autre chose que 404 ou 403 (le CDN de Hostinger refuse parfois une adresse en `.sql` de lui-même : 403, pas une fuite) |
 | HTTP → HTTPS | avertissement seulement |
 | Auth Supabase | `auth/v1/health` ≠ 200 |
 | Base | `sante()` : `status ≠ ok`, `pret = false`, ou `notifications = en_retard` (un envoi attend depuis plus de 15 min : pg_cron arrêté ?). `sante()` absente (migration pas encore passée) : avertissement seulement |
