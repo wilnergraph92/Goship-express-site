@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — le site sur goshipexpress.net, mis à jour à chaque push (26/10/2026)
+
+Aucune migration. Le site est servi par Hostinger à `https://goshipexpress.net` (envoyé à la main le 26/10/2026, à la place d'un WordPress vierge). `deploy.yml` pousse désormais le site contrôlé, plus `.htaccess`, sur la branche `hostinger`, que Hostinger suit : goshipexpress.net suit `main` comme GitHub Pages, sans mot de passe Hostinger dans GitHub. `.htaccess` est réécrit pour ce serveur : page 404 du site, pages et scripts revalidés à chaque visite (WordPress imposait une semaine de cache), images un jour, fichiers de travail et `.git` refusés, `nosniff` et `Referrer-Policy` ; le reste des en-têtes de `_headers` attend un essai. `siteUrl` = `https://goshipexpress.net` dans `config.js` : liens des messages et QR des étiquettes. `surveiller.sh` surveille goshipexpress.net par défaut. Restent à régler à la main : URL de Supabase Auth, `site_url` et `courriel_icones_url` du coffre-fort (docs/production/environment.md, « Domaine de production »).
+
 ## Non publié — une grille de points en arrière-plan du site (20/10/2026)
 
 Aucune migration. Toutes les pages publiques (pas le tableau de bord) dessinent une grille de petits points bleus très légers, fixe derrière la lecture ; près du curseur ou du doigt, les points grossissent et virent à l'orange, puis reviennent en 0,7 s. Elle vit dans `assets/js/fond.js` (un `<canvas class="gs-fond">` ajouté par le script, `pointer-events: none`, sous l'en-tête et les menus) et dans quatre lignes de `site.css`. Elle ne dessine que pendant un mouvement : une page immobile ne coûte rien. Un visiteur qui demande moins d'animation (`prefers-reduced-motion`) garde la grille immobile ; elle disparaît à l'impression et en contraste forcé. `build.py` charge le script après `site.js`.

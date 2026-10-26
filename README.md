@@ -45,7 +45,9 @@ Sur votre ordinateur, l'espace client fonctionne en **mode démonstration** tant
 
 ## Mettre le site en ligne
 
-Publiez tout le dossier (le dossier `outils/` et le lanceur `Voir le site en local.command` peuvent être omis) :
+Le site de production est **https://goshipexpress.net** (Hostinger). Il se met à jour tout seul : chaque `git push` sur `main` le publie sur GitHub Pages et sur la branche `hostinger`, que Hostinger suit (`.github/workflows/deploy.yml`). Rien à envoyer à la main.
+
+Pour un autre hébergement, publiez tout le dossier (le dossier `outils/` et le lanceur `Voir le site en local.command` peuvent être omis) :
 
 - **Netlify** : glissez-déposez le dossier sur https://app.netlify.com/drop.
 - **Hébergement classique (Hostinger, o2switch, cPanel…)** : envoyez le contenu du dossier dans `public_html` (ou `www`), en gardant les sous-dossiers `en`, `es`, `ht` et `assets`.
@@ -63,7 +65,7 @@ Trois protections tiennent l'ensemble : la **base de données** décide qui voit
 
 - **Rien n'est lisible sans compte.** Les tables refusent toute lecture anonyme ; seul le suivi public d'un colis (statut et étapes, sans nom ni adresse) répond sans connexion.
 - **Aucun script extérieur.** La bibliothèque Supabase est rangée dans `assets/js/vendor/`. Les pages portent une règle `Content-Security-Policy` qui interdit au navigateur d'exécuter ou de contacter autre chose que le site, Supabase et les polices Google. Un script glissé dans une page ne peut donc ni s'exécuter, ni envoyer les données des clients ailleurs.
-- **En-têtes de sécurité** dans `_headers` (Netlify, Cloudflare Pages…) et `.htaccess` (hébergement Apache) : site non affichable dans un cadre, HTTPS obligatoire, caméra et micro refusés.
+- **En-têtes de sécurité** dans `_headers` (Netlify, Cloudflare Pages…) : site non affichable dans un cadre, HTTPS obligatoire, caméra et micro refusés. Sur goshipexpress.net (Hostinger), `.htaccess` n'en active pour l'instant que deux, sans risque (`nosniff`, `Referrer-Policy`) : la caméra refusée couperait le scan du tableau de bord, et le reste attend un essai page par page.
 - **Les jetons de connexion ne traînent pas.** Le lien reçu par e-mail les dépose dans l'adresse de la page ; ils en sont effacés dès la session ouverte.
 - **Sur le téléphone**, la session est chiffrée par le système (Keychain / Keystore) et un téléphone qui change de main cesse de recevoir les colis de l'ancien propriétaire.
 

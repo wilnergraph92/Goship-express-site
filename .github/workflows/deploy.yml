@@ -1,11 +1,16 @@
 # ==========================================================================
-#  Mise en ligne automatique du site sur GitHub Pages
+#  Mise en ligne automatique du site : GitHub Pages et goshipexpress.net
 # ==========================================================================
 #  À chaque « push » sur la branche main, GitHub reconstruit le site et le
 #  publie. Les fichiers de travail (SQL, applications mobile et de bureau,
 #  README, outils) sont retirés avant publication : ils restent dans le dépôt, mais ne sont
 #  jamais servis aux visiteurs — c'est ce que faisaient _redirects et
 #  .htaccess, que GitHub Pages ne sait pas lire.
+#
+#  Le même site, contrôlé une seule fois, part aussi sur la branche
+#  « hostinger », plus le .htaccess. Hostinger suit cette branche et met
+#  goshipexpress.net à jour à chaque nouveau commit : aucun mot de passe
+#  ni aucune clé Hostinger n'est rangé dans GitHub.
 # ==========================================================================
 
 name: Mettre le site en ligne
@@ -15,7 +20,8 @@ on:
     branches: [main]
   workflow_dispatch:        # permet aussi de lancer la mise en ligne à la main
 
-# Par défaut, lecture seule ; seul le job « publier » reçoit le droit d'écrire sur Pages
+# Par défaut, lecture seule ; « publier » reçoit le droit d'écrire sur Pages,
+# « envoyer-hostinger » celui de pousser la branche hostinger
 permissions:
   contents: read
 
@@ -85,6 +91,62 @@ jobs:
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: _site
+
+  # goshipexpress.net : le site contrôlé ci-dessus, tel quel, plus le .htaccess
+  # (cache, page 404, fichiers de travail refusés). Un commit par mise en ligne,
+  # jamais de « push --force » : Hostinger tire la branche, il ne la réécrit pas.
+  envoyer-hostinger:
+    needs: construire
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Deux mises en ligne rapprochées : la seconde attend la première, sinon
+    # les deux commits se disputeraient la branche
+    concurrency:
+      group: hostinger
+      cancel-in-progress: false
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Récupérer le site construit
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artefact
+
+      - name: Pousser le site sur la branche hostinger
+        run: |
+          site="$RUNNER_TEMP/site"
+          branche="$RUNNER_TEMP/branche"
+          mkdir -p "$site"
+          tar -xf "$RUNNER_TEMP/artefact/artifact.tar" -C "$site"
+          rm -f "$site/.nojekyll"            # propre à GitHub Pages
+          cp .htaccess "$site/.htaccess"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth=1 origin hostinger; then
+            git worktree add -B hostinger "$branche" FETCH_HEAD
+          else
+            # Toute première fois : une branche sans lien avec main, qui part
+            # d'un commit vide
+            vide="$(git commit-tree -m "Branche de goshipexpress.net" "$(git hash-object -t tree /dev/null)")"
+            git worktree add -B hostinger "$branche" "$vide"
+          fi
+
+          # La branche devient exactement le site : un fichier retiré du site
+          # disparaît aussi de goshipexpress.net
+          rsync -a --delete --exclude '.git' "$site/" "$branche/"
+          cd "$branche"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Rien n'a changé pour goshipexpress.net."
+            exit 0
+          fi
+          git commit -q -m "Site publié depuis ${GITHUB_SHA::7} : $(git -C "$GITHUB_WORKSPACE" log -1 --format=%s)"
+          git push origin hostinger
+          echo "Branche hostinger à jour : Hostinger met goshipexpress.net à jour dans la minute."
 
   publier:
     needs: construire

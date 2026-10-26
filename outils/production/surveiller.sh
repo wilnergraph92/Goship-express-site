@@ -25,7 +25,7 @@
 # =============================================================================
 set -uo pipefail
 
-SITE="${1:-https://wilnergraph92.github.io/Goship-express-site/}"
+SITE="${1:-https://goshipexpress.net/}"
 SITE="${SITE%/}/"
 ICI="$(cd "$(dirname "$0")" && pwd)"
 RACINE="$(cd "$ICI/../.." && pwd)"

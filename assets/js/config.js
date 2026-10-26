@@ -47,5 +47,5 @@ window.GOSHIP_CONFIG = {
   carteDevise: 'USD',
   appStoreLien: '',
   googlePlayLien: '',
-  siteUrl: ''
+  siteUrl: 'https://goshipexpress.net'
 };

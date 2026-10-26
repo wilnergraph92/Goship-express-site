@@ -1464,11 +1464,68 @@ ENTETES = [
 ]
 
 
+# Le .htaccess de goshipexpress.net (Hostinger), tel qu'il a été essayé en ligne le
+# 26/10/2026. Il ne reprend pas ENTETES en entier : voir son bloc « En-têtes de sécurité ».
+HTACCESS = r'''# ==========================================================================
+#  Goship Express — réglages du serveur de goshipexpress.net (Hostinger)
+# ==========================================================================
+#  Écrit par outils/generateur/build.py (HTACCESS) : changez-le là.
+#  Hostinger lit ce fichier à chaque requête ; GitHub Pages l'ignore, et
+#  deploy.yml ne l'y envoie pas. Il part sur Hostinger avec le site, par la
+#  branche « hostinger » (voir deploy.yml, job « envoyer-hostinger »).
+# ==========================================================================
+
+# Une adresse inconnue montre la page « introuvable » du site, pas celle de
+# l'hébergeur. Ses liens commencent par « / » : elle s'affiche juste à
+# n'importe quelle profondeur (/en/…, /ht/…).
+ErrorDocument 404 /404.html
+
+# --- Cache ----------------------------------------------------------------
+#  Les pages, les scripts et les feuilles de style ne portent pas de numéro
+#  de version dans leur nom : une copie gardée une semaine montrerait une
+#  page neuve avec un script ancien. Le navigateur redemande donc à chaque
+#  visite ; s'il n'y a rien de neuf, le serveur répond « 304 » sans renvoyer
+#  le fichier. Les images et les polices changent rarement : un jour.
+#  (L'ancien WordPress imposait une semaine à tout, un mois aux scripts.)
+<IfModule mod_expires.c>
+  ExpiresActive Off
+</IfModule>
+<IfModule mod_headers.c>
+  Header unset Expires
+  <FilesMatch "\.(html?|js|css|txt|xml)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>
+
+# --- En-têtes de sécurité -------------------------------------------------
+#  Seuls ceux qui ne peuvent rien casser sont actifs. La politique complète
+#  (CSP, HSTS, Permissions-Policy, dans _headers) attend un essai page par
+#  page : « camera=() » couperait le scan des codes-barres du tableau de
+#  bord, et la CSP n'a jamais été essayée sur le site réel.
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# --- Les fichiers de travail ne sont jamais servis aux visiteurs ----------
+#  Ils ne sont pas envoyés, mais si l'un arrivait par erreur, il resterait
+#  caché. Le dossier .git est celui que Hostinger garde pour suivre la
+#  branche « hostinger ».
+<FilesMatch "(^\.|\.(sql|py|md|command|json|lock)$)">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 ^/(outils|application-mobile|bureau|docs|\.git|\.github|\.claude)(/|$)
+'''
+
+
 def write_entetes():
     """Fichiers d'en-têtes de sécurité, à côté du site.
 
     _headers   : lu tout seul par Netlify, Cloudflare Pages, Vercel…
-    .htaccess  : lu tout seul par un hébergement Apache (cPanel, OVH, Hostinger…)
+    .htaccess  : lu tout seul par Hostinger (goshipexpress.net) ; contenu fixe, HTACCESS
     Un hébergeur qui ne lit ni l'un ni l'autre ignore simplement ces fichiers :
     les pages gardent alors la protection inscrite dans leur propre en-tête.
     """
@@ -1488,19 +1545,8 @@ def write_entetes():
     with open(os.path.join(OUT, '_redirects'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(interdits) + '\n')
 
-    apache = ['# En-têtes de sécurité (hébergement Apache). Voir README.md, « Sécurité ».',
-              '<IfModule mod_headers.c>']
-    apache += [f'  Header always set {nom} "{valeur}"' for nom, valeur in valeurs]
-    apache += ['</IfModule>', '',
-               '# Les fichiers de travail ne sont jamais servis aux visiteurs',
-               '<FilesMatch "(^\\.|\\.(sql|py|md|command|json|lock)$)">',
-               '  Require all denied',
-               '</FilesMatch>',
-               'RedirectMatch 404 ^/(outils|application-mobile|\\.claude)/',
-               '',
-               'ErrorDocument 404 /404.html']
     with open(os.path.join(OUT, '.htaccess'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(apache) + '\n')
+        f.write(HTACCESS)
 
 
 def main():
