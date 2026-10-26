@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — l'application de bureau 1.0.1 ouvre goshipexpress.net (26/10/2026)
+
+Aucune migration. `bureau/config/environnements.json` : `production` = `https://goshipexpress.net/`. goshipexpress.net renvoyant `admin.html` vers `/admin`, l'application garde les deux adresses comme tableau de bord (`estTableau`) ; sans cela, elle aurait ouvert le navigateur à la place du tableau de bord. Le serveur d'essai fait la même redirection, et l'essai vérifie l'adresse de production. Version 1.0.1 : nouveaux installateurs (Actions > « Application de bureau »), à installer par-dessus la 1.0.0 ; la 1.0.0 continue d'ouvrir GitHub Pages.
+
 ## Non publié — des adresses sans « .html » sur goshipexpress.net (26/10/2026)
 
 Aucune migration. Le visiteur voit `goshipexpress.net/nos-services`, `goshipexpress.net/en/`, `goshipexpress.net/admin` : `.htaccess` (écrit par `build.py`) sert le fichier `.html` du même nom et renvoie une fois (301) toute adresse en `.html`, `index.html` ou à barre finale vers l'adresse propre, paramètres et ancre compris (`?retour=…`, jeton d'une connexion par e-mail). Les fichiers et les liens des pages ne changent pas : le site marche toujours sur l'ordinateur (`file:`, démonstration) et sur GitHub Pages, qui sert aussi `nos-services` sans `.html`. `robots.txt` interdit `/admin` (les deux adresses). `surveiller.sh` suit les redirections et contrôle une adresse propre. Essayé sur un Apache local : aucune boucle, une seule redirection par adresse.

@@ -1,7 +1,7 @@
 {
   "name": "goship-express-bureau",
   "productName": "GoShip Express",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Poste de travail GoShip Express (Windows, macOS) : le tableau de bord de l'équipe dans une fenêtre dédiée, avec impression, scanner et raccourcis.",
   "author": "GoShip Express",

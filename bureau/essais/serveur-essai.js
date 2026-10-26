@@ -25,6 +25,13 @@ var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascrip
 function demarrer(port) {
   var serveur = http.createServer(function (req, res) {
     var chemin = decodeURIComponent(req.url.split(/[?#]/)[0]);
+    // Comme goshipexpress.net (.htaccess, « Adresses propres ») : admin.html est
+    // renvoyé vers /admin, qui sert admin.html. L'application doit suivre.
+    if (chemin === '/admin.html') {
+      res.writeHead(301, { Location: '/admin' + req.url.slice('/admin.html'.length) });
+      return res.end();
+    }
+    if (chemin === '/admin') chemin = '/admin.html';
     if (chemin === '/') chemin = '/index.html';
     if (chemin === '/assets/js/config.js') {
       res.writeHead(200, { 'Content-Type': TYPES['.js'] });

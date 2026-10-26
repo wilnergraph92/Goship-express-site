@@ -45,6 +45,20 @@ function taillePdf(octets) {
 }
 
 (async function () {
+  // ---- 0. L'adresse de production, sans lancer l'application -------------------
+  var avant = process.env.GOSHIP_ENV;
+  process.env.GOSHIP_ENV = 'production';
+  var prod = require(path.join(BUREAU, 'src', 'config.js')).charger();
+  if (avant === undefined) delete process.env.GOSHIP_ENV; else process.env.GOSHIP_ENV = avant;
+  var securite = require(path.join(BUREAU, 'src', 'securite.js'));
+  ok('production : ' + prod.site, prod.site === 'https://goshipexpress.net/');
+  ok('production : admin.html et /admin (avec ou sans #vue) sont le tableau de bord',
+     securite.estTableau(prod, 'https://goshipexpress.net/admin.html') && securite.estTableau(prod, 'https://goshipexpress.net/admin') &&
+     securite.estTableau(prod, 'https://goshipexpress.net/admin#colis'));
+  ok('production : ni l\'accueil, ni /administration, ni un autre site',
+     !securite.estTableau(prod, 'https://goshipexpress.net/') && !securite.estTableau(prod, 'https://goshipexpress.net/administration') &&
+     !securite.estTableau(prod, 'https://wilnergraph92.github.io/admin') && !securite.estTableau(prod, 'https://goshipexpress.net.example.com/admin'));
+
   var serveur = await serveurEssai.demarrer();
   var donnees = fs.mkdtempSync(path.join(os.tmpdir(), 'goship-bureau-essai-'));
   var app = await electron.launch({
@@ -73,7 +87,7 @@ function taillePdf(octets) {
                dedans: b.x >= z.x && b.y >= z.y && b.x + b.width <= z.x + z.width && b.y + b.height <= z.y + z.height };
     });
     ok('la fenêtre (' + cadre.fenetre + ') tient dans l\'écran (' + cadre.ecran + ')', cadre.dedans);
-    ok('la fenêtre ouvre le tableau de bord du site : ' + page.url(), page.url() === 'http://localhost:8765/admin.html');
+    ok('la fenêtre ouvre le tableau de bord du site, admin.html renvoyé vers /admin comme sur goshipexpress.net : ' + page.url(), page.url() === 'http://localhost:8765/admin');
     var pont = await page.evaluate(function () {
       var b = window.GoshipBureau;
       return b && { contrat: b.contrat, version: b.version, plateforme: b.plateforme, env: b.environnement,
@@ -90,7 +104,7 @@ function taillePdf(octets) {
     ok('rien de Node dans la page (require, process, module…) : ' + nu, nu === 'undefined,undefined,undefined,undefined,undefined');
     var journalApp = path.join(donnees, 'journaux', 'bureau.log');
     var journalTexte = fs.existsSync(journalApp) ? fs.readFileSync(journalApp, 'utf8') : '';
-    ok('journal local : démarrage et page chargée notés', /démarrage 1\.\d+\.\d+/.test(journalTexte) && /page chargée : http:\/\/localhost:8765\/admin\.html/.test(journalTexte));
+    ok('journal local : démarrage et page chargée notés', /démarrage 1\.\d+\.\d+/.test(journalTexte) && /page chargée : http:\/\/localhost:8765\/admin\b/.test(journalTexte));
 
     // ---- 2. Session chiffrée -------------------------------------------------------
     var session = await page.evaluate(async function () {
@@ -301,10 +315,10 @@ function taillePdf(octets) {
        liste.length === 1 && /^https:\/\/wa\.me\//.test(liste[0]));
     await page.evaluate(function () { location.href = 'index.html'; });
     await attendre(800);
-    ok('une autre page du site (accueil) : dans le navigateur, pas dans l\'application', page.url().indexOf('/admin.html') > 0 && (await ouverts()).pop() === 'http://localhost:8765/index.html');
+    ok('une autre page du site (accueil) : dans le navigateur, pas dans l\'application', /\/admin$/.test(page.url().split('#')[0]) && (await ouverts()).pop() === 'http://localhost:8765/index.html');
     await page.evaluate(function () { location.href = 'file:///etc/hosts'; });
     await attendre(500);
-    ok('file:// : refusé, ni ouvert ni affiché', page.url().indexOf('/admin.html') > 0 && (await ouverts()).pop() !== 'file:///etc/hosts');
+    ok('file:// : refusé, ni ouvert ni affiché', /\/admin$/.test(page.url().split('#')[0]) && (await ouverts()).pop() !== 'file:///etc/hosts');
     // La politique se vérifie par ce que le navigateur refuse (les rapports de
     // violation), pas par page.evaluate, que les outils de développement exemptent
     var csp = await page.evaluate(function () {
@@ -354,7 +368,7 @@ function taillePdf(octets) {
     var horsLigne = await page.evaluate(function () { return [typeof window.GoshipBureau, typeof window.GoshipHorsLigne].join(','); });
     ok('page locale : pas de pont vers la session ni l\'impression (' + horsLigne + ')', horsLigne === 'undefined,object');
     await page.click('[data-reessayer]');
-    await page.waitForURL('http://localhost:8765/admin.html', { timeout: 20000 });
+    await page.waitForURL('http://localhost:8765/admin', { timeout: 20000 });
     await page.waitForSelector('[data-ecran="tableau"]:not([hidden])', { timeout: 20000 });
     ok('« Réessayer » : retour au tableau de bord, session gardée', true);
 

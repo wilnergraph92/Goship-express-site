@@ -36,9 +36,9 @@ réussie) :
 
 | Système | Fichier | Pour |
 |---|---|---|
-| Windows 10 / 11 | `GoShip-Express-Setup-1.0.0-windows-x64.exe` | PC (Intel ou AMD, 64 bits) |
-| macOS 12 ou plus | `GoShip-Express-1.0.0-macos-arm64.dmg` | Mac Apple Silicon (M1, M2, M3, M4…) |
-| macOS 12 ou plus | `GoShip-Express-1.0.0-macos-x64.dmg` | Mac Intel |
+| Windows 10 / 11 | `GoShip-Express-Setup-1.0.1-windows-x64.exe` | PC (Intel ou AMD, 64 bits) |
+| macOS 12 ou plus | `GoShip-Express-1.0.1-macos-arm64.dmg` | Mac Apple Silicon (M1, M2, M3, M4…) |
+| macOS 12 ou plus | `GoShip-Express-1.0.1-macos-x64.dmg` | Mac Intel |
 
 ### Windows
 
@@ -204,16 +204,19 @@ mémoire : reconnexion à chaque lancement plutôt qu'un jeton en clair.
 
 ```json
 {
-  "production": { "site": "https://wilnergraph92.github.io/Goship-express-site/" },
+  "production": { "site": "https://goshipexpress.net/" },
   "local": { "site": "http://localhost:8765/" }
 }
 ```
 
 - Une installation ouvre `production`. `--env=local` (ou `GOSHIP_ENV=local`)
   ouvre le site de développement ; seuls les noms du fichier sont acceptés.
-- **Le jour où le site passe sur son nom de domaine** (ex.
-  `https://www.goshipexpress.com/`) : changez `production`, puis reconstruisez
-  les installateurs. C'est le seul endroit où l'adresse est écrite.
+- **Changer d'adresse** : changez `production`, puis reconstruisez les
+  installateurs. C'est le seul endroit où l'adresse est écrite. Depuis la
+  version 1.0.1 (26/10/2026), c'est `https://goshipexpress.net/` ; la 1.0.0
+  ouvre encore GitHub Pages, qui reste en ligne. goshipexpress.net renvoie
+  `admin.html` vers `/admin` : l'application garde les deux adresses
+  (`securite.js`, `estTableau`), et le serveur d'essai fait de même.
 - Pas d'environnement « staging » : il n'en existe pas aujourd'hui. Pour en
   ajouter un, une ligne de plus dans ce fichier, avec l'adresse d'un site qui a
   sa propre base Supabase.
@@ -284,7 +287,7 @@ de s'en servir.
 
 ## Versions et mises à jour
 
-- Version : `package.json` (`1.0.0`, *Majeur.Mineur.Correctif*). Elle
+- Version : `package.json` (`1.0.1`, *Majeur.Mineur.Correctif*). Elle
   s'affiche dans *À propos* et dans *Réglages > Système*, et c'est celle de
   l'installateur (même fichier).
 - **Le tableau de bord se met à jour avec le site** : une mise en ligne suffit,

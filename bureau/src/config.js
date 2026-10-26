@@ -45,9 +45,12 @@ function charger() {
   var site = verifierSite(tous[nom].site);
   return {
     nom: nom,
-    site: site.href,                                   // https://…/Goship-express-site/
+    site: site.href,                                   // https://goshipexpress.net/
     origine: site.origin,                              // https://…
     tableau: new URL('admin.html', site).href,         // la page que l'application ouvre
+    // goshipexpress.net renvoie admin.html vers /admin (.htaccess, « Adresses
+    // propres ») : c'est la même page, l'application la garde aussi
+    tableauPropre: new URL('admin', site).href,
     // Une adresse est « du site » si elle a la même origine et le même dossier
     estDuSite: function (adresse) {
       try {

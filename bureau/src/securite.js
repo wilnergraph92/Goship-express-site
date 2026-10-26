@@ -2,8 +2,8 @@
    GoShip Express (bureau) — ce que les pages ont le droit de faire
    --------------------------------------------------------------------------
    L'application n'affiche qu'une page : le tableau de bord du site
-   (admin.html). Tout le reste est fermé :
-     - navigation : admin.html seulement ; une autre page du site (accueil,
+   (admin.html, ou /admin sur goshipexpress.net). Tout le reste est fermé :
+     - navigation : admin.html (ou admin) seulement ; une autre page du site (accueil,
        espace client) ou un lien extérieur s'ouvre dans le navigateur ;
        les adresses javascript:, file:, data:… ne s'ouvrent nulle part ;
      - nouvelles fenêtres (window.open, target=_blank) : jamais dans
@@ -41,11 +41,12 @@ function politique(origine) {
   ].concat(https ? ['upgrade-insecure-requests'] : []).join('; ');
 }
 
-// Une adresse que l'application garde : le tableau de bord, avec ou sans #vue
+// Une adresse que l'application garde : le tableau de bord, avec ou sans #vue,
+// sous son nom (admin.html) ou son adresse propre (admin)
 function estTableau(config, adresse) {
   try {
-    var u = new URL(adresse);
-    return config.estDuSite(adresse) && u.href.split(/[?#]/)[0] === config.tableau;
+    var page = new URL(adresse).href.split(/[?#]/)[0];
+    return config.estDuSite(adresse) && (page === config.tableau || page === config.tableauPropre);
   } catch (e) { return false; }
 }
 

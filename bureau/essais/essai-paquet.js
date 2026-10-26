@@ -60,12 +60,12 @@ function taille() { return fs.existsSync(fichierJournal()) ? fs.readFileSync(fic
   var serveur = await serveurEssai.demarrer();
   var depuis = taille();
   var app = lancer();
-  var texte = await attendreLigne(depuis, /page chargée : http:\/\/localhost:8765\/admin\.html/, 90000);
+  var texte = await attendreLigne(depuis, /page chargée : http:\/\/localhost:8765\/admin\b/, 90000);
   arreter(app);
   serveur.close();
   ok('démarrage noté : version ' + VERSION + ', ' + systeme + ' ' + process.arch,
      new RegExp('démarrage ' + VERSION.replace(/\./g, '\\.') + ' \\(' + systeme + ' ').test(texte));
-  ok('le tableau de bord du site est chargé', /page chargée : http:\/\/localhost:8765\/admin\.html/.test(texte));
+  ok('le tableau de bord du site est chargé', /page chargée : http:\/\/localhost:8765\/admin\b/.test(texte));
   ok('aucune erreur au démarrage', !/ ERREUR /.test(texte));
   await attendre(3000);
 

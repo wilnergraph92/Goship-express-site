@@ -103,9 +103,11 @@ Réglages qui portent l'adresse du site :
 3. **`siteUrl` de `assets/js/config.js`** = `https://goshipexpress.net` (fait le
    26/10/2026) : liens « Suivre mon colis » des messages envoyés depuis le tableau de
    bord et QR des étiquettes.
-4. **Encore sur l'ancienne adresse** : `bureau/config/environnements.json`
-   (`production`, application de bureau à reconstruire) et le `siteUrl` de
-   l'application mobile (nouvelle version à publier). `outils/production/surveiller.sh`
+4. **Applications** : l'application de bureau ouvre goshipexpress.net depuis la
+   version 1.0.1 (`bureau/config/environnements.json`) ; l'application mobile
+   depuis la mise à jour à distance du 26/10/2026 (`siteUrl` de son `config.js`).
+   Les postes en 1.0.0 ouvrent encore GitHub Pages tant qu'ils ne sont pas
+   réinstallés. `outils/production/surveiller.sh`
    surveille goshipexpress.net par défaut ; le contrôle de `deploy.yml` reçoit
    l'adresse GitHub Pages.
 5. Vérifier : inscription, « mot de passe oublié » (le lien doit ouvrir
