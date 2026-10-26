@@ -495,6 +495,10 @@ def adapter_sous_dossier(src, langue):
     src = src.replace('<html lang="fr">', f'<html lang="{langue}">', 1)
     src = src.replace('<meta property="og:locale" content="fr_FR">',
                       f'<meta property="og:locale" content="{LANGUES[langue]["locale"]}">', 1)
+    # Le badge officiel de Google Play dans la langue de la page. Google n'en fournit pas
+    # en créole : la page ht garde le badge français.
+    if langue in ('en', 'es'):
+        src = src.replace('assets/img/boutiques/google-play-fr.png', f'assets/img/boutiques/google-play-{langue}.png')
     return src
 
 

@@ -883,10 +883,40 @@ def bouton_store(magasin, logo, nom, mini=False):
             f'<strong translate="no">{nom}</strong></span></a>')
 
 
+def lien_google_play():
+    """La fiche Google Play (googlePlayLien dans config.js), '' tant que l'application n'y est pas."""
+    lien = reglage('googlePlayLien')
+    return lien if lien.startswith('https://') else ''
+
+
+def badge_google_play(lien, mini=False):
+    """Le badge officiel de Google, exigé par sa charte dès que l'application est en ligne
+    (le logo redessiné de LOGO_PLAY ne sert plus qu'à « Bientôt sur »). L'image est celle
+    que Google fournit, sans retouche, dans la langue de la page : traduire.py remplace
+    google-play-fr par -en ou -es ; Google n'en fait pas en créole, la page ht garde le
+    français."""
+    classe = 'gs-play gs-play--mini' if mini else 'gs-play'
+    return (f'<a class="{classe}" data-store="android" href="{attr_escape(lien)}" target="_blank" rel="noopener">'
+            '<img src="assets/img/boutiques/google-play-fr.png" alt="Disponible sur Google Play" '
+            'width="646" height="250"></a>')
+
+
 def boutons_stores(mini=False):
-    return (bouton_store('android', LOGO_PLAY, 'Google Play', mini)
+    lien = lien_google_play()
+    android = badge_google_play(lien, mini) if lien else bouton_store('android', LOGO_PLAY, 'Google Play', mini)
+    return (android
             + ('\n        ' if mini else '\n      ')
             + bouton_store('ios', LOGO_POMME, 'App Store', mini))
+
+
+def phrase_attente():
+    """Sous les boutons, tant qu'une boutique manque. site.js la cache quand tous les
+    boutons restants ont leur adresse."""
+    if lien_google_play():
+        return ("Sur iPhone, l'application arrive bientôt sur l'App Store. En attendant, tout le suivi "
+                "est déjà dans votre espace client.")
+    return ("L'application arrive sur les deux boutiques. En attendant, tout le suivi est déjà dans "
+            "votre espace client.")
 
 
 # Les trois écrans de l'application, dessinés aux mesures de l'application par
@@ -953,7 +983,7 @@ def section_application():
     <div class="gs-stores">
     {boutons_stores()}
     </div>
-    <p class="gs-app__attente" data-store-etat="bientot">L'application arrive sur les deux boutiques. En attendant, tout le suivi est déjà dans votre espace client.</p>
+    <p class="gs-app__attente" data-store-etat="bientot">{phrase_attente()}</p>
 {DECOR}
     <div class="gs-app__telephones">
 {telephones()}

@@ -1122,6 +1122,13 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
 .gs-store__texte{display:flex;flex-direction:column;line-height:1.2;text-align:left}
 .gs-store__texte small{font-size:11px;opacity:.8}
 .gs-store__texte strong{font-size:16.5px;font-weight:700}
+/* Le badge officiel de Google Play, dès que l'application y est en ligne
+   (build.py, badge_google_play) : l'image telle que Google la fournit, à la
+   hauteur des boutons voisins, sans fond ni bordure ajoutés (sa charte
+   interdit de la modifier). */
+.gs-play{display:inline-flex;flex:none;line-height:0;border-radius:10px}
+.gs-play img{display:block;height:64px;width:auto;max-width:none}
+.gs-play:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 
 /* Les deux mêmes boutons, en petit, dans la bannière d'accueil */
 .gs-hero-app{margin-top:30px;display:flex;flex-wrap:wrap;align-items:center;gap:11px 16px}
@@ -1133,6 +1140,7 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
 .gs-store--mini .gs-store__logo{width:18px;height:18px}
 .gs-store--mini .gs-store__texte small{font-size:9.5px}
 .gs-store--mini .gs-store__texte strong{font-size:13.5px}
+.gs-play--mini img{height:48px}
 
 /* Les trois téléphones */
 .gs-app__telephones{margin-top:clamp(42px,5.5vw,74px);display:flex;align-items:flex-end;
@@ -1168,6 +1176,7 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
   .gs-stores{margin-top:24px;gap:10px}
   .gs-store{padding:12px 16px;gap:9px}
   .gs-store__texte strong{font-size:15px}
+  .gs-play img{height:57px}
   .gs-app__telephones{margin-top:34px}
 }
 
