@@ -156,8 +156,8 @@ base (`40,00 $`, `$40.00`).
 
 Langue : celle de l'écran quand le client lit (site, application), celle de
 son compte (`clients.langue`) pour le téléphone, l'e-mail et WhatsApp, le
-français à défaut. La copie démo (`assets/js/api.js`) a les mêmes textes ;
-`essai-notifications.py` vérifie qu'ils sont identiques.
+français à défaut. Le mode démo (`assets/js/api.js`) n'a pas de copie du
+moteur : seul `essai-notifications.py` éprouve ces textes, sur la vraie chaîne.
 
 ## 5. Idempotence, doublons, regroupement
 
@@ -309,13 +309,12 @@ select * from cron.job_run_details order by start_time desc limit 5;   -- le tra
 
 ## 14. Essais
 
-- `outils/essais-services/essai-notifications.py` — base jetable, toutes les
-  migrations ; fournisseurs simulés (réponses écrites dans
+- `outils/essais-services/essai-notifications.py` — base jetable, toute la
+  chaîne de `outils/migrations.txt` ; fournisseurs simulés (réponses écrites dans
   `net._http_response`) : règles, idempotence et concurrence, nouveaux essais
   et abandon, multi-canal, panne de pg_net, préférences, sécurité par compte,
-  rappels, échappement, forme des réponses démo = base, volume (10 000
-  envois, quatre travailleurs en parallèle).
-- `outils/essais-services/essai-notifications.js` — la copie démo.
+  rappels, échappement, volume (10 000 envois, quatre travailleurs en
+  parallèle). Lancé par la CI (`essais.yml`) à chaque push.
 - `outils/essais-services/essai-mobile.py` — l'application mobile sur la
   même base (les notifications incluses).
 

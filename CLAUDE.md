@@ -389,9 +389,9 @@ push depuis admin.js, compte.js ou l'application (`envoyer_email_client` et
 permission, même à un administrateur) — elles lisent
 `mes_notifications`, `centre_notifications`, `envois_colis`, `regles_notifications`.
 Un nouveau type de notification = une ligne dans `notification_regles` + ses
-textes dans `notification_textes()` (quatre langues) + la même chose dans la
-copie démo (`REGLES_NOTIFICATIONS`, `TEXTES_NOTIFICATIONS` dans `api.js`) :
-`essai-notifications.py` compare les deux. Ne jamais marquer un envoi
+textes dans `notification_textes()` (quatre langues), éprouvés par
+`essai-notifications.py` sur toute la chaîne de migrations. Le mode démo n'a pas
+de copie du moteur. Ne jamais marquer un envoi
 « envoye » ou « livre » sans réponse du fournisseur.
 L'e-mail de « Colis reçu » et « Colis disponible » porte le tableau des détails du colis
 (`outils/supabase-courriel-colis.sql`, qui remplace `expedier_envoi` : ne pas relancer

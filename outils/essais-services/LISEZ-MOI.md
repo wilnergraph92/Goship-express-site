@@ -274,21 +274,22 @@ Il faut PostgREST 12 (`postgrest` dans le PATH, ou `POSTGREST=chemin`).
 de l'authentification, commandes `/essai/panne`, `/essai/revoquer`, `/essai/sql`) :
 c'est la base des essais de l'application (`npm run essai:web`, parcours Maestro).
 
-## essai-notifications.py et essai-notifications.js (Phase 11)
+## essai-notifications.py (Phase 11)
 
 Les notifications : événement → règle → notification → envois → statut. Base
-jetable avec toutes les migrations ; les fournisseurs (Expo, Brevo, Meta) ne
+jetable avec toute la chaîne de `outils/migrations.txt`, comme en production ;
+une relance de `supabase-notifications.sql` relance aussi les migrations qui
+la suivent. Les fournisseurs (Expo, Brevo, Meta) ne
 sont jamais appelés — la doublure de pg_net garde chaque requête et l'essai
 écrit lui-même la réponse du fournisseur (réussite, refus, panne, silence).
 Règles et étapes, idempotence (même clé, six traitements simultanés),
 factures et paiements, travailleur (nouveaux essais 30 s / 2 min, abandon au
 troisième, échecs définitifs), panne de pg_net et moteur cassé sans effet sur
 l'opération métier, préférences, sécurité compte par compte, rappels de
-retard, échappement et liens, forme des réponses démo = base, volume (10 000
-envois, quatre travailleurs en parallèle).
+retard, échappement et liens, volume (10 000 envois, quatre travailleurs en
+parallèle). Le mode démo n'a pas de copie du moteur : rien à comparer côté JS.
 
     python3 outils/essais-services/essai-notifications.py
-    node outils/essais-services/essai-notifications.js
 
 ## essai-production.py (Phase 12)
 
