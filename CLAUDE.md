@@ -397,6 +397,12 @@ de copie du moteur. Ne jamais marquer un envoi
 réception d'Expo, lus toutes les 5 minutes par `lire_accuses_push`
 (`outils/supabase-accuses.sql`, `essai-accuses.py`), seulement pour les push
 envoyés après son installation (`notification_moteur.accuses_depuis`).
+Les e-mails Brevo passent à « livre » ou « echec » (BREVO_EXPEDITEUR,
+ADRESSE_INEXISTANTE…) par leurs événements chez Brevo, lus toutes les 5 minutes
+par `lire_suivi_courriels` (`outils/supabase-suivi-courriels.sql`,
+`essai-suivi-courriels.py`) : Brevo accepte d'abord (201) puis peut refuser en
+différé. Sa demande en cours est `suivi_requete`, jamais `accuse_requete`, que
+`lire_accuses_push` relit quel que soit le canal.
 L'e-mail de « Colis reçu » et « Colis disponible » porte le tableau des détails du colis
 (`outils/supabase-courriel-colis.sql`, qui remplace `expedier_envoi` : ne pas relancer
 `supabase-notifications.sql` après lui) ; les autres e-mails gardent leur phrase seule. Le pied de tous les e-mails (`courriel_gabarit`) porte les boutons Google Play / App Store
@@ -505,7 +511,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

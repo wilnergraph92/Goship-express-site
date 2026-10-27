@@ -17,6 +17,7 @@ python3 outils/essais-services/essai-analytics.py    # les Analytics : périodes
 python3 outils/essais-services/essai-mobile.py       # l'application mobile par l'API réelle : isolation, pré-alertes (Phase 10)
 python3 outils/essais-services/essai-notifications.py # les notifications : règles, file, envois (Phase 11)
 python3 outils/essais-services/essai-accuses.py      # les accusés de réception des push : « livré », téléphones oubliés (36)
+python3 outils/essais-services/essai-suivi-courriels.py # le suivi des e-mails chez Brevo : « livré », refus en différé (49)
 python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
 bash outils/essais-services/essai-sauvegarde-locale.sh # la sauvegarde du code sur le Mac (outils/sauvegarde-locale), sans vraie clé ni vrai bucket
 python3 outils/essais-services/essai-rapports.py     # les rapports : permissions, périodes, chiffres, journal, suppression

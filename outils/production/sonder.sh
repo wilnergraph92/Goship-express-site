@@ -71,7 +71,8 @@ supabase-courriel-pied.sql|courriel_boutiques|p_langue=fr|non
 supabase-lieu-reception.sql|lieu_reception_phrase|p_lieu=Miami&p_langue=fr|non
 supabase-courriel-reseaux.sql|courriel_reseaux|p_langue=fr|non
 supabase-identite.sql|lire_sexe|p_valeur=M|non
-supabase-accuses.sql|lire_accuses_push||non'
+supabase-accuses.sql|lire_accuses_push||non
+supabase-suivi-courriels.sql|lire_suivi_courriels||non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

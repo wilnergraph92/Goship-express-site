@@ -232,7 +232,8 @@ webhook. Ce n'est pas branché : un webhook doit vérifier une signature sur le
 corps brut de la requête, ce que PostgREST ne permet pas — il faudrait une
 Supabase Edge Function (vérification de la signature et de l'horodatage,
 refus des rejeux, puis `update notification_envois set statut = 'livre'`).
-En attendant, aucun e-mail ni message WhatsApp n'est marqué « livré ».
+En attendant, aucun message WhatsApp n'est marqué « livré » ; les e-mails de
+Brevo le sont par le suivi décrit plus bas, sans webhook.
 
 **Push : les accusés de réception d'Expo** (`outils/supabase-accuses.sql`,
 28e migration). Expo n'a pas besoin de webhook : il garde 24 heures, pour chaque
@@ -254,6 +255,38 @@ cite l'identifiant du téléphone. Le jour de l'installation, les téléphones
 désinstallés de longue date passent en échec : les alertes « TAUX_ECHEC » ou
 « APPAREILS_OUBLIES » de l'onglet Notifications peuvent s'allumer quelques jours,
 puis s'éteignent d'elles-mêmes.
+
+**E-mails : le suivi chez Brevo** (`outils/supabase-suivi-courriels.sql`,
+29e migration). Brevo répond « 201 » dès qu'il **accepte** un e-mail, et la base
+le marque alors « envoye ». Mais il peut le **refuser quelques secondes plus
+tard** : du 26/10 à 10 h 16 au 27/10 à 6 h 44 UTC, l'adresse d'expédition
+infos@goshipexpress.net n'était pas validée chez Brevo, tous les e-mails ont été
+refusés, et l'onglet Notifications les montrait « envoyés ». Brevo n'a pas besoin
+de webhook pour le dire : il garde les événements de chaque e-mail, que la base
+vient lire (`GET /v3/smtp/statistics/events?messageId=…`). Toutes les 5 minutes
+(tâche `goship-suivi-courriels`, décalée de deux minutes sur celle des push),
+`lire_suivi_courriels` demande ceux des e-mails acceptés il y a plus de
+2 minutes (une requête par e-mail, 50 par passage), puis lit les réponses au
+passage suivant :
+- « delivered » → **« livre »** : remis au serveur de messagerie du client (pas
+  une preuve de lecture) ;
+- refus définitif → **« echec »** avec un code : `BREVO_EXPEDITEUR` (adresse
+  d'expédition non validée : **tous** les e-mails échouent, c'est Brevo >
+  Expéditeurs, domaines à reprendre), `BREVO_REFUS` (autre refus de Brevo),
+  `ADRESSE_INEXISTANTE` (rejet définitif), `ADRESSE_INVALIDE`,
+  `ADRESSE_BLOQUEE` ;
+- rien de définitif (accepté, retardé, rejet temporaire) → redemandé de moins en
+  moins souvent (un sixième de l'âge de l'e-mail, entre 2 minutes et 1 heure),
+  clos sans changer le statut après 72 heures.
+
+Seuls les e-mails envoyés après l'installation du fichier sont lus
+(`notification_moteur.suivi_courriels_depuis`), et seulement ceux de Brevo (un
+e-mail de Resend garde « envoye »). Le texte de Brevo n'est pas recopié (il peut
+citer l'adresse du client) : seul le code est gardé. La demande en cours a sa
+propre colonne, `suivi_requete` : `lire_accuses_push` relit toute ligne qui a une
+`accuse_requete`, quel que soit le canal, et effacerait celles des e-mails. Avec
+assez d'e-mails, l'alerte « ECHECS_ANORMAUX » de l'onglet Notifications s'allume
+quand plus d'un sur cinq échoue en 24 heures.
 
 ## 10. Plateformes
 
@@ -330,6 +363,11 @@ select * from cron.job_run_details order by start_time desc limit 5;   -- le tra
 
 ## 14. Essais
 
+- `outils/essais-services/essai-suivi-courriels.py` — le suivi des e-mails chez
+  Brevo : une demande par e-mail, « livre », les cinq codes d'échec (dont
+  l'expéditeur non validé du 26/10), rien de définitif et redemandes espacées,
+  pannes de Brevo, clôture après 72 h, e-mails d'avant l'installation jamais
+  touchés, push et e-mails qui ne se mêlent pas, Resend ignoré, droits.
 - `outils/essais-services/essai-accuses.py` — les accusés de réception des push :
   demande par lot, « livre », `DeviceNotRegistered` et téléphone oublié, pannes
   d'Expo, abandon après 24 h, push d'avant l'installation jamais touchés, droits.
