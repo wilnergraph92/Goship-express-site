@@ -3040,7 +3040,11 @@
     NON_CONFIGURE: 'canal non configuré', PREFERENCE: 'coupé par le client', REGLE_COUPEE: 'e-mail coupé dans les règles', SANS_APPAREIL: 'aucun téléphone enregistré',
     SANS_DESTINATAIRE: 'pas d’adresse ou de numéro', SANS_MODELE: 'pas de modèle WhatsApp pour ce message',
     APPAREIL_INCONNU: 'téléphone oublié', DeviceNotRegistered: 'application désinstallée',
-    RESEAU: 'fournisseur injoignable', ERREUR_INTERNE: 'erreur interne'
+    RESEAU: 'fournisseur injoignable', ERREUR_INTERNE: 'erreur interne',
+    // Refus de Brevo lus après coup (supabase-suivi-courriels.sql)
+    BREVO_EXPEDITEUR: 'adresse d’expédition non validée chez Brevo', BREVO_REFUS: 'refusé par Brevo',
+    ADRESSE_INEXISTANTE: 'adresse e-mail inexistante', ADRESSE_INVALIDE: 'adresse e-mail invalide',
+    ADRESSE_BLOQUEE: 'adresse e-mail bloquée par Brevo'
   };
   // Les libellés des règles (notification_regles, supabase-notifications.sql)
   var TYPES_NOTIF = {
