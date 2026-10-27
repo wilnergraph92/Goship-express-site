@@ -34,3 +34,4 @@ supabase-courriel-pied.sql
 supabase-lieu-reception.sql
 supabase-courriel-reseaux.sql
 supabase-identite.sql
+supabase-accuses.sql

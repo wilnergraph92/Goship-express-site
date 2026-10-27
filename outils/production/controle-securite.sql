@@ -95,7 +95,10 @@ colonnes_attendues(table_name, column_name, fichier) as (values
   ('journal_audit', 'motif', 'supabase-corrections.sql'),
   ('recompenses', 'valide_apres', 'supabase-campagnes.sql'),
   ('clients', 'sexe', 'supabase-identite.sql'),
-  ('clients', 'type_document', 'supabase-identite.sql')),
+  ('clients', 'type_document', 'supabase-identite.sql'),
+  ('notification_envois', 'accuse_requete', 'supabase-accuses.sql'),
+  ('notification_envois', 'accuse_le', 'supabase-accuses.sql'),
+  ('notification_moteur', 'accuses_depuis', 'supabase-accuses.sql')),
 -- Une migration de la chaîne officielle = un objet qu'elle seule installe
 migrations(ordre, fichier, present) as (values
   (1,  'supabase.sql',                 to_regprocedure('public.permissions_du_role(text)') is not null),
@@ -126,7 +129,8 @@ migrations(ordre, fichier, present) as (values
   (24, 'supabase-courriel-pied.sql',   exists (select 1 from pg_proc where proname = 'courriel_boutiques')),
   (25, 'supabase-lieu-reception.sql',  exists (select 1 from pg_proc where proname = 'lieu_reception_phrase')),
   (26, 'supabase-courriel-reseaux.sql', exists (select 1 from pg_proc where proname = 'courriel_reseaux')),
-  (27, 'supabase-identite.sql',        exists (select 1 from pg_proc where proname = 'lire_type_document'))),
+  (27, 'supabase-identite.sql',        exists (select 1 from pg_proc where proname = 'lire_type_document')),
+  (28, 'supabase-accuses.sql',         exists (select 1 from pg_proc where proname = 'lire_accuses_push'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,

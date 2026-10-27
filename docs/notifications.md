@@ -232,7 +232,28 @@ webhook. Ce n'est pas branché : un webhook doit vérifier une signature sur le
 corps brut de la requête, ce que PostgREST ne permet pas — il faudrait une
 Supabase Edge Function (vérification de la signature et de l'horodatage,
 refus des rejeux, puis `update notification_envois set statut = 'livre'`).
-En attendant, aucun envoi n'est jamais marqué « livré ».
+En attendant, aucun e-mail ni message WhatsApp n'est marqué « livré ».
+
+**Push : les accusés de réception d'Expo** (`outils/supabase-accuses.sql`,
+28e migration). Expo n'a pas besoin de webhook : il garde 24 heures, pour chaque
+push accepté, un accusé que la base vient chercher. Toutes les 5 minutes,
+`lire_accuses_push` demande ceux des push acceptés il y a plus de 15 minutes
+(`getReceipts`, 300 par requête au plus), puis lit les réponses au passage
+suivant :
+- accusé « ok » → l'envoi passe à **« livre »** : remis au service de
+  notifications de Google ou d'Apple (pas une preuve que le client l'a lu) ;
+- accusé d'erreur → **« echec »** avec le code d'Expo ; pour
+  `DeviceNotRegistered` (application désinstallée ou réinstallée), le téléphone
+  est supprimé de `appareils`, comme quand Expo refuse le push d'emblée ;
+- pas encore d'accusé → redemandé au passage suivant, clos sans changer le
+  statut après 24 heures.
+
+Seuls les push envoyés après l'installation du fichier sont lus
+(`notification_moteur.accuses_depuis`). Le message d'Expo n'est pas recopié : il
+cite l'identifiant du téléphone. Le jour de l'installation, les téléphones
+désinstallés de longue date passent en échec : les alertes « TAUX_ECHEC » ou
+« APPAREILS_OUBLIES » de l'onglet Notifications peuvent s'allumer quelques jours,
+puis s'éteignent d'elles-mêmes.
 
 ## 10. Plateformes
 
@@ -309,6 +330,9 @@ select * from cron.job_run_details order by start_time desc limit 5;   -- le tra
 
 ## 14. Essais
 
+- `outils/essais-services/essai-accuses.py` — les accusés de réception des push :
+  demande par lot, « livre », `DeviceNotRegistered` et téléphone oublié, pannes
+  d'Expo, abandon après 24 h, push d'avant l'installation jamais touchés, droits.
 - `outils/essais-services/essai-notifications.py` — base jetable, toute la
   chaîne de `outils/migrations.txt` ; fournisseurs simulés (réponses écrites dans
   `net._http_response`) : règles, idempotence et concurrence, nouveaux essais
