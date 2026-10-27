@@ -38,7 +38,7 @@ jobs:
       matrix:
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
                mobile, production, rapports, frais, corrections, programmes, courriel-colis, courriel-pied, lieu-reception, courriel-reseaux, identite,
-               notifications]
+               notifications, accuses]
     steps:
       # Tout l'historique : plusieurs bancs rejouent la migration depuis une
       # version publiée plus ancienne (git show <commit>:outils/…)
