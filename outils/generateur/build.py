@@ -249,6 +249,23 @@ def mesure_active():
     return bool(re.fullmatch(r'G-[A-Z0-9]{4,20}', reglage('googleAnalytics')))
 
 
+def pixel_actif():
+    """Le pixel Meta est-il réglé ? (metaPixel dans config.js, que des chiffres)"""
+    return bool(re.fullmatch(r'\d{10,20}', reglage('metaPixel')))
+
+
+def mesure_quelconque():
+    """Au moins une des deux mesures est réglée : les pages publiques chargent mesure.js."""
+    return mesure_active() or pixel_actif()
+
+
+# Les adresses du pixel Meta, telles que Meta les documente pour une CSP : le
+# script vient de connect.facebook.net, les événements partent vers facebook.com
+META_SCRIPTS = ['https://connect.facebook.net']
+META_CONNEXIONS = ['https://www.facebook.com', 'https://connect.facebook.net']
+META_IMAGES = ['https://www.facebook.com']
+
+
 # Les adresses de Google Analytics 4, telles que Google les documente pour une CSP
 # (« Use a Content Security Policy » de la documentation de gtag.js)
 GOOGLE_SCRIPTS = ['https://www.googletagmanager.com']
@@ -258,9 +275,9 @@ GOOGLE_IMAGES = ['https://*.google-analytics.com', 'https://www.googletagmanager
 
 
 def csp(entete=False, mesure=False):
-    """mesure : la page charge Google Analytics (pages publiques seulement, et
-    seulement si googleAnalytics est réglé). Le tableau de bord et l'espace client
-    gardent la règle stricte : aucun script venu d'ailleurs."""
+    """mesure : la page charge Google Analytics et le pixel Meta (pages publiques
+    seulement, et chacun seulement s'il est réglé). Le tableau de bord et l'espace
+    client gardent la règle stricte : aucun script venu d'ailleurs."""
     sb = origine_supabase()
     scripts = ["'self'"]
     images = ["'self'", 'data:', 'https://images.unsplash.com']
@@ -272,6 +289,10 @@ def csp(entete=False, mesure=False):
         scripts += GOOGLE_SCRIPTS
         images += GOOGLE_IMAGES
         connexions += GOOGLE_CONNEXIONS
+    if mesure and pixel_actif():
+        scripts += META_SCRIPTS
+        images += META_IMAGES
+        connexions += META_CONNEXIONS
     regles = [
         "default-src 'self'",
         "base-uri 'none'",
@@ -383,6 +404,36 @@ def confidentialite_mesure():
         + '      </div>\n'
         + para.format("Google conserve ces données le temps réglé dans notre compte Google Analytics (deux mois par "
                       "défaut, quatorze au plus), selon sa propre politique de confidentialité.")
+        + '      </div>\n')
+
+
+def confidentialite_pixel():
+    """La section « Publicités Facebook et Instagram », posée seulement quand le pixel
+    Meta est réglé (metaPixel dans config.js), sur le même principe que
+    confidentialite_mesure() : la page dit exactement ce que mesure.js fait."""
+    return (
+        '      <div id="pixel-meta" style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);'
+        'border:1px solid #e7edf9;border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+        '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+        "Publicités Facebook et Instagram</h3>\n"
+        + para.format("Nous faisons de la publicité sur Facebook et Instagram. Pour savoir si une publicité vous a "
+                      "donné envie de nous contacter, les pages publiques du site utilisent le pixel Meta (Meta "
+                      "Platforms). Il reçoit l'adresse de la page, le fait que vous avez cliqué sur WhatsApp, le "
+                      "téléphone ou l'e-mail, ou envoyé une demande de devis, et les identifiants que Meta associe à "
+                      "votre navigateur et à votre compte Facebook ou Instagram, s'il existe.")
+        + '        <div style="margin-top:22px;padding:clamp(20px,2.4vw,26px);background:#f4f6fa;border-radius:14px;'
+          'display:grid;gap:14px">\n'
+        + puce('Ce qui n\'est jamais envoyé :', "le contenu des formulaires, vos numéros de colis, et rien de votre "
+               "espace client, du tableau de bord ni de l'application. Le pixel ne se charge pas sur une adresse "
+               "de suivi de colis.")
+        + puce('Pas de collecte automatique :', "le pixel ne lit ni le texte de la page ni les champs que vous "
+               "remplissez ; il ne reçoit que les gestes décrits ci-dessus.")
+        + puce('Refuser :', "activez « Global Privacy Control » ou « Ne pas me suivre » dans votre navigateur : le "
+               "site ne charge alors pas le pixel. Dans Facebook et Instagram, « Préférences publicitaires » permet "
+               "aussi de limiter l'usage de ces données.")
+        + '      </div>\n'
+        + para.format("Meta utilise ces données pour mesurer nos publicités et les montrer aux personnes susceptibles "
+                      "d'être intéressées, selon sa propre politique de confidentialité.")
         + '      </div>\n')
 
 
@@ -1201,7 +1252,8 @@ def page_specific(body, src, page):
     # (Google Play, App Store) exigent qu'elle le dise : identifiant de notification,
     # appareil photo, prestataires, suppression du compte depuis l'application et le site.
     if src == 'Confidentialite.dc.html':
-        ajout = confidentialite_application() + (confidentialite_mesure() if mesure_active() else '')
+        ajout = (confidentialite_application() + (confidentialite_mesure() if mesure_active() else '')
+                 + (confidentialite_pixel() if pixel_actif() else ''))
         body = replace_once(body, CONF_REPERE, ajout + CONF_REPERE, page)
 
     # Fermer un compte : la suppression depuis l'application (adresse demandée par Google Play)
@@ -1320,9 +1372,9 @@ LOCAL_BUSINESS = {
 
 
 def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(), noindex=False, mesure=False):
-    """mesure : page publique, qui charge mesure.js (Google Analytics) s'il est réglé."""
+    """mesure : page publique, qui charge mesure.js (Google Analytics, pixel Meta) si l'un des deux est réglé."""
     esc = attr_escape
-    mesure = mesure and mesure_active()
+    mesure = mesure and mesure_quelconque()
     lines = [
         '<!DOCTYPE html>',
         '<html lang="fr">',

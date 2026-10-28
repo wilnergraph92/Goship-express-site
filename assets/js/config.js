@@ -47,6 +47,14 @@
                  sur l'espace client ni le tableau de bord. Après l'avoir changé,
                  relancez build.py puis traduire.py : la politique de sécurité
                  des pages doit autoriser Google.
+
+   metaPixel     Identifiant du pixel Meta (une quinzaine de chiffres, dans le
+                 Gestionnaire d'événements > Sources de données). Vide : aucun
+                 pixel. Rempli : mêmes règles que googleAnalytics (pages
+                 publiques, siteUrl seulement), et c'est grâce à lui que les
+                 publicités Facebook et Instagram savent qui écrit sur WhatsApp
+                 ou demande un devis après les avoir vues. Après l'avoir
+                 changé, relancez build.py puis traduire.py.
    ========================================================================== */
 window.GOSHIP_CONFIG = {
   whatsapp: '18495386262',
@@ -59,5 +67,6 @@ window.GOSHIP_CONFIG = {
   appStoreLien: '',
   googlePlayLien: 'https://play.google.com/store/apps/details?id=com.goshipexpress.app',
   siteUrl: 'https://goshipexpress.net',
-  googleAnalytics: 'G-KLV2HSF91C'
+  googleAnalytics: 'G-KLV2HSF91C',
+  metaPixel: '29446158641646387'
 };
