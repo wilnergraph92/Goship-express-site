@@ -27,8 +27,9 @@
    googlePlayLien fois publiée. Tant qu'elles sont vides, la section « Vos colis
                  dans votre poche » de l'accueil affiche « Bientôt sur » et les
                  boutons ne mènent nulle part. Dès qu'une adresse est collée
-                 (elle doit commencer par https://), le bouton devient un vrai
-                 lien. Pensez alors aux badges officiels : voir README, « Section
+                 (elle doit commencer par https://) et build.py puis
+                 traduire.py relancés, le bouton devient un vrai lien. Pensez
+                 alors aux badges officiels : voir README, « Section
                  application mobile ».
 
    siteUrl       Adresse publique du site, une fois en ligne (ex.
