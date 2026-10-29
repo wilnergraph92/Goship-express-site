@@ -290,34 +290,9 @@
   window.addEventListener('storage', majSession);
   document.addEventListener('goship:session', majSession);
 
-  /* ---- Boutons Google Play et App Store ------------------------------------
-     Tant que les adresses des boutiques ne sont pas renseignées dans config.js,
-     les boutons affichent « Bientôt sur » et ne mènent nulle part. Dès qu'une
-     adresse est ajoutée, le bouton devient un vrai lien. */
-  (function boutiques() {
-    var boutons = document.querySelectorAll('.gs-store');
-    if (!boutons.length) return;
-    var toutesPretes = true;
-    boutons.forEach(function (bouton) {
-      var reglage = bouton.getAttribute('data-store') === 'ios' ? REGLAGES.appStoreLien : REGLAGES.googlePlayLien;
-      var lien = String(reglage || '').trim();
-      if (/^https:\/\//.test(lien)) {
-        bouton.href = lien;
-        bouton.target = '_blank';
-        bouton.rel = 'noopener';
-      } else {
-        toutesPretes = false;
-      }
-      bouton.querySelectorAll('[data-store-etat]').forEach(function (el) {
-        el.hidden = (el.getAttribute('data-store-etat') === 'pret') !== !!bouton.href;
-      });
-    });
-    if (toutesPretes) {
-      document.querySelectorAll('.gs-app__attente[data-store-etat="bientot"]').forEach(function (el) {
-        el.hidden = true;
-      });
-    }
-  })();
+  /* Les boutons Google Play et App Store sont écrits par build.py selon config.js
+     (« Bientôt sur » ou un vrai lien « Disponible sur ») : rien à faire ici. Une
+     adresse de boutique ajoutée demande de relancer build.py puis traduire.py. */
 
   /* ---- Suivi de colis ------------------------------------------------------
      Espace client actif : recherche du colis (numéro GSE ou suivi du vendeur)

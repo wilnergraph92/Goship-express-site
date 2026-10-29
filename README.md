@@ -439,8 +439,10 @@ appStoreLien: 'https://apps.apple.com/app/…',
 googlePlayLien: 'https://play.google.com/store/apps/details?id=com.goshipexpress.app',
 ```
 
-Les boutons deviennent alors de vrais liens et affichent « Disponible sur » ; la phrase d'attente
-disparaît d'elle-même. Les deux boutiques demandent qu'on utilise leurs **badges officiels** dès que
+puis relancez `build.py` et `traduire.py` : les boutons deviennent de vrais liens et affichent
+« Disponible sur » ; la phrase d'attente disparaît. La page ne porte jamais qu'un seul des deux
+libellés (les deux côte à côte, l'un masqué, se lisaient « Coming soon toAvailable onApp Store »
+dans Google et les aperçus de liens). Les deux boutiques demandent qu'on utilise leurs **badges officiels** dès que
 l'application est en ligne.
 
 **Google Play : fait le 26/10/2026.** `googlePlayLien` est rempli ; `build.py` (relancé avec

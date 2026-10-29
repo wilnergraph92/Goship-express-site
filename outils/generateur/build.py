@@ -290,6 +290,15 @@ def csp(entete=False, mesure=False):
     return '; '.join(regles)
 
 
+# La phrase d'accroche de l'accueil, sous « Livraison internationale »
+ACCROCHE = ("Une adresse à Miami à votre nom, gratuite à l'ouverture du compte : achetez aux États-Unis, "
+            "nous livrons en Haïti et à Santo Domingo. Délais annoncés, prix clairs, colis suivis de bout en bout.")
+
+
+# Habillage d'un champ à trous de la maquette des conditions générales ([devise locale]…)
+SP_TROU = "<span style=\"font-family:'IBM Plex Mono',monospace;font-size:15px;color:#8a93ac\">"
+
+
 def attr_escape(s):
     return htmllib.escape(s, quote=False).replace('"', '&quot;')
 
@@ -376,6 +385,11 @@ def confidentialite_mesure():
         + puce('Ce qui n\'est jamais envoyé :', "le contenu des formulaires, vos numéros de colis, et rien de votre "
                "espace client, du tableau de bord ni de l'application : la mesure ne fonctionne que sur les pages "
                "publiques du site.")
+        + puce('L\'inscription :', "la page de création de compte ne charge Google Analytics qu'une fois votre compte "
+               "créé, formulaire vidé, pour compter une inscription. Google ne reçoit ni votre nom, ni votre e-mail, "
+               "ni rien de ce que vous avez saisi.")
+        + puce('Les campagnes :', "si vous arrivez par une de nos publicités, l'adresse envoyée garde ses paramètres "
+               "de campagne (utm_…, gclid) pour savoir quelle annonce vous a amené ; tous les autres sont retirés.")
         + puce('Pas de publicité :', "les signaux Google et la personnalisation des annonces sont désactivés.")
         + puce('Refuser la mesure :', "activez « Global Privacy Control » ou « Ne pas me suivre » dans votre "
                "navigateur : le site ne charge alors pas Google Analytics. Vous pouvez aussi effacer les cookies de "
@@ -653,7 +667,7 @@ TRACK_RESULT = '''
         </div>
         <div class="gs-suivi" data-track-etat="introuvable" hidden>
           <p class="gs-suivi__titre">Aucun colis ne correspond à cette référence.</p>
-          <p>Vérifiez le numéro de colis (par exemple GSE-4821-HT) ou saisissez le numéro de suivi du vendeur. Un colis tout juste expédié apparaît dès sa réception à Miami. <a data-track-link href="https://wa.me/''' + WHATSAPP + '''" target="_blank" rel="noopener">Écrire sur WhatsApp</a></p>
+          <p>Vérifiez le numéro de colis : il commence par GSE- et figure sur votre étiquette et dans votre espace client. Vous pouvez aussi saisir le numéro de suivi du vendeur. Un colis tout juste expédié apparaît dès sa réception à Miami. <a data-track-link href="https://wa.me/''' + WHATSAPP + '''" target="_blank" rel="noopener">Écrire sur WhatsApp</a></p>
         </div>
         <div class="gs-suivi" data-track-etat="code-client" hidden>
           <p class="gs-suivi__titre">Ceci est un code client.</p>
@@ -872,15 +886,27 @@ def ajouter_second_numero(body, page):
     return body.replace(carte, carte + '\n        ' + seconde, 1)
 
 
-def bouton_store(magasin, logo, nom, mini=False):
-    """Bouton d'une boutique. Sans adresse dans config.js il affiche « Bientôt sur »
-    et ne mène nulle part ; site.js le transforme en vrai lien dès qu'elle est remplie."""
+def lien_app_store():
+    """La fiche App Store (appStoreLien dans config.js), '' tant que l'application n'y est pas."""
+    lien = reglage('appStoreLien')
+    return lien if lien.startswith('https://') else ''
+
+
+def bouton_store(magasin, logo, nom, mini=False, lien=''):
+    """Bouton d'une boutique. Un seul libellé dans la page, celui de l'état réel :
+    « Bientôt sur » sans adresse dans config.js (un simple badge, pas un lien), «
+    Disponible sur » avec. Les deux côte à côte, l'un masqué, se lisaient « Coming soon
+    toAvailable onApp Store » pour Google, les lecteurs d'écran et les aperçus de
+    liens. L'espace entre les deux lignes n'est pas affiché (colonne flex) mais garde
+    « Bientôt sur App Store » lisible comme texte."""
     classe = 'gs-store gs-store--mini' if mini else 'gs-store'
-    return (f'<a class="{classe}" data-store="{magasin}">{logo}'
-            f'<span class="gs-store__texte">'
-            f'<small data-store-etat="bientot">Bientôt sur</small>'
-            f'<small data-store-etat="pret" hidden>Disponible sur</small>'
-            f'<strong translate="no">{nom}</strong></span></a>')
+    texte = (f'<span class="gs-store__texte">'
+             f'<small>{"Disponible sur" if lien else "Bientôt sur"}</small> '
+             f'<strong translate="no">{nom}</strong></span>')
+    if lien:
+        return (f'<a class="{classe}" data-store="{magasin}" href="{attr_escape(lien)}" target="_blank" '
+                f'rel="noopener">{logo}{texte}</a>')
+    return f'<span class="{classe}" data-store="{magasin}">{logo}{texte}</span>'
 
 
 def lien_google_play():
@@ -906,12 +932,13 @@ def boutons_stores(mini=False):
     android = badge_google_play(lien, mini) if lien else bouton_store('android', LOGO_PLAY, 'Google Play', mini)
     return (android
             + ('\n        ' if mini else '\n      ')
-            + bouton_store('ios', LOGO_POMME, 'App Store', mini))
+            + bouton_store('ios', LOGO_POMME, 'App Store', mini, lien_app_store()))
 
 
 def phrase_attente():
-    """Sous les boutons, tant qu'une boutique manque. site.js la cache quand tous les
-    boutons restants ont leur adresse."""
+    """Sous les boutons, tant qu'une boutique manque ; rien quand les deux sont prêtes."""
+    if lien_google_play() and lien_app_store():
+        return ''
     if lien_google_play():
         return ("Sur iPhone, l'application arrive bientôt sur l'App Store. En attendant, tout le suivi "
                 "est déjà dans votre espace client.")
@@ -973,6 +1000,7 @@ TRACE = (
 
 
 def section_application():
+    attente = f'    <p class="gs-app__attente">{phrase_attente()}</p>\n' if phrase_attente() else ''
     html = f'''
 <section id="application" class="gs-app">
   <div class="gs-app__halo" aria-hidden="true"></div>
@@ -983,8 +1011,7 @@ def section_application():
     <div class="gs-stores">
     {boutons_stores()}
     </div>
-    <p class="gs-app__attente" data-store-etat="bientot">{phrase_attente()}</p>
-{DECOR}
+{attente}{DECOR}
     <div class="gs-app__telephones">
 {telephones()}
     </div>
@@ -1059,6 +1086,21 @@ def page_specific(body, src, page):
 
     # Grilles : une colonne ne dépasse jamais la largeur disponible (petits téléphones)
     body = re.sub(r'minmax\((\d+px),1fr\)', r'minmax(min(\1,100%),1fr)', body)
+    # Conditions générales : les champs à trous du modèle ([devise locale]…) étaient
+    # affichés tels quels. La devise est connue (tous les prix sont en dollars US) ;
+    # les trois autres sont reformulées sans chiffre, à la demande de l'entreprise
+    # (29/10/2026), en attendant des valeurs relues par son conseil.
+    if src == 'Termes-et-Conditions.dc.html':
+        trou = SP_TROU
+        for avant, apres in (
+                ('exprimés en ' + trou + '[devise locale]</span> et', 'exprimés en dollars américains (USD) et'),
+                ('pénalités de retard équivalant à ' + trou + '[pourcentage %]</span> par mois sur le montant restant dû.',
+                 'pénalités de retard sur le montant restant dû.'),
+                ('persiste au-delà de ' + trou + '[nombre de jours]</span>, GoShip',
+                 'persiste après une relance restée sans réponse, GoShip'),
+                ('limitée à ' + trou + '[montant maximal ou norme en vigueur]</span>, sauf',
+                 'limitée à la valeur déclarée du colis, dans la limite prévue par la réglementation applicable, sauf')):
+            body = replace_once(body, avant, apres, page)
     # Grand titre de l'accueil
     if src == 'Goship Express.dc.html':
         body = replace_once(body, '<div style="min-width:0;animation:om-rise .7s cubic-bezier(.2,.7,.3,1) both">',
@@ -1072,9 +1114,15 @@ def page_specific(body, src, page):
         # (site.css, .gs-hero-ruban)
         body = replace_once(body, '<div style="display:inline-flex;align-items:center;gap:14px;padding:9px 9px 9px 18px;',
                             '<div class="gs-hero-ruban" style="display:inline-flex;align-items:center;gap:14px;padding:9px 9px 9px 18px;', page)
-        # Au téléphone, le premier bouton ouvre un compte plutôt qu'un devis : c'est
-        # l'espace client qui donne l'adresse de Miami. Les deux boutons sont dans la
-        # page, site.css montre l'un ou l'autre selon la largeur (.gs-hero-actions).
+        # Le premier bouton ouvre un compte plutôt qu'un devis : c'est l'espace client
+        # qui donne l'adresse de Miami. Les deux boutons sont dans la page, site.css
+        # montre le devis à la place quand le visiteur est déjà connecté (.gs-hero-actions).
+        # La phrase d'accroche dit d'emblée ce que le compte apporte (le texte d'origine
+        # reste la description de la page pour Google).
+        body = replace_once(body,
+                            'color:#c4d0ec">Réception, consolidation, transport et livraison de colis entre les '
+                            'États-Unis, Santo Domingo et Haïti. Délais annoncés, prix clairs, colis suivis de bout en bout.</p>',
+                            'color:#c4d0ec">' + ACCROCHE + '</p>', page)
         body = replace_once(body, '<div style="margin-top:38px;display:flex;flex-wrap:wrap;gap:14px">\n',
                             '<div class="gs-hero-actions" style="margin-top:38px;display:flex;flex-wrap:wrap;gap:14px">\n'
                             '        <a href="inscription.html" class="gs-hero-compte hv-fill-cta-lift" data-session="non" '
@@ -1427,6 +1475,11 @@ def convert(src, out, title=None, desc=None):
 
     body = poser_traces(body, page)
 
+    # Le numéro de la maquette (GSE-4821-HT : champ de suivi, étiquette de l'accueil,
+    # flotte d'À propos) ressemblait à un vrai colis, mais n'existe pas : un visiteur
+    # qui le tapait recevait « aucun colis ». Un format visiblement générique le remplace.
+    body = body.replace('GSE-4821-HT', 'GSE-XXXX-HT')
+
     # Image principale de chaque page : chargement prioritaire
     body = re.sub(r'(<section id="top"[^>]*>\s*<img )', r'\1fetchpriority="high" ', body, count=1)
 
@@ -1502,7 +1555,10 @@ def build_compte():
         # lieux.js (régions et villes) avant compte.js, qui s'en sert.
         scripts = (('api', 'codes', 'impression', 'lieux', 'compte') if out == 'mon-compte.html'
                    else ('api', 'lieux', 'compte'))
-        head = build_head(title, desc, None, False, False, scripts=scripts, noindex=noindex)
+        # L'inscription porte mesure.js, qui n'y charge Google qu'une fois le compte
+        # créé, pour compter l'inscription (voir mesure.js) ; les autres pages du compte, jamais.
+        head = build_head(title, desc, None, False, False, scripts=scripts, noindex=noindex,
+                          mesure=out == 'inscription.html')
         with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
             f.write(head + body[:s] + main + body[e:])
 
