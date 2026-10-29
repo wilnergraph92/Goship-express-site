@@ -434,20 +434,27 @@
       };
       attente(formInscription, 'attente-inscription');
       API.inscrire(donnees).then(function (r) {
+        // Le compte existe : le formulaire est vidé avant que la mesure d'audience
+        // (mesure.js, seulement en ligne et si elle est réglée) compte l'inscription
+        // — elle ne voit jamais ce qui a été écrit. Sans elle, on continue tout de suite.
+        formInscription.reset();
+        var compter = window.GoshipMesure ? window.GoshipMesure.inscription : function (m, suite) { suite(); };
         if (r.confirmation) {
-          attente(formInscription);
-          formInscription.hidden = true;
-          $('[data-methode]').hidden = true;
-          var boite = $('[data-confirmation]');
-          $('[data-confirmation-texte]', boite).textContent = t('confirmation-email', { email: donnees.email });
-          boite.hidden = false;
-          boite.focus();
+          compter('email', function () {
+            attente(formInscription);
+            formInscription.hidden = true;
+            $('[data-methode]').hidden = true;
+            var boite = $('[data-confirmation]');
+            $('[data-confirmation-texte]', boite).textContent = t('confirmation-email', { email: donnees.email });
+            boite.hidden = false;
+            boite.focus();
+          });
           return;
         }
         annoncerSession();
         // Le code est entré dans le compte par la base ; inutile de le rejouer ensuite
         if (donnees.code_parrainage) garderParrain('');
-        location.href = 'mon-compte.html?bienvenue=1';
+        compter('email', function () { location.href = 'mon-compte.html?bienvenue=1'; });
       }).catch(function (err) {
         attente(formInscription);
         montrerErreur(formInscription, err);
