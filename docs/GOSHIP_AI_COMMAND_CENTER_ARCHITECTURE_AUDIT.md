@@ -429,41 +429,40 @@ Les agents 2, 4, 5, 6, 7 et 8 n'ont pas de données GoShip à exploiter aujourd'
 ## 9. Diagramme des composants
 
 ```mermaid
-flowchart LR
-  subgraph Navigateur["Navigateur ou application de bureau du CEO"]
-    UI["admin.html<br/>onglet Direction IA (ia.js, ES5)"]
-  end
+flowchart TB
+  UI["Navigateur ou bureau du CEO<br/>admin.html · onglet Direction IA"]
+  CLAUDE["API Claude (Anthropic)<br/>Opus 5.5 · Sonnet 5.5 · Haiku 5.5"]
 
-  subgraph Supabase["Supabase (projet de production)"]
-    AUTH["Auth<br/>session + MFA (aal2)"]
-    EF["Edge Function ia-passerelle<br/>clé API Claude (secret)<br/>boucle d'outils, budget, filtres"]
+  subgraph SB["Supabase (production)"]
+    AUTH["Auth<br/>session + MFA aal2"]
+    EF["Edge Function ia-passerelle<br/>clé API Claude, boucle d'outils,<br/>budget, filtres"]
     REST["PostgREST /rest/v1/rpc"]
     subgraph PG["PostgreSQL"]
       ACC["ia_exiger_acces()<br/>ia.commander + ia_acces + aal2"]
-      LECT["Fonctions de lecture existantes<br/>vue_generale, analytics_*, rapport_donnees…"]
-      SERV["Fonctions de service existantes<br/>executer_operation, enregistrer_paiement…"]
+      LECT["Fonctions de lecture existantes<br/>vue_generale, analytics_*, rapport_donnees"]
       IA["Tables ia_*<br/>missions, étapes, approbations,<br/>messages, rapports, journal"]
-      JA["journal_audit (immuable)"]
-      CRON["pg_cron goship-ia<br/>+ pg_net"]
-      VAULT["Vault<br/>jeton interne"]
+      SERV["Fonctions de service existantes<br/>executer_operation, enregistrer_paiement"]
+      JA["journal_audit immuable"]
+      CRON["pg_cron goship-ia + pg_net"]
+      VAULT["Vault : jeton interne"]
     end
   end
 
-  CLAUDE["API Claude (Anthropic)<br/>Opus 5.5 · Sonnet 5.5 · Haiku 5.5"]
-
-  UI -- "1. question (jeton du CEO)" --> EF
-  EF -- "2. contrôle d'accès" --> REST --> ACC
-  EF -- "3. appel au modèle" --> CLAUDE
-  CLAUDE -- "4. demande d'outil" --> EF
-  EF -- "5. lecture avec le jeton du CEO" --> REST --> LECT
-  EF -- "6. proposition" --> IA
-  EF -- "journal" --> IA
-  UI -- "7. approuver (aal2)" --> REST --> IA
-  UI -- "8. exécuter via API.admin existant" --> REST --> SERV --> JA
-  CRON -- "données assemblées en SQL" --> IA
-  CRON -- "jeton interne (Vault)" --> EF
-  VAULT -.-> CRON
+  UI -->|"① question, jeton du CEO"| EF
   AUTH -.-> EF
+  EF -->|"② contrôle d'accès"| REST
+  REST --> ACC
+  EF <-->|"③ appel au modèle, demandes d'outils"| CLAUDE
+  EF -->|"④ lecture avec le jeton du CEO"| REST
+  REST --> LECT
+  EF -->|"⑤ propositions et journal"| IA
+  UI -->|"⑥ approbation du CEO"| REST
+  REST --> IA
+  UI -->|"⑦ exécution par API.admin existant"| REST
+  REST --> SERV --> JA
+  CRON -->|"données assemblées en SQL"| IA
+  VAULT -.-> CRON
+  CRON -->|"jeton interne"| EF
 ```
 
 Version texte :
