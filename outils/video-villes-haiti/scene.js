@@ -32,13 +32,23 @@
   // --- Les villes, dans l'ordre demandé ------------------------------------
   //  Coordonnées réelles : elles placent les points sur la carte d'Haïti.
   var VILLES = [
-    { nom: 'PORT-AU-PRINCE', dep: "Département de l'Ouest",      lon: -72.34, lat: 18.54, dessin: dessinerPortAuPrince },
-    { nom: 'CAP-HAÏTIEN',    dep: 'Département du Nord',          lon: -72.20, lat: 19.76, dessin: dessinerCapHaitien },
-    { nom: 'GONAÏVES',       dep: "Département de l'Artibonite",  lon: -72.69, lat: 19.45, dessin: dessinerGonaives },
-    { nom: 'LES CAYES',      dep: 'Département du Sud',           lon: -73.75, lat: 18.19, dessin: dessinerLesCayes },
-    { nom: 'HINCHE',         dep: 'Département du Centre',        lon: -72.01, lat: 19.15, dessin: dessinerHinche },
-    { nom: 'JACMEL',         dep: 'Département du Sud-Est',       lon: -72.53, lat: 18.23, dessin: dessinerJacmel }
+    { nom: 'PORT-AU-PRINCE', dep: "Département de l'Ouest",      lon: -72.34, lat: 18.54, dessin: dessinerPortAuPrince,
+      photo: { fichier: 'port-au-prince', cy: 900, pan: 1, drapeau: 0 } },
+    { nom: 'CAP-HAÏTIEN',    dep: 'Département du Nord',          lon: -72.20, lat: 19.76, dessin: dessinerCapHaitien,
+      photo: { fichier: 'cap-haitien', cy: 880, pan: -1, drapeau: -1 } },
+    { nom: 'GONAÏVES',       dep: "Département de l'Artibonite",  lon: -72.69, lat: 19.45, dessin: dessinerGonaives,
+      photo: { fichier: 'gonaives', cy: 800, pan: 1, drapeau: 0 } },
+    { nom: 'LES CAYES',      dep: 'Département du Sud',           lon: -73.75, lat: 18.19, dessin: dessinerLesCayes,
+      photo: { fichier: 'les-cayes', cy: 820, pan: -1, drapeau: -1 } },
+    { nom: 'HINCHE',         dep: 'Département du Centre',        lon: -72.01, lat: 19.15, dessin: dessinerHinche,
+      photo: { fichier: 'hinche', cy: 830, pan: 1, drapeau: 1 } },
+    { nom: 'JACMEL',         dep: 'Département du Sud-Est',       lon: -72.53, lat: 18.23, dessin: dessinerJacmel,
+      photo: { fichier: 'jacmel', cy: 760, pan: -1, drapeau: 1 } }
   ];
+  // `photo` : si photos/<fichier>.jpg existe (preparer-photos.sh), la ville
+  // s'affiche en photo ; sinon elle garde son décor dessiné. cy : hauteur où
+  // centrer la photo ; pan : sens du lent panoramique ; drapeau : grand
+  // drapeau dans le coin (1 gauche, -1 droite, 0 aucun — la photo en a un).
   // Libellés de la carte, en casse normale
   var NOMS_CARTE = ['Port-au-Prince', 'Cap-Haïtien', 'Gonaïves', 'Les Cayes', 'Hinche', 'Jacmel'];
   // Où poser l'étiquette autour du point, pour qu'aucune ne se chevauche
@@ -1117,6 +1127,79 @@
   }
 
   // ========================================================================
+  //  Villes en photo
+  // ========================================================================
+  //  La photo nette occupe toute la largeur (un peu plus, pour la poussée) ;
+  //  si elle n'est pas assez haute pour l'écran vertical, elle se fond en
+  //  haut et en bas dans un agrandissement flou d'elle-même — plutôt que de
+  //  la recadrer jusqu'à n'en garder qu'une bande.
+  function preparerPhoto(img, cy) {
+    var iw = img.width, ih = img.height, rap = iw / ih;
+    var fw = Math.max(W * 1.08, Math.min(H * 1.04 * rap, W * 1.25)), fh = fw / rap;
+    var fond = toile(W, H), f = fond.getContext('2d');
+    var cw = Math.max(W, H * rap) * 1.15, ch = cw / rap;
+    f.filter = 'blur(38px) saturate(1.3) brightness(0.8)';
+    f.drawImage(img, (W - cw) / 2, cy - ch / 2 < H - ch ? H - ch : Math.min(0, cy - ch / 2), cw, ch);
+    f.filter = 'none';
+    var avant = toile(W, H), a = avant.getContext('2d');
+    a.imageSmoothingQuality = 'high';
+    var y = fh >= H ? borner(cy - fh / 2, H - fh, 0) : cy - fh / 2;
+    a.drawImage(img, (W - fw) / 2, y, fw, fh);
+    if (fh < H) {
+      // Fondu des bords haut et bas dans le fond flou
+      a.globalCompositeOperation = 'destination-in';
+      var h0 = Math.max(0, y), h1 = Math.min(H, y + fh), bord = 150;
+      a.fillStyle = degradeV(a, h0, h1, [[0, 'rgba(0,0,0,' + (y > 0 ? 0 : 1) + ')'], [bord / (h1 - h0), 'rgba(0,0,0,1)'],
+        [1 - bord / (h1 - h0), 'rgba(0,0,0,1)'], [1, 'rgba(0,0,0,' + (y + fh < H ? 0 : 1) + ')']]);
+      a.fillRect(0, 0, W, H);
+    }
+    return { fond: fond, avant: avant };
+  }
+
+  function dessinerPhoto(c, u, z, i) {
+    var v = VILLES[i], P = v.photo;
+    var L = cache['photo' + i] || (cache['photo' + i] = preparerPhoto(images['photo' + i], P.cy));
+    camera(c, 0.4, z); c.drawImage(L.fond, 0, 0);
+    var s = 1 + 0.13 * z, dx = P.pan * (z - 0.5) * 50;
+    c.setTransform(s, 0, 0, s, CAM_X * (1 - s) + dx, CAM_Y * (1 - s));
+    c.drawImage(L.avant, 0, 0);
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    // Voile chaud qui traverse l'image (fuite de lumière)
+    var e = prog(u, 0.2, 4.5);
+    if (e > 0 && e < 1) {
+      var lx = mix(-400, W + 400, e), ly = mix(300, 900, e);
+      halo(c, lx, ly, 900, 'rgba(255,150,60,' + (0.28 * Math.sin(e * Math.PI)) + ')');
+    }
+    if (!enMiniature) poussieres(c, u, 500 + i);
+    // Assombrit le bas, pour que le titre se lise sur n'importe quelle photo
+    c.fillStyle = degradeV(c, 1100, H, [[0, 'rgba(3,10,35,0)'], [0.45, 'rgba(3,10,35,0.55)'], [1, 'rgba(3,10,35,0.8)']]);
+    c.fillRect(0, 1100, W, H - 1100);
+    c.fillStyle = degradeV(c, 0, 260, [[0, 'rgba(3,10,35,0.35)'], [1, 'rgba(3,10,35,0)']]);
+    c.fillRect(0, 0, W, 260);
+    if (P.drapeau && !enMiniature) {
+      camera(c, 1.4, z);
+      if (P.drapeau > 0) drapeauHaiti(c, 18, 120, 380, 245, u, 1, 900);
+      else drapeauHaiti(c, 1062, 110, 380, 245, u, -1, 900);
+      c.setTransform(1, 0, 0, 1, 0, 0);
+    }
+  }
+
+  // Poussière dorée qui monte lentement dans la lumière
+  function poussieres(c, u, graine) {
+    var r = alea(graine);
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    for (var i = 0; i < 45; i++) {
+      var x0 = r() * W, y0 = r() * H, v = 25 + r() * 60, t = 1.5 + r() * 3.5, ph = r() * 6.28;
+      var y = ((y0 - u * v) % H + H) % H, x = x0 + Math.sin(u * 0.8 + ph) * 20;
+      c.globalAlpha = 0.35 + 0.35 * Math.sin(u * 2 + ph);
+      c.fillStyle = 'rgba(255,220,150,1)';
+      c.beginPath(); c.arc(x, y, t, 0, 6.28); c.fill();
+    }
+    c.restore();
+  }
+
+  // ========================================================================
   //  Carte d'Haïti (introduction et final)
   // ========================================================================
 
@@ -1450,6 +1533,10 @@
   // Centre vertical de chaque vue, là où se trouve son monument
   var CENTRES_VUES = [1080, 830, 900, 1120, 1040, 960];
 
+  // Vrai pendant que la miniature peint ses vignettes : sans drapeau ni
+  // poussière, une vignette de 360 px resterait illisible
+  var enMiniature = false;
+
   function dessinerMiniature(c) {
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.drawImage(couche('miniature', peindreMiniature), 0, 0);
@@ -1458,6 +1545,7 @@
   function peindreMiniature(x) {
     var vue = toile(W, H), vx = vue.getContext('2d');
     var HAUT = 620, BAS = 1300, LT = 360, ech = 0.4;
+    enMiniature = true;
     // Les six vues, telles qu'elles apparaissent dans la vidéo
     VILLES.forEach(function (v, i) {
       vx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1467,7 +1555,8 @@
       var col = i % 3, ligne = i < 3 ? 0 : 1;
       var tx = col * LT, ty = ligne ? BAS : 0, th = ligne ? H - BAS : HAUT;
       var sw = LT / ech, sh = th / ech;
-      var sy = borner(CENTRES_VUES[i] - sh / 2, 0, H - sh);
+      var centre = v.enPhoto ? v.photo.cy : CENTRES_VUES[i];
+      var sy = borner(centre - sh / 2, 0, H - sh);
       x.drawImage(vue, (W - sw) / 2, sy, sw, sh, tx, ty, LT, th);
       // Nom de la ville, au pied de la vignette
       var by = ty + th;
@@ -1481,6 +1570,7 @@
       x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left';
       x.fillText(nom, gx + 30, by - 38);
     });
+    enMiniature = false;
     // Séparations lumineuses entre les vignettes
     x.save();
     x.globalCompositeOperation = 'lighter';
@@ -1627,7 +1717,14 @@
       document.fonts.load('italic 800 40px Montserrat'),
       document.fonts.load('800 40px Montserrat'),
       chargerImage('../../assets/img/logo-goship-grand.png').then(function (im) { images.logo = im; })
-    ]).then(function () {
+    ].concat(VILLES.map(function (v, i) {
+      if (!v.photo) return null;
+      return chargerImage('photos/' + v.photo.fichier + '.jpg').then(function (im) {
+        images['photo' + i] = im;
+        v.enPhoto = true;
+        v.dessin = function (c, u, z) { dessinerPhoto(c, u, z, i); };
+      }, function () { /* pas de photo : décor dessiné */ });
+    }))).then(function () {
       for (var i = 0; i < 6; i++) { NUAGES.push(creerNuage(100 + i, false)); NUAGES_BLANCS.push(creerNuage(200 + i, true)); }
       VILLES.forEach(function (v, i) { cache['titre' + i] = preparerTitre(v.nom, 980, 190, PALETTE_CHROME); });
       cache.titreHaiti = preparerTitre('HAÏTI', 900, 230, PALETTE_CHROME);
@@ -1642,7 +1739,8 @@
       });
       // Premier passage sur chaque scène : remplit le cache des décors
       SCENES.forEach(function (S, i) { dessinerScene(i, 1); });
-      return { duree: DUREE, largeur: W, hauteur: H, scenes: SCENES.map(function (s) { return [s.type, s.debut, s.fin]; }) };
+      return { duree: DUREE, largeur: W, hauteur: H,
+        photos: VILLES.filter(function (v) { return v.enPhoto; }).length, scenes: SCENES.map(function (s) { return [s.type, s.debut, s.fin]; }) };
     });
   }
 

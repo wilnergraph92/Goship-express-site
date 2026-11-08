@@ -22,7 +22,7 @@ var sortie = args[0] && args[0].indexOf('--') !== 0 ? args[0] : path.join(__dirn
 
 // Petit serveur statique : le canvas refuse d'exporter une image chargée
 // en file:// (le logo), il faut une vraie adresse http.
-var TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.ttf': 'font/ttf' };
+var TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg', '.ttf': 'font/ttf' };
 var serveur = http.createServer(function (req, res) {
   var p = path.join(RACINE, decodeURIComponent(req.url.split('?')[0]));
   if (p.indexOf(RACINE) !== 0 || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); res.end(); return; }
@@ -37,7 +37,7 @@ serveur.listen(0, '127.0.0.1', async function () {
   page.on('pageerror', function (e) { console.error('Erreur dans la page :', e.message); });
   await page.goto('http://127.0.0.1:' + port + '/outils/video-villes-haiti/index.html?rendu');
   var infos = await page.evaluate(function () { return GoshipVideo.preparer(); });
-  console.log('Durée : ' + infos.duree + ' s, ' + infos.largeur + '×' + infos.hauteur);
+  console.log('Durée : ' + infos.duree + ' s, ' + infos.largeur + '×' + infos.hauteur + ', villes en photo : ' + infos.photos + ' / 6');
 
   var mini = option('--miniature');
   if (mini) {
