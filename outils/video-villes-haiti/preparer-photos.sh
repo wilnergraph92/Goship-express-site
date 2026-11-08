@@ -7,7 +7,7 @@
 #
 #  ./preparer-photos.sh dossier-source
 #  Le dossier source contient, en .jpg : port-au-prince, cap-haitien,
-#  gonaives, les-cayes, hinche, jacmel (une ou plusieurs).
+#  gonaives, les-cayes, hinche, jacmel (une ou plusieurs), et drapeau.
 # ==========================================================================
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -19,3 +19,6 @@ for ville in port-au-prince cap-haitien gonaives les-cayes hinche jacmel; do
   ffmpeg -y -v error -i "$f" -vf "scale=iw*3:ih*3:flags=lanczos,unsharp=7:7:0.7,eq=saturation=1.22:contrast=1.07:gamma=0.97,colorbalance=rs=0.03:bs=-0.05:rm=0.03:bm=-0.03:rh=0.04:bh=-0.04" -q:v 2 "photos/$ville.jpg"
   echo "✓ $ville"
 done
+# Le drapeau : photo détourée (fond de ciel retiré), qui ondule à l'écran
+if [ -f "$source/drapeau.jpg" ]; then python3 -I detourer-drapeau.py "$source/drapeau.jpg" photos/drapeau.png
+else echo "— drapeau : pas de photo, drapeau dessiné"; fi

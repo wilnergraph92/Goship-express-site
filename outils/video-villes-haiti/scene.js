@@ -33,11 +33,11 @@
   //  Coordonnées réelles : elles placent les points sur la carte d'Haïti.
   var VILLES = [
     { nom: 'PORT-AU-PRINCE', dep: "Département de l'Ouest",      lon: -72.34, lat: 18.54, dessin: dessinerPortAuPrince,
-      photo: { fichier: 'port-au-prince', cy: 900, pan: 1, drapeau: 0 } },
+      photo: { fichier: 'port-au-prince', cy: 900, pan: 1, drapeau: 1 } },
     { nom: 'CAP-HAÏTIEN',    dep: 'Département du Nord',          lon: -72.20, lat: 19.76, dessin: dessinerCapHaitien,
       photo: { fichier: 'cap-haitien', cy: 880, pan: -1, drapeau: -1 } },
     { nom: 'GONAÏVES',       dep: "Département de l'Artibonite",  lon: -72.69, lat: 19.45, dessin: dessinerGonaives,
-      photo: { fichier: 'gonaives', cy: 800, pan: 1, drapeau: 0 } },
+      photo: { fichier: 'gonaives', cy: 930, pan: 1, drapeau: -1 } },
     { nom: 'LES CAYES',      dep: 'Département du Sud',           lon: -73.75, lat: 18.19, dessin: dessinerLesCayes,
       photo: { fichier: 'les-cayes', cy: 820, pan: -1, drapeau: -1 } },
     { nom: 'HINCHE',         dep: 'Département du Centre',        lon: -72.01, lat: 19.15, dessin: dessinerHinche,
@@ -48,7 +48,7 @@
   // `photo` : si photos/<fichier>.jpg existe (preparer-photos.sh), la ville
   // s'affiche en photo ; sinon elle garde son décor dessiné. cy : hauteur où
   // centrer la photo ; pan : sens du lent panoramique ; drapeau : grand
-  // drapeau dans le coin (1 gauche, -1 droite, 0 aucun — la photo en a un).
+  // drapeau dans le coin (1 gauche, -1 droite, 0 aucun).
   // Libellés de la carte, en casse normale
   var NOMS_CARTE = ['Port-au-Prince', 'Cap-Haïtien', 'Gonaïves', 'Les Cayes', 'Hinche', 'Jacmel'];
   // Où poser l'étiquette autour du point, pour qu'aucune ne se chevauche
@@ -361,7 +361,13 @@
   }
 
   // Drapeau haïtien qui flotte. dir = 1 : il part vers la droite du mât.
+  // Avec photos/drapeau.png (detourer-drapeau.py), c'est cette photo qui
+  // ondule, découpée en bandes verticales décalées par une vague ; sinon,
+  // le drapeau dessiné plus bas.
+  var tamponDrapeau = null;
   function drapeauHaiti(c, x, y, w, h, u, dir, mat) {
+    var D = images.drapeau;
+    if (D) { drapeauPhoto(c, D, x, y, w, u, dir, mat); return; }
     if (mat) {
       c.fillStyle = degradeH(c, x - 6, x + 6, [[0, '#8b8f99'], [0.5, '#f2f2f2'], [1, '#6b6f78']]);
       c.fillRect(x - 5, y - 18, 10, mat);
@@ -390,6 +396,42 @@
       c.fillStyle = sh > 0 ? 'rgba(255,255,255,' + (sh * 0.22) + ')' : 'rgba(0,0,30,' + (-sh * 0.38) + ')';
       c.fillRect(px, py, larg + 1, h);
     }
+  }
+
+  function mat(c, x, y, longueur) {
+    c.fillStyle = degradeH(c, x - 6, x + 6, [[0, '#8b8f99'], [0.5, '#f2f2f2'], [1, '#6b6f78']]);
+    c.fillRect(x - 5, y - 18, 10, longueur);
+    c.fillStyle = '#ffd36b';
+    c.beginPath(); c.arc(x, y - 22, 10, 0, Math.PI * 2); c.fill();
+  }
+  function drapeauPhoto(c, D, x, y, w, u, dir, longueurMat) {
+    var h = w * D.height / D.width, marge = Math.ceil(h * 0.14);
+    var tw = Math.ceil(w), th = Math.ceil(h + 2 * marge);
+    if (!tamponDrapeau || tamponDrapeau.width !== tw || tamponDrapeau.height !== th) tamponDrapeau = toile(tw, th);
+    var t = tamponDrapeau.getContext('2d');
+    t.globalCompositeOperation = 'source-over';
+    t.clearRect(0, 0, tw, th);
+    var N = 60, sw = D.width / N, dw = w / N, decal = [];
+    for (var i = 0; i < N; i++) {
+      var s = (i + 0.5) / N;
+      var ph = s * 4.6 - u * 4.8;
+      var dy = Math.sin(ph) * h * 0.075 * s;
+      decal.push(Math.cos(ph) * Math.min(1, s * 1.5));
+      t.drawImage(D, i * sw, 0, sw + 1, D.height, i * dw, marge + dy, dw + 1, h);
+    }
+    // Ombre et lumière des plis qui passent (seulement sur le tissu)
+    t.globalCompositeOperation = 'source-atop';
+    for (i = 0; i < N; i++) {
+      var sh = decal[i];
+      t.fillStyle = sh > 0 ? 'rgba(255,255,255,' + (sh * 0.16) + ')' : 'rgba(0,0,30,' + (-sh * 0.3) + ')';
+      t.fillRect(i * dw, 0, dw + 1, th);
+    }
+    if (longueurMat) mat(c, x, y, longueurMat);
+    c.save();
+    c.translate(x, y - marge);
+    if (dir < 0) c.scale(-1, 1);
+    c.drawImage(tamponDrapeau, 3, 0);
+    c.restore();
   }
 
   // Bougainvillée en grappes (cadre les vues, comme dans la référence)
@@ -1178,8 +1220,8 @@
     c.fillRect(0, 0, W, 260);
     if (P.drapeau && !enMiniature) {
       camera(c, 1.4, z);
-      if (P.drapeau > 0) drapeauHaiti(c, 18, 120, 380, 245, u, 1, 900);
-      else drapeauHaiti(c, 1062, 110, 380, 245, u, -1, 900);
+      if (P.drapeau > 0) drapeauHaiti(c, 26, 70, 360, 0, u, 1, 900);
+      else drapeauHaiti(c, 1054, 60, 360, 0, u, -1, 900);
       c.setTransform(1, 0, 0, 1, 0, 0);
     }
   }
@@ -1197,6 +1239,133 @@
       c.beginPath(); c.arc(x, y, t, 0, 6.28); c.fill();
     }
     c.restore();
+  }
+
+  // ========================================================================
+  //  Colis animés : dans chaque ville, un colis GoShip arrive en vol et se
+  //  pose — « plop » —, un second tombe dessus — « plop! ». musique.py pose
+  //  ses deux « plop » aux mêmes instants (COLIS_1, COLIS_2).
+  // ========================================================================
+  var COLIS_DEPART = 1.65, COLIS_1 = 2.5, COLIS_2 = 2.85;
+
+  // Carton en perspective aux couleurs du logo, posé sur (x, y) = milieu du bas
+  function carton(c, x, y, s, ex, ey, ang, alpha) {
+    c.save();
+    c.globalAlpha = alpha === undefined ? 1 : alpha;
+    c.translate(x, y); c.rotate(ang || 0); c.scale(s * (ex || 1), s * (ey || 1));
+    c.translate(-17, 0);
+    // Face de côté, dessus, face avant
+    c.fillStyle = '#c4550a';
+    c.beginPath(); c.moveTo(50, 0); c.lineTo(50, -70); c.lineTo(85, -92); c.lineTo(85, -22); c.closePath(); c.fill();
+    c.fillStyle = degradeV(c, -92, -70, [[0, '#ffc07a'], [1, '#ff9a45']]);
+    c.beginPath(); c.moveTo(-50, -70); c.lineTo(50, -70); c.lineTo(85, -92); c.lineTo(-15, -92); c.closePath(); c.fill();
+    c.fillStyle = degradeV(c, -70, 0, [[0, '#ff8a2a'], [1, '#e2610c']]);
+    c.fillRect(-50, -70, 100, 70);
+    // Ruban bleu, comme le colis du logo
+    c.fillStyle = '#1f6bff';
+    c.beginPath(); c.moveTo(-7, -70); c.lineTo(7, -70); c.lineTo(42, -92); c.lineTo(28, -92); c.closePath(); c.fill();
+    c.fillRect(-7, -70, 14, 30);
+    c.fillStyle = '#1550c7';
+    c.beginPath(); c.moveTo(50, -40); c.lineTo(50, -50); c.lineTo(85, -72); c.lineTo(85, -62); c.closePath(); c.fill();
+    // Étiquette avec le logo
+    c.fillStyle = '#ffffff';
+    arrondi(c, -44, -32, 66, 26, 4); c.fill();
+    var L = images.logo;
+    if (L) c.drawImage(L, -41, -30, 60, 60 * L.height / L.width);
+    // Arêtes éclairées
+    c.strokeStyle = 'rgba(255,230,190,0.85)'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(-50, -70); c.lineTo(50, -70); c.lineTo(85, -92); c.stroke();
+    c.restore();
+  }
+
+  // Écrasement à l'atterrissage, puis petit rebond
+  function ressort(dt) {
+    if (dt < 0) return { ex: 1, ey: 1, dy: 0 };
+    var a = Math.exp(-dt * 9);
+    var ey = 1 - 0.3 * a * Math.cos(dt * 30);
+    return { ex: 1 / Math.sqrt(ey), ey: ey, dy: -Math.abs(Math.sin(dt * 13)) * 26 * Math.exp(-dt * 8) };
+  }
+
+  function impactSol(c, x, y, dt, taille) {
+    if (dt < 0 || dt > 0.7) return;
+    var p = dt / 0.7;
+    c.save();
+    c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = 'rgba(255,150,50,' + (1 - p) * 0.9 + ')';
+    c.lineWidth = 5 * (1 - p) + 1;
+    c.beginPath(); c.ellipse(x, y, taille * (0.6 + p * 1.4), taille * (0.15 + p * 0.35), 0, 0, 6.28); c.stroke();
+    c.restore();
+    for (var k = 0; k < 9; k++) {
+      var a = Math.PI + (k / 8) * Math.PI;
+      var d = taille * (0.4 + sortie(p) * 1.1);
+      c.fillStyle = 'rgba(255,240,220,' + (1 - p) * 0.55 + ')';
+      c.beginPath(); c.arc(x + Math.cos(a) * d, y + Math.sin(a) * d * 0.3, 8 + p * 16, 0, 6.28); c.fill();
+    }
+  }
+
+  function bulle(c, x, y, texte, dt) {
+    if (dt < 0 || dt > 0.8) return;
+    var p = dt / 0.8, s = rebond(Math.min(1, p * 3));
+    c.save();
+    c.globalAlpha = 1 - Math.pow(p, 3);
+    c.translate(x, y - p * 70); c.rotate(-0.12); c.scale(s, s);
+    c.font = 'italic 900 54px Montserrat'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.lineWidth = 10; c.strokeStyle = '#0b1d4a'; c.lineJoin = 'round'; c.strokeText(texte, 0, 0);
+    c.fillStyle = degradeV(c, -24, 24, [[0, '#fff1d6'], [0.5, '#ffb347'], [1, '#ff6a00']]);
+    c.fillText(texte, 0, 0);
+    c.restore();
+  }
+
+  function colisAnimes(c, i, u) {
+    if (u < COLIS_DEPART) return;
+    var cote = i % 2 ? 1 : -1;            // une ville à droite, la suivante à gauche
+    var sx = cote > 0 ? 860 : 220, sol = 1830;
+    var s1 = 1.12, s2 = 0.86;
+    // Ombre au sol
+    var ombre = borner((u - COLIS_DEPART) / (COLIS_1 - COLIS_DEPART), 0, 1);
+    c.fillStyle = 'rgba(0,5,20,' + 0.45 * ombre + ')';
+    c.beginPath(); c.ellipse(sx + 10, sol + 5, 85, 17, 0, 0, 6.28); c.fill();
+    // Colis 1 : vol en arc avec traînée lumineuse
+    var x0 = cote > 0 ? -140 : W + 140, y0 = 620, cx = 540, cy = 260;
+    var p = prog(u, COLIS_DEPART, COLIS_1);
+    if (p < 1) {
+      var q = 1 - Math.pow(1 - p, 1.5);
+      c.save();
+      c.globalCompositeOperation = 'lighter';
+      c.lineCap = 'round';
+      for (var k = 0; k < 22; k++) {
+        var qa = q - k * 0.014, qb = q - (k + 1) * 0.014;
+        if (qb < 0) break;
+        var a = bez(x0, y0, cx, cy, sx, sol - 50, qa), b = bez(x0, y0, cx, cy, sx, sol - 50, qb);
+        var f = 1 - k / 22;
+        c.strokeStyle = 'rgba(255,140,40,' + 0.5 * f + ')'; c.lineWidth = 26 * f;
+        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+        c.strokeStyle = 'rgba(255,240,210,' + 0.9 * f + ')'; c.lineWidth = 7 * f;
+        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      }
+      c.restore();
+      var pos = bez(x0, y0, cx, cy, sx, sol - 50, q);
+      halo(c, pos[0], pos[1] - 40, 120, 'rgba(255,140,40,0.55)');
+      carton(c, pos[0], pos[1] + 50 * q, s1 * (0.6 + 0.4 * q), 1, 1, (1 - q) * 2.6 * -cote);
+      return;
+    }
+    var r1 = ressort(u - COLIS_1), r2 = ressort(u - COLIS_2);
+    // Le premier carton accuse aussi le choc du second
+    var choc = u > COLIS_2 ? 1 - 0.12 * Math.exp(-(u - COLIS_2) * 10) * Math.cos((u - COLIS_2) * 30) : 1;
+    impactSol(c, sx, sol, u - COLIS_1, 110);
+    carton(c, sx, sol + r1.dy, s1, r1.ex / Math.sqrt(choc), r1.ey * choc, 0);
+    // Colis 2 : tombe du ciel sur le premier
+    var haut1 = sol - (70 + 11) * s1 * r1.ey * choc;
+    var px2 = sx + 17 * s1 * 0.55;
+    var pc = prog(u, COLIS_2 - 0.4, COLIS_2);
+    if (pc > 0) {
+      var y2 = pc < 1 ? mix(-250, haut1, pc * pc) : haut1 + r2.dy;
+      carton(c, px2, y2, s2, pc < 1 ? 0.9 : r2.ex, pc < 1 ? 1.12 : r2.ey, pc < 1 ? 0.15 * cote * (1 - pc) : 0);
+    }
+    // « PLOP », « PLOP! »
+    // (à côté de la pile, côté centre : au-dessus, elles cacheraient la pastille)
+    bulle(c, sx - cote * 190, sol - 70, 'PLOP', u - COLIS_1);
+    bulle(c, sx - cote * 215, sol - 150, 'PLOP!', u - COLIS_2);
   }
 
   // ========================================================================
@@ -1490,7 +1659,7 @@
       c.restore();
     }
     // Coordonnées : WhatsApp et site
-    ligneContact(c, 1590, 'whatsapp', '+1 849 538-6262', prog(u, 3.8, 4.2));
+    ligneContact(c, 1590, 'whatsapp', '+1 809 317-6686', prog(u, 3.8, 4.2));
     ligneContact(c, 1680, 'site', 'goshipexpress.net', prog(u, 4.1, 4.5));
     var pf = prog(u, 4.4, 4.9);
     if (pf > 0) {
@@ -1641,6 +1810,9 @@
     // Le titre suit la poussée de la caméra, en plan rapproché
     camera(px, 0.5, u / VILLE);
     blocTitre(px, S.ville, u, 1480);
+    // Poussée faible : les colis restent dans le cadre jusqu'à la fin du plan
+    camera(px, 0.3, u / VILLE);
+    colisAnimes(px, S.ville, u);
     px.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -1716,7 +1888,8 @@
       document.fonts.load('italic 900 100px Montserrat'),
       document.fonts.load('italic 800 40px Montserrat'),
       document.fonts.load('800 40px Montserrat'),
-      chargerImage('../../assets/img/logo-goship-grand.png').then(function (im) { images.logo = im; })
+      chargerImage('../../assets/img/logo-goship-grand.png').then(function (im) { images.logo = im; }),
+      chargerImage('photos/drapeau.png').then(function (im) { images.drapeau = im; }, function () { /* drapeau dessiné */ })
     ].concat(VILLES.map(function (v, i) {
       if (!v.photo) return null;
       return chargerImage('photos/' + v.photo.fichier + '.jpg').then(function (im) {

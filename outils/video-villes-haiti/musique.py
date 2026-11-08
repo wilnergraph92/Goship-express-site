@@ -241,6 +241,13 @@ for i in range(NB_VILLES):
     poser(G, tching(), tt, 0.42, pan=0.15)
     poser(R, tching(), tt, 0.45)
 
+# Les colis de chaque ville (scene.js : COLIS_1 = 2.5, COLIS_2 = 2.85)
+for i in range(NB_VILLES):
+    tv = INTRO + i * VILLE
+    poser(G, plop(0.8), tv + 2.5, 0.55, pan=0.3 if i % 2 else -0.3)
+    poser(G, plop(1.0), tv + 2.85, 0.55, pan=0.3 if i % 2 else -0.3)
+    poser(R, plop(0.9), tv + 2.5, 0.15)
+
 # « PLOP PLOP! » (final, scene.js : 0.8 → 1.2 puis 1.15 → 1.55)
 tf = INTRO + NB_VILLES * VILLE
 poser(G, plop(1.0), tf + 0.98, 0.9)

@@ -19,14 +19,15 @@ leurs auteurs. Les décors dessinés et la musique, eux, sont libres de droits. 
 |---|---|
 | 0 – 1,5 s | Miniature (première image) : six vignettes de villes, logo, « Livraison partout en HAÏTI », slogan |
 | 1,5 – 7,5 s | Logo, « Livraison partout en HAÏTI », carte d'Haïti, trajet Miami → Port-au-Prince |
-| 7,5 – 43,5 s | Port-au-Prince, Cap-Haïtien, Gonaïves, Les Cayes, Hinche, Jacmel (6 s chacune) |
+| 7,5 – 43,5 s | Port-au-Prince, Cap-Haïtien, Gonaïves, Les Cayes, Hinche, Jacmel (6 s chacune) : drapeau qui flotte, colis qui arrive en vol puis un second qui s'empile, « PLOP / PLOP! » |
 | 43,5 – 51,5 s | « PLOP PLOP! Koli'w nan Men'w », carte complète, bouton « Expédiez maintenant », WhatsApp, site |
 
 ## Fabriquer
 
 ```sh
 ./preparer-photos.sh ~/Photos/villes   # port-au-prince.jpg, cap-haitien.jpg, gonaives.jpg,
-                                       # les-cayes.jpg, hinche.jpg, jacmel.jpg (facultatif)
+                                       # les-cayes.jpg, hinche.jpg, jacmel.jpg, drapeau.jpg
+                                       # (tous facultatifs)
 ./fabriquer.sh                 # → goship-villes-haiti.mp4 (musique originale),
                                #   …-effets-seuls.mp4 (pour ajouter un morceau dans
                                #   TikTok / Instagram) et …-miniature.png
