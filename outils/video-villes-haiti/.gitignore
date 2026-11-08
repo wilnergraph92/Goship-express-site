@@ -1,0 +1,4 @@
+# Les sorties se refabriquent avec ./fabriquer.sh : on ne garde que la recette
+*.mp4
+*.wav
+apercus/
