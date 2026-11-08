@@ -11,7 +11,10 @@
 #  suivent le même minutage : souffle + impact à chaque plongée, « tching »
 #  quand un titre arrive, deux « plop » sur « PLOP PLOP! ».
 #
-#  python3 musique.py [sortie.wav]
+#  python3 musique.py [sortie.wav] [--effets]
+#  --effets : seulement les effets (souffles, impacts, « tching », « plop »),
+#  sans la musique — pour poser un morceau sous licence par-dessus, dans
+#  fabriquer.sh (MUSIQUE=…) ou dans l'application (TikTok, Instagram).
 # ==========================================================================
 import sys
 import wave
@@ -28,6 +31,8 @@ DUREE = INTRO + NB_VILLES * VILLE + FINALE
 N = int((DEBUT + DUREE) * SR)
 BEAT = 0.5
 rng = np.random.default_rng(1804)
+EFFETS = '--effets' in sys.argv
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
 
 G = np.zeros((2, N))        # bus principal (stéréo)
 R = np.zeros((2, N))        # envoi vers la réverbération
@@ -174,7 +179,7 @@ ACCORDS = [(57, 60, 64), (53, 57, 60), (48, 52, 55, 60), (55, 59, 62)]
 BASSES = [33, 29, 36, 31]
 FIN_RYTHME = DUREE - 2.0
 
-nb_mesures = int(DUREE / 2)
+nb_mesures = 0 if EFFETS else int(DUREE / 2)
 for m in range(nb_mesures):
     t0 = m * 2.0
     acc = ACCORDS[m % 4]
@@ -211,7 +216,7 @@ for m in range(nb_mesures):
 # Roulement qui annonce la première ville (4 → 6 s) et le final (40 → 42 s)
 for debut, fin in ((4.0, INTRO), (INTRO + NB_VILLES * VILLE - 2.0, INTRO + NB_VILLES * VILLE)):
     k = 0
-    t = debut
+    t = fin if EFFETS else debut
     while t < fin - 0.01:
         p = (t - debut) / (fin - debut)
         poser(G, claquement(), t, 0.2 + 0.5 * p, pan=(k % 2 - 0.5) * 0.4)
@@ -279,9 +284,9 @@ mix[:, -nf:] *= np.linspace(1, 0, nf) ** 1.5
 mix[:, :int(0.05 * SR)] *= np.linspace(0, 1, int(0.05 * SR))
 # Saturation douce, puis normalisation à -1 dBFS
 mix = np.tanh(mix / (np.abs(mix).max() + 1e-9) * 1.6)
-mix *= 0.89 / np.abs(mix).max()
+mix *= 0.84 / np.abs(mix).max()
 
-sortie = sys.argv[1] if len(sys.argv) > 1 else 'musique.wav'
+sortie = ARGS[0] if ARGS else ('effets.wav' if EFFETS else 'musique.wav')
 with wave.open(sortie, 'wb') as w:
     w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((mix.T * 32767).astype('<i2').tobytes())
