@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Goship Express — vidéo des villes de livraison</title>
+<!-- Page de travail, jamais publiée (outils/ est exclu du site).
+     Ouverte par rendre.js pour fabriquer la vidéo ; ouverte à la main
+     (servie, pas en file://), elle rejoue l'animation en boucle. -->
+<style>
+  @font-face { font-family: Montserrat; font-style: italic; font-weight: 900; src: url(polices/Montserrat-it900.ttf); }
+  @font-face { font-family: Montserrat; font-style: italic; font-weight: 800; src: url(polices/Montserrat-it800.ttf); }
+  @font-face { font-family: Montserrat; font-style: normal; font-weight: 800; src: url(polices/Montserrat-n800.ttf); }
+  html, body { margin: 0; background: #000; }
+  canvas { display: block; height: 100vh; margin: 0 auto; }
+</style>
+</head>
+<body>
+<canvas id="ecran"></canvas>
+<script src="scene.js"></script>
+<script>
+  // Lecture en boucle quand on ouvre la page soi-même (?rendu la coupe)
+  if (location.search.indexOf('rendu') < 0) {
+    GoshipVideo.preparer().then(function () {
+      var debut = performance.now();
+      (function boucle() {
+        GoshipVideo.rendre(((performance.now() - debut) / 1000) % GoshipVideo.duree);
+        requestAnimationFrame(boucle);
+      })();
+    });
+  }
+</script>
+</body>
+</html>
