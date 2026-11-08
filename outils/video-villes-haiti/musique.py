@@ -20,8 +20,12 @@ import numpy as np
 SR = 44100
 INTRO, VILLE, FINALE = 6.0, 6.0, 8.0
 NB_VILLES = 6
+# La miniature (première image de la vidéo, scene.js : MINIATURE) passe
+# avant la musique : tous les temps ci-dessous comptent depuis la fin de la
+# miniature, et poser() les décale de DEBUT.
+DEBUT = 1.5
 DUREE = INTRO + NB_VILLES * VILLE + FINALE
-N = int(DUREE * SR)
+N = int((DEBUT + DUREE) * SR)
 BEAT = 0.5
 rng = np.random.default_rng(1804)
 
@@ -32,7 +36,7 @@ KICKS = []                  # instants des grosses caisses (pour le « pompage �
 
 def poser(bus, son, t, gain=1.0, pan=0.0):
     """Ajoute un son mono ou stéréo à l'instant t (s), panoramique -1..1."""
-    i = int(t * SR)
+    i = int((t + DEBUT) * SR)
     if i >= N:
         return
     if son.ndim == 1:
@@ -245,11 +249,19 @@ poser(R, tching(), tf + 3.6, 0.4)
 poser(G, impact(), FIN_RYTHME, 0.8)
 poser(R, impact(), FIN_RYTHME, 0.4)
 
+# Miniature : un éclat quand elle apparaît, puis le souffle de la plongée
+poser(G, tching(), -DEBUT + 0.02, 0.4)
+poser(R, tching(), -DEBUT + 0.02, 0.5)
+poser(G, impact(), -DEBUT + 0.02, 0.35)
+poser(G, souffle(1.0, True), -0.75, 0.38, pan=-0.2)
+poser(G, impact(), 0.0, 0.6)
+poser(R, impact(), 0.0, 0.25)
+
 # --- Pompage : le reste se creuse à chaque grosse caisse ----------------
 pompe = np.ones(N)
 courbe = 1 - 0.45 * np.exp(-temps(0.4) * 9)
 for tk in KICKS:
-    i = int(tk * SR); n = min(len(courbe), N - i)
+    i = int((tk + DEBUT) * SR); n = min(len(courbe), N - i)
     pompe[i:i + n] = np.minimum(pompe[i:i + n], courbe[:n])
 
 # --- Réverbération : convolution par une queue de bruit décroissante ----
@@ -273,4 +285,4 @@ sortie = sys.argv[1] if len(sys.argv) > 1 else 'musique.wav'
 with wave.open(sortie, 'wb') as w:
     w.setnchannels(2); w.setsampwidth(2); w.setframerate(SR)
     w.writeframes((mix.T * 32767).astype('<i2').tobytes())
-print('Écrit :', sortie, '—', DUREE, 's')
+print('Écrit :', sortie, '—', DEBUT + DUREE, 's')

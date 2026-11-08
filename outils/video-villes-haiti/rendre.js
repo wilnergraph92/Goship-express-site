@@ -5,6 +5,7 @@
 
    node rendre.js [sortie.mp4] [--debut 12] [--fin 18] [--images 0,6.5,13]
    --images : n'écrit que quelques images PNG (vérification rapide).
+   --miniature fichier.png : n'écrit que la miniature (première image).
    ========================================================================== */
 'use strict';
 var http = require('http');
@@ -37,6 +38,14 @@ serveur.listen(0, '127.0.0.1', async function () {
   await page.goto('http://127.0.0.1:' + port + '/outils/video-villes-haiti/index.html?rendu');
   var infos = await page.evaluate(function () { return GoshipVideo.preparer(); });
   console.log('Durée : ' + infos.duree + ' s, ' + infos.largeur + '×' + infos.hauteur);
+
+  var mini = option('--miniature');
+  if (mini) {
+    var png = await page.evaluate(function () { return GoshipVideo.miniature(); });
+    fs.writeFileSync(mini, Buffer.from(png.split(',')[1], 'base64'));
+    console.log('Miniature : ' + mini);
+    await navigateur.close(); serveur.close(); return;
+  }
 
   var liste = option('--images');
   if (liste) {

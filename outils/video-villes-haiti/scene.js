@@ -24,6 +24,10 @@
   //  Chaque changement de scène tombe sur une mesure : musique.py s'aligne
   //  sur les mêmes chiffres (TEMPS dans ce fichier-là).
   var INTRO = 6, VILLE = 6, FINALE = 8;
+  // La miniature ouvre la vidéo : c'est sa première image, celle que
+  // WhatsApp, Instagram ou TikTok montrent avant la lecture. Hors mesure :
+  // musique.py la compte à part (DEBUT).
+  var MINIATURE = 1.5;
 
   // --- Les villes, dans l'ordre demandé ------------------------------------
   //  Coordonnées réelles : elles placent les points sur la carte d'Haïti.
@@ -43,6 +47,7 @@
   var SCENES = [];
   (function () {
     var t = 0;
+    SCENES.push({ type: 'miniature', debut: t, fin: t + MINIATURE }); t += MINIATURE;
     SCENES.push({ type: 'intro', debut: t, fin: t + INTRO }); t += INTRO;
     VILLES.forEach(function (v, i) { SCENES.push({ type: 'ville', ville: i, debut: t, fin: t + VILLE }); t += VILLE; });
     SCENES.push({ type: 'finale', debut: t, fin: t + FINALE });
@@ -1440,6 +1445,94 @@
   }
 
   // ========================================================================
+  //  Miniature : trois villes en haut, trois en bas, le titre au centre
+  // ========================================================================
+  // Centre vertical de chaque vue, là où se trouve son monument
+  var CENTRES_VUES = [1080, 830, 900, 1120, 1040, 960];
+
+  function dessinerMiniature(c) {
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(couche('miniature', peindreMiniature), 0, 0);
+  }
+
+  function peindreMiniature(x) {
+    var vue = toile(W, H), vx = vue.getContext('2d');
+    var HAUT = 620, BAS = 1300, LT = 360, ech = 0.4;
+    // Les six vues, telles qu'elles apparaissent dans la vidéo
+    VILLES.forEach(function (v, i) {
+      vx.setTransform(1, 0, 0, 1, 0, 0);
+      vx.globalAlpha = 1;
+      v.dessin(vx, 2.5, 0.4);
+      vx.setTransform(1, 0, 0, 1, 0, 0);
+      var col = i % 3, ligne = i < 3 ? 0 : 1;
+      var tx = col * LT, ty = ligne ? BAS : 0, th = ligne ? H - BAS : HAUT;
+      var sw = LT / ech, sh = th / ech;
+      var sy = borner(CENTRES_VUES[i] - sh / 2, 0, H - sh);
+      x.drawImage(vue, (W - sw) / 2, sy, sw, sh, tx, ty, LT, th);
+      // Nom de la ville, au pied de la vignette
+      var by = ty + th;
+      x.fillStyle = degradeV(x, by - 130, by, [[0, 'rgba(2,10,32,0)'], [1, 'rgba(2,10,32,0.85)']]);
+      x.fillRect(tx, by - 130, LT, 130);
+      x.font = 'italic 800 27px Montserrat';
+      var nom = NOMS_CARTE[i].toUpperCase();
+      var tw = x.measureText(nom).width;
+      var gx = tx + (LT - tw - 30) / 2;
+      epingle(x, gx + 8, by - 42, 0.85, '#ff7a1a');
+      x.fillStyle = '#ffffff'; x.textBaseline = 'middle'; x.textAlign = 'left';
+      x.fillText(nom, gx + 30, by - 38);
+    });
+    // Séparations lumineuses entre les vignettes
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    [LT, 2 * LT].forEach(function (sx) {
+      [[0, HAUT], [BAS, H]].forEach(function (z) {
+        x.fillStyle = degradeV(x, z[0], z[1], [[0, 'rgba(80,180,255,0.9)'], [1, 'rgba(80,180,255,0.2)']]);
+        x.fillRect(sx - 2, z[0], 4, z[1] - z[0]);
+      });
+    });
+    x.restore();
+    // Bandeau central : nuit étoilée, comme l'intro
+    x.save();
+    x.beginPath(); x.rect(0, HAUT, W, BAS - HAUT); x.clip();
+    var g = x.createRadialGradient(540, 960, 40, 540, 960, 760);
+    g.addColorStop(0, '#16489f'); g.addColorStop(0.55, '#071c50'); g.addColorStop(1, '#020a22');
+    x.fillStyle = g; x.fillRect(0, HAUT, W, BAS - HAUT);
+    var r = alea(321);
+    for (var i = 0; i < 120; i++) { x.fillStyle = 'rgba(255,255,255,' + (0.2 + r() * 0.6) + ')'; var st = 0.5 + r() * 2; x.fillRect(r() * W, HAUT + r() * (BAS - HAUT), st, st); }
+    for (var k = 0; k < 3; k++) anneau(x, 540, 1010 + k * 30, 640 + k * 90, 150 + k * 30, -0.1 + k * 0.07, 0.3 + k * 2.2, 2.2 + k * 2.2, '40,140,255', 2.4, 'tout');
+    // Logo
+    var L = images.logo, lw = 540, lh = lw * L.height / L.width;
+    halo(x, 540, 722, 320, 'rgba(255,255,255,0.16)');
+    x.drawImage(L, 540 - lw / 2, 722 - lh / 2, lw, lh);
+    // Sur-titre, titre chromé et ses anneaux
+    x.font = 'italic 800 40px Montserrat'; x.fillStyle = '#ffffff'; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
+    if ('letterSpacing' in x) x.letterSpacing = '12px';
+    x.fillText('LIVRAISON PARTOUT EN', 546, 862);
+    if ('letterSpacing' in x) x.letterSpacing = '0px';
+    x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 2;
+    x.beginPath(); x.moveTo(90, 849); x.lineTo(140, 849); x.moveTo(940, 849); x.lineTo(990, 849); x.stroke();
+    var T = cache.titreMiniature;
+    anneaux(x, 540, 1025, 470, 112, 3, 'arriere');
+    dessinerTitre(x, T, 540, 1094, 1, -1);
+    anneaux(x, 540, 1025, 470, 112, 3, 'avant');
+    pastilleSimple(x, 540, 1192, "PLOP PLOP KOLI'W NAN MEN'W", 1);
+    x.font = 'italic 800 30px Montserrat'; x.fillStyle = '#9fd4ff'; x.textAlign = 'center';
+    x.fillText('Miami  ➜  Haïti  ·  6 villes desservies', 540, 1272);
+    x.restore();
+    // Liserés du bandeau (orange en haut, bleu en bas)
+    x.save();
+    x.globalCompositeOperation = 'lighter';
+    [[HAUT, '255,130,30'], [BAS, '60,170,255']].forEach(function (b) {
+      [[14, 0.18], [5, 0.55], [2, 1]].forEach(function (pp) {
+        x.fillStyle = 'rgba(' + b[1] + ',' + pp[1] + ')'; x.fillRect(0, b[0] - pp[0] / 2, W, pp[0]);
+      });
+      halo(x, 540, b[0], 300, 'rgba(' + b[1] + ',0.45)');
+    });
+    x.restore();
+    x.drawImage(cache.vignette, 0, 0);
+  }
+
+  // ========================================================================
   //  Assemblage : scène courante, transitions « plongée », finitions
   // ========================================================================
   var ecran, ctx, plan, px, images = {};
@@ -1449,6 +1542,7 @@
     px.setTransform(1, 0, 0, 1, 0, 0);
     px.globalAlpha = 1;
     px.globalCompositeOperation = 'source-over';
+    if (S.type === 'miniature') { dessinerMiniature(px); return; }
     if (S.type === 'intro') { dessinerIntro(px, u); return; }
     if (S.type === 'finale') { dessinerFinale(px, u); return; }
     var v = VILLES[S.ville];
@@ -1510,9 +1604,8 @@
     }
 
     // Vignettage et léger étalonnage chaud
-    ctx.drawImage(cache.vignette, 0, 0);
-    // Ouverture au noir, au tout début
-    if (t < 0.35) { ctx.fillStyle = 'rgba(0,0,0,' + (1 - t / 0.35) + ')'; ctx.fillRect(0, 0, W, H); }
+    // (la miniature a déjà le sien : la première image doit être nette)
+    if (S.type !== 'miniature') ctx.drawImage(cache.vignette, 0, 0);
   }
 
   function chargerImage(src) {
@@ -1538,6 +1631,7 @@
       for (var i = 0; i < 6; i++) { NUAGES.push(creerNuage(100 + i, false)); NUAGES_BLANCS.push(creerNuage(200 + i, true)); }
       VILLES.forEach(function (v, i) { cache['titre' + i] = preparerTitre(v.nom, 980, 190, PALETTE_CHROME); });
       cache.titreHaiti = preparerTitre('HAÏTI', 900, 230, PALETTE_CHROME);
+      cache.titreMiniature = preparerTitre('HAÏTI', 900, 205, PALETTE_CHROME);
       cache.plop1 = preparerTitre('PLOP', 430, 160, PALETTE_ORANGE);
       cache.plop2 = preparerTitre('PLOP!', 470, 160, PALETTE_ORANGE);
       cache.slogan = preparerTitre("KOLI'W NAN MEN'W", 960, 104, PALETTE_CHROME);
@@ -1556,6 +1650,8 @@
     preparer: preparer,
     rendre: rendre,
     image: function (q) { return ecran.toDataURL('image/jpeg', q || 0.93); },
+    // La miniature seule, en PNG (pour la publier comme couverture)
+    miniature: function () { rendre(0); return ecran.toDataURL('image/png'); },
     duree: DUREE
   };
 })();
