@@ -28,8 +28,10 @@
 <script src="assets/js/lieux.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
 <script src="assets/js/scan-parser.js" defer></script>
+<script src="assets/js/transporteur.js" defer></script>
 <script src="assets/js/scanner.js" defer></script>
 <script src="assets/js/programmes.js" defer></script>
+<script src="assets/js/prealertes.js" defer></script>
 </head>
 <body class="gs-admin-body">
 <a class="gs-skip" href="#contenu-principal">Aller au contenu</a>
@@ -53,6 +55,7 @@
         <button type="button" role="tab" aria-selected="true" data-onglet-vue="apercu" data-permission="shipments.view" title="Vue générale"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="gs-td__libelle">Vue générale</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/></svg><span class="gs-td__libelle">Scanner</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="prealertes" data-permission="shipments.view" tabindex="-1" title="Pré-alertes"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M8 11h8M8 15h5"/></svg><span class="gs-td__libelle">Pré-alertes</span><span class="gs-admin-onglets__total" data-total="prealertes"></span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
       </div>
     </div>
@@ -622,6 +625,40 @@
           <p class="gs-champ__aide" data-scan-journal-vide>Aucun scan pour l'instant.</p>
         </aside>
       </div>
+    </div>
+
+    <!-- Les pré-alertes (assets/js/prealertes.js) : les achats que les clients ont
+         annoncés depuis l'application, avant leur arrivée. Lecture seule : une
+         pré-alerte passe à « Reçue » toute seule quand un colis est enregistré pour
+         le même client avec le même numéro de suivi (rapprocher_prealerte). -->
+    <div class="gs-admin-vue" data-vue="prealertes" data-permission="shipments.view" role="tabpanel" hidden>
+      <div class="gs-admin-outils">
+        <label class="gs-recherche"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" data-recherche-prealertes placeholder="Numéro de suivi, magasin, contenu, client…" aria-label="Rechercher une pré-alerte" autocomplete="off" spellcheck="false"></label>
+        <select class="gs-admin-filtre" data-filtre-prealertes aria-label="Filtrer les pré-alertes">
+          <option value="attente">En attente</option>
+          <option value="recu">Reçues</option>
+          <option value="annulee">Annulées</option>
+          <option value="">Toutes</option>
+        </select>
+      </div>
+      <p class="gs-champ__aide">Annoncées par les clients depuis l'application. Une pré-alerte passe à « Reçue » toute seule quand un colis est enregistré pour le même client avec le même numéro de suivi.</p>
+      <div class="gs-tableau-cadre">
+        <table class="gs-tableau gs-tableau--prealertes">
+          <thead>
+            <tr>
+              <th scope="col">Numéro de suivi</th>
+              <th scope="col">Client</th>
+              <th scope="col">Magasin et contenu</th>
+              <th scope="col">Annoncée le</th>
+              <th scope="col">État</th>
+              <th scope="col" class="gs-cellule-actions">Action</th>
+            </tr>
+          </thead>
+          <tbody data-lignes="prealertes"></tbody>
+        </table>
+      </div>
+      <p class="gs-admin-vide" data-vide="prealertes" hidden></p>
+      <div class="gs-pagination" data-pagination="prealertes" hidden></div>
     </div>
 
     <!-- Analytics (outils/supabase-analytics.sql) : ce qui s'est passé et
