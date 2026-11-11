@@ -1066,6 +1066,7 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 [data-apparence="sombre"] .gs-admin-body .gs-scan__etat.is-erreur strong{color:#fca5a5}
 [data-apparence="sombre"] .gs-admin-body .gs-scan__fiche,[data-apparence="sombre"] .gs-admin-body .gs-scan__journal{border-color:#22304f;background-color:#0e1830}
 [data-apparence="sombre"] .gs-admin-body .gs-scan__infos dt{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-scan__prealerte{border-color:#22304f;background-color:#13203d}
 [data-apparence="sombre"] .gs-admin-body .gs-scan__alerte{background-color:rgba(234,179,8,.15);color:#fcd34d}
 [data-apparence="sombre"] .gs-admin-body .gs-scan__alerte--incident{background-color:rgba(220,38,38,.16);color:#fca5a5}
 [data-apparence="sombre"] .gs-admin-body .gs-scan__raison{border-color:#22304f}

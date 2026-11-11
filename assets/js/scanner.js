@@ -80,6 +80,14 @@
       }, function (err) {
         return { etat: etatDe(err), erreur: err };
       });
+    },
+
+    // Un suivi de vendeur sans colis : les pré-alertes EN ATTENTE qui portent ce
+    // numéro (lecture seule). null si la lecture échoue : le poste garde alors son
+    // « Colis introuvable » tel quel, rien n'est inventé.
+    prealertes: function (reference) {
+      if (!API.admin.prealertesDuSuivi) return Promise.resolve(null);
+      return API.admin.prealertesDuSuivi(reference).then(function (l) { return l || []; }, function () { return null; });
     }
   };
 
@@ -186,6 +194,8 @@
     livre: ['attention', 'COLIS DÉJÀ LIVRÉ'],
     incident: ['attention', '⚠ ACTION REQUISE'],
     introuvable: ['erreur', '✕ COLIS INTROUVABLE'],
+    prealerte: ['attention', 'ℹ PAS ENCORE DE COLIS : PRÉ-ALERTE TROUVÉE'],
+    prealertes: ['attention', '⚠ PLUSIEURS PRÉ-ALERTES : CHOISISSEZ LE CLIENT'],
     invalide: ['attention', '⚠ CODE INVALIDE'],
     refuse: ['erreur', '⚠ ACTION NON AUTORISÉE'],
     impossible: ['attention', '⚠ OPÉRATION IMPOSSIBLE'],
@@ -292,6 +302,8 @@
     ligne(dl, 'Origine', f.origine);
     ligne(dl, 'Destination', [c.destination, c.pays_destination].filter(Boolean).join(', '));
     ligne(dl, 'Suivi vendeur', c.suivi_transporteur);
+    var transp = window.GoshipTransporteur ? window.GoshipTransporteur(c.suivi_transporteur) : null;
+    ligne(dl, 'Transporteur', transp ? transp.nom : '');
     ligne(dl, 'Localisation', c.lieu);
     ligne(dl, 'Dernier événement', f.dernier_evenement
       ? libelleEvenement(f.dernier_evenement.statut, f.dernier_evenement) + ' — ' + O.date(f.dernier_evenement.cree_le, true)
@@ -336,6 +348,114 @@
     h.appendChild(ol);
     zoneFiche.appendChild(h);
   }
+
+  /* ---- Un suivi de vendeur sans colis : les pré-alertes ----------------------
+     Le carton arrive à Miami avant que le colis existe chez Goship. Si un client
+     l'a annoncé depuis l'application, le poste le montre ; si plusieurs clients
+     ont annoncé le même numéro, il les montre tous et c'est l'employé qui choisit,
+     après avoir vérifié le nom sur le carton. Rien n'est enregistré ici : le choix
+     ouvre le formulaire « Enregistrer un colis » (admin.js) rempli avec ce que le
+     client a annoncé. Le colis naît par creer_colis, et la base passe la
+     pré-alerte à « Reçue » (rapprocher_prealerte). Aucun statut, aucun événement
+     d'un colis existant n'est touché.
+     ------------------------------------------------------------------------- */
+  var droitsPoste = null;
+  function lireDroitsPoste() {
+    if (droitsPoste) return Promise.resolve(droitsPoste);
+    return API.permissions().then(function (p) { droitsPoste = (p && p.permissions) || []; return droitsPoste; },
+                                  function () { return []; });
+  }
+  function peutCreer() { return !!droitsPoste && droitsPoste.indexOf('shipments.create') >= 0; }
+
+  var referenceAttendue = null;   // le numéro dont un colis est en cours d'enregistrement
+
+  function nouveauColis(detail, reference) {
+    referenceAttendue = reference;
+    document.dispatchEvent(new CustomEvent('goship:nouveau-colis', { detail: detail }));
+  }
+
+  // liste : les pré-alertes en attente pour ce numéro (peut être vide)
+  function afficherPrealertes(reference, liste) {
+    ficheActuelle = null;
+    zoneFiche.textContent = '';
+    zoneFiche.hidden = false;
+    var tete = el('div', 'gs-scan__tete');
+    tete.appendChild(el('strong', 'gs-scan__numero', reference));
+    var t = window.GoshipTransporteur ? window.GoshipTransporteur(reference) : null;
+    tete.appendChild(el('span', 'gs-scan__statut', t ? t.nom : 'Transporteur non déterminé'));
+    zoneFiche.appendChild(tete);
+
+    if (!liste.length) {
+      zoneFiche.appendChild(el('p', 'gs-champ__aide', 'Aucun colis et aucune pré-alerte en attente ne portent ce numéro.'));
+      if (peutCreer()) {
+        var vide = el('div', 'gs-scan__operations');
+        var b0 = bouton('Enregistrer un colis avec ce numéro', 'gs-bouton--contour', function () {
+          nouveauColis({ suivi: reference }, reference);
+        });
+        b0.setAttribute('data-scan-nouveau-colis', '');
+        vide.appendChild(b0);
+        zoneFiche.appendChild(vide);
+      }
+      return;
+    }
+
+    zoneFiche.appendChild(el('p', 'gs-scan__alerte', liste.length > 1
+      ? 'Plusieurs clients ont annoncé ce numéro. Vérifiez le nom sur le carton, puis choisissez le bon client.'
+      : 'Un client a annoncé ce numéro. Vérifiez le nom sur le carton avant d’enregistrer le colis.'));
+    var ul = el('ul', 'gs-scan__prealertes');
+    liste.forEach(function (p) {
+      var li = el('li', 'gs-scan__prealerte');
+      li.setAttribute('data-scan-prealerte', p.id);
+      var dl = el('dl', 'gs-scan__infos');
+      // Comme la fiche du poste (fiche_scanner) : le nom et le code, ni adresse ni téléphone
+      ligne(dl, 'Client', [p.nom_client || 'Client supprimé', p.code_client].filter(Boolean).join(' · '));
+      ligne(dl, 'Magasin', p.magasin);
+      ligne(dl, 'Contenu', p.description);
+      ligne(dl, 'Valeur déclarée', p.valeur_usd != null ? O.argent(p.valeur_usd) : '');
+      ligne(dl, 'Annoncée le', O.date(p.cree_le, true));
+      li.appendChild(dl);
+      if (peutCreer() && p.code_client) {
+        var actions = el('div', 'gs-scan__operations');
+        var b = bouton(liste.length > 1 ? 'Choisir ce client' : 'Enregistrer le colis pour ce client', 'gs-bouton--plein',
+          function () { nouveauColis({ code: p.code_client, prealerte: p }, reference); });
+        b.setAttribute('data-scan-choisir', p.id);
+        b.setAttribute('aria-label', 'Enregistrer le colis pour ' + (p.nom_client || p.code_client));
+        actions.appendChild(b);
+        li.appendChild(actions);
+      }
+      ul.appendChild(li);
+    });
+    zoneFiche.appendChild(ul);
+  }
+
+  // Après un « introuvable » sur un suivi de vendeur : la recherche des pré-alertes,
+  // puis l'état qu'elle donne. Le poste reste « occupé » pendant ce temps : un code
+  // scanné entre-temps attend son tour au lieu de se mêler à ce résultat.
+  function chercherPrealertes(reference) {
+    return Promise.all([ServiceScanner.prealertes(reference), lireDroitsPoste()]).then(function (r) {
+      var liste = r[0];
+      if (liste === null) return;   // lecture impossible : « Colis introuvable » reste tel quel
+      afficherPrealertes(reference, liste);
+      if (!liste.length) return;
+      var nom = liste.length > 1 ? 'prealertes' : 'prealerte';
+      montrerEtat(nom, null, liste.length > 1
+        ? 'Ne choisissez qu’après avoir lu le nom sur le carton.'
+        : 'Vérifiez le client, puis enregistrez le colis.');
+      Son.info();
+      // La ligne du journal : on remplace le « introuvable » qui vient d'être noté
+      if (derniers.length && derniers[0].reference === reference) derniers.shift();
+      noter(reference, nom, liste.length > 1 ? 'ℹ plusieurs pré-alertes' : 'ℹ pré-alerte trouvée');
+    });
+  }
+
+  // Le colis de ce numéro vient d'être enregistré (admin.js) : le poste le montre
+  document.addEventListener('goship:colis-enregistre', function (e) {
+    var c = e.detail && e.detail.colis;
+    if (!c || !referenceAttendue || vue.hidden) return;
+    if (String(c.suivi_transporteur || '').toUpperCase() !== referenceAttendue) return;
+    referenceAttendue = null;
+    recevoir(c.numero);
+  });
 
   /* ---- Mode normal : choisir l'opération, confirmer ------------------------- */
   function annulerConfirmation() {
@@ -416,6 +536,10 @@
         } else if (r.etat === 'conflit' || r.etat === 'impossible') {
           // Le colis a bougé, ou l'opération ne va plus : on remontre son état réel
           ServiceScanner.chercher(reference).then(function (x) { if (x.fiche) afficherFiche(x.fiche); });
+        } else if (r.etat === 'introuvable' && SCAN.analyser(reference).type === 'suivi_vendeur') {
+          // Mode rapide, carton d'un vendeur encore sans colis : les pré-alertes, comme en mode normal
+          afficherFiche(null);
+          return apresPrealertes(reference);
         }
       }
       pret();
@@ -473,11 +597,21 @@
         afficherFiche(r.fiche);
       } else {
         echec(r.analyse.reference, r);
-        if (r.etat === 'introuvable') afficherFiche(null);
+        if (r.etat === 'introuvable') {
+          afficherFiche(null);
+          // Un suivi de vendeur sans colis : peut-être un achat qu'un client a annoncé
+          if (r.analyse.type === 'suivi_vendeur') return apresPrealertes(r.analyse.reference);
+        }
       }
       pret();
       suivant();
     });
+  }
+
+  function apresPrealertes(reference) {
+    occupe = true;
+    function fin() { occupe = false; pret(); suivant(); }
+    return chercherPrealertes(reference).then(fin, fin);
   }
 
   // Les codes arrivés pendant une requête attendent leur tour, dans l'ordre

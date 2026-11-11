@@ -87,6 +87,8 @@ Anniversaire avec avantage
 Anniversaires
 Anniversaires de la période
 Anniversaires, offre de bienvenue, parrainage et GOPOINTS. Chaque programme naît éteint ou en brouillon, et ne promet rien au client tant qu'il n'est pas complet.
+Annoncée le
+Annoncées par les clients depuis l'application. Une pré-alerte passe à « Reçue » toute seule quand un colis est enregistré pour le même client avec le même numéro de suivi.
 Annuel
 Annulation
 Annulation d’un paiement
@@ -134,6 +136,7 @@ Aucun colis en cours
 Aucun colis en cours. Cliquez sur « Enregistrer un colis » à la réception d’un paquet à Miami.
 Aucun colis en « action requise ».
 Aucun colis enregistré.
+Aucun colis et aucune pré-alerte en attente ne portent ce numéro.
 Aucun colis ne correspond à ces filtres.
 Aucun colis passé en action requise pendant cette période.
 Aucun colis reçu ni livré sur cette période.
@@ -173,6 +176,9 @@ Aucune opération pendant cette période.
 Aucune opération permise pour ce colis à ce statut.
 Aucune opération sur la période.
 Aucune promesse n'est faite au client tant que l'avantage n'est pas complet et allumé.
+Aucune pré-alerte en attente.
+Aucune pré-alerte ne correspond à cette recherche.
+Aucune pré-alerte.
 Aucune ville dans les colis
 Aucune ville de destination sur la période.
 Aucune ville indiquée.
@@ -262,6 +268,7 @@ Chercher
 Chiffres clés et facturé
 Chiffres et contrôle de la facturation
 Chiffres, analytics et rapports
+Choisir ce client
 Choisir un pays
 Choisir…
 Choisissez au moins deux factures, ou une facture et un colis.
@@ -345,6 +352,7 @@ Configuration enregistrée.
 Confirmer
 Conformes
 Connexion administrateur
+Connexion impossible : vérifiez le réseau, puis réessayez.
 Connexion impossible. Vérifiez la connexion Internet, puis réessayez.
 Connexion impossible. Vérifiez votre réseau et réessayez.
 Connexion perdue.
@@ -502,11 +510,13 @@ Enregistrer cette règle
 Enregistrer en brouillon
 Enregistrer la date
 Enregistrer le colis
+Enregistrer le colis pour ce client
 Enregistrer le paiement
 Enregistrer les modifications
 Enregistrer les réglages
 Enregistrer un autre colis
 Enregistrer un colis
+Enregistrer un colis avec ce numéro
 Enregistré le
 Ensemble, après la sortie
 Envoi
@@ -566,6 +576,7 @@ Filleuls inscrits
 Filtre « Agence » indisponible : la base attend la mise à jour de outils/supabase-analytics.sql (SQL Editor).
 Filtrer les clients
 Filtrer les factures
+Filtrer les pré-alertes
 Filtrer par pays de destination
 Filtrer par service
 Filtrer par statut
@@ -686,6 +697,7 @@ Les factures cochées, et les colis ajoutés, sont réunis sur une seule nouvell
 Les filtres découpent les colis : chiffres, jours, statuts, chaîne, activité, routes. Facturation, clients, poste de scan et colis à traiter restent entiers.
 Les icônes seulement, pour laisser plus de place aux listes (ordinateur).
 Les informations saisies dans cette fenêtre seront perdues.
+Les pré-alertes n’ont pas pu être lues.
 Lien de paiement
 Lien de paiement (facultatif)
 Lien de paiement prêt
@@ -711,6 +723,8 @@ Livrés, expédiés
 Livrés, taux
 Localisation
 Là où se trouve le colis : USA = au dépôt de Miami (reçu, emballé) ; Haïti, Santo Domingo = arrivé dans le pays (centre de distribution, succursale, disponible)
+Magasin
+Magasin et contenu
 Maj
 Maritime
 Masculin
@@ -794,6 +808,7 @@ Même identifiant e-mail que le parrain
 Même nombre de jours juste avant ; « ce mois » : le mois précédent aux mêmes dates ; « cette année » : l’année précédente aux mêmes dates.
 Même taux, période précédente
 Même téléphone que le parrain
+Ne choisissez qu’après avoir lu le nom sur le carton.
 Nom
 Nom (A → Z)
 Nom de l'offre
@@ -825,6 +840,8 @@ Nouvelle facture
 Nouvelle offre
 Nouvelle valeur
 Numéro
+Numéro de suivi
+Numéro de suivi, magasin, contenu, client…
 Numéro, contenu, magasin, suivi du vendeur, destination…
 N°
 N° colis
@@ -930,6 +947,7 @@ Plafond global atteint
 Plafond par parrain atteint
 Plus de 7 jours
 Plus de 90 jours
+Plusieurs clients ont annoncé ce numéro. Vérifiez le nom sur le carton, puis choisissez le bon client.
 Poids
 Poids (lb)
 Poids en cours
@@ -962,6 +980,8 @@ Programme GOPOINTS allumé
 Programme enregistré.
 Programmes
 Programmée
+Pré-alerte
+Pré-alertes
 Précédent
 Précédente
 Préférence de notification
@@ -1009,6 +1029,7 @@ Rechercher
 Rechercher un client
 Rechercher un colis
 Rechercher un rapport
+Rechercher une pré-alerte
 Recherche…
 Reconnectez-vous pour continuer.
 Refuser
@@ -1041,6 +1062,8 @@ Reçu le
 Reçu à l'entrepôt
 Reçu → Embarqué (entrepôt de Miami)
 Reçu → Livré (total)
+Reçue
+Reçues
 Reçus
 Reçus du
 Reçus jusqu'au
@@ -1091,6 +1114,7 @@ Sans limite
 Sans mouvement
 Sans mouvement depuis
 Sans nom
+Sans numéro
 Sans échéance
 Santo Domingo
 Scanner
@@ -1200,6 +1224,8 @@ Transférés à la succursale
 Transition
 Transitions de statut
 Transport facturé
+Transporteur
+Transporteur non déterminé
 Trier les clients
 Trimestre du
 Trimestriel
@@ -1213,6 +1239,7 @@ Téléphone (push)
 USA
 Un acompte suffit : la facture reste à payer pour le reste.
 Un avantage, une seule fois par client, après sa première opération qualifiante vue par la base. Une opération annulée ou échouée ne donne rien. Une campagne incomplète ne se publie pas.
+Un client a annoncé ce numéro. Vérifiez le nom sur le carton avant d’enregistrer le colis.
 Un message par client et par année, le jour de son anniversaire, envoyé par le système de notifications existant. Le programme est éteint tant que vous ne l'allumez pas, et rien ne part sans un canal réellement configuré. La date de naissance n'est visible que par les comptes autorisés.
 Un motif est obligatoire ; l'action est journalisée.
 Un mouvement de plus, avec un motif. Le solde ne peut jamais devenir négatif.
@@ -1239,6 +1266,7 @@ Utilisés
 Valeur
 Valeur de l'avantage
 Valeur de l'avantage (en dollars)
+Valeur déclarée
 Valeurs extrêmes
 Valide
 Valider
@@ -1264,6 +1292,7 @@ Voir
 Voir ce que chaque rôle peut faire
 Voir la facture
 Voir le client
+Voir le colis
 Voir le détail, période par période
 Voir le rapport
 Voir le site
@@ -1277,10 +1306,13 @@ Voir l’équipe
 Voir tous les colis
 Volume
 Volume par période
+Votre rôle ne permet pas de voir les pré-alertes.
+Votre rôle ne permet pas d’enregistrer un colis.
 Vous corrigez le montant de la facture : indiquez-en le motif (5 caractères au moins), il sera gardé au journal.
 Vous n’avez pas la permission d’utiliser le poste de scan.
 Vue d'ensemble logistique
 Vue générale
+Vérifiez le client, puis enregistrez le colis.
 WhatsApp
 WhatsApp s’ouvre avec le message déjà rédigé : appuyez sur Envoyer. Pour que la base l’envoie elle-même, configurez l’API WhatsApp (docs/notifications.md).
 action requise
@@ -1433,6 +1465,9 @@ transférés à la succursale
 Événements
 Événements des colis
 ℹ DÉJÀ FAIT
+ℹ PAS ENCORE DE COLIS : PRÉ-ALERTE TROUVÉE
+ℹ plusieurs pré-alertes
+ℹ pré-alerte trouvée
 ↗ nouveau
 ⚠ ACTION NON AUTORISÉE
 ⚠ ACTION REQUISE
@@ -1442,6 +1477,7 @@ transférés à la succursale
 ⚠ ERREUR SERVEUR
 ⚠ LE COLIS A CHANGÉ ENTRE-TEMPS
 ⚠ OPÉRATION IMPOSSIBLE
+⚠ PLUSIEURS PRÉ-ALERTES : CHOISISSEZ LE CLIENT
 ✓ COLIS TROUVÉ
 ✓ trouvé
 ✕ COLIS INTROUVABLE
