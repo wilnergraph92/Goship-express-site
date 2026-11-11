@@ -2121,7 +2121,8 @@
   /* ---- Onglets Colis / Clients / Factures -------------------------------------------------- */
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
-                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports', programmes: 'Programmes' };
+                      scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports', programmes: 'Programmes',
+                      prealertes: 'Pré-alertes' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
@@ -2661,6 +2662,19 @@
       }
     } else {
       f.code.value = options.code || etat.colis.clientCode || '';
+      // Un colis reçu pour une pré-alerte (onglet Pré-alertes, poste de scan) : ce que le
+      // client a annoncé est repris tel quel. L'employé complète le reste (poids, lieu,
+      // ville) et peut tout corriger. Le même client et le même numéro font passer la
+      // pré-alerte à « reçue » dans la base (rapprocher_prealerte) : rien d'autre à faire.
+      var pa = options.prealerte;
+      if (pa) {
+        f.suivi_transporteur.value = pa.suivi_transporteur || '';
+        f.expediteur.value = pa.magasin || '';
+        f.description.value = pa.description || '';
+        if (pa.service) f.service.value = pa.service;
+      } else if (options.suivi) {
+        f.suivi_transporteur.value = options.suivi;
+      }
       // Aucun lieu par défaut : le personnel dit où le colis est reçu (Miami, Santo Domingo,
       // Port-au-Prince…), et le client le lit dans son e-mail « Colis reçu à… ».
       f.lieu.value = '';
@@ -2676,6 +2690,16 @@
     (f.code.value ? f.description : f.code).focus();
   }
   $('[data-action="nouveau-colis"]').addEventListener('click', function () { ouvrirColis(); });
+
+  // Enregistrer un colis depuis un autre fichier (prealertes.js, scanner.js) :
+  // detail { code (le client GSE), prealerte (ce qu'il a annoncé), suivi (un numéro seul) }.
+  // Le bouton n'est montré qu'à qui peut créer un colis ; la base le revérifie.
+  document.addEventListener('goship:nouveau-colis', function (e) {
+    var x = e.detail || {};
+    if (!peut('shipments.create')) { toast('Votre rôle ne permet pas d’enregistrer un colis.', true); return; }
+    if (dlgColis.open) return;
+    ouvrirColis({ code: x.code || '', prealerte: x.prealerte || null, suivi: x.suivi || '' });
+  });
 
   formColis.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -2775,6 +2799,8 @@
         var colis = creation ? r.colis : r;
         attente(bouton);
         dlgColis.close();
+        // L'onglet Pré-alertes et le poste de scan se mettent à jour (une pré-alerte a pu être rapprochée)
+        document.dispatchEvent(new CustomEvent('goship:colis-enregistre', { detail: { colis: colis, creation: creation } }));
         etat.vus[colis.id] = null;
         chargerStatistiques();
         chargerColis(true);
@@ -6060,6 +6086,9 @@
     sectionFiche('Expéditeur (magasin)');
     champFiche('Nom', colis.expediteur || 'Non renseigné');
     champFiche('N° de suivi du vendeur', colis.suivi_transporteur);
+    // Le transporteur, seulement quand le numéro le prouve (scan-parser.js)
+    var transp = window.GoshipScan && window.GoshipScan.transporteur(colis.suivi_transporteur);
+    champFiche('Transporteur', transp ? transp.nom : '');
     var grilleExp = grilleFiche;
 
     sectionFiche('Colis');
@@ -6177,7 +6206,7 @@
   // Ce qu'est une ligne, selon son tableau (sinon la légende du tableau, le titre de sa
   // carte ou celui de l'onglet)
   var TYPES_FICHE = { clients: 'Client', factures: 'Facture', equipe: 'Membre de l’équipe', paiements: 'Paiement reçu',
-                      routes: 'Route', activite: 'Activité récente', traiter: 'Colis à traiter' };
+                      routes: 'Route', activite: 'Activité récente', traiter: 'Colis à traiter', prealertes: 'Pré-alerte' };
   function typeDeLigne(table) {
     var m = /gs-tableau--([a-z]+)/.exec(table.className);
     if (m && TYPES_FICHE[m[1]]) return TYPES_FICHE[m[1]];

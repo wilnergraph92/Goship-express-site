@@ -38,7 +38,7 @@ jobs:
       matrix:
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
                mobile, production, rapports, frais, corrections, programmes, courriel-colis, courriel-pied, lieu-reception, courriel-reseaux, identite,
-               notifications, accuses, suivi-courriels]
+               notifications, accuses, suivi-courriels, prealertes]
     steps:
       # Tout l'historique : plusieurs bancs rejouent la migration depuis une
       # version publiée plus ancienne (git show <commit>:outils/…)
@@ -51,8 +51,8 @@ jobs:
         with: { node-version: '20' }
       - name: PostgreSQL jetable
         run: pip install pgserver==0.1.4
-      - name: PostgREST (API réelle, banc mobile)
-        if: matrix.banc == 'mobile'
+      - name: PostgREST (API réelle, bancs mobile et pré-alertes)
+        if: matrix.banc == 'mobile' || matrix.banc == 'prealertes'
         run: |
           curl -sSL "https://github.com/PostgREST/postgrest/releases/download/$POSTGREST_VERSION/postgrest-$POSTGREST_VERSION-linux-static-x64.tar.xz" | tar -xJ -C "$RUNNER_TEMP"
           echo "POSTGREST=$RUNNER_TEMP/postgrest" >> "$GITHUB_ENV"
@@ -75,7 +75,7 @@ jobs:
       - run: pip install pgserver==0.1.4
       - name: Le mode démonstration (api.js), hors navigateur
         run: |
-          for f in demo scanner finances permissions tableau analytics rapports frais corrections programmes identite; do
+          for f in demo scanner finances permissions tableau analytics rapports frais corrections programmes identite prealertes; do
             echo "== essai-$f.js"; node "outils/essais-services/essai-$f.js"
           done
       - name: E-mails et factures client (outils/essais-sql)

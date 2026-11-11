@@ -65,6 +65,34 @@
   // Un paiement : ce que la page saisit. Le client, l'auteur et la date
   // d'enregistrement sont ceux de la base.
   var CHAMPS_PAIEMENT = ['montant_usd', 'moyen', 'reference', 'paye_le', 'note'];
+  // Une pré-alerte telle que l'équipe la lit (onglet Pré-alertes, poste de scan) :
+  // ses colonnes, son client et le colis qui l'a rapprochée. Lecture seule — la
+  // règle prealertes_lecture (outils/supabase.sql, partie 9) l'ouvre à
+  // shipments.view ; rien ici n'écrit dans prealertes.
+  var CHAMPS_PREALERTE = 'id, client_id, magasin, description, suivi_transporteur, valeur_usd, service, statut, ' +
+                         'colis_id, cree_le, client:clients(id, code, nom_complet, telephone), ' +
+                         'colis:colis(id, numero, statut)';
+  var STATUTS_PREALERTE = ['attente', 'recu', 'annulee'];
+
+  // La ligne de la base (client et colis imbriqués) → une ligne à plat, la même
+  // en ligne et en démonstration
+  function prealerteAPlat(p, client, colis) {
+    client = client || {};
+    colis = colis || {};
+    return {
+      id: p.id, client_id: p.client_id || null, code_client: client.code || null, nom_client: client.nom_complet || null,
+      telephone_client: client.telephone || null, magasin: p.magasin || '', description: p.description || '',
+      suivi_transporteur: p.suivi_transporteur || '', valeur_usd: p.valeur_usd == null ? null : Number(p.valeur_usd),
+      service: p.service || 'aerien', statut: p.statut, colis_id: p.colis_id || null,
+      numero_colis: colis.numero || null, statut_colis: colis.statut || null, cree_le: p.cree_le
+    };
+  }
+
+  // Un numéro de suivi tel que la base le range (creer_prealerte, regles_colis) :
+  // majuscules, sans espaces
+  function suiviNormalise(texte) {
+    return String(texte == null ? '' : texte).toUpperCase().replace(/\s+/g, '');
+  }
 
   /* ---- Les tarifs ------------------------------------------------------------
      Le transport est facturé à la livre. Le tarif peut être remplacé colis par
@@ -985,6 +1013,64 @@
           .then(resultat);
       },
 
+      /* ---- Les pré-alertes : ce que les clients ont annoncé ----------------
+         Elles naissent dans l'application mobile (creer_prealerte) et passent
+         à « reçue » toutes seules quand un colis du même client porte leur
+         numéro (déclencheur rapprocher_prealerte). Ces deux appels ne font que
+         lire : aucune écriture, aucune fonction nouvelle dans la base. */
+
+      // Une page de pré-alertes, des plus récentes aux plus anciennes.
+      // o : { statut ('attente', 'recu', 'annulee' ou rien pour toutes),
+      //       recherche (numéro, magasin, contenu, client), page, parPage }
+      prealertes: function (o) {
+        o = o || {};
+        var parPage = o.parPage || 50, page = o.page || 0;
+        var t = nettoyer(o.recherche);
+        return sb().then(function (c) {
+          // Un nom, un code GSE, un téléphone : les clients qui y répondent d'abord,
+          // puisque le filtre ne descend pas dans le client imbriqué
+          var parClient = t
+            ? c.from('clients').select('id').or(['code', 'nom_complet', 'telephone', 'email']
+                .map(function (k) { return k + '.ilike."*' + t + '*"'; }).join(',')).limit(200)
+            : Promise.resolve({ data: [] });
+          return parClient.then(function (rc) {
+            if (rc.error) throw erreurSupabase(rc.error);
+            var q = c.from('prealertes').select(CHAMPS_PREALERTE, { count: 'exact' })
+              .order('cree_le', { ascending: false })
+              .range(page * parPage, page * parPage + parPage - 1);
+            if (STATUTS_PREALERTE.indexOf(o.statut) >= 0) q = q.eq('statut', o.statut);
+            if (t) {
+              var ou = ['suivi_transporteur', 'magasin', 'description']
+                .map(function (k) { return k + '.ilike."*' + t + '*"'; });
+              var ids = (rc.data || []).map(function (x) { return x.id; });
+              if (ids.length) ou.push('client_id.in.(' + ids.join(',') + ')');
+              q = q.or(ou.join(','));
+            }
+            return q;
+          });
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return { lignes: (res.data || []).map(function (p) { return prealerteAPlat(p, p.client, p.colis); }),
+                   total: res.count || 0 };
+        });
+      },
+
+      // Les pré-alertes EN ATTENTE qui portent exactement ce numéro de suivi
+      // (poste de scan) : aucune, une, ou plusieurs quand des clients différents
+      // ont annoncé le même numéro — l'employé choisit alors lui-même.
+      prealertesDuSuivi: function (reference) {
+        var r = suiviNormalise(reference);
+        if (r.length < 4 || r.length > 60) return Promise.resolve([]);
+        return sb().then(function (c) {
+          return c.from('prealertes').select(CHAMPS_PREALERTE)
+            .eq('statut', 'attente').eq('suivi_transporteur', r)
+            .order('cree_le', { ascending: true }).limit(20);
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return (res.data || []).map(function (p) { return prealerteAPlat(p, p.client, p.colis); });
+        });
+      },
+
       // Journal d'audit, du plus récent au plus ancien (équipe uniquement)
       journal: function (o) {
         o = o || {};
@@ -1685,6 +1771,35 @@
     return d.colis.filter(function (x) { return x.numero === r; })[0] ||
       d.colis.filter(function (x) { return x.suivi_transporteur && x.suivi_transporteur === r; })
         .sort(function (a, b) { return new Date(b.maj_le) - new Date(a.maj_le); })[0] || null;
+  }
+
+  /* ---- Les pré-alertes, version démonstration --------------------------------
+     d.prealertes : les lignes de public.prealertes. La copie de deux choses de la
+     base : la lecture de l'équipe (prealerteAPlat, client et colis compris) et
+     le déclencheur rapprocher_prealerte (outils/supabase.sql, partie 9) — un
+     colis enregistré ou modifié avec un client et un numéro de suivi fait passer
+     à « reçue » les pré-alertes EN ATTENTE de CE client qui portent ce numéro
+     (comparaison sans casse ni espaces de bord, comme lower(trim())). Les autres
+     clients ne sont jamais touchés. */
+  function prealerteDemo(d, p) {
+    var cl = d.comptes.filter(function (x) { return x.id === p.client_id; })[0];
+    var c = p.colis_id ? d.colis.filter(function (x) { return x.id === p.colis_id; })[0] : null;
+    return prealerteAPlat(p, cl, c);
+  }
+
+  function rapprocherPrealertesDemo(d, c) {
+    var suivi = String(c.suivi_transporteur || '').trim().toLowerCase();
+    if (!suivi || !c.client_id) return 0;
+    var n = 0;
+    (d.prealertes || []).forEach(function (p) {
+      if (p.client_id === c.client_id && p.statut === 'attente' &&
+          String(p.suivi_transporteur || '').trim().toLowerCase() === suivi) {
+        p.statut = 'recu';
+        p.colis_id = c.id;
+        n++;
+      }
+    });
+    return n;
   }
 
   function ficheScanner(d, c) {
@@ -4668,6 +4783,7 @@
           d.seqColis += 1;
           c.numero = 'GSE-' + d.seqColis + '-' + c.pays_destination;
           d.colis.push(c);
+          rapprocherPrealertesDemo(d, c);   // le déclencheur rapprocher_prealerte, après l'insertion
           historiser(d, c, c.recu_le);
           journaliser(d, moi, 'colis.creation', 'colis', c.id, null, choisir(c, RESUME_COLIS.slice(0, RESUME_CREATION)));
           var facture = facturerColisDemo(d, moi, c).facture;
@@ -4699,6 +4815,8 @@
           reglesColis(d, nouveau, c);
           var diff = difference(c, nouveau, RESUME_COLIS);
           Object.assign(c, nouveau, { maj_le: maintenant() });
+          // rapprocher_prealerte se déclenche aussi quand le numéro ou le client d'un colis change
+          if ('suivi_transporteur' in champs || 'client_id' in champs) rapprocherPrealertesDemo(d, c);
           if (diff) journaliser(d, moi, 'colis.modification', 'colis', c.id, diff.avant, diff.apres, champs.motif);
           ecrireDonnees(d);
           return plusTard(detailsColis(d, c));
@@ -4830,6 +4948,35 @@
         return plusTard(Object.assign(detailsColis(d, c), { historique: avecHistorique(d, c, true).historique }));
       },
 
+      // Même contrat que la lecture en ligne : { lignes, total }, à plat
+      prealertes: function (o) {
+        o = o || {};
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var t = nettoyer(o.recherche);
+        var lignes = (d.prealertes || []).map(function (p) { return prealerteDemo(d, p); }).filter(function (p) {
+          if (STATUTS_PREALERTE.indexOf(o.statut) >= 0 && p.statut !== o.statut) return false;
+          if (t) {
+            var cl = d.comptes.filter(function (x) { return x.id === p.client_id; })[0] || {};
+            if (!contient([p.suivi_transporteur, p.magasin, p.description, cl.code, cl.nom_complet, cl.telephone,
+                           cl.email], t)) return false;
+          }
+          return true;
+        }).sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); });
+        return plusTard(page(lignes, o));
+      },
+
+      prealertesDuSuivi: function (reference) {
+        var d = lireDonnees();
+        try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
+        var r = suiviNormalise(reference);
+        if (r.length < 4 || r.length > 60) return plusTard([]);
+        return plusTard((d.prealertes || []).filter(function (p) {
+          return p.statut === 'attente' && p.suivi_transporteur === r;
+        }).sort(function (a, b) { return new Date(a.cree_le) - new Date(b.cree_le); })
+          .slice(0, 20).map(function (p) { return prealerteDemo(d, p); }));
+      },
+
       journal: function (o) {
         o = o || {};
         var d = lireDonnees();
@@ -4849,6 +4996,8 @@
         d.colis = d.colis.filter(function (c) { return c.id !== id; });
         d.historique = d.historique.filter(function (h) { return h.colis_id !== id; });
         d.notifications = (d.notifications || []).filter(function (n) { return n.colis_id !== id; });
+        // prealertes.colis_id … on delete set null : la pré-alerte reste, sans son colis
+        (d.prealertes || []).forEach(function (p) { if (p.colis_id === id) p.colis_id = null; });
         ecrireDonnees(d);
         return plusTard(true);
       },
@@ -6458,6 +6607,33 @@
           } else if (p.suivi === '1Z999AA10123456784') {
             fa.echeance_le = date(2).slice(0, 10);
           }
+        });
+        // Les pré-alertes annoncées depuis l'application, une par cas que le poste
+        // de scan doit savoir traiter : un numéro attendu par un seul client, le
+        // même numéro annoncé par deux clients (l'employé choisit), une pré-alerte
+        // déjà rapprochée de son colis, une annulée, une sans numéro.
+        d.prealertes = d.prealertes || [];
+        var colisPieces = d.colis.filter(function (c) { return c.suivi_transporteur === '1Z999AA10123456784'; }).pop();
+        [
+          { client: 0, magasin: 'Amazon', desc: 'Écouteurs sans fil', suivi: 'TBA312345678901', valeur: 59.99, jours: 2 },
+          { client: 1, magasin: 'Walmart', desc: 'Mixeur de cuisine', suivi: '9400111899223399887764', valeur: 45, jours: 3 },
+          { client: 2, magasin: 'Target', desc: 'Jouets pour enfants', suivi: '9400111899223399887764', valeur: 38.5, jours: 1 },
+          { client: 2, magasin: 'SHEIN', desc: 'Robes (3)', suivi: 'GFUS01072196299901', valeur: 64, jours: 4, service: 'maritime' },
+          { client: 1, magasin: 'RockAuto', desc: 'Pièces auto (amortisseurs)', suivi: '1Z999AA10123456784', valeur: 210,
+            jours: 11, statut: 'recu', colis: colisPieces },
+          { client: 0, magasin: 'eBay', desc: 'Montre', suivi: '', valeur: null, jours: 6, statut: 'annulee' },
+          { client: 0, magasin: 'Temu', desc: 'Accessoires de téléphone', suivi: '', valeur: 22, jours: 0 }
+        ].forEach(function (p) {
+          var deja = d.prealertes.some(function (x) {
+            return x.client_id === ids[p.client] && x.suivi_transporteur === p.suivi && x.description === p.desc;
+          });
+          if (deja) return;
+          d.prealertes.push({
+            id: identifiant(), client_id: ids[p.client], magasin: p.magasin, description: p.desc,
+            suivi_transporteur: p.suivi, valeur_usd: p.valeur, service: p.service || 'aerien',
+            statut: p.colis ? 'recu' : (p.statut === 'recu' ? 'attente' : (p.statut || 'attente')),
+            colis_id: p.colis ? p.colis.id : null, cree_le: date(p.jours, -5)
+          });
         });
         ecrireDonnees(d);
         return plusTard(true);

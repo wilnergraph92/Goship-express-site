@@ -7,6 +7,18 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — Palier A du suivi universel : les pré-alertes à l'entrepôt de Miami (11/11/2026)
+
+**Aucune migration, aucune fonction ni règle nouvelle dans la base**, aucun service externe. Autorisé par la décision du CEO du 11/11/2026 (Palier A uniquement) ; pas encore publié.
+
+- **Onglet « Pré-alertes »** (`assets/js/prealertes.js`, menu Opérations, `shipments.view`) : les achats annoncés par les clients depuis l'application, jusqu'ici invisibles pour l'équipe. Filtre par état (en attente, reçues, annulées, toutes), recherche (numéro, magasin, contenu, nom, code ou téléphone du client), nombre en attente dans le menu. « Enregistrer le colis » ouvre le formulaire habituel rempli avec le client, le numéro, le magasin, le contenu et le mode. Lecture seule : `API.admin.prealertes` lit `prealertes` sous la règle existante `prealertes_lecture`.
+- **Poste de scan** : un suivi de vendeur sans colis consulte les pré-alertes en attente (`API.admin.prealertesDuSuivi`). Une seule : la carte du client, « Enregistrer le colis pour ce client ». Plusieurs (des clients différents ont annoncé le même numéro) : toutes, et l'employé choisit après avoir lu le nom sur le carton. Aucune : « Colis introuvable », comme avant, avec « Enregistrer un colis avec ce numéro ». Pareil en mode rapide. Ni téléphone ni adresse sur ces cartes (comme `fiche_scanner`). Une fois le colis enregistré, le poste le montre.
+- **Rapprochement** : inchangé, par la base — `creer_colis` fait naître le colis « Reçu », et le déclencheur `rapprocher_prealerte` passe la pré-alerte du même client et du même numéro à « reçue ». Les pré-alertes des autres clients ne bougent pas ; un même numéro sur deux colis reste refusé (`TRACKING_ALREADY_EXISTS`).
+- **Transporteur** (`GoshipScan.transporteur`, `scan-parser.js`) : nommé seulement quand le numéro le prouve — UPS (`1Z…`, clé de contrôle), USPS (IMpb 20 à 22 chiffres et S10 `…US`, clés de contrôle), Amazon Logistics (`TBA` + 12 chiffres). Sinon « Transporteur non déterminé » : un numéro de 12 ou 15 chiffres n'est jamais dit FedEx. Affiché dans l'onglet, sur le poste et dans la fiche du colis.
+- Copie démo : `d.prealertes`, `rapprocherPrealertesDemo` (copie de `rapprocher_prealerte`, appelée à la création et à la modification d'un colis), pré-alertes d'exemple pour chaque cas. Textes du tableau de bord : 36 lignes dans `tableau.txt`, traduites en anglais, espagnol et créole.
+
+Essais : `essai-prealertes.js` (mode démo, 53), `essai-prealertes.py` (chaîne officielle complète, vrai PostgREST, requêtes exactes d'`api.js`, RLS réelles : 28), `essai-prealertes-navigateur.mjs` (Chromium, mode démo : 34), et un parcours en mode Supabase contre la base d'essai de `essai-mobile.py --serveur` (12). Non-régression : les 11 bancs démo existants (623 vérifications), `essai-scanner.py` (45) et `essai-evenements.py` (89) passent.
+
 ## Non publié — vérification avant les campagnes publicitaires (29/10/2026)
 
 Aucune migration. Vérification complète du site avant le lancement des publicités ; ce qui a changé :

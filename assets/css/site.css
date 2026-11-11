@@ -914,6 +914,10 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-scan__alerte{margin:14px 0 0;padding:10px 14px;border-radius:10px;background:#fffbeb;color:#92400e;font-weight:600}
 .gs-scan__alerte--incident{background:#fef2f2;color:#b91c1c}
 .gs-scan__operations{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+/* Les pré-alertes d'un suivi de vendeur sans colis : une carte par client (scanner.js) */
+.gs-scan__prealertes{display:grid;gap:12px;margin:14px 0 0;padding:0;list-style:none}
+.gs-scan__prealerte{padding:2px 16px 16px;border:1px solid #e3e8f2;border-radius:12px;background:#f8fafd}
+.gs-scan__prealerte .gs-scan__operations{margin-top:12px}
 .gs-scan__confirmation:empty{display:none}
 .gs-scan__confirmation{display:grid;gap:10px;margin-top:14px;padding:14px;border:2px solid var(--ink);border-radius:12px}
 .gs-scan__confirmation p{margin:0;font-weight:700}

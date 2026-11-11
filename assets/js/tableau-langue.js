@@ -104,6 +104,10 @@
     [/^(.+) \(vous\)$/, ['$1 (you)', '$1 (usted)', '$1 (ou)']],
     [/^(.+) \(démonstration\)$/, ['{1} (demo)', '{1} (demo)', '{1} (demo)']],
     [/^Facture (\d{4}-\d{2}-\d+)$/, ['Invoice $1', 'Factura $1', 'Fakti $1']],
+    // Les pré-alertes (prealertes.js, poste de scan) : le numéro du colis et le nom du client restent tels quels
+    [/^Colis (GSE-\S+)$/, ['Package $1', 'Paquete $1', 'Koli $1']],
+    [/^Enregistrer le colis de (.+)$/, ['Register the package of $1', 'Registrar el paquete de $1', 'Anrejistre koli $1 a']],
+    [/^Enregistrer le colis pour (.+)$/, ['Register the package for $1', 'Registrar el paquete para $1', 'Anrejistre koli a pou $1']],
     [/^Miami → ([^·]+)$/, ['Miami → {1}', 'Miami → {1}', 'Miami → {1}']],
     [/^(.+), (Haïti|République dominicaine|États-Unis)$/, ['$1, {2}', '$1, {2}', '$1, {2}']],
     // Le regroupement des factures, et la sortie de colis d'une facture regroupée
