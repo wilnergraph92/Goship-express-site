@@ -6086,8 +6086,8 @@
     sectionFiche('Expéditeur (magasin)');
     champFiche('Nom', colis.expediteur || 'Non renseigné');
     champFiche('N° de suivi du vendeur', colis.suivi_transporteur);
-    // Le transporteur, seulement quand le numéro le prouve (scan-parser.js)
-    var transp = window.GoshipScan && window.GoshipScan.transporteur(colis.suivi_transporteur);
+    // Le transporteur, seulement quand le numéro le prouve (transporteur.js)
+    var transp = window.GoshipTransporteur && window.GoshipTransporteur(colis.suivi_transporteur);
     champFiche('Transporteur', transp ? transp.nom : '');
     var grilleExp = grilleFiche;
 

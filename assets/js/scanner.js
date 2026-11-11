@@ -302,7 +302,7 @@
     ligne(dl, 'Origine', f.origine);
     ligne(dl, 'Destination', [c.destination, c.pays_destination].filter(Boolean).join(', '));
     ligne(dl, 'Suivi vendeur', c.suivi_transporteur);
-    var transp = SCAN.transporteur ? SCAN.transporteur(c.suivi_transporteur) : null;
+    var transp = window.GoshipTransporteur ? window.GoshipTransporteur(c.suivi_transporteur) : null;
     ligne(dl, 'Transporteur', transp ? transp.nom : '');
     ligne(dl, 'Localisation', c.lieu);
     ligne(dl, 'Dernier événement', f.dernier_evenement
@@ -381,7 +381,7 @@
     zoneFiche.hidden = false;
     var tete = el('div', 'gs-scan__tete');
     tete.appendChild(el('strong', 'gs-scan__numero', reference));
-    var t = SCAN.transporteur ? SCAN.transporteur(reference) : null;
+    var t = window.GoshipTransporteur ? window.GoshipTransporteur(reference) : null;
     tete.appendChild(el('span', 'gs-scan__statut', t ? t.nom : 'Transporteur non déterminé'));
     zoneFiche.appendChild(tete);
 

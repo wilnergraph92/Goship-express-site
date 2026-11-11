@@ -14,7 +14,7 @@
        le déclencheur rapprocher_prealerte qui passe la pré-alerte à « Reçue »
        quand le client et le numéro sont les mêmes. Aucun statut de colis,
        aucun événement n'est touché ici.
-   Le transporteur affiché vient de GoshipScan.transporteur (scan-parser.js) :
+   Le transporteur affiché vient de GoshipTransporteur (transporteur.js) :
    seulement quand le numéro le prouve.
    ========================================================================== */
 (function () {
@@ -56,7 +56,7 @@
   }
 
   function transporteurDe(numero) {
-    return window.GoshipScan && numero ? window.GoshipScan.transporteur(numero) : null;
+    return window.GoshipTransporteur && numero ? window.GoshipTransporteur(numero) : null;
   }
 
   function messageErreur(err) {

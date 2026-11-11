@@ -43,7 +43,8 @@ bureau/                             app de bureau Windows/macOS (Electron) — j
 | `fond.js` | Grille de points en arrière-plan des pages publiques (canvas fixe, réagit au curseur) — pas le tableau de bord |
 | `mesure.js` | Google Analytics 4, pages publiques seulement, si `googleAnalytics` est réglé ; page envoyée sans ses paramètres (sauf ceux d'une campagne : `utm_*`, `gclid`), jamais de numéro de colis. Sur `inscription.html`, rien n'est chargé avant que le compte soit créé et le formulaire vidé : `GoshipMesure.inscription` (appelée par `compte.js`) envoie alors `sign_up`. La CSP qui l'autorise est posée par `build.py` (`csp(mesure=True)`) |
 | `codes.js` | QR codes et codes-barres |
-| `scan-parser.js` | Lecture d'un code scanné (étiquette, QR, suivi vendeur) — aucune requête |
+| `scan-parser.js` | Lecture d'un code scanné (étiquette, QR, suivi vendeur) — aucune requête. **Copié à l'identique** dans l'application mobile (`lib/scan-parser.js`), dont les essais comparent les deux : n'y ajoute rien que l'application n'ait pas |
+| `transporteur.js` | Le transporteur d'un suivi de vendeur (UPS, USPS, Amazon Logistics), nommé seulement quand la forme et la clé de contrôle le prouvent — tableau de bord seulement |
 | `scanner.js` | Onglet « Scanner » du tableau de bord (`admin.html#scanner`) |
 | `prealertes.js` | Onglet « Pré-alertes » du tableau de bord : lecture seule des pré-alertes des clients (Palier A du suivi universel) |
 | `lieux.js` | Régions et villes (Haïti, Rép. dominicaine, États des USA) : adresse du client (`compte.js`), filtre « Destination » du tableau de bord |
@@ -284,7 +285,7 @@ choisit) ne font que **lire** `prealertes` sous la règle existante `prealertes_
 ouvre le formulaire colis rempli (événement `goship:nouveau-colis`, `admin.js`) ; c'est
 `creer_colis` qui crée le colis et `rapprocher_prealerte` qui passe la pré-alerte à « recu ».
 Aucun statut, aucun événement de colis n'est touché. Le transporteur affiché vient de
-`GoshipScan.transporteur` (UPS, USPS, Amazon Logistics, prouvés par la forme et la clé de
+`GoshipTransporteur` (`transporteur.js` : UPS, USPS, Amazon Logistics, prouvés par la forme et la clé de
 contrôle ; sinon rien). La Phase 1 et la suite (17TRACK…) attendent une décision écrite du CEO.
 Copie démo : `rapprocherPrealertesDemo` ; bancs `essai-prealertes.js` / `.py` / `-navigateur.mjs`.
 

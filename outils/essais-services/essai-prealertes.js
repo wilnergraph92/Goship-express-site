@@ -1,7 +1,7 @@
 /* ==========================================================================
    Goship Express — les pré-alertes vues par l'équipe (Palier A), hors navigateur
    ==========================================================================
-   1. Le transporteur d'un suivi de vendeur (scan-parser.js) : nommé seulement
+   1. Le transporteur d'un suivi de vendeur (transporteur.js) : nommé seulement
       quand le numéro le prouve, jamais deviné.
    2. La lecture des pré-alertes en mode démonstration (api.js) : la liste de
       l'onglet, et celles d'un numéro scanné (aucune, une, plusieurs).
@@ -37,6 +37,7 @@ global.setTimeout = function (f) { return setImmediate(f); };
 var racine = path.join(__dirname, '..', '..', 'assets', 'js');
 new Function(fs.readFileSync(path.join(racine, 'api.js'), 'utf8'))();
 new Function(fs.readFileSync(path.join(racine, 'scan-parser.js'), 'utf8'))();
+new Function(fs.readFileSync(path.join(racine, 'transporteur.js'), 'utf8'))();
 var API = global.window.GoshipAPI, SCAN = global.window.GoshipScan, A = API.admin;
 global.setTimeout = attendre;
 
@@ -51,7 +52,7 @@ function verifier(titre, obtenu, attendu) {
 }
 function code(p) { return p.then(function () { return 'aucune'; }, function (e) { return e.code; }); }
 function donnees() { return JSON.parse(memoire['gse-demo-donnees']); }
-function nomTransporteur(n) { var t = SCAN.transporteur(n); return t ? t.nom : null; }
+function nomTransporteur(n) { var t = global.window.GoshipTransporteur(n); return t ? t.nom : null; }
 
 (async function () {
   console.log('1. Le transporteur : seulement quand le numéro le prouve');
