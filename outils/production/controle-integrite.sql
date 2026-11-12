@@ -147,6 +147,34 @@ controles(ordre, controle, gravite, nombre, exemples) as (
     from public.evenements_facturation
    where traite_le is null
      and cree_le < coalesce((select actives_depuis from public.notification_moteur limit 1), '-infinity')
+  union all
+  -- 6. Suivi externe (supabase-moteur-suivi.sql, supabase-synchro-suivi.sql) : prévenir avant
+  --    la panne sèche. Lu en texte (to_jsonb) pour que ce contrôle tourne aussi sur une base
+  --    d'avant ces migrations, où ces colonnes n'existent pas encore.
+  select 6, 'Suivi externe : quota sous 50', 'ALERTE', count(*),
+         string_agg(code || ' : ' || (to_jsonb(f) ->> 'quota_restant'), ', ')
+    from public.fournisseurs_suivi f
+   where (to_jsonb(f) ->> 'quota_restant')::integer < 50
+  union all
+  select 6, 'Suivi externe : fournisseur arrêté tout seul', 'ALERTE', count(*),
+         string_agg(code || ' : ' || (to_jsonb(f) ->> 'arret_motif'), ', ')
+    from public.fournisseurs_suivi f
+   where to_jsonb(f) ->> 'arret_motif' is not null and not f.actif
+     and coalesce((to_jsonb(f) ->> 'essai')::boolean, false) = false
+  union all
+  select 6, 'Suivi externe : lectures en retard de plus de 2 h', 'ALERTE', count(*), null
+    from public.suivis_externes s
+   where to_jsonb(s) ->> 'etape' = 'lecture' and to_jsonb(s) ->> 'requete' is null
+     and s.prochaine_synchro_le < now() - interval '2 hours'
+     and exists (select 1 from public.fournisseurs_suivi f
+                  where f.actif or coalesce((to_jsonb(f) ->> 'essai')::boolean, false))
+  union all
+  select 6, 'Suivi externe : appels en erreur (24 h)', 'INFO', count(*),
+         (select string_agg(resultat || ' ×' || n, ', ') from
+            (select resultat, count(*) n from public.suivis_externes_journal
+              where resultat <> 'ok' and cree_le > now() - interval '24 hours' group by 1) x)
+    from public.suivis_externes_journal
+   where resultat <> 'ok' and cree_le > now() - interval '24 hours'
 )
 select controle,
        case when nombre = 0 then 'OK' else gravite end as verdict,

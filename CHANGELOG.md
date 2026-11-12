@@ -7,9 +7,20 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — Phase 2 du suivi universel : le moteur du suivi externe (12/11/2026)
+## Non publié — Phase 3 du suivi universel : la synchronisation du suivi externe (12/11/2026)
 
-**Migration à passer**, après les 30 premières et **sur décision écrite du CEO** : `supabase-moteur-suivi.sql` (31e ; contrôle attendu `21 | 0 | false | false | 1`, `0` en dernier sans pg_cron). Elle ne remplace que `etat_fournisseurs_suivi` (mêmes clés, quelques-unes de plus), ne change aucune donnée existante et se relance sans risque. Tant qu'aucun fournisseur n'est mis en essai ou actif, sa tâche planifiée n'appelle personne.
+**Migration à passer**, après les 31 premières et **sur décision écrite du CEO** : `supabase-synchro-suivi.sql` (32e ; contrôle attendu `4 | 0 | 1 | false | 18`). Elle remplace `traiter_suivis_externes`, `demander_suivi_externe`, `regler_fournisseur_suivi`, `etat_fournisseurs_suivi` et `transporteurs_connus` (mêmes formes), ne change aucune donnée existante hormis le nom des suivis rangés sous un code 17TRACK désormais connu (SwiftX, SpeedX, YWE), et se relance sans risque.
+
+- **La relecture, gratuite** (lire un suivi ne coûte rien chez 17TRACK, prouvé en production à l'étape B) : `planifier_suivis_externes` relit les suivis en cours toutes les 6 h (12 h sans premier scan) et les termine — livré (une dernière lecture 24 h après), arrivé à Miami (un colis porte ce numéro ; un suivi pas encore inscrit ne l'est jamais), 30 jours de silence (`TRACKING_EXPIRED`), terminé. Pas de webhook, par décision du CEO.
+- **Les pré-alertes suivies automatiquement** : déclencheur `suivre_prealerte`, interrupteur `suivre_prealertes` **éteint à l'installation**, plafond mensuel obligatoire ; au-delà, les numéros attendent le mois suivant sans rien coûter. Un même numéro annoncé par deux clients n'a qu'un suivi. Le déclencheur ne fait jamais échouer une pré-alerte ; l'application mobile ne voit aucune différence.
+- **Surveillance** : `sante_suivi_externe()` (équipe) et quatre lignes de `controle-integrite.sql` (quota sous 50, fournisseur arrêté tout seul, lectures en retard de plus de 2 h, appels en erreur).
+- Liste des transporteurs : SwiftX, SpeedX et YWE, trouvés à Miami pendant l'essai réel.
+
+Essai : `essai-synchro-suivi.py` (51). `essai-moteur-suivi.py` éprouve désormais la 31e migration à sa place dans la chaîne. `controle-securite.sql` (4 colonnes, migration 32), `controle-integrite.sql`, `sonder.sh`, `essais.yml`, README, CLAUDE.md et `docs/production/database.md` connaissent le 32e fichier.
+
+## Phase 2 du suivi universel : le moteur du suivi externe (12/11/2026)
+
+**Migration exécutée en production le 12/11/2026** (décision écrite du CEO ; 17TRACK mis en essai le même jour), après les 30 premières : `supabase-moteur-suivi.sql` (31e ; contrôle attendu `21 | 0 | false | false | 1`, `0` en dernier sans pg_cron). Elle ne remplace que `etat_fournisseurs_suivi` (mêmes clés, quelques-unes de plus), ne change aucune donnée existante et se relance sans risque. Tant qu'aucun fournisseur n'est mis en essai ou actif, sa tâche planifiée n'appelle personne.
 
 - **Le moteur** : `demander_suivi_externe` (`tracking.manage`) range un numéro de vendeur (original gardé), reconnaît un numéro de commande Amazon (`ORDER_NUMBER_DETECTED`, rien d'envoyé) ou de colis GoShip (refusé), détecte UPS, USPS et Amazon TBA par la clé de contrôle (`detecter_transporteur`, copie de `transporteur.js`), accepte le choix manuel parmi 15 transporteurs. `traiter_suivis_externes` (chaque minute) inscrit chez 17TRACK, lit la réponse, range le statut normalisé et chaque événement une seule fois ; redemande deux fois un suivi sans premier scan.
 - **L'essai** : `regler_fournisseur_suivi` (journalisé) met un fournisseur « VERIFIED » ou « PENDING_VERIFICATION » en essai, avec un plafond ; « actif » reste réservé à « VERIFIED ». Un seul fournisseur en service ; aucune bascule.
