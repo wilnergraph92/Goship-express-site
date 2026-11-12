@@ -37,3 +37,4 @@ supabase-identite.sql
 supabase-accuses.sql
 supabase-suivi-courriels.sql
 supabase-suivi-externe.sql
+supabase-moteur-suivi.sql

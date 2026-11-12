@@ -303,6 +303,19 @@ qui attend la décision écrite du CEO sur le fournisseur. La clé d'un fourniss
 dans une table. `permissions_du_role` y est recopiée mot pour mot (`supabase.sql` fait foi). Pas de copie
 démo (aucune page ne s'en sert encore). Banc : `essai-suivi-externe.py`.
 
+**Le moteur du suivi externe** (Phase 2, `outils/supabase-moteur-suivi.sql`, dossier validé le 12/11/2026) :
+même chemin que les e-mails — `pg_net`, `pg_cron` (`traiter_suivis_externes`, tâche `goship-suivi-externe`,
+chaque minute), clé dans Vault (`suivi_17track_cle`). Seule porte : `demander_suivi_externe(numero, transporteur)`
+(`tracking.manage`) ; réglages : `regler_fournisseur_suivi` (journalisé). L'adaptateur 17TRACK (`suivi17_*`) est
+le seul endroit qui connaît 17TRACK. **Un fournisseur non VERIFIED n'est jamais actif** : il peut être **en
+essai** (`essai`, `plafond_essai`), et rien n'en sort vers un client ; un seul fournisseur en service, jamais
+de bascule. Le quota se tient dans la base, **avant** l'appel (chaque inscription envoyée compte), relu chez
+17TRACK avant tout lot qui coûte ; marge, quota épuisé, clé refusée → arrêt (`arret_motif`). La requête ne
+porte que le numéro et le code du transporteur ; `shipping_info` et `misc_info` (adresse du destinataire,
+références) ne sont jamais lus. USPS exclu d'office (`transporteurs_exclus`). `detecter_transporteur` est
+une copie de `transporteur.js`, comparée par le banc. Pas de mise à jour régulière ni de webhook (Phase 3),
+rien d'affiché aux clients (Phase 4). Pas de copie démo. Banc : `essai-moteur-suivi.py`.
+
 **Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
 dialogues) : un clic à côté ne fait rien. Une saisie de l'utilisateur (événement
 `isTrusted` dans un formulaire) pose `data-saisie` ; Échap, × ou « Annuler » ouvrent
@@ -538,7 +551,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
