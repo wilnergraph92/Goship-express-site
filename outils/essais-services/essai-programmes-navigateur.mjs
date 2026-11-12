@@ -41,6 +41,11 @@ async function inscrire(page, nom, email, naissance) {
   await page.click('[data-action="methode-formulaire"]').catch(() => {});
   await page.fill('#ins-nom', nom);
   if (naissance !== null) await page.fill('#ins-naissance', naissance);
+  // Sexe et pièce d'identité (supabase-identite.sql) : obligatoires pour le formulaire du site.
+  // Le numéro ne s'ouvre qu'une fois le document choisi.
+  await page.selectOption('#ins-sexe', 'F');
+  await page.selectOption('#ins-document', 'passeport');
+  await page.fill('#ins-numero-document', 'AB1234567');
   await page.selectOption('#ins-pays', 'HT');
   await page.selectOption('#ins-region', { index: 1 });
   await page.selectOption('#ins-ville', { index: 1 });
@@ -56,8 +61,10 @@ try {
   const ctx = await contexte(navigateur, 390, 844);
   const page = await ctx.newPage();
   await inscrire(page, 'Anna Joseph', 'anna@exemple.com', null);
-  verifier('le champ existe, est de type date et obligatoire',
-    await page.$eval('#ins-naissance', (c) => [c.type, c.required, c.max.length === 10]), ['date', true, true]);
+  // Un champ texte « jj/mm/aaaa » : le champ date du navigateur suivait la langue de l'appareil
+  // (« mm/jj/aaaa » chez certains), compte.js pose les barres et convertit vers « AAAA-MM-JJ ».
+  verifier('le champ existe, est un champ texte « jj/mm/aaaa » obligatoire',
+    await page.$eval('#ins-naissance', (c) => [c.type, c.required, c.maxLength, c.placeholder]), ['text', true, 10, 'jj/mm/aaaa']);
   verifier('le libellé est « Date de naissance »', (await page.textContent('label[for="ins-naissance"]')).replace('*', '').trim(), 'Date de naissance');
   await page.click('[data-envoyer]');
   verifier('sans date : message clair, et le focus va au champ',
@@ -67,12 +74,16 @@ try {
   await page.click('[data-envoyer]');
   verifier('date future : refusée avec son message', await page.textContent('#erreur-ins-naissance'),
     'La date de naissance ne peut pas être dans le futur.');
-  await page.fill('#ins-naissance', '1990-02-30').catch(() => {});
-  const valeurImpossible = await page.$eval('#ins-naissance', (c) => c.value);
-  verifier('30 février : le champ date du navigateur le refuse (valeur vide)', valeurImpossible, '');
+  // Le 30 février a la bonne forme mais n'existe pas : c'est compte.js qui le refuse, pas le navigateur
+  await page.fill('#ins-naissance', '30/02/1990');
+  await page.click('[data-envoyer]');
+  verifier('30 février : refusé avec le message du champ, le focus y reste',
+    [await page.textContent('#erreur-ins-naissance'), await page.evaluate(() => document.activeElement.id)],
+    ['Entrez une date de naissance valide, sous la forme jj/mm/aaaa (jour, mois, année).', 'ins-naissance']);
   verifier('rien n\'a été enregistré par ces refus',
     await page.evaluate(() => { try { return JSON.parse(localStorage.getItem('gse-demo-donnees') || '{"comptes":[]}').comptes.filter((c) => c.email === 'anna@exemple.com').length; } catch (e) { return 0; } }), 0);
-  await page.fill('#ins-naissance', '1990-03-15');
+  await page.fill('#ins-naissance', '15/03/1990');
+  verifier('la date tapée garde sa forme jj/mm/aaaa', await page.$eval('#ins-naissance', (c) => c.value), '15/03/1990');
   await page.click('[data-envoyer]');
   await page.waitForURL(/mon-compte\.html/);
   await page.waitForSelector('[data-nom-adresse]:not(:empty)');
@@ -108,7 +119,8 @@ try {
   verifier('aucun débordement horizontal à 390 px', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   verifier('la date saisie est lue sans décalage de jour', await page.textContent('[data-info="naissance"]'), '15 mars 1990');
   verifier('le compte a une date : aucune demande', await page.$eval('[data-completer-naissance]', (b) => b.hidden), true);
-  await page.screenshot({ path: process.env.CAPTURES ? process.env.CAPTURES + '/adresse-390.png' : '/dev/null', fullPage: true });
+  // Captures seulement si CAPTURES est réglé : Playwright refuse « /dev/null », dont il ne devine pas le type d'image
+  if (process.env.CAPTURES) await page.screenshot({ path: process.env.CAPTURES + '/adresse-390.png', fullPage: true });
 
   console.log('\n3. Deux clients, deux adresses');
   await page.evaluate(() => { localStorage.removeItem('gse-demo-session'); });
@@ -173,7 +185,7 @@ try {
   const pressee = await bureau.evaluate(() => navigator.clipboard.readText());
   verifier("l'adresse complète se copie sur ordinateur", pressee.split('\n').slice(1), ADRESSE.slice(0, 2).concat(ADRESSE.slice(2)));
   verifier('aucun débordement horizontal à 1280 px', await bureau.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
-  await bureau.screenshot({ path: process.env.CAPTURES ? process.env.CAPTURES + '/adresse-1280.png' : '/dev/null' });
+  if (process.env.CAPTURES) await bureau.screenshot({ path: process.env.CAPTURES + '/adresse-1280.png' });
   await ctx2.close();
 
   console.log('\n7. Les pages traduites (anglais, espagnol, créole)');
@@ -257,7 +269,7 @@ try {
   await pg.waitForSelector('[data-avt-parrainage]:not([hidden])');
   verifier('le filleul voit qu\'il a un parrain (plus de saisie de code)', await pg.locator('[data-avt-parrainage] details:has(summary:has-text("J\'ai un code"))').count(), 0);
   verifier('et aucun nom de parrain', (await pg.textContent('[data-panneau-programmes]')).includes('Pascal'), false);
-  await pg.screenshot({ path: process.env.CAPTURES ? process.env.CAPTURES + '/avantages-390.png' : '/dev/null', fullPage: true });
+  if (process.env.CAPTURES) await pg.screenshot({ path: process.env.CAPTURES + '/avantages-390.png', fullPage: true });
 
   // Une saisie tardive : mauvais code, son propre code
   await pg.evaluate(() => { localStorage.removeItem('gse-demo-session'); });
@@ -302,7 +314,8 @@ try {
   });
   await ph.goto(SITE + '/ht/inscription.html');
   await ph.fill('#ins-nom', 'Mari Jozèf');
-  await ph.fill('#ins-naissance', '1990-06-06');
+  await ph.fill('#ins-naissance', '06/06/1990');
+  await ph.selectOption('#ins-sexe', 'F'); await ph.selectOption('#ins-document', 'passeport'); await ph.fill('#ins-numero-document', 'AB7654321');
   await ph.selectOption('#ins-pays', 'HT'); await ph.selectOption('#ins-region', { index: 1 }); await ph.selectOption('#ins-ville', { index: 1 });
   await ph.fill('#ins-adresse', '12 rue Capois'); await ph.fill('#ins-tel', '+509 3712 3999'); await ph.fill('#ins-email', 'mari@exemple.com'); await ph.fill('#ins-mdp', 'motdepasse1');
   await ph.click('[data-envoyer]');
