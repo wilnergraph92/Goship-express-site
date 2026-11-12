@@ -240,9 +240,12 @@
     return (Math.round(v * 100) / 100).toString().replace('.', ',');
   }
 
+  // Une échéance (« 2026-11-20 », jour civil sans fuseau) lue telle quelle serait
+  // minuit UTC, donc la veille sur une facture imprimée en Haïti ou en République
+  // dominicaine : on la pose à midi, heure de l'appareil, comme API.outils.date.
   function date(valeur, langue) {
     if (!valeur) return '';
-    var d = new Date(valeur);
+    var d = new Date(typeof valeur === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valeur) ? valeur + 'T12:00:00' : valeur);
     if (isNaN(d.getTime())) return '';
     if (langue === 'ht') return d.getDate() + ' ' + MOIS_HT[d.getMonth()] + ' ' + d.getFullYear();
     try {

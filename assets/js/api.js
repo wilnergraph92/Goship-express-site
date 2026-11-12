@@ -6698,8 +6698,15 @@
 
   function deuxChiffres(n) { return (n < 10 ? '0' : '') + n; }
 
+  // Un jour civil seul (« 2026-11-20 » : échéance d'une facture, colonne date de la
+  // base) n'a pas de fuseau ; confié tel quel à Date, il devient minuit UTC, donc la
+  // veille au soir à Port-au-Prince ou à Santo Domingo, où sont les clients. On le
+  // pose à midi, heure de l'appareil : aucun fuseau habité n'en change le jour. Un
+  // horodatage complet (« …T14:05:00Z ») garde son instant exact.
+  var JOUR_SEUL = /^\d{4}-\d{2}-\d{2}$/;
+
   function date(iso, avecHeure) {
-    var d = new Date(iso);
+    var d = new Date(typeof iso === 'string' && JOUR_SEUL.test(iso) ? iso + 'T12:00:00' : iso);
     if (isNaN(d.getTime())) return '';
     var heure = avecHeure ? deuxChiffres(d.getHours()) + ':' + deuxChiffres(d.getMinutes()) : '';
     if (LANGUE === 'ht') return d.getDate() + ' ' + MOIS_HT[d.getMonth()] + ' ' + d.getFullYear() + (heure ? ', ' + heure : '');

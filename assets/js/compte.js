@@ -864,7 +864,7 @@
           solde.classList.toggle('is-a-jour', !(Number(f.solde_usd) > 0));
           var phrases = [];
           if (Number(f.montant_en_retard) > 0) phrases.push(t('solde-retard', { montant: O.argent(f.montant_en_retard) }));
-          if (f.prochaine_echeance) phrases.push(t('solde-echeance', { date: O.date(f.prochaine_echeance + 'T12:00:00') }));
+          if (f.prochaine_echeance) phrases.push(t('solde-echeance', { date: O.date(f.prochaine_echeance) }));
           note.textContent = phrases.join(' ');
           note.hidden = !phrases.length;
         }
