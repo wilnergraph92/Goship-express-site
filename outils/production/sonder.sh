@@ -75,7 +75,8 @@ supabase-accuses.sql|lire_accuses_push||non
 supabase-suivi-courriels.sql|lire_suivi_courriels||non
 supabase-suivi-externe.sql|etat_fournisseurs_suivi||non
 supabase-moteur-suivi.sql|liste_suivis_externes||non
-supabase-synchro-suivi.sql|sante_suivi_externe||non'
+supabase-synchro-suivi.sql|sante_suivi_externe||non
+supabase-mes-suivis.sql|mes_suivis_externes||non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

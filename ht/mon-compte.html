@@ -172,6 +172,70 @@
           <p class="gs-form__erreur" data-colis-erreur role="alert" hidden></p>
         </div>
 
+        <!-- Mes colis en route : les achats annoncés (pré-alertes) et ce qu'en dit leur
+             transporteur, avant l'arrivée à Miami. Tout vient de la base (mes_suivis_externes) ;
+             le panneau reste caché si la base ne connaît pas encore cette lecture. -->
+        <div class="gs-panneau gs-achats" data-panneau-achats hidden>
+          <div class="gs-panneau__tete">
+            <h2>Koli mwen yo ki sou wout</h2>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="annoncer-achat" aria-expanded="false" aria-controls="form-achat"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Anonse yon acha</button>
+          </div>
+          <p class="gs-panneau__intro">Acha ou fè sou entènèt ou anonse yo, anvan yo rive nan depo nou an Miami.</p>
+          <form class="gs-form gs-form--compact gs-achats__form" id="form-achat" data-form="achat" novalidate hidden>
+            <div class="gs-achats__champs">
+              <div class="gs-champ">
+                <label for="ach-magasin">Magazen<span class="gs-requis" aria-hidden="true">*</span></label>
+                <input id="ach-magasin" name="magasin" required maxlength="80" placeholder="Amazon, SHEIN, Temu…" autocomplete="off">
+              </div>
+              <div class="gs-champ">
+                <label for="ach-contenu">Kontni<span class="gs-requis" aria-hidden="true">*</span></label>
+                <input id="ach-contenu" name="description" required maxlength="300" placeholder="Egz. 2 rad, yon telefòn" autocomplete="off">
+              </div>
+              <div class="gs-champ">
+                <label for="ach-valeur">Valè (USD)</label>
+                <input id="ach-valeur" name="valeur_usd" type="number" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="(pa obligatwa)">
+              </div>
+              <div class="gs-champ">
+                <label for="ach-service">Mòd ekspedisyon</label>
+                <select id="ach-service" name="service">
+                  <option value="aerien">Pa lè</option>
+                  <option value="maritime">Pa lanmè</option>
+                </select>
+              </div>
+            </div>
+            <div class="gs-champ">
+              <label for="ach-suivi">Nimewo swivi transpòtè a</label>
+              <p class="gs-achats__avertissement" id="ach-suivi-aide">Antre nimewo swivi transpòtè a, pa nimewo kòmand lan.</p>
+              <input id="ach-suivi" name="suivi" maxlength="60" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="ach-suivi-aide" translate="no" data-achat-suivi>
+              <p class="gs-champ__aide gs-achats__alerte" data-achat-alerte role="status" hidden></p>
+            </div>
+            <details class="gs-achats__ou">
+              <summary>Ki kote pou w jwenn nimewo sa a ?</summary>
+              <ul>
+                <li><strong translate="no">Amazon</strong> : Kòmand ou yo › Swiv koli a. Nimewo a parèt anba « ID swivi » (souvan TBA…, 1Z… oswa 9…).</li>
+                <li><strong translate="no">SHEIN</strong> : Kòmand › Voye › Swiv. Kopye nimewo transpòtè a (souvan GFUS…).</li>
+                <li><strong translate="no">Temu</strong> : Kòmand › Swiv. Nimewo transpòtè a anba non li.</li>
+              </ul>
+              <p>Yon nimewo kòmand (pa egzanp 112-1234567-1234567 kay Amazon) pa pèmèt ou swiv koli a.</p>
+            </details>
+            <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+            <div class="gs-form__boutons">
+              <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Anonse acha sa a</button>
+              <button class="gs-bouton gs-bouton--contour" type="button" data-action="annuler-achat">Anile</button>
+            </div>
+          </form>
+          <p class="gs-copie-ok" data-achat-ok role="status" hidden></p>
+          <div class="gs-achats__liste" data-liste-achats aria-busy="true">
+            <div class="gs-squelette" aria-hidden="true"></div>
+          </div>
+          <div class="gs-vide" data-vide="achats" hidden>
+            <span class="gs-vide__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+            <strong>Pa gen okenn acha anonse</strong>
+            <p>Anonse acha ou fè sou entènèt ak nimewo swivi yo : w ap wè kote yo ye kay transpòtè a, jiskaske yo rive Miami.</p>
+          </div>
+          <p class="gs-form__erreur" data-achats-erreur role="alert" hidden></p>
+        </div>
+
         <div class="gs-panneau gs-panneau--factures">
           <div class="gs-panneau__tete">
             <h2>Fakti mwen yo</h2>
@@ -344,6 +408,35 @@
       <details class="gs-colis__historique">
         <summary>Istorik <span data-champ="nb-etapes"></span></summary>
         <ol class="gs-chrono" data-champ="historique"></ol>
+      </details>
+    </div>
+  </article>
+</template>
+
+<template data-modele="achat">
+  <article class="gs-achat">
+    <div class="gs-achat__tete">
+      <div class="gs-achat__id">
+        <p class="gs-achat__titre" data-champ="titre" translate="no"></p>
+        <span class="gs-achat__numero" data-champ="numero" translate="no"></span>
+      </div>
+      <span class="gs-badge" data-champ="badge"></span>
+    </div>
+    <p class="gs-achat__statut" data-champ="statut"></p>
+    <p class="gs-achat__message" data-champ="message" hidden></p>
+    <ul class="gs-colis__infos">
+      <li data-champ="transporteur"></li>
+      <li data-champ="lieu" translate="no"></li>
+      <li data-champ="livraison"></li>
+      <li data-champ="annonce"></li>
+    </ul>
+    <a class="gs-bouton gs-bouton--petit gs-bouton--contour" data-champ="colis" hidden>Swiv koli sa a</a>
+    <div class="gs-colis__pied" data-champ="pied">
+      <span class="gs-colis__maj" data-champ="maj"></span>
+      <details class="gs-colis__historique" data-champ="parcours">
+        <summary>Wout li kay transpòtè a <span data-champ="nb-evenements"></span></summary>
+        <ol class="gs-chrono gs-achat__chrono" data-champ="evenements"></ol>
+        <p class="gs-achat__source">Enfòmasyon transpòtè a, atravè 17TRACK. GoShip pa chanje yo.</p>
       </details>
     </div>
   </article>
@@ -563,6 +656,54 @@
   <p data-t="erreur-REFERRAL_TOO_LATE">Li two ta pou ajoute yon kòd parennaj : premye operasyon ou an deja fèt oswa delè a pase.</p>
   <p data-t="erreur-REFERRAL_CYCLE">Parennaj sa a pa posib.</p>
   <p data-t="erreur-copie">Kopye a pa mache. Chwazi tèks la epi kopye l alamen.</p>
+  <p data-t="achat-statut-PENDING">N ap tann premye nouvèl transpòtè a</p>
+  <p data-t="achat-statut-INFO_RECEIVED">Machann nan prepare ekspedisyon an</p>
+  <p data-t="achat-statut-IN_TRANSIT">Sou wout pou Miami</p>
+  <p data-t="achat-statut-CUSTOMS">Nan ladwàn</p>
+  <p data-t="achat-statut-OUT_FOR_DELIVERY">Ap livre Miami</p>
+  <p data-t="achat-statut-AVAILABLE_FOR_PICKUP">Disponib nan yon pwen retrè transpòtè a</p>
+  <p data-t="achat-statut-DELIVERED">Transpòtè a livre l — n ap tann depo GoShip la resevwa l</p>
+  <p data-t="achat-statut-DELIVERED-par">{transporteur} livre l — n ap tann depo GoShip la resevwa l</p>
+  <p data-t="achat-statut-FAILED_ATTEMPT">Eseye livre a pa mache</p>
+  <p data-t="achat-statut-EXCEPTION">Pwoblèm kay transpòtè a</p>
+  <p data-t="achat-statut-RETURNED">Retounen bay moun ki voye l la</p>
+  <p data-t="achat-statut-EXPIRED">Pa gen nouvèl transpòtè a ankò</p>
+  <p data-t="achat-statut-NOT_FOUND">Pa gen nouvèl transpòtè a ankò</p>
+  <p data-t="achat-statut-inconnu">Estati a pa rekonèt : gade detay transpòtè a</p>
+  <p data-t="achat-message-NO_TRACKING">Pa gen nimewo swivi : n ap swiv koli ou depi l rive Miami.</p>
+  <p data-t="achat-message-ORDER_NUMBER_DETECTED">Sa sanble ak yon nimewo kòmand. Antre nimewo swivi transpòtè a, ki nan detay ekspedisyon an.</p>
+  <p data-t="achat-message-INVALID_TRACKING">Transpòtè a pa rekonèt nimewo sa a. Verifye l.</p>
+  <p data-t="achat-message-PENDING_FIRST_SCAN">Nimewo a aksepte, men transpòtè a poko eskane l. Sa ka pran kèk jou.</p>
+  <p data-t="achat-message-CARRIER_UNKNOWN">Transpòtè a pa idantifye : ekip nou an ap verifye l.</p>
+  <p data-t="achat-message-UNSUPPORTED_TRACKING">Swivi sa a pa disponib pou kounye a. N ap swiv koli ou depi l rive Miami.</p>
+  <p data-t="achat-message-AMAZON_TBA_LIMITATION">Amazon pa pataje swivi sa a. N ap swiv koli ou depi l rive Miami.</p>
+  <p data-t="achat-message-PROVIDER_UNAVAILABLE">Swivi transpòtè a pa disponib pou kounye a. Eseye ankò pita.</p>
+  <p data-t="achat-message-TRACKING_EXPIRED">Transpòtè a pa mete swivi sa a ajou ankò.</p>
+  <p data-t="achat-badge-attente">Sou wout</p>
+  <p data-t="achat-badge-livre">Transpòtè a livre l</p>
+  <p data-t="achat-badge-recu">Rive Miami</p>
+  <p data-t="achat-badge-info">Pou verifye</p>
+  <p data-t="achat-arrive">Rive Miami : se koli {numero} an.</p>
+  <p data-t="achat-voir-colis">Swiv koli sa a</p>
+  <p data-t="achat-transporteur">Transpòtè : {nom}</p>
+  <p data-t="achat-transporteur-inconnu">Transpòtè a pa idantifye</p>
+  <p data-t="achat-dernier-lieu">Dènye kote : {lieu}</p>
+  <p data-t="achat-livraison-prevue">Dat livrezon transpòtè a bay : {date}</p>
+  <p data-t="achat-annonce-le">Anonse {date}</p>
+  <p data-t="achat-maj-minutes">Mizajou gen {n} min</p>
+  <p data-t="achat-maj-heures">Mizajou gen {n} è</p>
+  <p data-t="achat-aucun-evenement">Poko gen okenn evènman transpòtè a.</p>
+  <p data-t="achat-ok">Acha anonse ✓</p>
+  <p data-t="achat-numero-goship">Sa se yon nimewo koli GoShip : yo deja swiv li nan « Koli mwen yo ».</p>
+  <p data-t="erreur-PROFILE_INCOMPLETE">Ranpli pwofil ou anvan (non, telefòn, peyi ak vil) pou w ka anonse yon acha.</p>
+  <p data-t="erreur-PREALERT_STORE_REQUIRED">Di ki magazen.</p>
+  <p data-t="erreur-PREALERT_DESCRIPTION_REQUIRED">Di sa ki nan koli a.</p>
+  <p data-t="erreur-INVALID_TRACKING">Nimewo swivi a pa lizib : lèt ak chif sèlman, ant 6 ak 60.</p>
+  <p data-t="erreur-INVALID_VALUE">Valè a dwe ant 0 ak 100 000 $.</p>
+  <p data-t="erreur-INVALID_SERVICE">Mòd ekspedisyon an pa konnen.</p>
+  <p data-t="erreur-PREALERT_DUPLICATE">Nimewo swivi sa a deja anonse : acha a nan lis ou.</p>
+  <p data-t="erreur-PREALERT_ALREADY_RECEIVED">Koli sa a deja rive Miami : li nan « Koli mwen yo ».</p>
+  <p data-t="erreur-TOO_MANY_PREALERTS">Ou deja gen 60 acha anonse k ap tann.</p>
 </template>
 </main>
 

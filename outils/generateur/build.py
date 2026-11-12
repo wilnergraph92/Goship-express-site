@@ -669,6 +669,14 @@ TRACK_RESULT = '''
           <p class="gs-suivi__titre">Aucun colis ne correspond à cette référence.</p>
           <p>Vérifiez le numéro de colis : il commence par GSE- et figure sur votre étiquette et dans votre espace client. Vous pouvez aussi saisir le numéro de suivi du vendeur. Un colis tout juste expédié apparaît dès sa réception à Miami. <a data-track-link href="https://wa.me/''' + WHATSAPP + '''" target="_blank" rel="noopener">Écrire sur WhatsApp</a></p>
         </div>
+        <div class="gs-suivi" data-track-etat="transporteur" hidden>
+          <p class="gs-suivi__titre">C'est un numéro de transporteur.</p>
+          <p>Connectez-vous et ajoutez-le à vos colis en route pour le suivre : vous verrez où il en est chez le transporteur, jusqu'à son arrivée à notre entrepôt de Miami. <a href="mon-compte.html">Mes colis en route</a></p>
+        </div>
+        <div class="gs-suivi" data-track-etat="commande" hidden>
+          <p class="gs-suivi__titre">Ceci ressemble à un numéro de commande.</p>
+          <p>Entrez le numéro de suivi du transporteur, indiqué dans les détails d'expédition de votre commande, ou le numéro de colis GoShip (GSE-…).</p>
+        </div>
         <div class="gs-suivi" data-track-etat="code-client" hidden>
           <p class="gs-suivi__titre">Ceci est un code client.</p>
           <p>Connectez-vous à votre espace client pour voir tous les colis rattachés à votre compte. <a href="connexion.html">Se connecter</a></p>
