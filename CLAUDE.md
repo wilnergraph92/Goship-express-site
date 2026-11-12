@@ -286,8 +286,22 @@ ouvre le formulaire colis rempli (événement `goship:nouveau-colis`, `admin.js`
 `creer_colis` qui crée le colis et `rapprocher_prealerte` qui passe la pré-alerte à « recu ».
 Aucun statut, aucun événement de colis n'est touché. Le transporteur affiché vient de
 `GoshipTransporteur` (`transporteur.js` : UPS, USPS, Amazon Logistics, prouvés par la forme et la clé de
-contrôle ; sinon rien). La Phase 1 et la suite (17TRACK…) attendent une décision écrite du CEO.
-Copie démo : `rapprocherPrealertesDemo` ; bancs `essai-prealertes.js` / `.py` / `-navigateur.mjs`.
+contrôle ; sinon rien). Copie démo : `rapprocherPrealertesDemo` ; bancs `essai-prealertes.js` / `.py` /
+`-navigateur.mjs`.
+
+**Le suivi externe, fondation de données** (Phase 1, `outils/supabase-suivi-externe.sql`, validée le
+12/11/2026) : `suivis_externes` (un numéro de vendeur, son transporteur, son dernier statut, **aucune
+donnée client**), `suivis_externes_evenements` et `suivis_externes_journal` (immuables, déclencheur
+`suivi_externe_immuable`), `fournisseurs_suivi` (conformité VERIFIED, PENDING_VERIFICATION,
+NOT_AUTHORIZED, DISABLED ; actif seulement si VERIFIED, contrainte), colonne `prealertes.suivi_externe_id`.
+Tables fermées (RLS sans règle) ; lecture par `suivi_externe` et `etat_fournisseurs_suivi`
+(`tracking.view` : équipe ; `tracking.manage` : administrateur). `statut_suivi_normalise` traduit les
+statuts de 17TRACK vers les 12 du cahier des charges ; un statut inconnu reste NULL, **jamais**
+DELIVERED. **Rien ne relie ces tables à `colis.statut` ni à `colis_historique`** : un « livré » du
+transporteur n'est jamais un statut GoShip. Aucun appel extérieur ni tâche planifiée : c'est la Phase 2,
+qui attend la décision écrite du CEO sur le fournisseur. La clé d'un fournisseur ira dans Vault, jamais
+dans une table. `permissions_du_role` y est recopiée mot pour mot (`supabase.sql` fait foi). Pas de copie
+démo (aucune page ne s'en sert encore). Banc : `essai-suivi-externe.py`.
 
 **Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
 dialogues) : un clic à côté ne fait rien. Une saisie de l'utilisateur (événement
@@ -524,7 +538,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

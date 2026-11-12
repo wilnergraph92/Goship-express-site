@@ -100,7 +100,8 @@ colonnes_attendues(table_name, column_name, fichier) as (values
   ('notification_envois', 'accuse_le', 'supabase-accuses.sql'),
   ('notification_moteur', 'accuses_depuis', 'supabase-accuses.sql'),
   ('notification_envois', 'suivi_requete', 'supabase-suivi-courriels.sql'),
-  ('notification_moteur', 'suivi_courriels_depuis', 'supabase-suivi-courriels.sql')),
+  ('notification_moteur', 'suivi_courriels_depuis', 'supabase-suivi-courriels.sql'),
+  ('prealertes', 'suivi_externe_id', 'supabase-suivi-externe.sql')),
 -- Une migration de la chaîne officielle = un objet qu'elle seule installe
 migrations(ordre, fichier, present) as (values
   (1,  'supabase.sql',                 to_regprocedure('public.permissions_du_role(text)') is not null),
@@ -133,7 +134,8 @@ migrations(ordre, fichier, present) as (values
   (26, 'supabase-courriel-reseaux.sql', exists (select 1 from pg_proc where proname = 'courriel_reseaux')),
   (27, 'supabase-identite.sql',        exists (select 1 from pg_proc where proname = 'lire_type_document')),
   (28, 'supabase-accuses.sql',         exists (select 1 from pg_proc where proname = 'lire_accuses_push')),
-  (29, 'supabase-suivi-courriels.sql', exists (select 1 from pg_proc where proname = 'lire_suivi_courriels'))),
+  (29, 'supabase-suivi-courriels.sql', exists (select 1 from pg_proc where proname = 'lire_suivi_courriels')),
+  (30, 'supabase-suivi-externe.sql',   exists (select 1 from pg_proc where proname = 'etat_fournisseurs_suivi'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,
