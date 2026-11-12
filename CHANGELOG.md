@@ -7,6 +7,10 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — Phase 1 du suivi universel : la fondation de données du suivi externe (12/11/2026)
+
+**Migration à passer**, après les 29 premières et **sur décision écrite du CEO** : `supabase-suivi-externe.sql` (30e ; contrôle attendu `4 | 1 | 0 | false | true`). Elle n'en remplace aucune hormis `permissions_du_role` (recopiée de `supabase.sql`, avec `tracking.view` pour l'équipe et `tracking.manage` pour l'administrateur), ne change aucune donnée existante et se relance sans risque. Elle ajoute quatre tables fermées et vides — `suivis_externes`, `suivis_externes_evenements`, `suivis_externes_journal` (immuables), `fournisseurs_suivi` (17TRACK et AfterShip, désactivés, « DISABLED ») —, la colonne vide `prealertes.suivi_externe_id`, la correspondance des statuts de 17TRACK (`statut_suivi_normalise`, un statut inconnu reste vide) et deux lectures (`suivi_externe`, `etat_fournisseurs_suivi`). Aucun appel extérieur, aucune tâche planifiée, aucune page modifiée, aucun lien avec le statut ou l'historique des colis. Validée par le CEO le 12/11/2026 (dossier de conception de la Phase 1). Essai : `essai-suivi-externe.py` (80). `supabase.sql` et `supabase-naissance.sql` (la matrice), la copie démo d'`api.js`, `controle-securite.sql`, `sonder.sh`, README, CLAUDE.md et `docs/production/database.md` connaissent le 30e fichier.
+
 ## Non publié — Palier A du suivi universel : les pré-alertes à l'entrepôt de Miami (11/11/2026)
 
 **Aucune migration, aucune fonction ni règle nouvelle dans la base**, aucun service externe. Autorisé par la décision du CEO du 11/11/2026 (Palier A uniquement) ; pas encore publié.

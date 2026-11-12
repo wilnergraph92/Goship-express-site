@@ -93,7 +93,8 @@ as $$
       'payments.view', 'payments.create', 'payments.cancel',
       'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
       'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
-      'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust']
+      'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
+      'tracking.view', 'tracking.manage']
     when 'gerant' then array[
       'clients.view', 'clients.create', 'clients.edit',
       'shipments.view', 'shipments.create', 'shipments.edit',
@@ -102,12 +103,14 @@ as $$
       'payments.view', 'payments.create', 'payments.cancel',
       'reports.view', 'reports.create',
       'users.view',
-      'birthdays.view', 'programs.view']
+      'birthdays.view', 'programs.view',
+      'tracking.view']
     when 'employe' then array[
       'clients.view', 'clients.create',
       'shipments.view', 'shipments.create', 'shipments.edit',
       'shipments.scan', 'shipments.change_status', 'shipments.view_history',
-      'invoices.view', 'payments.view']
+      'invoices.view', 'payments.view',
+      'tracking.view']
     when 'client' then array[
       'clients.view:own', 'clients.edit:own',
       'shipments.view:own', 'shipments.view_history:own',

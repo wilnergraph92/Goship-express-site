@@ -157,8 +157,10 @@ def instantane(db, sauf=None):
 
 def main():
     db = installer()
-    print('0. La chaîne officielle (%d migrations) s\'installe ; le Palier A n\'en ajoute aucune' % len(FICHIERS))
-    verifier('aucun fichier SQL nouveau dans outils/migrations.txt', FICHIERS[-1], 'supabase-suivi-courriels.sql')
+    print('0. La chaîne officielle (%d migrations) s\'installe ; le Palier A n\'en demande aucune' % len(FICHIERS))
+    # Le Palier A ne lit que des colonnes d'avant le suivi externe (Phase 1, supabase-suivi-externe.sql) :
+    # il marche sur une base qui a la Phase 1 comme sur une base qui ne l'a pas encore
+    verifier('le Palier A ne lit aucune colonne de la Phase 1', 'suivi_externe' in CHAMPS, False)
 
     # Les données : des colis existants, puis les pré-alertes que l'application enverrait
     base = {'description': 'Chaussures', 'poids_lb': 4, 'service': 'aerien', 'pays_destination': 'HT',

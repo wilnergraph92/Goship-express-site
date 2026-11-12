@@ -36,3 +36,4 @@ supabase-courriel-reseaux.sql
 supabase-identite.sql
 supabase-accuses.sql
 supabase-suivi-courriels.sql
+supabase-suivi-externe.sql
