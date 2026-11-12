@@ -22,7 +22,9 @@ rôle de l'essai sur de vrais numéros (étape A du dossier de conception).
      quota épuisé arrêtent le fournisseur, sans bascule ;
   I. le choix manuel du transporteur, et le changement qui coûte un numéro ;
   J. le suivi GoShip, les notifications et l'application mobile ne bougent pas ;
-     tables et fonctions fermées aux clients et aux visiteurs.
+     tables et fonctions fermées aux clients et aux visiteurs ;
+  L. deux vraies réponses de 17TRACK (étape A, anonymisées : donnees/17track-reel.json) se rangent
+     comme dans l'essai réel.
 
     python3 outils/essais-services/essai-moteur-suivi.py
 """
@@ -582,6 +584,30 @@ def main():
                     "'suivi_externe_consommes','suivi_externe_arreter','suivi_externe_reessayer','traiter_suivis_externes',"
                     "'demander_suivi_externe','regler_fournisseur_suivi','liste_suivis_externes','transporteurs_suivi',"
                     "'etat_fournisseurs_suivi');"), '0')
+
+    print('\nL. De vraies réponses de 17TRACK (étape A du 12/11/2026, anonymisées)')
+    reel = json.load(open(os.path.join(ICI, 'donnees', '17track-reel.json'), encoding='utf-8'))
+    verifier('la donnée d\'essai ne garde ni adresse du destinataire ni référence client',
+             [k for a in reel['lecture']['data']['accepted'] for k in ('shipping_info', 'misc_info') if k in a['track_info']],
+             [])
+    verifier('le refus réel « transporteur non détecté » → CARRIER_UNKNOWN (choix manuel)',
+             un(db, "select public.suivi17_refus(%d);" % reel['inscription']['data']['rejected'][0]['error']['code']),
+             'CARRIER_UNKNOWN')
+    attendus = {'1Z999AA10123456784': ('REEL-UPS-0001', 13), 'GFUS01000000000001': ('GFUS01000000000001', 17)}
+    for item in reel['lecture']['data']['accepted']:
+        numero, nb = attendus[item['number']]
+        # Une seule exécution chacune : un() lance sa requête deux fois
+        sid = db.sql("insert into suivis_externes (numero, fournisseur, etat, etape) values (%s, '17track', 'en_attente', "
+                     "'lecture') returning id;" % q(numero)).splitlines()[0].strip()
+        code = db.sql("select coalesce(public.suivi17_ranger('%s', %s::jsonb), 'aucun');"
+                      % (sid, q(json.dumps(item)))).splitlines()[-1].strip()
+        verifier('%s : %d événements réels rangés, statut et lieu du transporteur' % (numero, nb),
+                 [code, un(db, "select count(*) from suivis_externes_evenements where suivi_id = '%s';" % sid),
+                  ligne(db, numero, "statut || '|' || transporteur || '|' || (dernier_lieu ilike '%%medley%%')")],
+                 ['aucun', str(nb), 'DELIVERED|%s|true' % ('ups' if numero.startswith('REEL') else 'gofo')])
+        verifier('%s : chaque statut d\'événement reconnu, aucun inventé' % numero,
+                 un(db, "select count(*) filter (where statut is null) || '/' || count(*) from suivis_externes_evenements "
+                        "where suivi_id = '%s';" % sid), '0/%d' % nb)
 
     ok = sum(S.RESULTATS)
     print('\n%d vérifications, %d réussies.' % (len(S.RESULTATS), ok))

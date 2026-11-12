@@ -1,0 +1,1106 @@
+{
+ "source": "Réponses réelles de 17TRACK (API v2.4), étape A du 12/11/2026, anonymisées : numéros remplacés, shipping_info, misc_info et champs du destinataire retirés.",
+ "inscription": {
+  "code": 0,
+  "data": {
+   "accepted": [
+    {
+     "number": "1Z999AA10123456784",
+     "carrier": 100002,
+     "origin": 2
+    },
+    {
+     "number": "GFUS01000000000001",
+     "carrier": 100996,
+     "origin": 3
+    }
+   ],
+   "rejected": [
+    {
+     "carrier": 0,
+     "number": "SWF0000000000001",
+     "error": {
+      "code": -18019903,
+      "message": "Carrier cannot be detected."
+     }
+    }
+   ]
+  }
+ },
+ "lecture": {
+  "code": 0,
+  "data": {
+   "accepted": [
+    {
+     "number": "1Z999AA10123456784",
+     "carrier": 100002,
+     "track_info": {
+      "latest_status": {
+       "status": "Delivered",
+       "sub_status": "Delivered_Other",
+       "sub_status_descr": null
+      },
+      "latest_event": {
+       "time_iso": "2026-10-26T10:24:06-04:00",
+       "time_utc": "2026-10-26T14:24:06Z",
+       "time_raw": {
+        "date": "2026-10-26",
+        "time": "10:24:06",
+        "timezone": "-04:00"
+       },
+       "description": "Delivered, DELIVERED",
+       "location": "MEDLEY, FL, US",
+       "stage": "Delivered",
+       "sub_status": "Delivered_Other",
+       "address": {
+        "country": null,
+        "state": null,
+        "city": null,
+        "street": null,
+        "postal_code": null,
+        "coordinates": {
+         "longitude": null,
+         "latitude": null
+        }
+       }
+      },
+      "time_metrics": {
+       "days_after_order": 5,
+       "days_of_transit": 5,
+       "days_of_transit_done": 5,
+       "days_after_last_update": 0,
+       "estimated_delivery_date": {
+        "source": null,
+        "from": null,
+        "to": null
+       }
+      },
+      "milestone": [
+       {
+        "key_stage": "InfoReceived",
+        "time_iso": "2026-10-21T12:42:29-04:00",
+        "time_utc": "2026-10-21T16:42:29Z",
+        "time_raw": {
+         "date": "2026-10-21",
+         "time": "12:42:29",
+         "timezone": "-04:00"
+        }
+       },
+       {
+        "key_stage": "PickedUp",
+        "time_iso": "2026-10-21T14:21:03-04:00",
+        "time_utc": "2026-10-21T18:21:03Z",
+        "time_raw": {
+         "date": "2026-10-21",
+         "time": "14:21:03",
+         "timezone": "-04:00"
+        }
+       },
+       {
+        "key_stage": "Departure",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "Arrival",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "AvailableForPickup",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "OutForDelivery",
+        "time_iso": "2026-10-26T09:30:34-04:00",
+        "time_utc": "2026-10-26T13:30:34Z",
+        "time_raw": {
+         "date": "2026-10-26",
+         "time": "09:30:34",
+         "timezone": "-04:00"
+        }
+       },
+       {
+        "key_stage": "Delivered",
+        "time_iso": "2026-10-26T10:24:06-04:00",
+        "time_utc": "2026-10-26T14:24:06Z",
+        "time_raw": {
+         "date": "2026-10-26",
+         "time": "10:24:06",
+         "timezone": "-04:00"
+        }
+       },
+       {
+        "key_stage": "Returning",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "Returned",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       }
+      ],
+      "tracking": {
+       "providers_hash": -117866861,
+       "providers": [
+        {
+         "provider": {
+          "key": 100002,
+          "name": "UPS",
+          "alias": "UPS",
+          "tel": "+1 (800) 742-5877",
+          "homepage": "https://www.ups.com/",
+          "country": "US"
+         },
+         "provider_lang": null,
+         "service_type": "UPS Ground",
+         "latest_sync_status": "Success",
+         "latest_sync_time": "2026-11-12T07:27:21Z",
+         "events_hash": 1777074436,
+         "provider_tips": null,
+         "events": [
+          {
+           "time_iso": "2026-10-26T10:24:06-04:00",
+           "time_utc": "2026-10-26T14:24:06Z",
+           "time_raw": {
+            "date": "2026-10-26",
+            "time": "10:24:06",
+            "timezone": "-04:00"
+           },
+           "description": "Delivered, DELIVERED",
+           "location": "MEDLEY, FL, US",
+           "stage": "Delivered",
+           "sub_status": "Delivered_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-26T09:30:34-04:00",
+           "time_utc": "2026-10-26T13:30:34Z",
+           "time_raw": {
+            "date": "2026-10-26",
+            "time": "09:30:34",
+            "timezone": "-04:00"
+           },
+           "description": "Out for Delivery, Out For Delivery Today",
+           "location": "Miami, FL, United States",
+           "stage": "OutForDelivery",
+           "sub_status": "OutForDelivery_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-26T07:38:26-04:00",
+           "time_utc": "2026-10-26T11:38:26Z",
+           "time_raw": {
+            "date": "2026-10-26",
+            "time": "07:38:26",
+            "timezone": "-04:00"
+           },
+           "description": "On the Way, Loaded on Delivery Vehicle",
+           "location": "Miami, FL, United States",
+           "stage": null,
+           "sub_status": "DeliveryFailure_NoBody",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-26T03:40:29-04:00",
+           "time_utc": "2026-10-26T07:40:29Z",
+           "time_raw": {
+            "date": "2026-10-26",
+            "time": "03:40:29",
+            "timezone": "-04:00"
+           },
+           "description": "Processing at UPS Facility",
+           "location": "Miami, FL, United States",
+           "stage": null,
+           "sub_status": "DeliveryFailure_NoBody",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-24T09:22:03-04:00",
+           "time_utc": "2026-10-24T13:22:03Z",
+           "time_raw": {
+            "date": "2026-10-24",
+            "time": "09:22:03",
+            "timezone": "-04:00"
+           },
+           "description": "The receiving business was closed and delivery has been rescheduled for the next business day.",
+           "location": "Miami, FL, United States",
+           "stage": null,
+           "sub_status": "DeliveryFailure_NoBody",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-24T07:04:18-04:00",
+           "time_utc": "2026-10-24T11:04:18Z",
+           "time_raw": {
+            "date": "2026-10-24",
+            "time": "07:04:18",
+            "timezone": "-04:00"
+           },
+           "description": "Processing at UPS Facility",
+           "location": "Miami, FL, United States",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-24T03:37:00-04:00",
+           "time_utc": "2026-10-24T07:37:00Z",
+           "time_raw": {
+            "date": "2026-10-24",
+            "time": "03:37:00",
+            "timezone": "-04:00"
+           },
+           "description": "Arrived at Facility",
+           "location": "Miami, FL, United States",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-23T15:15:00-04:00",
+           "time_utc": "2026-10-23T19:15:00Z",
+           "time_raw": {
+            "date": "2026-10-23",
+            "time": "15:15:00",
+            "timezone": "-04:00"
+           },
+           "description": "Departed from Facility",
+           "location": "Jacksonville, FL, United States",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-23T09:43:00-04:00",
+           "time_utc": "2026-10-23T13:43:00Z",
+           "time_raw": {
+            "date": "2026-10-23",
+            "time": "09:43:00",
+            "timezone": "-04:00"
+           },
+           "description": "Arrived at Facility",
+           "location": "Jacksonville, FL, United States",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-21T23:57:00-04:00",
+           "time_utc": "2026-10-22T03:57:00Z",
+           "time_raw": {
+            "date": "2026-10-21",
+            "time": "23:57:00",
+            "timezone": "-04:00"
+           },
+           "description": "Departed from Facility",
+           "location": "Brooklyn, NY, United States",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-21T20:23:26-04:00",
+           "time_utc": "2026-10-22T00:23:26Z",
+           "time_raw": {
+            "date": "2026-10-21",
+            "time": "20:23:26",
+            "timezone": "-04:00"
+           },
+           "description": "Arrived at Facility",
+           "location": "Brooklyn, NY, United States",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-21T14:21:03-04:00",
+           "time_utc": "2026-10-21T18:21:03Z",
+           "time_raw": {
+            "date": "2026-10-21",
+            "time": "14:21:03",
+            "timezone": "-04:00"
+           },
+           "description": "We have your Package, RFID Confirmed Pickup",
+           "location": "Brooklyn, NY, United States",
+           "stage": "PickedUp",
+           "sub_status": "InTransit_PickedUp",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-10-21T12:42:29-04:00",
+           "time_utc": "2026-10-21T16:42:29Z",
+           "time_raw": {
+            "date": "2026-10-21",
+            "time": "12:42:29",
+            "timezone": "-04:00"
+           },
+           "description": "Label Created, Shipper created a label, UPS has not received the package yet.",
+           "location": "United States",
+           "stage": "InfoReceived",
+           "sub_status": "InfoReceived",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "lang": null,
+     "destination_postal_code": null,
+     "origin_country": null,
+     "origin_city": null,
+     "origin_state": null,
+     "origin_postal_code": null,
+     "destination_country": null,
+     "destination_city": null,
+     "destination_state": null,
+     "service_type": null,
+     "ship_date": null,
+     "special_tracking_info": null,
+     "labels": null
+    },
+    {
+     "number": "GFUS01000000000001",
+     "carrier": 100996,
+     "track_info": {
+      "latest_status": {
+       "status": "Delivered",
+       "sub_status": "Delivered_Other",
+       "sub_status_descr": null
+      },
+      "latest_event": {
+       "time_iso": "2026-11-09T13:16:47-05:00",
+       "time_utc": "2026-11-09T18:16:47Z",
+       "time_raw": {
+        "date": "2026-11-09",
+        "time": "13:16:47",
+        "timezone": "-05:00"
+       },
+       "description": "Delivered, Door/Yard. For Delivery Issues & Tracking Support, Contact GOFO at +1 949 688-6032 or cs@mail.gofo.com",
+       "location": "MEDLEY, FL",
+       "stage": "Delivered",
+       "sub_status": "Delivered_Other",
+       "address": {
+        "country": null,
+        "state": "FL",
+        "city": "MEDLEY",
+        "street": null,
+        "postal_code": null,
+        "coordinates": {
+         "longitude": null,
+         "latitude": null
+        }
+       }
+      },
+      "time_metrics": {
+       "days_after_order": 7,
+       "days_of_transit": 7,
+       "days_of_transit_done": 7,
+       "days_after_last_update": 0,
+       "estimated_delivery_date": {
+        "source": null,
+        "from": null,
+        "to": null
+       }
+      },
+      "milestone": [
+       {
+        "key_stage": "InfoReceived",
+        "time_iso": "2026-11-01T18:13:18-08:00",
+        "time_utc": "2026-11-02T02:13:18Z",
+        "time_raw": {
+         "date": "2026-11-01",
+         "time": "18:13:18",
+         "timezone": "-08:00"
+        }
+       },
+       {
+        "key_stage": "PickedUp",
+        "time_iso": "2026-11-02T22:06:42-08:00",
+        "time_utc": "2026-11-03T06:06:42Z",
+        "time_raw": {
+         "date": "2026-11-02",
+         "time": "22:06:42",
+         "timezone": "-08:00"
+        }
+       },
+       {
+        "key_stage": "Departure",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "Arrival",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "AvailableForPickup",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "OutForDelivery",
+        "time_iso": "2026-11-06T07:54:10-05:00",
+        "time_utc": "2026-11-06T12:54:10Z",
+        "time_raw": {
+         "date": "2026-11-06",
+         "time": "07:54:10",
+         "timezone": "-05:00"
+        }
+       },
+       {
+        "key_stage": "Delivered",
+        "time_iso": "2026-11-09T13:16:47-05:00",
+        "time_utc": "2026-11-09T18:16:47Z",
+        "time_raw": {
+         "date": "2026-11-09",
+         "time": "13:16:47",
+         "timezone": "-05:00"
+        }
+       },
+       {
+        "key_stage": "Returning",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       },
+       {
+        "key_stage": "Returned",
+        "time_iso": null,
+        "time_utc": null,
+        "time_raw": {
+         "date": null,
+         "time": null,
+         "timezone": null
+        }
+       }
+      ],
+      "tracking": {
+       "providers_hash": 1855497543,
+       "providers": [
+        {
+         "provider": {
+          "key": 100996,
+          "name": "GOFO",
+          "alias": "GOFO",
+          "tel": "+1 (949) 688-6032",
+          "homepage": "https://www.gofo.com/",
+          "country": "US"
+         },
+         "provider_lang": null,
+         "service_type": null,
+         "latest_sync_status": "Success",
+         "latest_sync_time": "2026-11-12T07:27:20Z",
+         "events_hash": -1307195494,
+         "provider_tips": null,
+         "events": [
+          {
+           "time_iso": "2026-11-09T13:16:47-05:00",
+           "time_utc": "2026-11-09T18:16:47Z",
+           "time_raw": {
+            "date": "2026-11-09",
+            "time": "13:16:47",
+            "timezone": "-05:00"
+           },
+           "description": "Delivered, Door/Yard. For Delivery Issues & Tracking Support, Contact GOFO at +1 949 688-6032 or cs@mail.gofo.com",
+           "location": "MEDLEY, FL",
+           "stage": "Delivered",
+           "sub_status": "Delivered_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "MEDLEY",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-08T08:48:20-05:00",
+           "time_utc": "2026-11-08T13:48:20Z",
+           "time_raw": {
+            "date": "2026-11-08",
+            "time": "08:48:20",
+            "timezone": "-05:00"
+           },
+           "description": "Out for Delivery",
+           "location": "Miami, FL",
+           "stage": "OutForDelivery",
+           "sub_status": "OutForDelivery_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Miami",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-06T07:44:26-08:00",
+           "time_utc": "2026-11-06T15:44:26Z",
+           "time_raw": {
+            "date": "2026-11-06",
+            "time": "07:44:26",
+            "timezone": "-08:00"
+           },
+           "description": "Arrived at GOFO Delivery Station",
+           "location": "Miami, FL",
+           "stage": null,
+           "sub_status": "DeliveryFailure_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Miami",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-06T10:31:03-05:00",
+           "time_utc": "2026-11-06T15:31:03Z",
+           "time_raw": {
+            "date": "2026-11-06",
+            "time": "10:31:03",
+            "timezone": "-05:00"
+           },
+           "description": "Delivery Exception, Refused by the Recipient. For Delivery Issues & Tracking Support, Contact GOFO at +1 949 688-6032 or cs@mail.gofo.com",
+           "location": "MEDLEY, FL",
+           "stage": null,
+           "sub_status": "DeliveryFailure_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "MEDLEY",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-06T07:54:10-05:00",
+           "time_utc": "2026-11-06T12:54:10Z",
+           "time_raw": {
+            "date": "2026-11-06",
+            "time": "07:54:10",
+            "timezone": "-05:00"
+           },
+           "description": "Out for Delivery",
+           "location": "Miami, FL",
+           "stage": "OutForDelivery",
+           "sub_status": "OutForDelivery_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Miami",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-06T02:35:24-05:00",
+           "time_utc": "2026-11-06T07:35:24Z",
+           "time_raw": {
+            "date": "2026-11-06",
+            "time": "02:35:24",
+            "timezone": "-05:00"
+           },
+           "description": "Loaded on Vehicle",
+           "location": "Miami, FL",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Miami",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-06T00:19:51-05:00",
+           "time_utc": "2026-11-06T05:19:51Z",
+           "time_raw": {
+            "date": "2026-11-06",
+            "time": "00:19:51",
+            "timezone": "-05:00"
+           },
+           "description": "Arrived at GOFO Regional Hub",
+           "location": "Miami, FL",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Miami",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-05T13:14:49-05:00",
+           "time_utc": "2026-11-05T18:14:49Z",
+           "time_raw": {
+            "date": "2026-11-05",
+            "time": "13:14:49",
+            "timezone": "-05:00"
+           },
+           "description": "In Transit to Next Facility",
+           "location": "Miami, FL",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Miami",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-05T08:25:20-05:00",
+           "time_utc": "2026-11-05T13:25:20Z",
+           "time_raw": {
+            "date": "2026-11-05",
+            "time": "08:25:20",
+            "timezone": "-05:00"
+           },
+           "description": "In Transit to Next Facility",
+           "location": "Orlando, FL",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "FL",
+            "city": "Orlando",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-03T10:25:00-08:00",
+           "time_utc": "2026-11-03T18:25:00Z",
+           "time_raw": {
+            "date": "2026-11-03",
+            "time": "10:25:00",
+            "timezone": "-08:00"
+           },
+           "description": "Departed GOFO Regional Hub",
+           "location": "Chino, CA",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Chino",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-03T09:18:16-08:00",
+           "time_utc": "2026-11-03T17:18:16Z",
+           "time_raw": {
+            "date": "2026-11-03",
+            "time": "09:18:16",
+            "timezone": "-08:00"
+           },
+           "description": "Loaded on Vehicle",
+           "location": "Chino, CA",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Chino",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-03T02:36:07-08:00",
+           "time_utc": "2026-11-03T10:36:07Z",
+           "time_raw": {
+            "date": "2026-11-03",
+            "time": "02:36:07",
+            "timezone": "-08:00"
+           },
+           "description": "In Transit to Next Facility",
+           "location": "Chino, CA",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Chino",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-03T01:24:21-08:00",
+           "time_utc": "2026-11-03T09:24:21Z",
+           "time_raw": {
+            "date": "2026-11-03",
+            "time": "01:24:21",
+            "timezone": "-08:00"
+           },
+           "description": "Departed GOFO Regional Hub",
+           "location": "Vernon, CA",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Vernon",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-03T01:24:10-08:00",
+           "time_utc": "2026-11-03T09:24:10Z",
+           "time_raw": {
+            "date": "2026-11-03",
+            "time": "01:24:10",
+            "timezone": "-08:00"
+           },
+           "description": "Loaded on Vehicle",
+           "location": "Vernon, CA",
+           "stage": null,
+           "sub_status": "InTransit_Other",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Vernon",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-02T22:06:42-08:00",
+           "time_utc": "2026-11-03T06:06:42Z",
+           "time_raw": {
+            "date": "2026-11-02",
+            "time": "22:06:42",
+            "timezone": "-08:00"
+           },
+           "description": "Arrived at GOFO Regional Origin Hub",
+           "location": "Vernon, CA",
+           "stage": "PickedUp",
+           "sub_status": "InTransit_PickedUp",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Vernon",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-02T01:06:24-08:00",
+           "time_utc": "2026-11-02T09:06:24Z",
+           "time_raw": {
+            "date": "2026-11-02",
+            "time": "01:06:24",
+            "timezone": "-08:00"
+           },
+           "description": "Pickup Exception, GOFO has not Received the Package from the Warehouse yet. For Delivery Issues & Tracking Support, Contact GOFO at +1 949 688-6032 or cs@mail.gofo.com",
+           "location": "Vernon, CA",
+           "stage": null,
+           "sub_status": "InfoReceived",
+           "address": {
+            "country": null,
+            "state": "CA",
+            "city": "Vernon",
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          },
+          {
+           "time_iso": "2026-11-01T18:13:18-08:00",
+           "time_utc": "2026-11-02T02:13:18Z",
+           "time_raw": {
+            "date": "2026-11-01",
+            "time": "18:13:18",
+            "timezone": "-08:00"
+           },
+           "description": "Shipping Label Created",
+           "location": null,
+           "stage": "InfoReceived",
+           "sub_status": "InfoReceived",
+           "address": {
+            "country": null,
+            "state": null,
+            "city": null,
+            "street": null,
+            "postal_code": null,
+            "coordinates": {
+             "longitude": null,
+             "latitude": null
+            }
+           }
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "lang": null,
+     "destination_postal_code": null,
+     "origin_country": null,
+     "origin_city": null,
+     "origin_state": null,
+     "origin_postal_code": null,
+     "destination_country": null,
+     "destination_city": null,
+     "destination_state": null,
+     "service_type": null,
+     "ship_date": null,
+     "special_tracking_info": null,
+     "labels": null
+    }
+   ],
+   "rejected": []
+  }
+ }
+}

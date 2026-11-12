@@ -17,7 +17,7 @@ base **avant** de publier le site.
 - **Confidentialité** : la requête ne porte que le numéro et le code du transporteur ; l'adresse du destinataire, ses coordonnées et les références client que 17TRACK renvoie ne sont jamais lues.
 - Aucun lien avec le statut ou l'historique des colis, ni avec les notifications ; aucune page modifiée.
 
-Essai : `essai-moteur-suivi.py` (83). `essai-suivi-externe.py` éprouve désormais la 30e migration à sa place dans la chaîne. `controle-securite.sql` (21 colonnes, migration 31), `sonder.sh`, `essais.yml`, README, CLAUDE.md et `docs/production/database.md` connaissent le 31e fichier.
+Essais : `essai-moteur-suivi.py` (89, dont deux vraies réponses de 17TRACK anonymisées, `donnees/17track-reel.json`). Étape A (12/11/2026) : le vrai moteur sur une base jetable contre le vrai 17TRACK, 18 numéros de l'équipe de Miami — 16 lus (153 événements), 1 transporteur non détecté, 1 USPS exclu ; 16 numéros consommés sur 200. `essai-suivi-externe.py` éprouve désormais la 30e migration à sa place dans la chaîne. `controle-securite.sql` (21 colonnes, migration 31), `sonder.sh`, `essais.yml`, README, CLAUDE.md et `docs/production/database.md` connaissent le 31e fichier.
 
 ## Phase 1 du suivi universel : la fondation de données du suivi externe (12/11/2026)
 
