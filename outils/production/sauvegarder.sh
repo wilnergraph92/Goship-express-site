@@ -90,20 +90,68 @@ if ! "$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c 'select 1;' > /de
 fi
 echo "Base jointe"
 
-# 1. Le schéma public, complet. Les déclencheurs et règles de sécurité sont recréés
-# après les données au moment de la restauration : aucune règle ne se déclenche en
-# rechargeant l'historique.
-"$PG_DUMP" --format=custom --no-owner --schema=public \
-  --file "$travail/public.dump" "$SUPABASE_DB_URL"
+# Ce que le manifeste promet de retrouver après une restauration : le nombre de lignes
+# de chaque table, la valeur de chaque séquence et les comptes. Lu par lire_etat dans les
+# variables du même nom, et résumé dans $etat pour comparer deux lectures.
+lire() { "$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "$1"; }
+lire_etat() {
+  lignes="$(compter_lignes "$SUPABASE_DB_URL")"
+  comptes="$(lire 'select count(*) from auth.users;')"
+  # La valeur de chaque séquence du schéma public (numéros de colis, de factures, codes
+  # clients) : une restauration qui les remettrait à zéro redonnerait des numéros déjà pris
+  sequences="$(lire "select coalesce(json_object_agg(sequencename, last_value order by sequencename), '{}') from pg_sequences where schemaname = 'public';")"
+  # Ce qu'il faut pour qu'un compte restauré puisse se reconnecter : ses identités et
+  # l'empreinte de son mot de passe. None (null dans le manifeste) quand la table ou la
+  # colonne n'existe pas dans la base sauvegardée.
+  identites=None
+  [ "$(lire "select to_regclass('auth.identities') is not null;")" = t ] && identites="$(lire 'select count(*) from auth.identities;')"
+  avec_mot_de_passe=None
+  [ "$(lire "select exists (select 1 from information_schema.columns where table_schema = 'auth' and table_name = 'users' and column_name = 'encrypted_password');")" = t ] \
+    && avec_mot_de_passe="$(lire "select count(*) from auth.users where coalesce(encrypted_password, '') <> '';")"
+  confirmes="$(lire 'select count(*) from auth.users where email_confirmed_at is not null;')"
+  etat="$lignes|$comptes|$sequences|$identites|$avec_mot_de_passe|$confirmes"
+}
 
-# 2. Les comptes : données ET définition des deux tables. Une restauration dans un
-# projet Supabase neuf n'en lit que les données (le schéma auth appartient à
-# Supabase, qui le recrée) ; la définition sert à la restauration d'épreuve sur un
-# PostgreSQL ordinaire (restaurer.sh, RESTAURATION_ESSAI=1), où les colonnes du
-# vrai auth.users doivent exister.
-"$PG_DUMP" --format=custom --no-owner --no-privileges \
-  --table=auth.users --table=auth.identities \
-  --file "$travail/comptes.dump" "$SUPABASE_DB_URL"
+# La base vit pendant la copie : le moteur du suivi externe écrit son journal à toute
+# heure, un client peut s'inscrire. Le 13/11/2026, une ligne de journal écrite entre la
+# copie et le comptage a fait échouer l'épreuve de restauration (27 lignes promises,
+# 26 copiées). L'état est donc lu AVANT et APRÈS les deux copies, et on ne garde que des
+# copies entre lesquelles rien n'a bougé : le manifeste dit alors exactement ce qu'elles
+# contiennent. Sinon on recommence, cinq fois au plus, puis on échoue (jamais de manifeste
+# approximatif).
+essais_copie="${SAUVEGARDE_ESSAIS:-5}"
+pause_copie="${SAUVEGARDE_PAUSE:-20}"
+essai=1
+while :; do
+  lire_etat
+  avant="$etat"
+
+  # 1. Le schéma public, complet. Les déclencheurs et règles de sécurité sont recréés
+  # après les données au moment de la restauration : aucune règle ne se déclenche en
+  # rechargeant l'historique.
+  "$PG_DUMP" --format=custom --no-owner --schema=public \
+    --file "$travail/public.dump" "$SUPABASE_DB_URL"
+
+  # 2. Les comptes : données ET définition des deux tables. Une restauration dans un
+  # projet Supabase neuf n'en lit que les données (le schéma auth appartient à
+  # Supabase, qui le recrée) ; la définition sert à la restauration d'épreuve sur un
+  # PostgreSQL ordinaire (restaurer.sh, RESTAURATION_ESSAI=1), où les colonnes du
+  # vrai auth.users doivent exister.
+  "$PG_DUMP" --format=custom --no-owner --no-privileges \
+    --table=auth.users --table=auth.identities \
+    --file "$travail/comptes.dump" "$SUPABASE_DB_URL"
+
+  lire_etat
+  [ "$etat" = "$avant" ] && break
+  if [ "$essai" -ge "$essais_copie" ]; then
+    echo "La base a changé pendant chacune des $essais_copie copies : sauvegarde abandonnée (relancer plus tard)" >&2
+    exit 1
+  fi
+  echo "La base a changé pendant la copie (essai $essai sur $essais_copie) : nouvelle copie dans $pause_copie s"
+  essai=$((essai + 1))
+  sleep "$pause_copie"
+done
+[ "$essai" -gt 1 ] && echo "Copie stable obtenue à l'essai $essai"
 
 # 3. Vérifier que les archives se relisent, et qu'elles contiennent bien les données
 for partie in public comptes; do
@@ -126,23 +174,9 @@ taille_min=20000   # un schéma public GoShip vide pèse déjà bien plus : en d
 compter() { grep -c " $1 public " "$travail/public.liste" || true; }
 echo "Copie relue : $(compter 'TABLE DATA') tables avec données, $(compter FUNCTION) fonctions, $(compter TRIGGER) déclencheurs, $(compter POLICY) règles RLS, $(compter 'SEQUENCE SET') séquences"
 
-# 4. Le manifeste : ce qu'il faudra retrouver après une restauration
-lignes="$(compter_lignes "$SUPABASE_DB_URL")"
-comptes="$("$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c 'select count(*) from auth.users;')"
+# 4. Le manifeste : ce qu'il faudra retrouver après une restauration (l'état lu juste
+# après les copies, identique à celui d'avant)
 version_serveur="$("$PSQL" "$SUPABASE_DB_URL" -X -A -t -c 'show server_version;')"
-lire() { "$PSQL" "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "$1"; }
-# La valeur de chaque séquence du schéma public (numéros de colis, de factures, codes
-# clients) : une restauration qui les remettrait à zéro redonnerait des numéros déjà pris
-sequences="$(lire "select coalesce(json_object_agg(sequencename, last_value order by sequencename), '{}') from pg_sequences where schemaname = 'public';")"
-# Ce qu'il faut pour qu'un compte restauré puisse se reconnecter : ses identités et
-# l'empreinte de son mot de passe. None (null dans le manifeste) quand la table ou la
-# colonne n'existe pas dans la base sauvegardée.
-identites=None
-[ "$(lire "select to_regclass('auth.identities') is not null;")" = t ] && identites="$(lire 'select count(*) from auth.identities;')"
-avec_mot_de_passe=None
-[ "$(lire "select exists (select 1 from information_schema.columns where table_schema = 'auth' and table_name = 'users' and column_name = 'encrypted_password');")" = t ] \
-  && avec_mot_de_passe="$(lire "select count(*) from auth.users where coalesce(encrypted_password, '') <> '';")"
-confirmes="$(lire 'select count(*) from auth.users where email_confirmed_at is not null;')"
 empreinte() { sha256sum "$1" | cut -d' ' -f1; }
 
 # 5. Chiffrer, puis effacer le clair

@@ -287,6 +287,44 @@ def main():
              (b'marie@exemple.com' in brut, b'GSE-' in brut, brut.startswith(b'age-encryption.org')), (False, False, True))
     verifier('aucun fichier en clair laissé derrière', [f for f in fichiers if f.endswith('.dump')], [])
 
+    # La base vit pendant la copie (le 13/11/2026, une ligne du journal du suivi externe
+    # écrite entre la copie et le comptage a fait échouer l'épreuve de restauration) : un
+    # faux pg_dump écrit une ligne juste après la copie du schéma public. La sauvegarde doit
+    # le voir, recommencer, et promettre dans son manifeste exactement ce que la copie contient.
+    psql_dans(db, S.BASE, 'create table public.essai_course (x int);')
+    faux = os.path.join(travail, 'faux-pg_dump.sh')
+    with open(faux, 'w') as f:
+        f.write('#!/bin/bash\nset -e\n"%s" "$@"\n'
+                'if [ ! -e "$COURSE_FAITE" ] || [ "$COURSE_TOUJOURS" = 1 ]; then\n'
+                '  case " $* " in *" --schema=public "*) touch "$COURSE_FAITE";\n'
+                '    "%s" "$COURSE_URL" -X -q -c "insert into public.essai_course values (1);" ;; esac\n'
+                'fi\n' % (os.path.join(BIN, 'pg_dump'), os.path.join(BIN, 'psql')))
+    os.chmod(faux, 0o755)
+    course = dict(env_pg(url), SUPABASE_DB_URL=url, SAUVEGARDE_DESTINATAIRE=publique, PG_DUMP=faux,
+                  COURSE_URL=url, COURSE_FAITE=os.path.join(travail, 'course-faite'), SAUVEGARDE_PAUSE='0')
+    r = subprocess.run(['bash', os.path.join(PRODUCTION, 'sauvegarder.sh'), os.path.join(travail, 'course')],
+                       env=course, capture_output=True, text=True)
+    verifier('une écriture pendant la copie : vue, la copie recommence et réussit',
+             (r.returncode, 'essai 1 sur 5' in r.stdout, "Copie stable obtenue à l'essai 2" in r.stdout), (0, True, True))
+    nom_c = sorted(os.listdir(os.path.join(travail, 'course')))[0].split('.')[0]
+    manif_c = json.loads(subprocess.run(['age', '-d', '-i', cle, os.path.join(travail, 'course', nom_c + '.manifeste.json.age')],
+                                        capture_output=True, text=True, check=True).stdout)
+    clair = os.path.join(travail, 'course.dump')
+    subprocess.run(['age', '-d', '-i', cle, '-o', clair, os.path.join(travail, 'course', nom_c + '.public.dump.age')], check=True)
+    donnees = subprocess.run([os.path.join(BIN, 'pg_restore'), '--data-only', '--table=essai_course', '-f', '-', clair],
+                             capture_output=True, text=True, check=True).stdout
+    copiees = donnees.split('COPY public.essai_course', 1)[1].split('\\.', 1)[0].strip().splitlines()[1:]
+    verifier('le manifeste promet exactement ce que la copie contient (1 ligne, 1 ligne)',
+             (manif_c['lignes_par_table'].get('essai_course'), len(copiees)), (1, 1))
+    r = subprocess.run(['bash', os.path.join(PRODUCTION, 'sauvegarder.sh'), os.path.join(travail, 'course-sans-fin')],
+                       env=dict(course, COURSE_TOUJOURS='1', SAUVEGARDE_ESSAIS='2'), capture_output=True, text=True)
+    verifier('une base qui change à chaque copie : échec franc, aucun fichier écrit',
+             (r.returncode, 'sauvegarde abandonnée' in r.stderr,
+              os.listdir(os.path.join(travail, 'course-sans-fin')) if os.path.isdir(os.path.join(travail, 'course-sans-fin')) else []),
+             (1, True, []))
+    os.remove(clair)
+    psql_dans(db, S.BASE, 'drop table public.essai_course;')
+
     avant = empreintes(db, S.BASE)
     resume_avant = jsonq(db, M.MARIE, 'select public.mon_resume();')
     psql_dans(db, 'postgres', 'drop database if exists %s with (force);' % RESTAUREE)
