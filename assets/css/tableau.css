@@ -1418,3 +1418,45 @@ html[data-apparence="sombre"] body.gs-admin-body{--ink:#e7edf9;--ink2:#c3d0ee;--
 /* Apparence sombre : les interrupteurs des programmes (la règle des champs sombres plus haut les repeint sinon) */
 [data-apparence="sombre"] .gs-admin-body .gs-prog__champ--case input[type="checkbox"]{background-color:#2a3a5f}
 [data-apparence="sombre"] .gs-admin-body .gs-prog__champ--case input[type="checkbox"]:checked{background-color:var(--accent)}
+
+/* ---- Le suivi des transporteurs (onglet « Suivi transporteurs », supervision.js) ---------
+   La santé du moteur en chiffres, les puces des raisons « à surveiller », deux tableaux.
+   Mêmes cartes que les programmes ; une valeur qui demande de l'attention est en orange. */
+.gs-sv{display:flex;flex-direction:column;gap:22px}
+.gs-sv[hidden]{display:none}
+.gs-sv__sante,.gs-sv__bloc{display:flex;flex-direction:column;gap:14px;padding:20px;border:1px solid #e3e8f2;border-radius:18px;background:#fff}
+.gs-sv h2{margin:0;font-family:'Archivo','Manrope',sans-serif;font-size:20px;font-weight:800;color:var(--ink)}
+.gs-sv__tete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.gs-sv__actions{display:flex;flex-wrap:wrap;gap:8px}
+.gs-sv__actions[hidden]{display:none}
+.gs-sv__chiffres{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin:0}
+.gs-sv__chiffre{margin:0;padding:14px 16px;border:1px solid #e3e8f2;border-radius:14px;background:#f7f9fd}
+.gs-sv__chiffre dt{margin:0 0 6px;font-size:13px;font-weight:700;color:#5b6782}
+.gs-sv__chiffre dd{display:flex;flex-direction:column;gap:2px;margin:0}
+.gs-sv__valeur{font-size:20px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.gs-sv__detail{font-size:13px;line-height:1.4;color:#5b6782}
+.gs-sv__chiffre.is-alerte{border-color:#f5c27a;background:#fff7eb}
+.gs-sv__chiffre.is-alerte .gs-sv__valeur{color:#b45309}
+.gs-sv__puces{display:flex;flex-wrap:wrap;gap:8px}
+.gs-sv__puce{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border:1px solid #cfd7e6;border-radius:999px;background:#fff;color:#2d3850;font:inherit;font-weight:700;cursor:pointer}
+.gs-sv__puce.is-actif{border-color:#1f5fe0;background:#1f5fe0;color:#fff}
+.gs-sv__puce:focus-visible{outline:3px solid #1f5fe0;outline-offset:2px}
+.gs-sv__puce-n{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 6px;border-radius:999px;background:rgba(31,95,224,.12);font-size:13px}
+.gs-sv__puce.is-actif .gs-sv__puce-n{background:rgba(255,255,255,.25)}
+.gs-sv__quota{display:inline-block;margin-top:6px}
+@media (max-width:640px){
+  .gs-sv__sante,.gs-sv__bloc{padding:16px}
+  .gs-sv__chiffres{grid-template-columns:1fr 1fr}
+  .gs-sv__actions .gs-bouton{flex:1 1 100%;justify-content:center}
+}
+
+/* Apparence sombre : le suivi des transporteurs */
+[data-apparence="sombre"] .gs-admin-body .gs-sv__sante,[data-apparence="sombre"] .gs-admin-body .gs-sv__bloc{border-color:#22304f;background:#0e1830}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__chiffre{border-color:#22304f;background:#0b1429}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__chiffre dt,[data-apparence="sombre"] .gs-admin-body .gs-sv__detail{color:#9aaacb}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__chiffre.is-alerte{border-color:#8a5a1c;background:#2a1e0e}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__chiffre.is-alerte .gs-sv__valeur{color:#f6b35c}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__puce{border-color:#2a3a5f;background:#0b1429;color:#dce5f7}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__puce.is-actif{border-color:#4d86f5;background:#1f5fe0;color:#fff}
+[data-apparence="sombre"] .gs-admin-body .gs-sv__puce-n{background:rgba(77,134,245,.22)}
+[data-apparence="sombre"] .gs-admin-body .gs-sv h2,[data-apparence="sombre"] .gs-admin-body .gs-sv__valeur{color:#eef3ff}

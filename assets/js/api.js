@@ -1100,6 +1100,40 @@
         });
       },
 
+      /* ---- La supervision du suivi externe (suivi universel, Phase 6) ----------
+         L'onglet « Suivi transporteurs » (supervision.js) et la fiche d'un suivi. Tout
+         vient de outils/supabase-supervision-suivi.sql : santé, cas à surveiller, liste,
+         page par page ; la page ne compte rien. tracking.view pour lire (administrateur,
+         gérant, employé), tracking.manage pour piloter et suivre un numéro à la main
+         (administrateur). Aucun statut de colis n'est touché. Une base sans ce fichier
+         répond « absent » : l'onglet le dit. */
+
+      // filtres : { recherche, etat, statut, transporteur, suivi } ; page : 1, 2…
+      supervisionSuivi: function (filtres, page) {
+        return appelBase('supervision_suivi', { p_filtres: filtres || {}, p_page: page || 1 });
+      },
+
+      // Un suivi : ses événements, le journal des appels faits pour lui seul, ses achats, son colis
+      ficheSuivi: function (id) {
+        return appelBase('fiche_suivi_externe', { p_suivi: id });
+      },
+
+      // Le suivi d'un numéro de vendeur (fiche d'un colis), ou null
+      suiviExterne: function (numero) {
+        return appelBase('suivi_externe', { p_numero: String(numero || '') });
+      },
+
+      // action : 'arreter', 'reprendre' ou 'plafond' (valeur : 1 à 100 000) ; motif obligatoire
+      piloterSuivi: function (code, action, motif, valeur) {
+        return appelBase('piloter_suivi_externe', { p_code: code, p_action: action, p_motif: motif || '',
+                                                    p_valeur: valeur == null || valeur === '' ? null : Number(valeur) });
+      },
+
+      // Suivre un numéro à la main (coûte une inscription du quota du fournisseur)
+      demanderSuivi: function (numero, transporteur) {
+        return appelBase('demander_suivi_externe', { p_numero: String(numero || ''), p_transporteur: transporteur || null });
+      },
+
       // Journal d'audit, du plus récent au plus ancien (équipe uniquement)
       journal: function (o) {
         o = o || {};
@@ -1880,6 +1914,167 @@
       termine: false, evenements: evenements
     };
     return a;
+  }
+
+  /* ---- La supervision du suivi externe, version démonstration (Phase 6) --------
+     La copie de supervision_suivi, fiche_suivi_externe et piloter_suivi_externe
+     (outils/supabase-supervision-suivi.sql). La démo n'a pas de moteur : chaque numéro
+     de pré-alerte qui peut être un suivi de transporteur (ni numéro de commande, ni colis
+     GoShip) a « son » suivi, dont les nouvelles viennent de SUIVIS_DEMO, comme pour
+     « Mes colis en route ». d.suiviFournisseurs : le fournisseur, en essai comme en
+     production avant sa vérification. Mêmes raisons, mêmes seuils, même tri, mêmes
+     refus qu'en ligne ; essai-supervision-suivi.js compare les formes des deux côtés. */
+  var SEUILS_SUIVI = { livre_jours: 3, silence_jours: 30 };
+  var RAISONS_SUIVI = ['LIVRE_NON_RECU', 'AUTRE_CLIENT', 'INCIDENT', 'NUMERO_REFUSE', 'SILENCE'];
+  var STATUTS_SUIVI = ['PENDING', 'INFO_RECEIVED', 'IN_TRANSIT', 'CUSTOMS', 'OUT_FOR_DELIVERY', 'AVAILABLE_FOR_PICKUP',
+                       'DELIVERED', 'FAILED_ATTEMPT', 'EXCEPTION', 'RETURNED', 'EXPIRED', 'NOT_FOUND'];
+
+  function fournisseursSuiviDemo(d) {
+    if (!d.suiviFournisseurs) {
+      d.suiviFournisseurs = [{ code: '17track', nom: '17TRACK', conformite: 'PENDING_VERIFICATION', actif: false,
+                               essai: true, plafond_mensuel: 30, plafond_essai: 30, marge_quota: 20, quota_restant: 184,
+                               quota_lu_le: maintenant(), arret_motif: null, transporteurs_exclus: ['usps'],
+                               suivre_prealertes: true, note: '', maj_le: maintenant() }];
+    }
+    return d.suiviFournisseurs;
+  }
+
+  function suivisDemo(d) {
+    var parNumero = {};
+    (d.prealertes || []).forEach(function (p) {
+      var n = suiviNormalise(p.suivi_transporteur);
+      if (!/^[A-Z0-9-]{5,50}$/.test(n) || /^GSE/.test(n) || /^[0-9]{3}-[0-9]{7}-[0-9]{7}$/.test(n)) return;
+      if (!parNumero[n] || new Date(p.cree_le) < new Date(parNumero[n].cree_le)) {
+        parNumero[n] = { numero: n, cree_le: p.cree_le, origine: 'prealerte' };
+      }
+    });
+    (d.suivisEquipe || []).forEach(function (s) { if (!parNumero[s.numero]) parNumero[s.numero] = s; });
+    return Object.keys(parNumero).map(function (n) {
+      // Les mêmes heures que « Mes colis en route » (achatDemo) : ce que voit l'équipe est
+      // ce que voit le client
+      var base = parNumero[n], x = SUIVIS_DEMO[n] || {}, t0 = Date.now();
+      var evenements = (x.evenements || []).map(function (e) {
+        return { survenu_le: new Date(t0 - e[0] * 36e5).toISOString(), statut: e[1],
+                 statut_original: e[2], description: e[2], lieu: e[3], pays: e[4] };
+      }).reverse();
+      var dernier = evenements[0] || null;
+      var livre = evenements.filter(function (e) { return e.statut === 'DELIVERED'; })[0];
+      var arrive = (d.colis || []).some(function (c) { return c.suivi_transporteur === n; });
+      return {
+        id: 'demo-suivi-' + n, numero: n, transporteur: x.transporteur || null, transporteur_nom: x.nom || null,
+        transporteur_source: x.transporteur ? 'fournisseur' : null, fournisseur: '17track',
+        etat: x.message ? 'arrete' : (dernier ? 'actif' : 'en_attente'),
+        etape: x.message || arrive ? 'fini' : (dernier ? 'lecture' : 'inscription'),
+        statut: dernier ? dernier.statut : null, statut_original: dernier ? dernier.statut_original : null,
+        sous_statut: null, code_resultat: x.message || null, derniere_erreur: null,
+        dernier_lieu: dernier ? (dernier.lieu || null) : null, dernier_evenement_le: dernier ? dernier.survenu_le : null,
+        livraison_estimee_le: null, livre_vu_le: livre ? livre.survenu_le : null,
+        origine: base.origine, fin_motif: arrive ? 'ARRIVE_MIAMI' : (x.message ? 'TERMINE' : null),
+        inscrit_le: dernier ? base.cree_le : null, derniere_synchro_le: dernier ? maintenant() : null,
+        prochaine_synchro_le: null, lectures: dernier ? 1 : 0, tentatives: 0, cree_le: base.cree_le,
+        evenements: evenements
+      };
+    }).sort(function (a, b) { return (new Date(b.cree_le) - new Date(a.cree_le)) || (a.numero < b.numero ? -1 : 1); });
+  }
+
+  function clientSuiviDemo(d, id, noms) {
+    if (!noms) return null;
+    var cl = d.comptes.filter(function (x) { return x.id === id; })[0];
+    return cl ? { id: cl.id, code: cl.code || null, nom: cl.nom_complet || '' } : null;
+  }
+
+  function santeSuiviDemo(d, suivis) {
+    var f = fournisseursSuiviDemo(d).filter(function (x) { return x.actif || x.essai; })[0] || null;
+    return {
+      en_service: !!f, fournisseur: f ? f.code : null, quota_restant: f ? f.quota_restant : null,
+      quota_lu_le: f ? f.quota_lu_le : null,
+      arrets: fournisseursSuiviDemo(d).filter(function (x) { return x.arret_motif && !(x.actif || x.essai); })
+        .map(function (x) { return { code: x.code, motif: x.arret_motif }; }),
+      en_cours: suivis.filter(function (s) { return !s.fin_motif && (s.etat === 'en_attente' || s.etat === 'actif'); }).length,
+      a_relire: suivis.filter(function (s) { return s.etape === 'lecture'; }).length,
+      en_retard: 0, erreurs_24h: 0, derniere_lecture_ok: null
+    };
+  }
+
+  function etatFournisseursDemo(d) {
+    return fournisseursSuiviDemo(d).map(function (f) {
+      return { code: f.code, nom: f.nom, conformite: f.conformite, actif: f.actif, essai: f.essai,
+               plafond_mensuel: f.plafond_mensuel, plafond_essai: f.plafond_essai, marge_quota: f.marge_quota,
+               consommes: 0, quota_restant: f.quota_restant, quota_lu_le: f.quota_lu_le, arret_motif: f.arret_motif,
+               transporteurs_exclus: f.transporteurs_exclus, suivre_prealertes: f.suivre_prealertes,
+               prealertes_ce_mois: 0, note: f.note, maj_le: f.maj_le };
+    });
+  }
+
+  function aSurveillerDemo(d, suivis, noms) {
+    var parNumero = {};
+    suivis.forEach(function (s) { parNumero[s.numero] = s; });
+    var cas = [], ilYa = function (jours) { return Date.now() - jours * 864e5; };
+    function suiviJson(s) {
+      return s ? { id: s.id, numero: s.numero, transporteur: s.transporteur, transporteur_nom: s.transporteur_nom,
+                   statut: s.statut, code_resultat: s.code_resultat, dernier_lieu: s.dernier_lieu,
+                   dernier_evenement_le: s.dernier_evenement_le } : null;
+    }
+    (d.prealertes || []).filter(function (p) { return p.statut === 'attente'; }).forEach(function (p) {
+      var n = suiviNormalise(p.suivi_transporteur), s = parNumero[n];
+      var achat = { id: p.id, magasin: p.magasin || '', description: p.description || '',
+                    numero_suivi: p.suivi_transporteur || '', cree_le: p.cree_le,
+                    client: clientSuiviDemo(d, p.client_id, noms) };
+      function ajouter(raison, depuis, colis) {
+        cas.push({ raison: raison, depuis: depuis, achat: achat, suivi: suiviJson(s), colis: colis || null,
+                   _rang: RAISONS_SUIVI.indexOf(raison), _annonce: p.cree_le, _id: p.id });
+      }
+      if (n) {
+        (d.colis || []).filter(function (c) { return c.suivi_transporteur === n && c.client_id !== p.client_id; })
+          .forEach(function (c) {
+            ajouter('AUTRE_CLIENT', c.cree_le, { id: c.id, numero: c.numero, statut: c.statut, cree_le: c.cree_le,
+                                                 client: clientSuiviDemo(d, c.client_id, noms) });
+          });
+      }
+      if (!s) return;
+      var depuisLivre = s.livre_vu_le || s.dernier_evenement_le;
+      var calme = s.dernier_evenement_le || s.inscrit_le || s.cree_le;
+      if (s.statut === 'DELIVERED') {
+        if (new Date(depuisLivre).getTime() < ilYa(SEUILS_SUIVI.livre_jours)) ajouter('LIVRE_NON_RECU', depuisLivre);
+      } else if (['EXCEPTION', 'FAILED_ATTEMPT', 'RETURNED'].indexOf(s.statut) >= 0) {
+        ajouter('INCIDENT', s.dernier_evenement_le);
+      } else if (s.code_resultat === 'INVALID_TRACKING') {
+        ajouter('NUMERO_REFUSE', s.cree_le);
+      } else if (new Date(calme).getTime() < ilYa(SEUILS_SUIVI.silence_jours)) {
+        ajouter('SILENCE', calme);
+      }
+    });
+    cas.sort(function (a, b) {
+      return (a._rang - b._rang) || (new Date(a.depuis) - new Date(b.depuis)) ||
+             (new Date(a._annonce) - new Date(b._annonce)) || (a._id < b._id ? -1 : 1);
+    });
+    var compteurs = { total: cas.length };
+    RAISONS_SUIVI.forEach(function (r) { compteurs[r] = cas.filter(function (c) { return c.raison === r; }).length; });
+    return { compteurs: compteurs, cas: cas.slice(0, 200).map(function (c) {
+      return { raison: c.raison, depuis: c.depuis, achat: c.achat, suivi: c.suivi, colis: c.colis };
+    }) };
+  }
+
+  function ficheSuiviDemo(d, s, noms) {
+    var colis = (d.colis || []).filter(function (c) { return c.suivi_transporteur === s.numero; })[0];
+    var champs = {};
+    Object.keys(s).forEach(function (k) { if (k !== 'evenements') champs[k] = s[k]; });
+    return {
+      suivi: champs,
+      evenements: s.evenements.slice(0, 200).map(function (e) {
+        return { survenu_le: e.survenu_le, statut: e.statut, statut_original: e.statut_original,
+                 description: e.description, lieu: e.lieu, pays: e.pays };
+      }),
+      journal: [],
+      achats: (d.prealertes || []).filter(function (p) { return suiviNormalise(p.suivi_transporteur) === s.numero; })
+        .sort(function (a, b) { return new Date(b.cree_le) - new Date(a.cree_le); })
+        .map(function (p) {
+          return { id: p.id, magasin: p.magasin || '', description: p.description || '', statut: p.statut,
+                   cree_le: p.cree_le, colis_id: p.colis_id || null, client: clientSuiviDemo(d, p.client_id, noms) };
+        }),
+      colis: colis ? { id: colis.id, numero: colis.numero, statut: colis.statut, cree_le: colis.cree_le } : null,
+      noms: noms
+    };
   }
 
   function ficheScanner(d, c) {
@@ -5122,6 +5317,122 @@
           return p.statut === 'attente' && p.suivi_transporteur === r;
         }).sort(function (a, b) { return new Date(a.cree_le) - new Date(b.cree_le); })
           .slice(0, 20).map(function (p) { return prealerteDemo(d, p); }));
+      },
+
+      // Les copies démo de supervision_suivi, fiche_suivi_externe, suivi_externe,
+      // piloter_suivi_externe et demander_suivi_externe : mêmes formes, mêmes refus
+      supervisionSuivi: function (filtres, numeroPage) {
+        var d = lireDonnees();
+        try { exiger(d, 'tracking.view'); } catch (e) { return echec(e.code); }
+        var moi = compteConnecte(d), noms = peutCompte(moi, 'clients.view');
+        var f = filtres || {}, parPage = 50, n = Math.max(Number(numeroPage) || 1, 1);
+        var suivis = suivisDemo(d);
+        var t = String(f.recherche || '').trim().toLowerCase().slice(0, 80);
+        var compact = t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        var liste = suivis.filter(function (s) {
+          if (['en_attente', 'actif', 'arrete', 'erreur'].indexOf(f.etat) >= 0 && s.etat !== f.etat) return false;
+          if (f.statut === 'AUCUN' ? s.statut !== null
+              : (STATUTS_SUIVI.indexOf(f.statut) >= 0 && s.statut !== f.statut)) return false;
+          if (/^[a-z0-9_-]{2,40}$/.test(f.transporteur || '') && s.transporteur !== f.transporteur) return false;
+          if ((f.suivi === 'en_cours' && s.fin_motif) || (f.suivi === 'termine' && !s.fin_motif)) return false;
+          if (!t) return true;
+          if (compact && s.numero.indexOf(compact) >= 0) return true;
+          return (d.prealertes || []).some(function (p) {
+            if (suiviNormalise(p.suivi_transporteur) !== s.numero) return false;
+            var cl = d.comptes.filter(function (x) { return x.id === p.client_id; })[0] || {};
+            return [p.magasin, p.description].concat(noms ? [cl.code, cl.nom_complet] : [])
+              .some(function (v) { return String(v || '').toLowerCase().indexOf(t) >= 0; });
+          });
+        });
+        var lignes = liste.slice((n - 1) * parPage, n * parPage).map(function (s) {
+          var achats = (d.prealertes || []).filter(function (p) { return suiviNormalise(p.suivi_transporteur) === s.numero; });
+          var colis = (d.colis || []).filter(function (c) { return c.suivi_transporteur === s.numero; })[0];
+          var codes = [];
+          achats.forEach(function (p) {
+            var cl = clientSuiviDemo(d, p.client_id, true);
+            if (cl && cl.code && codes.indexOf(cl.code) < 0) codes.push(cl.code);
+          });
+          return {
+            id: s.id, numero: s.numero, transporteur: s.transporteur, transporteur_nom: s.transporteur_nom,
+            fournisseur: s.fournisseur, etat: s.etat, etape: s.etape, statut: s.statut, code_resultat: s.code_resultat,
+            derniere_erreur: s.derniere_erreur, dernier_lieu: s.dernier_lieu, dernier_evenement_le: s.dernier_evenement_le,
+            origine: s.origine, fin_motif: s.fin_motif, inscrit_le: s.inscrit_le, cree_le: s.cree_le,
+            evenements: s.evenements.length, achats: achats.length, clients: noms ? codes.sort() : null,
+            colis: colis ? { id: colis.id, numero: colis.numero, statut: colis.statut } : null
+          };
+        });
+        return plusTard({
+          sante: santeSuiviDemo(d, suivis), fournisseurs: etatFournisseursDemo(d),
+          alertes: { regles: ['carrier_delivered', 'carrier_invalid', 'carrier_issue'].map(function (type) {
+                       return { type: type, actif: true, canaux: ['push'] };
+                     }), notifications: {}, erreurs_24h: 0 },
+          seuils: { livre_jours: SEUILS_SUIVI.livre_jours, silence_jours: SEUILS_SUIVI.silence_jours },
+          a_surveiller: aSurveillerDemo(d, suivis, noms), suivis: lignes, total: liste.length, page: n,
+          pages: Math.max(Math.ceil(liste.length / parPage), 1), noms: noms, peut_piloter: peutCompte(moi, 'tracking.manage')
+        });
+      },
+
+      ficheSuivi: function (id) {
+        var d = lireDonnees();
+        try { exiger(d, 'tracking.view'); } catch (e) { return echec(e.code); }
+        var s = suivisDemo(d).filter(function (x) { return x.id === id; })[0];
+        return plusTard(s ? ficheSuiviDemo(d, s, peutCompte(compteConnecte(d), 'clients.view')) : null);
+      },
+
+      suiviExterne: function (numero) {
+        var d = lireDonnees();
+        try { exiger(d, 'tracking.view'); } catch (e) { return echec(e.code); }
+        var n = suiviNormalise(numero);
+        var s = suivisDemo(d).filter(function (x) { return x.numero === n; })[0];
+        return plusTard(s || null);
+      },
+
+      piloterSuivi: function (code, action, motif, valeur) {
+        var d = lireDonnees(), moi;
+        try { moi = exiger(d, 'tracking.manage'); } catch (e) { return echec(e.code); }
+        motif = String(motif || '').trim();
+        if (motif.length < 5) return rejeter(Erreur('REASON_REQUIRED', 'Indiquez un motif (5 caractères au moins).'));
+        var f = fournisseursSuiviDemo(d).filter(function (x) { return x.code === code; })[0];
+        if (!f) return rejeter(Erreur('PROVIDER_UNKNOWN', 'Fournisseur de suivi inconnu.'));
+        var avant = JSON.parse(JSON.stringify(f));
+        if (action === 'arreter') {
+          if (!(f.actif || f.essai)) return rejeter(Erreur('PROVIDER_STOPPED', 'Ce fournisseur est déjà arrêté.'));
+          f.actif = false; f.essai = false;
+        } else if (action === 'reprendre') {
+          if (f.actif || f.essai) return rejeter(Erreur('PROVIDER_IN_SERVICE', 'Ce fournisseur est déjà en service.'));
+          if (f.conformite === 'VERIFIED') f.actif = true;
+          else if (f.conformite === 'PENDING_VERIFICATION') f.essai = true;
+          else return rejeter(Erreur('PROVIDER_NOT_VERIFIED',
+            'L’essai demande un fournisseur vérifié ou en cours de vérification.'));
+          f.arret_motif = null;
+        } else if (action === 'plafond') {
+          var v = Number(valeur);
+          if (valeur == null || valeur === '' || !(v >= 1 && v <= 100000) || Math.floor(v) !== v) {
+            return rejeter(Erreur('INVALID_CAP', 'Le plafond mensuel va de 1 à 100 000.'));
+          }
+          f.plafond_mensuel = v;
+        } else {
+          return rejeter(Erreur('INVALID_ACTION', 'Action inconnue.'));
+        }
+        f.maj_le = maintenant();
+        journaliser(d, moi, 'fournisseur_suivi.reglage', 'fournisseur_suivi', code, avant, JSON.parse(JSON.stringify(f)), motif);
+        ecrireDonnees(d, 'suivi');
+        return plusTard(etatFournisseursDemo(d));
+      },
+
+      demanderSuivi: function (numero) {
+        var d = lireDonnees();
+        try { exiger(d, 'tracking.manage'); } catch (e) { return echec(e.code); }
+        var n = suiviNormalise(numero);
+        if (!n) return rejeter(Erreur('TRACKING_REQUIRED', 'Entrez le numéro de suivi fourni par le transporteur.'));
+        if (/^GSE/.test(n)) return rejeter(Erreur('GOSHIP_NUMBER', 'C’est le numéro d’un colis GoShip : son suivi est déjà le nôtre.'));
+        if (!/^[A-Z0-9-]{5,50}$/.test(n)) return plusTard({ numero: n, code_resultat: 'UNSUPPORTED_TRACKING', enregistre: false });
+        var deja = suivisDemo(d).filter(function (x) { return x.numero === n; })[0];
+        if (deja) return plusTard(Object.assign({}, deja, { deja: true }));
+        d.suivisEquipe = d.suivisEquipe || [];
+        d.suivisEquipe.push({ numero: n, cree_le: maintenant(), origine: 'equipe' });
+        ecrireDonnees(d, 'suivi');
+        return plusTard(suivisDemo(d).filter(function (x) { return x.numero === n; })[0]);
       },
 
       journal: function (o) {
