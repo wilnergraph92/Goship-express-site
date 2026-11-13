@@ -7,6 +7,17 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — Phase 6 du suivi universel : le suivi des transporteurs vu par l'équipe (13/11/2026)
+
+**Migration à passer**, après les 34 premières et **sur décision écrite du CEO** : `supabase-supervision-suivi.sql` (35e ; contrôle attendu `3 | 1 | false`). Elle n'ajoute que trois fonctions et un index, ne change aucune table, aucune donnée, aucune fonction existante, et se relance sans risque.
+
+- **Onglet « Suivi transporteurs »** du tableau de bord (administrateur, gérant, employé) : la santé du moteur (fournisseur, quota, arrêt, retard, erreurs, notifications), **à surveiller** (livré par le transporteur depuis plus de 3 jours sans réception à Miami, colis reçu chez un autre client, incident, numéro refusé, 30 jours sans nouvelles), tous les suivis avec recherche, filtres et pages de 50.
+- **La fiche d'un suivi** : ce que dit le transporteur, ses achats, son colis, sa chronologie, le journal des appels faits pour ce seul numéro ; la fiche d'un colis montre « Chez le transporteur ».
+- **L'administrateur seul** arrête ou reprend le suivi, change le plafond mensuel (motif obligatoire, journalisé) et suit un numéro à la main (quota restant affiché).
+- Rien n'est rapproché ni corrigé tout seul ; aucun statut de colis ne change ; « livré » par le transporteur n'est jamais « reçu ».
+
+Essais : `essai-supervision-suivi.py` (57, droits rôle par rôle), `essai-supervision-navigateur.mjs` (45). `controle-securite.sql` (migration 35), `sonder.sh`, `essais.yml`, README, CLAUDE.md et `docs/production/database.md` connaissent le 35e fichier.
+
 ## Non publié — la sauvegarde quotidienne ne s'arrête plus quand la base écrit pendant la copie (13/11/2026)
 
 Le 13/11 à 13 h 13 UTC, l'épreuve de restauration a échoué : une ligne du journal du suivi externe, écrite entre la copie et le comptage des lignes, faisait promettre au manifeste 27 lignes quand la copie en contenait 26. La copie elle-même était bonne. `sauvegarder.sh` lit désormais l'état promis (lignes par table, séquences, comptes) **avant et après** les deux copies et ne garde que des copies entre lesquelles rien n'a bougé ; sinon il recommence (cinq fois au plus, 20 s d'écart), puis échoue franchement. Essai : `essai-production.py` (section F, trois cas de plus : écriture pendant la copie, manifeste égal à la copie, base qui change sans cesse).
