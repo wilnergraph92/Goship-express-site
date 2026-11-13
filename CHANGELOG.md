@@ -7,9 +7,9 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — Phase 4 du suivi universel : « Mes colis en route » (12/11/2026)
+## Phase 4 du suivi universel : « Mes colis en route » (13/11/2026)
 
-**Publication suspendue** à la réponse écrite de 17TRACK confirmant le droit d'afficher ses informations aux clients (décision du CEO). **Migration à passer** ensuite, après les 32 premières : `supabase-mes-suivis.sql` (33e ; contrôle attendu `1 | false | true`). Elle n'ajoute qu'une fonction de lecture, n'écrit rien, n'en remplace aucune et se relance sans risque.
+**Réponse écrite de 17TRACK le 13/11/2026** (support, chat) : « Yes, it's possible, there's no need to label it » — l'affichage aux clients est autorisé, sans mention obligatoire. **Migration exécutée en production le 13/11/2026** (décision écrite du CEO), après les 32 premières : `supabase-mes-suivis.sql` (33e ; contrôle obtenu `1 | false | true`). Tant que 17TRACK reste en essai, les cartes disent « pas disponible pour l'instant » ; le passage en VERIFIED et en service est prévu le 14/11, après le bilan de 48 h du moteur. Elle n'ajoute qu'une fonction de lecture, n'écrit rien, n'en remplace aucune et se relance sans risque.
 
 - **Mon compte** : une partie « Mes colis en route » montre les achats annoncés par le client (ses pré-alertes) et, pour chacun, le statut du transporteur en clair, le dernier lieu, la date prévue s'il la donne, la fraîcheur de la lecture et la chronologie (texte d'origine, source « via 17TRACK »). Livré par le transporteur s'écrit « en attente de réception à l'entrepôt GoShip », jamais « reçu ». Arrivé à Miami, la carte nomme le colis GoShip et mène à son suivi.
 - **Annoncer un achat depuis le site** : le formulaire de l'application (magasin, contenu, valeur, mode, numéro de suivi), par `creer_prealerte` inchangée ; un numéro de commande Amazon ou de colis GoShip est signalé avant l'envoi.

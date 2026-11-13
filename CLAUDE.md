@@ -338,8 +338,8 @@ qui n'est pas VERIFIED et actif** (en essai, la carte dit « pas disponible pour
 figée (l'application la lira en Phase 5). La page traduit les codes en phrases (textes `achat-…` de
 `textes-compte.html`) : le client ne voit jamais un code, et « livré » par le transporteur n'est jamais « reçu ».
 La page publique de suivi (`site.js`) ne montre **rien** d'externe : elle reconnaît un numéro de commande ou de
-transporteur et dit où le suivre. **Publication suspendue à la réponse écrite de 17TRACK sur le droit d'afficher**
-(décision du CEO). Copie démo : `achatDemo`, `SUIVIS_DEMO`. Bancs : `essai-mes-suivis.py`,
+transporteur et dit où le suivre. Droit d'afficher confirmé par écrit par 17TRACK le 13/11/2026 (aucune mention
+obligatoire ; « via 17TRACK » est gardé par transparence). Copie démo : `achatDemo`, `SUIVIS_DEMO`. Bancs : `essai-mes-suivis.py`,
 `essai-mes-suivis-navigateur.mjs`.
 
 **Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
