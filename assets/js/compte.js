@@ -693,6 +693,234 @@
       });
     };
 
+    /* ---- Mes colis en route (suivi universel, Phase 4) -----------------------
+       Les achats que le client a annoncés (ses pré-alertes) et ce qu'en dit leur
+       transporteur. La page n'en décide rien : statut, message, dates et chronologie
+       viennent de la base (API.mesSuivis, mes_suivis_externes), qui ne montre rien d'un
+       fournisseur pas encore vérifié. Elle traduit seulement les codes en phrases
+       (textes « achat-… ») : le client ne voit jamais un code, et « livré » par le
+       transporteur n'est jamais « reçu » — seul le scan de l'entrepôt le dit. */
+    var panneauAchats = $('[data-panneau-achats]');
+    var listeAchats = $('[data-liste-achats]');
+    var modeleAchat = $('template[data-modele="achat"]');
+    var formAchat = $('[data-form="achat"]');
+    var boutonAchat = $('[data-action="annoncer-achat"]');
+    var achatsLusLe = 0;
+    var cleAchat = null;
+    // Les messages qui demandent au client de vérifier son numéro (badge « À vérifier »)
+    var A_VERIFIER = ['ORDER_NUMBER_DETECTED', 'INVALID_TRACKING', 'CARRIER_UNKNOWN'];
+
+    // Un numéro de commande Amazon (comme nature_numero dans la base) ou de colis GoShip :
+    // le formulaire le dit avant l'envoi, puisque ni l'un ni l'autre ne se suit chez un transporteur
+    var natureNumero = function (texte) {
+      var n = String(texte || '').toUpperCase().replace(/\s+/g, '');
+      if (/^[0-9]{3}-[0-9]{7}-[0-9]{7}$/.test(n)) return 'commande';
+      if (/^GSE-[0-9]+-[A-Z]{2}$/.test(n)) return 'goship';
+      return '';
+    };
+
+    // Une clé d'envoi (uuid v4), comme celle de l'échange de points
+    var cleEnvoi = function () {
+      var o = new Uint8Array(16);
+      if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(o);
+      else for (var i = 0; i < o.length; i++) o[i] = Math.floor(Math.random() * 256);
+      var h = Array.prototype.map.call(o, function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join('');
+      return h.slice(0, 8) + '-' + h.slice(8, 12) + '-4' + h.slice(13, 16) + '-8' + h.slice(17, 20) + '-' + h.slice(20, 32);
+    };
+
+    var depuis = function (iso) {
+      if (!iso) return '';
+      var minutes = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+      if (minutes < 60) return t('achat-maj-minutes', { n: minutes });
+      if (minutes < 24 * 60) return t('achat-maj-heures', { n: Math.round(minutes / 60) });
+      return t('maj', { date: O.date(iso, true) });
+    };
+
+    var phraseStatut = function (s) {
+      if (!s.statut) return t('achat-statut-PENDING');
+      if (s.statut === 'DELIVERED' && s.transporteur_nom) {
+        return t('achat-statut-DELIVERED-par', { transporteur: s.transporteur_nom });
+      }
+      return t('achat-statut-' + s.statut) || t('achat-statut-inconnu');
+    };
+
+    var ecrire = function (el, texte) {
+      el.textContent = texte || '';
+      el.hidden = !texte;
+    };
+
+    var carteAchat = function (a) {
+      var fragment = document.importNode(modeleAchat.content, true);
+      var article = fragment.querySelector('.gs-achat');
+      article.setAttribute('data-id', a.id);
+      champ(article, 'titre').textContent = [a.magasin, a.description].filter(Boolean).join(' — ');
+      ecrire(champ(article, 'numero'), a.numero_suivi ? t('suivi-vendeur', { numero: a.numero_suivi }) : '');
+      ecrire(champ(article, 'annonce'), t('achat-annonce-le', { date: O.date(a.cree_le) }));
+      var badge = champ(article, 'badge');
+      var s = a.suivi;
+      var etat = 'attente';
+
+      if (a.statut === 'recu') {
+        etat = 'recu';
+        ecrire(champ(article, 'statut'), a.colis ? t('achat-arrive', { numero: a.colis.numero }) : t('achat-badge-recu'));
+        if (a.colis) {
+          var lien = champ(article, 'colis');
+          lien.href = 'index.html?suivi=' + encodeURIComponent(a.colis.numero);
+          lien.hidden = false;
+        }
+      } else {
+        ecrire(champ(article, 'statut'), s ? phraseStatut(s) : '');
+        ecrire(champ(article, 'message'), a.message ? t('achat-message-' + a.message) : '');
+        if (A_VERIFIER.indexOf(a.message) >= 0 ||
+            (s && ['FAILED_ATTEMPT', 'EXCEPTION', 'RETURNED'].indexOf(s.statut) >= 0)) etat = 'info';
+        else if (s && s.statut === 'DELIVERED') etat = 'livre';
+      }
+      badge.textContent = t('achat-badge-' + etat);
+      badge.className = 'gs-badge gs-badge--' + { attente: 'embarque', livre: 'disponible', recu: 'livre', info: 'incident' }[etat];
+
+      if (s && a.statut !== 'recu') {
+        ecrire(champ(article, 'transporteur'), s.transporteur_nom ? t('achat-transporteur', { nom: s.transporteur_nom })
+                                                                   : t('achat-transporteur-inconnu'));
+        ecrire(champ(article, 'lieu'), s.dernier_lieu ? t('achat-dernier-lieu', { lieu: s.dernier_lieu }) : '');
+        // La date donnée par le transporteur, et seulement elle : jamais une estimation de GoShip
+        ecrire(champ(article, 'livraison'), s.livraison_estimee_le && s.statut !== 'DELIVERED'
+          // Une date seule (« 2026-11-14 ») lue à midi, heure de l'appareil : lue à minuit UTC,
+          // elle s'afficherait la veille en Haïti et en République dominicaine
+          ? t('achat-livraison-prevue', { date: O.date(String(s.livraison_estimee_le).slice(0, 10) + 'T12:00:00') }) : '');
+        ecrire(champ(article, 'maj'), depuis(s.mis_a_jour_le));
+        var evenements = s.evenements || [];
+        var chrono = champ(article, 'evenements');
+        champ(article, 'nb-evenements').textContent = evenements.length ? '(' + evenements.length + ')' : '';
+        if (!evenements.length) {
+          var vide = document.createElement('li');
+          vide.className = 'gs-chrono__vide';
+          vide.textContent = t('achat-aucun-evenement');
+          chrono.appendChild(vide);
+        }
+        evenements.forEach(function (e) {
+          var li = document.createElement('li');
+          var titre = document.createElement('span');
+          titre.className = 'gs-chrono__statut';
+          // Le texte d'origine du transporteur, tel quel ; à défaut, la phrase de son statut
+          titre.textContent = e.description || (e.statut ? phraseStatut({ statut: e.statut }) : '');
+          if (e.description) titre.setAttribute('translate', 'no');
+          var meta = document.createElement('span');
+          meta.className = 'gs-chrono__meta';
+          meta.setAttribute('translate', 'no');
+          meta.textContent = [O.date(e.survenu_le, true), e.lieu].filter(Boolean).join(' · ');
+          li.appendChild(titre);
+          li.appendChild(meta);
+          chrono.appendChild(li);
+        });
+      } else {
+        ['transporteur', 'lieu', 'livraison'].forEach(function (k) { ecrire(champ(article, k), ''); });
+        champ(article, 'pied').hidden = true;
+      }
+      return article;
+    };
+
+    var afficherAchats = function (achats) {
+      var ouverts = $$('.gs-colis__historique[open]', listeAchats).map(function (d) {
+        return d.closest('.gs-achat').getAttribute('data-id');
+      });
+      listeAchats.textContent = '';
+      listeAchats.removeAttribute('aria-busy');
+      achats.forEach(function (a) {
+        var article = carteAchat(a);
+        if (ouverts.indexOf(a.id) >= 0) article.querySelector('.gs-colis__historique').open = true;
+        listeAchats.appendChild(article);
+      });
+      $('[data-vide="achats"]').hidden = achats.length > 0;
+    };
+
+    var chargerAchats = function () {
+      if (!panneauAchats) return Promise.resolve();
+      achatsLusLe = Date.now();
+      return API.mesSuivis().then(function (r) {
+        panneauAchats.hidden = false;
+        $('[data-achats-erreur]').hidden = true;
+        afficherAchats(r.achats || []);
+      }).catch(function (err) {
+        // Une base sans cette lecture (migration pas encore passée) : la partie n'existe pas
+        if (err.code === 'absent' || err.code === 'ferme') { panneauAchats.hidden = true; return; }
+        panneauAchats.hidden = false;
+        listeAchats.textContent = '';
+        listeAchats.removeAttribute('aria-busy');
+        var zone = $('[data-achats-erreur]');
+        zone.textContent = t('erreur-' + err.code) || t('erreur-inconnu');
+        zone.hidden = false;
+      });
+    };
+
+    // Le suivi des transporteurs est relu par la base toutes les 6 h : au retour sur l'onglet,
+    // la page relit ce qu'elle sait si sa dernière lecture date de plus de 5 minutes
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && profil && Date.now() - achatsLusLe > 5 * 60000) chargerAchats();
+    });
+
+    var ouvrirFormAchat = function (ouvrir) {
+      formAchat.hidden = !ouvrir;
+      boutonAchat.setAttribute('aria-expanded', ouvrir ? 'true' : 'false');
+      if (ouvrir) {
+        cleAchat = null;
+        $('[data-achat-ok]').hidden = true;
+        formAchat.elements.magasin.focus();
+      } else {
+        formAchat.reset();
+        cacherErreur(formAchat);
+        $('[data-achat-alerte]').hidden = true;
+      }
+    };
+
+    if (formAchat) {
+      boutonAchat.addEventListener('click', function () { ouvrirFormAchat(formAchat.hidden); });
+      $('[data-action="annuler-achat"]').addEventListener('click', function () {
+        ouvrirFormAchat(false);
+        boutonAchat.focus();
+      });
+      // Le numéro de commande se reconnaît pendant la saisie : le client est prévenu tout de suite
+      var champSuivi = $('[data-achat-suivi]', formAchat);
+      var alerteSuivi = $('[data-achat-alerte]', formAchat);
+      var verifierNumero = function () {
+        var nature = natureNumero(champSuivi.value);
+        var texte = nature === 'commande' ? t('achat-message-ORDER_NUMBER_DETECTED')
+                  : nature === 'goship' ? t('achat-numero-goship') : '';
+        ecrire(alerteSuivi, texte);
+        champSuivi.setAttribute('aria-invalid', texte ? 'true' : 'false');
+        return !texte;
+      };
+      champSuivi.addEventListener('input', verifierNumero);
+
+      formAchat.addEventListener('submit', function (e) {
+        e.preventDefault();
+        cacherErreur(formAchat);
+        if (!verifierFormulaire(formAchat)) return;
+        if (!verifierNumero()) { champSuivi.focus(); return; }
+        // Une clé par formulaire rempli : deux clics, ou un réseau qui hésite, n'annoncent qu'un achat
+        cleAchat = cleAchat || cleEnvoi();
+        var el = formAchat.elements;
+        attente(formAchat, 'attente-enregistrement');
+        API.annoncerAchat({
+          magasin: el.magasin.value, description: el.description.value, valeur_usd: el.valeur_usd.value,
+          service: el.service.value, suivi: el.suivi.value
+        }, cleAchat).then(function () {
+          attente(formAchat);
+          ouvrirFormAchat(false);
+          var ok = $('[data-achat-ok]');
+          ok.textContent = t('achat-ok');
+          ok.hidden = false;
+          boutonAchat.focus();
+          return chargerAchats();
+        }).catch(function (err) {
+          attente(formAchat);
+          if (err.code === 'non-autorise') { location.replace('connexion.html?retour=mon-compte.html'); return; }
+          // Refusé : la clé ne resservira pas (le client va corriger, c'est un autre envoi)
+          cleAchat = null;
+          montrerErreur(formAchat, err);
+        });
+      });
+    }
+
     /* ---- Mes factures ------------------------------------------------------
        Le tableau de bord les crée ; le client les lit, les règle et les
        imprime. Une facture marquée payée change d'état ici sans que la page
@@ -1261,6 +1489,7 @@
       // une fois, sans bruit ; un refus (parrainage fermé, déjà parrainé) n'est pas une erreur à montrer.
       if (lireParrain()) API.utiliserCodeParrainage(lireParrain()).then(function () { garderParrain(''); chargerProgrammes(); }, function () { garderParrain(''); });
       chargerColis();
+      chargerAchats();
       chargerFactures();
       chargerResume();
       var direct = $('[data-direct]');
@@ -1268,7 +1497,8 @@
       API.surveiller(function (quoi) {
         clearTimeout(prevu);
         prevu = setTimeout(function () {
-          if (quoi === 'factures') chargerFactures(); else chargerColis();
+          // Un colis reçu à Miami fait passer l'achat annoncé à « arrivé » : les deux se relisent
+          if (quoi === 'factures') chargerFactures(); else { chargerColis(); chargerAchats(); }
           chargerResume();
         }, 250);
       }, { etat: function (actif) { direct.hidden = !actif; } });
