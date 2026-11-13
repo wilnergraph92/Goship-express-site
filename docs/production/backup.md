@@ -27,6 +27,11 @@ soit vert de bout en bout **et** qu'une restauration dans un vrai projet ait ré
    définition des deux tables. Une restauration dans un vrai projet n'en lit que
    les données ; la définition sert à la restauration d'épreuve (le vrai
    `auth.users` a bien plus de colonnes que la doublure des essais) ;
+
+   la base vit pendant ce temps (le moteur du suivi externe écrit son journal) :
+   l'état que promettra le manifeste (lignes par table, séquences, comptes) est lu
+   avant et après les deux copies, et elles ne sont gardées que si rien n'a bougé ;
+   sinon elles sont refaites (cinq fois au plus, 20 s d'écart), puis le script échoue ;
 3. vérifie que les archives se relisent et contiennent les tables principales ;
 4. chiffre les trois fichiers pour une ou deux clés **publiques** age
    (`SAUVEGARDE_DESTINATAIRE` : le propriétaire ; `RESTAURATION_DESTINATAIRE` :

@@ -7,9 +7,13 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — Phase 5 du suivi universel : l'application mobile et les notifications des transporteurs (13/11/2026)
+## Non publié — la sauvegarde quotidienne ne s'arrête plus quand la base écrit pendant la copie (13/11/2026)
 
-**Migration à passer**, après les 33 premières et **sur décision écrite du CEO** : `supabase-alertes-suivi.sql` (34e ; contrôle attendu `3 | 0 | 12 | 1 | false`). Elle n'en remplace aucune, ne change aucune donnée existante, repose la contrainte des sources de règles avec `suivi_externe`, et se relance sans risque.
+Le 13/11 à 13 h 13 UTC, l'épreuve de restauration a échoué : une ligne du journal du suivi externe, écrite entre la copie et le comptage des lignes, faisait promettre au manifeste 27 lignes quand la copie en contenait 26. La copie elle-même était bonne. `sauvegarder.sh` lit désormais l'état promis (lignes par table, séquences, comptes) **avant et après** les deux copies et ne garde que des copies entre lesquelles rien n'a bougé ; sinon il recommence (cinq fois au plus, 20 s d'écart), puis échoue franchement. Essai : `essai-production.py` (section F, trois cas de plus : écriture pendant la copie, manifeste égal à la copie, base qui change sans cesse).
+
+## Phase 5 du suivi universel : l'application mobile et les notifications des transporteurs (13/11/2026)
+
+**Migration exécutée en production le 13/11/2026** (décision écrite du CEO, après la sauvegarde 59, verte, restauration d'épreuve comprise), après les 33 premières : `supabase-alertes-suivi.sql` (34e ; contrôle obtenu `3 | 0 | 12 | 1 | false`, empreintes des deux fonctions identiques à une installation jetable). L'application est partie sur le canal « preview » ; le canal « production » et l'allumage des trois règles attendent une nouvelle décision écrite du CEO. Elle n'en remplace aucune, ne change aucune donnée existante, repose la contrainte des sources de règles avec `suivi_externe`, et se relance sans risque.
 
 - **Trois notifications des transporteurs**, **éteintes à l'installation** : livré par le transporteur (jamais « reçu »), incident (exception, tentative échouée, retour), numéro refusé. Push et messages du compte seulement, jamais e-mail ni WhatsApp ; une par achat et par cas ; préférence « colis » respectée ; rien d'un fournisseur pas VERIFIED et en service ; le moteur de suivi n'échoue jamais.
 - `etat_alertes_suivi()` (équipe, `tracking.view`) : les règles et ce qu'elles ont produit.
