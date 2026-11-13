@@ -7,9 +7,21 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — Phase 3 du suivi universel : la synchronisation du suivi externe (12/11/2026)
+## Phase 4 du suivi universel : « Mes colis en route » (13/11/2026)
 
-**Migration à passer**, après les 31 premières et **sur décision écrite du CEO** : `supabase-synchro-suivi.sql` (32e ; contrôle attendu `4 | 0 | 1 | false | 18`). Elle remplace `traiter_suivis_externes`, `demander_suivi_externe`, `regler_fournisseur_suivi`, `etat_fournisseurs_suivi` et `transporteurs_connus` (mêmes formes), ne change aucune donnée existante hormis le nom des suivis rangés sous un code 17TRACK désormais connu (SwiftX, SpeedX, YWE), et se relance sans risque.
+**Réponse écrite de 17TRACK le 13/11/2026** (support, chat) : « Yes, it's possible, there's no need to label it » — l'affichage aux clients est autorisé, sans mention obligatoire. **Migration exécutée en production le 13/11/2026** (décision écrite du CEO), après les 32 premières : `supabase-mes-suivis.sql` (33e ; contrôle obtenu `1 | false | true`). Tant que 17TRACK reste en essai, les cartes disent « pas disponible pour l'instant » ; le passage en VERIFIED et en service est prévu le 14/11, après le bilan de 48 h du moteur. Elle n'ajoute qu'une fonction de lecture, n'écrit rien, n'en remplace aucune et se relance sans risque.
+
+- **Mon compte** : une partie « Mes colis en route » montre les achats annoncés par le client (ses pré-alertes) et, pour chacun, le statut du transporteur en clair, le dernier lieu, la date prévue s'il la donne, la fraîcheur de la lecture et la chronologie (texte d'origine, source « via 17TRACK »). Livré par le transporteur s'écrit « en attente de réception à l'entrepôt GoShip », jamais « reçu ». Arrivé à Miami, la carte nomme le colis GoShip et mène à son suivi.
+- **Annoncer un achat depuis le site** : le formulaire de l'application (magasin, contenu, valeur, mode, numéro de suivi), par `creer_prealerte` inchangée ; un numéro de commande Amazon ou de colis GoShip est signalé avant l'envoi.
+- **La porte** : `mes_suivis_externes()` ne lit que les pré-alertes du client connecté et ne montre rien d'un fournisseur qui n'est pas VERIFIED et actif. Aujourd'hui (17TRACK en essai), les cartes disent « pas disponible pour l'instant ».
+- **Page publique de suivi** : rien d'externe ; un numéro de transporteur pas encore chez nous reçoit « Connectez-vous et ajoutez-le à vos colis en route », un numéro de commande est signalé. Les numéros GSE et les suivis de colis déjà reçus fonctionnent comme avant.
+- Quatre langues (69 textes traduits), téléphone et ordinateur. Application mobile, tableau de bord et moteur : inchangés.
+
+Essais : `essai-mes-suivis.py` (33), `essai-mes-suivis-navigateur.mjs` (50). `essai-synchro-suivi.py` éprouve désormais la 32e migration à sa place dans la chaîne. `controle-securite.sql` (migration 33), `sonder.sh`, `essais.yml`, README, CLAUDE.md et `docs/production/database.md` connaissent le 33e fichier.
+
+## Phase 3 du suivi universel : la synchronisation du suivi externe (12/11/2026)
+
+**Migration exécutée en production le 12/11/2026** (décision écrite du CEO), après les 31 premières : `supabase-synchro-suivi.sql` (32e ; contrôle attendu `4 | 0 | 1 | false | 18`). Elle remplace `traiter_suivis_externes`, `demander_suivi_externe`, `regler_fournisseur_suivi`, `etat_fournisseurs_suivi` et `transporteurs_connus` (mêmes formes), ne change aucune donnée existante hormis le nom des suivis rangés sous un code 17TRACK désormais connu (SwiftX, SpeedX, YWE), et se relance sans risque.
 
 - **La relecture, gratuite** (lire un suivi ne coûte rien chez 17TRACK, prouvé en production à l'étape B) : `planifier_suivis_externes` relit les suivis en cours toutes les 6 h (12 h sans premier scan) et les termine — livré (une dernière lecture 24 h après), arrivé à Miami (un colis porte ce numéro ; un suivi pas encore inscrit ne l'est jamais), 30 jours de silence (`TRACKING_EXPIRED`), terminé. Pas de webhook, par décision du CEO.
 - **Les pré-alertes suivies automatiquement** : déclencheur `suivre_prealerte`, interrupteur `suivre_prealertes` **éteint à l'installation**, plafond mensuel obligatoire ; au-delà, les numéros attendent le mois suivant sans rien coûter. Un même numéro annoncé par deux clients n'a qu'un suivi. Le déclencheur ne fait jamais échouer une pré-alerte ; l'application mobile ne voit aucune différence.

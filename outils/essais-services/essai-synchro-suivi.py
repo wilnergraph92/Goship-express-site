@@ -101,8 +101,11 @@ def main():
     db.sql(S.DOUBLURES)
 
     print('A. Installation par-dessus une base en service')
-    verifier('la chaîne officielle se termine par ce fichier', CHAINE[-1], NOUVEAU)
-    for f in CHAINE[:-1]:
+    # Ce fichier éprouvé à sa place dans la chaîne : la Phase 4 (supabase-mes-suivis.sql)
+    # vient après lui et a son propre banc (essai-mes-suivis.py)
+    verifier('ce fichier est dans la chaîne officielle, après supabase-moteur-suivi.sql',
+             CHAINE[CHAINE.index(NOUVEAU) - 1] if NOUVEAU in CHAINE else None, 'supabase-moteur-suivi.sql')
+    for f in CHAINE[:CHAINE.index(NOUVEAU)]:
         db.fichier(M.chemin(f))
     for uid, email, nom in ((ADMIN, 'equipe@goship.test', 'Ada Admin'), (EMPLOYE, 'employe@goship.test', 'Emma Employée'),
                             (GERANT, 'gerant@goship.test', 'Gaston Gérant'), (MARIE, 'marie@exemple.com', 'Marie-Ange Dorvil'),

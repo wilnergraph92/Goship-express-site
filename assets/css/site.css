@@ -620,6 +620,40 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
   .gs-colis__tete{flex-direction:column-reverse;align-items:flex-start;gap:10px}
 }
 
+/* 7 bis. Mes colis en route (Mon compte) : les achats annoncés et leur transporteur.
+   Mêmes cartes que les colis ; le statut du transporteur est une phrase, pas une étape GoShip. */
+.gs-achats__form{padding:18px;border:1px solid #e3e8f2;border-radius:16px;background:#f8fafd}
+.gs-achats__champs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.gs-achats__form .gs-achats__champs+.gs-champ{margin-top:14px}
+.gs-achats__avertissement{margin:2px 0 8px;font-size:13.5px;font-weight:600;line-height:1.45;color:#7c3a0b}
+.gs-achats__alerte{margin-top:8px;padding:9px 12px;border:1px solid #fde2c8;border-radius:10px;background:#fff7ed;color:#7c3a0b;line-height:1.45}
+.gs-achats__form input[data-achat-suivi]{font-family:'IBM Plex Mono',monospace;letter-spacing:.03em;text-transform:uppercase}
+.gs-achats__ou{margin-top:12px;font-size:14px;line-height:1.5;color:#55627e}
+.gs-achats__ou summary{cursor:pointer;font-weight:700;color:#10308f}
+.gs-achats__ou ul{margin:8px 0 0;padding-left:18px}
+.gs-achats__ou li+li{margin-top:4px}
+.gs-achats__ou p{margin-top:8px}
+.gs-achats__form .gs-form__boutons{margin-top:16px}
+.gs-achats__liste{display:grid;gap:14px;margin-top:18px}
+.gs-achat{padding:18px 20px;border:1px solid #e3e8f2;border-radius:18px;background:#fff}
+.gs-achat__tete{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.gs-achat__id{min-width:0}
+.gs-achat__titre{font-size:16.5px;font-weight:700;line-height:1.35;color:#2d3850;overflow-wrap:anywhere}
+.gs-achat__numero{display:block;margin-top:3px;font-family:'IBM Plex Mono',monospace;font-size:13.5px;color:#5b6782;overflow-wrap:anywhere}
+.gs-achat__statut{margin-top:12px;font-size:15.5px;font-weight:700;line-height:1.4;color:var(--ink)}
+.gs-achat__message{margin-top:10px;padding:10px 13px;border:1px solid #dbe2ef;border-radius:12px;background:#f5f8fd;font-size:14.5px;line-height:1.5;color:#3d4a66}
+.gs-achat>.gs-bouton{margin-top:14px}
+.gs-achat__chrono .gs-chrono__statut{font-weight:600;overflow-wrap:anywhere}
+.gs-chrono__vide{color:#6b7690;font-size:14px}
+.gs-achat__source{margin-top:12px;font-size:12.5px;color:#7a849c}
+.gs-achat [hidden]{display:none!important}
+@media (max-width:639px){
+  .gs-achats__champs{grid-template-columns:minmax(0,1fr)}
+  .gs-achats__form{padding:14px}
+  .gs-achat{padding:16px}
+  .gs-achat__tete{flex-direction:column-reverse;align-items:flex-start;gap:10px}
+}
+
 /* 8. Tableau de bord ---------------------------------------------------------------- */
 .gs-admin-body{background:#f3f6fb}
 /* Un menu ou un bouton que le rôle ne permet pas : masqué. Confort seulement,

@@ -339,11 +339,19 @@
       API = window.GoshipAPI; // chargé après ce script (api.js)
       if (!API || API.mode === 'off') { viaWhatsApp(ref); return; }
       if (/^GSE-?\d{6,}$/.test(ref.replace(/\s+/g, ''))) { montrer('code-client'); return; }
+      // Un numéro de commande Amazon ne se suit nulle part : on le dit sans rien chercher
+      if (/^\d{3}-\d{7}-\d{7}$/.test(ref.replace(/\s+/g, ''))) { montrer('commande'); return; }
 
       bouton.disabled = true;
       form.setAttribute('aria-busy', 'true');
       API.suivre(ref).then(function (colis) {
-        if (colis) afficherColis(colis); else montrer('introuvable');
+        if (colis) { afficherColis(colis); return; }
+        // Pas encore chez nous. Un numéro qui a la forme d'un suivi de transporteur (des lettres
+        // et au moins six chiffres, sans le préfixe GSE) : la page publique ne montre RIEN du
+        // suivi externe (décision du CEO, Phase 4) ; elle dit où le suivre, une fois connecté.
+        var n = ref.replace(/\s+/g, '');
+        montrer(!/^GSE/.test(n) && /^[A-Z0-9-]{8,40}$/.test(n) && (n.match(/\d/g) || []).length >= 6
+          ? 'transporteur' : 'introuvable');
       }, function () {
         viaWhatsApp(ref);
       }).then(function () {

@@ -172,6 +172,70 @@
           <p class="gs-form__erreur" data-colis-erreur role="alert" hidden></p>
         </div>
 
+        <!-- Mes colis en route : les achats annoncés (pré-alertes) et ce qu'en dit leur
+             transporteur, avant l'arrivée à Miami. Tout vient de la base (mes_suivis_externes) ;
+             le panneau reste caché si la base ne connaît pas encore cette lecture. -->
+        <div class="gs-panneau gs-achats" data-panneau-achats hidden>
+          <div class="gs-panneau__tete">
+            <h2>Mes colis en route</h2>
+            <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="annoncer-achat" aria-expanded="false" aria-controls="form-achat"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>Annoncer un achat</button>
+          </div>
+          <p class="gs-panneau__intro">Vos achats en ligne annoncés, avant leur arrivée à notre entrepôt de Miami.</p>
+          <form class="gs-form gs-form--compact gs-achats__form" id="form-achat" data-form="achat" novalidate hidden>
+            <div class="gs-achats__champs">
+              <div class="gs-champ">
+                <label for="ach-magasin">Magasin<span class="gs-requis" aria-hidden="true">*</span></label>
+                <input id="ach-magasin" name="magasin" required maxlength="80" placeholder="Amazon, SHEIN, Temu…" autocomplete="off">
+              </div>
+              <div class="gs-champ">
+                <label for="ach-contenu">Contenu<span class="gs-requis" aria-hidden="true">*</span></label>
+                <input id="ach-contenu" name="description" required maxlength="300" placeholder="Ex. 2 robes, un téléphone" autocomplete="off">
+              </div>
+              <div class="gs-champ">
+                <label for="ach-valeur">Valeur (USD)</label>
+                <input id="ach-valeur" name="valeur_usd" type="number" inputmode="decimal" min="0" max="100000" step="0.01" placeholder="(facultatif)">
+              </div>
+              <div class="gs-champ">
+                <label for="ach-service">Mode d'envoi</label>
+                <select id="ach-service" name="service">
+                  <option value="aerien">Aérien</option>
+                  <option value="maritime">Maritime</option>
+                </select>
+              </div>
+            </div>
+            <div class="gs-champ">
+              <label for="ach-suivi">Numéro de suivi du transporteur</label>
+              <p class="gs-achats__avertissement" id="ach-suivi-aide">Entrez le numéro de suivi du transporteur, pas le numéro de commande.</p>
+              <input id="ach-suivi" name="suivi" maxlength="60" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-describedby="ach-suivi-aide" translate="no" data-achat-suivi>
+              <p class="gs-champ__aide gs-achats__alerte" data-achat-alerte role="status" hidden></p>
+            </div>
+            <details class="gs-achats__ou">
+              <summary>Où trouver ce numéro ?</summary>
+              <ul>
+                <li><strong translate="no">Amazon</strong> : Vos commandes › Suivre le colis. Le numéro apparaît sous « ID de suivi » (souvent TBA…, 1Z… ou 9…).</li>
+                <li><strong translate="no">SHEIN</strong> : Commandes › Expédiées › Suivre. Copiez le numéro du transporteur (souvent GFUS…).</li>
+                <li><strong translate="no">Temu</strong> : Commandes › Suivre. Le numéro du transporteur est sous son nom.</li>
+              </ul>
+              <p>Un numéro de commande (par exemple 112-1234567-1234567 chez Amazon) ne permet pas de suivre le colis.</p>
+            </details>
+            <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+            <div class="gs-form__boutons">
+              <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Annoncer cet achat</button>
+              <button class="gs-bouton gs-bouton--contour" type="button" data-action="annuler-achat">Annuler</button>
+            </div>
+          </form>
+          <p class="gs-copie-ok" data-achat-ok role="status" hidden></p>
+          <div class="gs-achats__liste" data-liste-achats aria-busy="true">
+            <div class="gs-squelette" aria-hidden="true"></div>
+          </div>
+          <div class="gs-vide" data-vide="achats" hidden>
+            <span class="gs-vide__ico"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m7.5 4.3 9 5.2"/><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg></span>
+            <strong>Aucun achat annoncé</strong>
+            <p>Annoncez vos achats en ligne avec leur numéro de suivi : vous verrez où ils en sont chez le transporteur, jusqu'à leur arrivée à Miami.</p>
+          </div>
+          <p class="gs-form__erreur" data-achats-erreur role="alert" hidden></p>
+        </div>
+
         <div class="gs-panneau gs-panneau--factures">
           <div class="gs-panneau__tete">
             <h2>Mes factures</h2>
@@ -344,6 +408,35 @@
       <details class="gs-colis__historique">
         <summary>Historique <span data-champ="nb-etapes"></span></summary>
         <ol class="gs-chrono" data-champ="historique"></ol>
+      </details>
+    </div>
+  </article>
+</template>
+
+<template data-modele="achat">
+  <article class="gs-achat">
+    <div class="gs-achat__tete">
+      <div class="gs-achat__id">
+        <p class="gs-achat__titre" data-champ="titre" translate="no"></p>
+        <span class="gs-achat__numero" data-champ="numero" translate="no"></span>
+      </div>
+      <span class="gs-badge" data-champ="badge"></span>
+    </div>
+    <p class="gs-achat__statut" data-champ="statut"></p>
+    <p class="gs-achat__message" data-champ="message" hidden></p>
+    <ul class="gs-colis__infos">
+      <li data-champ="transporteur"></li>
+      <li data-champ="lieu" translate="no"></li>
+      <li data-champ="livraison"></li>
+      <li data-champ="annonce"></li>
+    </ul>
+    <a class="gs-bouton gs-bouton--petit gs-bouton--contour" data-champ="colis" hidden>Suivre ce colis</a>
+    <div class="gs-colis__pied" data-champ="pied">
+      <span class="gs-colis__maj" data-champ="maj"></span>
+      <details class="gs-colis__historique" data-champ="parcours">
+        <summary>Parcours chez le transporteur <span data-champ="nb-evenements"></span></summary>
+        <ol class="gs-chrono gs-achat__chrono" data-champ="evenements"></ol>
+        <p class="gs-achat__source">Informations du transporteur, via 17TRACK. GoShip ne les modifie pas.</p>
       </details>
     </div>
   </article>
@@ -563,6 +656,54 @@
   <p data-t="erreur-REFERRAL_TOO_LATE">Il est trop tard pour ajouter un code de parrainage : votre première opération a déjà eu lieu ou le délai est dépassé.</p>
   <p data-t="erreur-REFERRAL_CYCLE">Ce parrainage n'est pas possible.</p>
   <p data-t="erreur-copie">La copie n'a pas fonctionné. Sélectionnez le texte et copiez-le à la main.</p>
+  <p data-t="achat-statut-PENDING">En attente des premières nouvelles du transporteur</p>
+  <p data-t="achat-statut-INFO_RECEIVED">Le vendeur a préparé l'envoi</p>
+  <p data-t="achat-statut-IN_TRANSIT">En route vers Miami</p>
+  <p data-t="achat-statut-CUSTOMS">En douane</p>
+  <p data-t="achat-statut-OUT_FOR_DELIVERY">En cours de livraison à Miami</p>
+  <p data-t="achat-statut-AVAILABLE_FOR_PICKUP">Disponible en point de retrait chez le transporteur</p>
+  <p data-t="achat-statut-DELIVERED">Livré par le transporteur — en attente de réception à l'entrepôt GoShip</p>
+  <p data-t="achat-statut-DELIVERED-par">Livré par {transporteur} — en attente de réception à l'entrepôt GoShip</p>
+  <p data-t="achat-statut-FAILED_ATTEMPT">Tentative de livraison échouée</p>
+  <p data-t="achat-statut-EXCEPTION">Incident chez le transporteur</p>
+  <p data-t="achat-statut-RETURNED">Retourné à l'expéditeur</p>
+  <p data-t="achat-statut-EXPIRED">Plus de nouvelles du transporteur</p>
+  <p data-t="achat-statut-NOT_FOUND">Plus de nouvelles du transporteur</p>
+  <p data-t="achat-statut-inconnu">Statut non reconnu : voir le détail du transporteur</p>
+  <p data-t="achat-message-NO_TRACKING">Pas de numéro de suivi : votre colis sera suivi dès son arrivée à Miami.</p>
+  <p data-t="achat-message-ORDER_NUMBER_DETECTED">Ceci ressemble à un numéro de commande. Entrez le numéro de suivi du transporteur, indiqué dans les détails d'expédition.</p>
+  <p data-t="achat-message-INVALID_TRACKING">Le transporteur ne reconnaît pas ce numéro. Vérifiez-le.</p>
+  <p data-t="achat-message-PENDING_FIRST_SCAN">Numéro accepté, mais pas encore scanné par le transporteur. Cela peut prendre quelques jours.</p>
+  <p data-t="achat-message-CARRIER_UNKNOWN">Transporteur non identifié : notre équipe va le vérifier.</p>
+  <p data-t="achat-message-UNSUPPORTED_TRACKING">Ce suivi n'est pas disponible pour l'instant. Votre colis sera suivi dès son arrivée à Miami.</p>
+  <p data-t="achat-message-AMAZON_TBA_LIMITATION">Amazon ne partage pas ce suivi. Votre colis sera suivi dès son arrivée à Miami.</p>
+  <p data-t="achat-message-PROVIDER_UNAVAILABLE">Le suivi du transporteur est momentanément indisponible. Réessayez plus tard.</p>
+  <p data-t="achat-message-TRACKING_EXPIRED">Ce suivi n'est plus mis à jour par le transporteur.</p>
+  <p data-t="achat-badge-attente">En route</p>
+  <p data-t="achat-badge-livre">Livré au transporteur</p>
+  <p data-t="achat-badge-recu">Arrivé à Miami</p>
+  <p data-t="achat-badge-info">À vérifier</p>
+  <p data-t="achat-arrive">Arrivé à Miami : c'est le colis {numero}.</p>
+  <p data-t="achat-voir-colis">Suivre ce colis</p>
+  <p data-t="achat-transporteur">Transporteur : {nom}</p>
+  <p data-t="achat-transporteur-inconnu">Transporteur non identifié</p>
+  <p data-t="achat-dernier-lieu">Dernier lieu : {lieu}</p>
+  <p data-t="achat-livraison-prevue">Livraison prévue par le transporteur : {date}</p>
+  <p data-t="achat-annonce-le">Annoncé le {date}</p>
+  <p data-t="achat-maj-minutes">Mis à jour il y a {n} min</p>
+  <p data-t="achat-maj-heures">Mis à jour il y a {n} h</p>
+  <p data-t="achat-aucun-evenement">Aucun événement du transporteur pour l'instant.</p>
+  <p data-t="achat-ok">Achat annoncé ✓</p>
+  <p data-t="achat-numero-goship">C'est un numéro de colis GoShip : il est déjà suivi dans « Mes colis ».</p>
+  <p data-t="erreur-PROFILE_INCOMPLETE">Complétez d'abord votre profil (nom, téléphone, pays et ville) pour annoncer un achat.</p>
+  <p data-t="erreur-PREALERT_STORE_REQUIRED">Indiquez le magasin.</p>
+  <p data-t="erreur-PREALERT_DESCRIPTION_REQUIRED">Indiquez le contenu du colis.</p>
+  <p data-t="erreur-INVALID_TRACKING">Numéro de suivi illisible : lettres et chiffres seulement, de 6 à 60.</p>
+  <p data-t="erreur-INVALID_VALUE">La valeur doit être comprise entre 0 et 100 000 $.</p>
+  <p data-t="erreur-INVALID_SERVICE">Mode d'envoi inconnu.</p>
+  <p data-t="erreur-PREALERT_DUPLICATE">Ce numéro de suivi est déjà annoncé : l'achat est dans votre liste.</p>
+  <p data-t="erreur-PREALERT_ALREADY_RECEIVED">Ce colis est déjà arrivé à Miami : il est dans « Mes colis ».</p>
+  <p data-t="erreur-TOO_MANY_PREALERTS">Vous avez déjà 60 achats annoncés en attente.</p>
 </template>
 </main>
 

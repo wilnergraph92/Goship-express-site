@@ -796,6 +796,32 @@
       }).then(resultat);
     },
 
+    /* ---- Mes colis en route (suivi universel, Phase 4) ------------------------
+       Les achats que le client a annoncés et, pour chacun, ce qu'en dit son
+       transporteur. Tout vient de la base (outils/supabase-mes-suivis.sql) : la page
+       ne lit jamais 17TRACK, et rien ne sort d'un fournisseur qui n'est pas VERIFIED.
+       Une base sans ce fichier répond « absent » : la partie ne s'affiche pas. */
+    mesSuivis: function () {
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return appelBase('mes_suivis_externes');
+      }).then(function (r) { return { achats: (r && r.achats) || [] }; });
+    },
+
+    // Annoncer un achat : la même fonction que l'application mobile (creer_prealerte,
+    // inchangée). cle : tirée une fois par formulaire (un double envoi n'en crée qu'un).
+    annoncerAchat: function (champs, cle) {
+      champs = champs || {};
+      return supabaseAPI.session().then(function (s) {
+        if (!s) throw Erreur('non-autorise');
+        return appelBase('creer_prealerte', {
+          p_cle: cle || null, p_magasin: champs.magasin || '', p_description: champs.description || '',
+          p_suivi: champs.suivi || '', p_valeur: champs.valeur_usd == null || champs.valeur_usd === '' ? null : Number(champs.valeur_usd),
+          p_service: champs.service || 'aerien'
+        });
+      });
+    },
+
     // Mises à jour en direct. options.tout : tous les colis et clients (administrateur)
     surveiller: function (rappel, options) {
       options = options || {};
@@ -1803,6 +1829,57 @@
       }
     });
     return n;
+  }
+
+  /* ---- Mes colis en route, version démonstration -----------------------------
+     La démo n'a pas de moteur de suivi : SUIVIS_DEMO tient lieu de ce que diraient les
+     transporteurs de quelques numéros (ceux des pré-alertes d'exemple, API.admin.exemples).
+     Chaque événement : [heures avant maintenant, statut, texte d'origine, lieu, pays] ;
+     livraison : la date que le transporteur donnerait, en jours après maintenant. Un autre
+     numéro est « en attente des premières nouvelles », comme un suivi tout juste ouvert.
+     Les numéros sont inventés. */
+  var SUIVIS_DEMO = {
+    'TBA312345678901': { transporteur: 'amazon', nom: 'Amazon Logistics', livraison: 2, evenements: [
+      [42, 'INFO_RECEIVED', 'Shipment information sent to Amazon', '', null],
+      [28, 'IN_TRANSIT', 'Package has left the seller facility', 'Fontana, CA, US', 'US'],
+      [14, 'IN_TRANSIT', 'Package arrived at a carrier facility', 'Hialeah, FL, US', 'US']] },
+    'GFUS01072196299901': { transporteur: 'gofo', nom: 'GOFO', evenements: [
+      [92, 'INFO_RECEIVED', 'Shipment created', '', null],
+      [78, 'IN_TRANSIT', 'Departed facility', 'Ontario, CA, US', 'US'],
+      [36, 'IN_TRANSIT', 'Arrived at facility', 'Doral, FL, US', 'US'],
+      [16, 'OUT_FOR_DELIVERY', 'Out for delivery', 'Medley, FL, US', 'US'],
+      [10, 'DELIVERED', 'Delivered', 'Medley, FL, US', 'US']] },
+    // USPS est exclu (outils/supabase-moteur-suivi.sql, transporteurs_exclus)
+    '9400111899223399887764': { message: 'UNSUPPORTED_TRACKING' }
+  };
+
+  function achatDemo(d, moi, p) {
+    var numero = suiviNormalise(p.suivi_transporteur);
+    var c = p.statut === 'recu' && p.colis_id ? trouverColisDemo(d, p.colis_id) : null;
+    var a = { id: p.id, magasin: p.magasin || '', description: p.description || '', service: p.service || 'aerien',
+              valeur_usd: p.valeur_usd == null ? null : Number(p.valeur_usd), statut: p.statut, cree_le: p.cree_le,
+              numero_suivi: p.suivi_transporteur || '', colis: c && c.client_id === moi.id ? { numero: c.numero } : null,
+              message: null, suivi: null };
+    if (p.statut === 'recu') return a;
+    if (!numero) { a.message = 'NO_TRACKING'; return a; }
+    if (/^[0-9]{3}-[0-9]{7}-[0-9]{7}$/.test(numero)) { a.message = 'ORDER_NUMBER_DETECTED'; return a; }
+    var x = SUIVIS_DEMO[numero];
+    if (x && x.message) { a.message = x.message; return a; }
+    var t0 = Date.now();
+    var evenements = ((x && x.evenements) || []).map(function (e) {
+      return { survenu_le: new Date(t0 - e[0] * 36e5).toISOString(), statut: e[1], description: e[2], lieu: e[3], pays: e[4] };
+    }).reverse();
+    var dernier = evenements[0] || null;
+    a.suivi = {
+      transporteur: x ? x.transporteur : null, transporteur_nom: x ? x.nom : null,
+      statut: dernier ? dernier.statut : null, dernier_lieu: dernier ? (dernier.lieu || null) : null,
+      dernier_evenement_le: dernier ? dernier.survenu_le : null,
+      livraison_estimee_le: x && x.livraison && (!dernier || dernier.statut !== 'DELIVERED')
+        ? new Date(t0 + x.livraison * 864e5).toISOString().slice(0, 10) : null,
+      mis_a_jour_le: dernier ? new Date(Date.now() - 2 * 36e5).toISOString() : null,
+      termine: false, evenements: evenements
+    };
+    return a;
   }
 
   function ficheScanner(d, c) {
@@ -4642,6 +4719,73 @@
       return plusTard(r);
     },
 
+    // La copie démo de mes_suivis_externes : même forme, mêmes règles de tri et de
+    // durée ; le suivi du transporteur vient de SUIVIS_DEMO (aucun moteur en démo).
+    mesSuivis: function () {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      var limite = Date.now() - 14 * 864e5;
+      var achats = (d.prealertes || []).filter(function (p) {
+        if (p.client_id !== moi.id) return false;
+        if (p.statut === 'attente') return true;
+        if (p.statut !== 'recu') return false;
+        var c = p.colis_id ? trouverColisDemo(d, p.colis_id) : null;
+        return new Date((c && c.cree_le) || p.cree_le).getTime() > limite;
+      }).sort(function (a, b) {
+        return ((b.statut === 'attente') - (a.statut === 'attente')) || (new Date(b.cree_le) - new Date(a.cree_le));
+      }).slice(0, 100).map(function (p) { return achatDemo(d, moi, p); });
+      return plusTard({ achats: achats });
+    },
+
+    // La copie démo de creer_prealerte (outils/supabase-mobile.sql) : mêmes refus,
+    // même réponse
+    annoncerAchat: function (champs, cle) {
+      var d = lireDonnees();
+      var moi = compteConnecte(d);
+      if (!moi) return echec('non-autorise');
+      champs = champs || {};
+      d.prealertes = d.prealertes || [];
+      var deja = cle ? d.prealertes.filter(function (p) { return p.client_id === moi.id && p.cle_envoi === cle; })[0] : null;
+      if (!deja) {
+        var magasin = String(champs.magasin || '').trim().slice(0, 80);
+        var desc = String(champs.description || '').trim().slice(0, 300);
+        var suivi = suiviNormalise(champs.suivi);
+        var service = String(champs.service || '').trim() || 'aerien';
+        var valeur = champs.valeur_usd == null || champs.valeur_usd === '' ? null : Number(champs.valeur_usd);
+        if (!['nom_complet', 'telephone', 'pays', 'ville'].every(function (k) { return String(moi[k] || '').trim(); })) {
+          return echec('PROFILE_INCOMPLETE');
+        }
+        if (!magasin) return echec('PREALERT_STORE_REQUIRED');
+        if (!desc) return echec('PREALERT_DESCRIPTION_REQUIRED');
+        if (suivi && !/^[A-Z0-9-]{6,60}$/.test(suivi)) return echec('INVALID_TRACKING');
+        if (valeur != null && (isNaN(valeur) || valeur < 0 || valeur > 100000)) return echec('INVALID_VALUE');
+        if (['aerien', 'maritime', 'terrestre'].indexOf(service) < 0) return echec('INVALID_SERVICE');
+        if (suivi) {
+          if (d.prealertes.some(function (p) {
+            return p.client_id === moi.id && p.statut === 'attente' && suiviNormalise(p.suivi_transporteur) === suivi;
+          })) return echec('PREALERT_DUPLICATE');
+          if (d.colis.some(function (c) { return c.client_id === moi.id && suiviNormalise(c.suivi_transporteur) === suivi; })) {
+            return echec('PREALERT_ALREADY_RECEIVED');
+          }
+        }
+        if (d.prealertes.filter(function (p) { return p.client_id === moi.id && p.statut === 'attente'; }).length >= 60) {
+          return echec('TOO_MANY_PREALERTS');
+        }
+        deja = { id: identifiant(), client_id: moi.id, magasin: magasin, description: desc, suivi_transporteur: suivi,
+                 valeur_usd: valeur == null ? null : arrondi(valeur), service: service, statut: 'attente', colis_id: null,
+                 cle_envoi: cle || null, cree_le: new Date().toISOString(), nouvelle: true };
+        d.prealertes.push(deja);
+        ecrireDonnees(d);
+        prevenir('colis');
+      }
+      var reponse = { id: deja.id, magasin: deja.magasin, description: deja.description,
+                      suivi_transporteur: deja.suivi_transporteur, valeur_usd: deja.valeur_usd, service: deja.service,
+                      statut: deja.statut, cree_le: deja.cree_le, deja: !deja.nouvelle };
+      delete deja.nouvelle;
+      return plusTard(reponse);
+    },
+
     surveiller: function (rappel, options) {
       options = options || {};
       abonnes.push(rappel);
@@ -6666,6 +6810,7 @@
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
     fournisseursConnexion: function () { return Promise.resolve([]); }, connecterAvec: ferme,
     changerMotDePasse: ferme, modifierProfil: ferme, mesColis: ferme, mesFactures: ferme, monResume: ferme,
+    mesSuivis: ferme, annoncerAchat: ferme,
     surveiller: function () { return function () {}; },
     suivre: ferme, estAdmin: function () { return Promise.resolve(false); },
     permissions: function () { return Promise.resolve({ role: null, equipe: false, permissions: [] }); },
