@@ -40,3 +40,4 @@ supabase-suivi-externe.sql
 supabase-moteur-suivi.sql
 supabase-synchro-suivi.sql
 supabase-mes-suivis.sql
+supabase-alertes-suivi.sql

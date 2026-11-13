@@ -1481,3 +1481,6 @@ transférés à la succursale
 ✓ COLIS TROUVÉ
 ✓ trouvé
 ✕ COLIS INTROUVABLE
+Achat livré par le transporteur
+Incident chez le transporteur
+Numéro refusé par le transporteur

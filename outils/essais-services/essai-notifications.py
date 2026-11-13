@@ -118,7 +118,10 @@ def main():
     relancer_depuis(db, 'supabase-notifications.sql')
     fin = open(os.path.join(RACINE, 'outils', 'supabase-notifications.sql')).read().split('-- 16. Contrôle')[1]
     requete = fin[fin.index('select (select count(*) from public.notification_regles)'):].strip().rstrip(';')
-    controle = db.sql('select regles, declencheurs, ancien_push, ouvertes_aux_visiteurs from (' + requete + ') x;')
+    # Les migrations suivantes ajoutent leurs propres règles (supabase-alertes-suivi.sql : trois, source
+    # « suivi_externe ») : relancé sur toute la chaîne, ce fichier compte ses 13 plus celles-là
+    controle = db.sql('select regles - (select count(*) from notification_regles where source = \'suivi_externe\'), '
+                      'declencheurs, ancien_push, ouvertes_aux_visiteurs from (' + requete + ') x;')
     verifier('rejouable ; contrôle : 13 règles, 2 déclencheurs, ancien push retiré, rien aux visiteurs',
              controle.splitlines()[-1], '13|2|0|f')
     db.sql("update notification_regles set actif = false where type = 'shipment_packed';")

@@ -168,7 +168,7 @@ try {
   verifier('le numéro rangé sans espaces ni minuscules', shein && shein.numero, 'Suivi vendeur : GFUS01072196299901');
   verifier('livré par le transporteur : jamais « reçu »',
     shein && [shein.statut, shein.badge, shein.livraison],
-    ['Livré par GOFO — en attente de réception à l\'entrepôt GoShip', 'Livré au transporteur', '']);
+    ['Livré par GOFO — en attente de réception à l\'entrepôt GoShip', 'Livré par le transporteur', '']);
   await annoncer(page, { magasin: 'Nike', description: 'Baskets', suivi: 'SWX0000000000099' });
   c = await cartes(page);
   const nike = c.find((x) => x.titre === 'Nike — Baskets');

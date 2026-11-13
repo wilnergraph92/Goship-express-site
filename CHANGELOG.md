@@ -7,6 +7,17 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — Phase 5 du suivi universel : l'application mobile et les notifications des transporteurs (13/11/2026)
+
+**Migration à passer**, après les 33 premières et **sur décision écrite du CEO** : `supabase-alertes-suivi.sql` (34e ; contrôle attendu `3 | 0 | 12 | 1 | false`). Elle n'en remplace aucune, ne change aucune donnée existante, repose la contrainte des sources de règles avec `suivi_externe`, et se relance sans risque.
+
+- **Trois notifications des transporteurs**, **éteintes à l'installation** : livré par le transporteur (jamais « reçu »), incident (exception, tentative échouée, retour), numéro refusé. Push et messages du compte seulement, jamais e-mail ni WhatsApp ; une par achat et par cas ; préférence « colis » respectée ; rien d'un fournisseur pas VERIFIED et en service ; le moteur de suivi n'échoue jamais.
+- `etat_alertes_suivi()` (équipe, `tracking.view`) : les règles et ce qu'elles ont produit.
+- Libellés des trois messages dans « Mes messages » (site) et dans les réglages des notifications (tableau de bord, quatre langues).
+- L'application mobile (dépôt `goship-express-app`) : onglet « En route », détail d'un achat et sa chronologie, recherche, filtres, hors ligne.
+
+Essai : `essai-alertes-suivi.py` (25). `controle-securite.sql` (migration 34), `sonder.sh`, `essais.yml`, README, CLAUDE.md et `docs/production/database.md` connaissent le 34e fichier.
+
 ## Phase 4 du suivi universel : « Mes colis en route » (13/11/2026)
 
 **Réponse écrite de 17TRACK le 13/11/2026** (support, chat) : « Yes, it's possible, there's no need to label it » — l'affichage aux clients est autorisé, sans mention obligatoire. **Migration exécutée en production le 13/11/2026** (décision écrite du CEO), après les 32 premières : `supabase-mes-suivis.sql` (33e ; contrôle obtenu `1 | false | true`). Tant que 17TRACK reste en essai, les cartes disent « pas disponible pour l'instant » ; le passage en VERIFIED et en service est prévu le 14/11, après le bilan de 48 h du moteur. Elle n'ajoute qu'une fonction de lecture, n'écrit rien, n'en remplace aucune et se relance sans risque.

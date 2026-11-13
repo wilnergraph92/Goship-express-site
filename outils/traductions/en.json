@@ -2787,5 +2787,8 @@
   "Valeur (USD)": "Value (USD)",
   "Vos achats en ligne annoncés, avant leur arrivée à notre entrepôt de Miami.": "Your announced online purchases, before they reach our Miami warehouse.",
   "Vous avez déjà 60 achats annoncés en attente.": "You already have 60 announced purchases pending.",
-  "À vérifier": "To check"
+  "À vérifier": "To check",
+  "Achat livré par le transporteur": "Purchase delivered by the carrier",
+  "Numéro refusé par le transporteur": "Number rejected by the carrier",
+  "Livré par le transporteur": "Delivered by the carrier"
 }

@@ -342,6 +342,17 @@ transporteur et dit où le suivre. Droit d'afficher confirmé par écrit par 17T
 obligatoire ; « via 17TRACK » est gardé par transparence). Copie démo : `achatDemo`, `SUIVIS_DEMO`. Bancs : `essai-mes-suivis.py`,
 `essai-mes-suivis-navigateur.mjs`.
 
+**Les notifications des transporteurs** (Phase 5, `outils/supabase-alertes-suivi.sql`, dossier validé le 13/11/2026) :
+trois règles du moteur de notifications, source `suivi_externe`, **nées éteintes** (allumées à la publication de
+l'application, sur décision écrite du CEO) : `carrier_delivered` (DELIVERED — jamais « reçu »), `carrier_issue`
+(EXCEPTION, FAILED_ATTEMPT, RETURNED), `carrier_invalid` (INVALID_TRACKING). Push et messages seulement. Déclencheur
+`notifier_suivi_externe` (après un changement de statut ou de code de `suivis_externes`) : une notification par
+pré-alerte en attente et par cas (clé `suivi:<pré-alerte>:<type>`), `{{numero}}` porte le nom de l'achat, rien d'un
+fournisseur pas VERIFIED et actif, **jamais d'échec du moteur** (erreur au journal des appels). Le travailleur d'envoi
+n'est pas touché : le push porte le type, l'application ouvre l'onglet « En route ». Lecture de l'équipe :
+`etat_alertes_suivi()` (`tracking.view`). Libellés : `message-carrier_*` (site), `tableau.txt`. Banc :
+`essai-alertes-suivi.py`.
+
 **Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
 dialogues) : un clic à côté ne fait rien. Une saisie de l'utilisateur (événement
 `isTrusted` dans un formulaire) pose `data-saisie` ; Échap, × ou « Annuler » ouvrent
@@ -577,7 +588,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

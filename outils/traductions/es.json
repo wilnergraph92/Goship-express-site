@@ -2787,5 +2787,8 @@
   "Valeur (USD)": "Valor (USD)",
   "Vos achats en ligne annoncés, avant leur arrivée à notre entrepôt de Miami.": "Sus compras en línea anunciadas, antes de su llegada a nuestro almacén de Miami.",
   "Vous avez déjà 60 achats annoncés en attente.": "Ya tiene 60 compras anunciadas en espera.",
-  "À vérifier": "Por verificar"
+  "À vérifier": "Por verificar",
+  "Achat livré par le transporteur": "Compra entregada por la transportista",
+  "Numéro refusé par le transporteur": "Número rechazado por la transportista",
+  "Livré par le transporteur": "Entregado por la transportista"
 }
