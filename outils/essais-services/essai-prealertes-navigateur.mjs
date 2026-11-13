@@ -87,7 +87,7 @@ try {
   await page.waitForSelector('[data-ecran="tableau"]:not([hidden])');
   verifier('l\'onglet est dans le menu « Opérations », après le scanner',
     await page.$$eval('[aria-labelledby="menu-operations"] [data-onglet-vue]', (b) => b.map((x) => x.getAttribute('data-onglet-vue'))),
-    ['apercu', 'colis', 'scanner', 'prealertes', 'clients']);
+    ['apercu', 'colis', 'scanner', 'prealertes', 'suivi', 'clients']);
   await onglet(page, 'prealertes');
   let lignes = await lignesPrealertes(page);
   verifier('5 pré-alertes en attente', lignes.length, 5);

@@ -344,7 +344,7 @@ obligatoire ; « via 17TRACK » est gardé par transparence). Copie démo : `ach
 
 **Les notifications des transporteurs** (Phase 5, `outils/supabase-alertes-suivi.sql`, dossier validé le 13/11/2026) :
 trois règles du moteur de notifications, source `suivi_externe`, **nées éteintes** (allumées à la publication de
-l'application, sur décision écrite du CEO) : `carrier_delivered` (DELIVERED — jamais « reçu »), `carrier_issue`
+l'application, sur décision écrite du CEO, le 13/11/2026) : `carrier_delivered` (DELIVERED — jamais « reçu »), `carrier_issue`
 (EXCEPTION, FAILED_ATTEMPT, RETURNED), `carrier_invalid` (INVALID_TRACKING). Push et messages seulement. Déclencheur
 `notifier_suivi_externe` (après un changement de statut ou de code de `suivis_externes`) : une notification par
 pré-alerte en attente et par cas (clé `suivi:<pré-alerte>:<type>`), `{{numero}}` porte le nom de l'achat, rien d'un
@@ -352,6 +352,20 @@ fournisseur pas VERIFIED et actif, **jamais d'échec du moteur** (erreur au jour
 n'est pas touché : le push porte le type, l'application ouvre l'onglet « En route ». Lecture de l'équipe :
 `etat_alertes_suivi()` (`tracking.view`). Libellés : `message-carrier_*` (site), `tableau.txt`. Banc :
 `essai-alertes-suivi.py`.
+
+**Le suivi des transporteurs vu par l'équipe** (Phase 6, `outils/supabase-supervision-suivi.sql`, dossier validé le
+13/11/2026) : l'onglet « Suivi transporteurs » (`admin.html#suivi`, `supervision.js`, `tracking.view`) — santé du moteur,
+**à surveiller** (livré par le transporteur depuis plus de 3 jours sans réception, colis reçu chez un autre client que
+la pré-alerte, incident, numéro refusé, 30 jours sans nouvelles ; une seule raison par achat, plus « autre client »),
+tous les suivis (filtres, 50 par page). Une lecture, `supervision_suivi(filtres, page)` ; la fiche d'un suivi,
+`fiche_suivi_externe(suivi)` (événements, journal des appels faits pour ce seul numéro, achats, colis), ouverte par
+`data-suivi-id` sur la ligne (`ouvrirFicheSuivi`, `admin.js`) ; la fiche d'un colis a une section « Chez le
+transporteur » (`suivi_externe`). **Rien n'est rapproché ni corrigé tout seul** ; aucun statut de colis ne change.
+L'administrateur seul (`tracking.manage`) : `piloter_suivi_externe(code, action, motif, valeur)` (arrêter, reprendre,
+plafond mensuel ; motif d'au moins 5 caractères, journalisé par `regler_fournisseur_suivi`) et « Suivre un numéro »
+(`demander_suivi_externe`, inchangée, quota restant affiché). Noms des clients seulement avec `clients.view`. Copie
+démo : `suivisDemo`, `aSurveillerDemo`, `ficheSuiviDemo`… (mêmes heures que `achatDemo`). Bancs :
+`essai-supervision-suivi.py` (droits rôle par rôle), `essai-supervision-navigateur.mjs` (formes démo = base).
 
 **Les fenêtres (`<dialog>`) ne se ferment que sur demande** (`admin.js`, bloc des
 dialogues) : un clic à côté ne fait rien. Une saisie de l'utilisateur (événement
@@ -588,7 +602,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

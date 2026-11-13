@@ -31,6 +31,7 @@
 <script src="assets/js/scanner.js" defer></script>
 <script src="assets/js/programmes.js" defer></script>
 <script src="assets/js/prealertes.js" defer></script>
+<script src="assets/js/supervision.js" defer></script>
 </head>
 <body class="gs-admin-body">
 <a class="gs-skip" href="#contenu-principal">Aller au contenu</a>
@@ -55,6 +56,7 @@
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="colis" tabindex="-1" title="Colis">[[ico:package]]<span class="gs-td__libelle">Colis</span><span class="gs-admin-onglets__total" data-total="colis"></span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="scanner" data-permission="shipments.scan" tabindex="-1" title="Poste de scan">[[ico:barcode]]<span class="gs-td__libelle">Scanner</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="prealertes" data-permission="shipments.view" tabindex="-1" title="Pré-alertes">[[ico:clipboard]]<span class="gs-td__libelle">Pré-alertes</span><span class="gs-admin-onglets__total" data-total="prealertes"></span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="suivi" data-permission="tracking.view" tabindex="-1" title="Suivi transporteurs">[[ico:activity]]<span class="gs-td__libelle">Suivi transporteurs</span><span class="gs-admin-onglets__total" data-total="suivi"></span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="clients" data-permission="clients.view" tabindex="-1" title="Clients">[[ico:users]]<span class="gs-td__libelle">Clients</span><span class="gs-admin-onglets__total" data-total="clients"></span></button>
       </div>
     </div>
@@ -658,6 +660,98 @@
       </div>
       <p class="gs-admin-vide" data-vide="prealertes" hidden></p>
       <div class="gs-pagination" data-pagination="prealertes" hidden></div>
+    </div>
+
+    <!-- Le suivi des transporteurs (assets/js/supervision.js, suivi universel, Phase 6) :
+         la santé du moteur, les achats qui demandent une action, tous les suivis. Tout
+         vient de la base (supervision_suivi, fiche_suivi_externe) ; rien ne change un
+         statut de colis. Lecture pour l'équipe (tracking.view) ; arrêter, reprendre,
+         changer le plafond et suivre un numéro à la main : l'administrateur
+         (tracking.manage), avec un motif. -->
+    <div class="gs-admin-vue" data-vue="suivi" data-permission="tracking.view" role="tabpanel" hidden>
+      <p class="gs-admin-vide" data-suivi-absent hidden></p>
+      <div class="gs-sv" data-suivi-zone>
+        <section class="gs-sv__sante" aria-labelledby="sv-sante-titre">
+          <div class="gs-sv__tete">
+            <h2 id="sv-sante-titre">Santé du suivi</h2>
+            <div class="gs-sv__actions" data-suivi-actions hidden>
+              <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-suivi-action="arreter" hidden>Arrêter le suivi</button>
+              <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-suivi-action="reprendre" hidden>Reprendre le suivi</button>
+              <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-suivi-action="plafond">Plafond mensuel</button>
+              <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-suivi-action="suivre">Suivre un numéro</button>
+            </div>
+          </div>
+          <dl class="gs-sv__chiffres" data-suivi-sante></dl>
+        </section>
+
+        <section class="gs-sv__bloc" aria-labelledby="sv-surveiller-titre">
+          <h2 id="sv-surveiller-titre">À surveiller</h2>
+          <p class="gs-champ__aide">Les achats en attente qui demandent une action. Rien n'est corrigé tout seul : « livré » par le transporteur n'est jamais « reçu ». Retrouvez le colis à l'entrepôt, puis enregistrez-le depuis sa pré-alerte.</p>
+          <div class="gs-sv__puces" data-suivi-raisons></div>
+          <div class="gs-tableau-cadre">
+            <table class="gs-tableau gs-tableau--surveiller">
+              <thead>
+                <tr>
+                  <th scope="col">Raison</th>
+                  <th scope="col">Achat</th>
+                  <th scope="col">Client</th>
+                  <th scope="col">Chez le transporteur</th>
+                  <th scope="col">Depuis le</th>
+                </tr>
+              </thead>
+              <tbody data-lignes="surveiller"></tbody>
+            </table>
+          </div>
+          <p class="gs-admin-vide" data-vide="surveiller" hidden></p>
+        </section>
+
+        <section class="gs-sv__bloc" aria-labelledby="sv-suivis-titre">
+          <h2 id="sv-suivis-titre">Tous les suivis</h2>
+          <div class="gs-admin-outils">
+            <label class="gs-recherche">[[ico:search]]<input type="search" data-recherche-suivis placeholder="Numéro, magasin, client…" aria-label="Rechercher un suivi" autocomplete="off" spellcheck="false"></label>
+            <select class="gs-admin-filtre" data-filtre-suivis="suivi" aria-label="Suivis en cours ou terminés">
+              <option value="">En cours et terminés</option>
+              <option value="en_cours">En cours</option>
+              <option value="termine">Terminés</option>
+            </select>
+            <select class="gs-admin-filtre" data-filtre-suivis="statut" aria-label="Statut chez le transporteur">
+              <option value="">Tous les statuts</option>
+              <option value="AUCUN">Pas encore de nouvelles</option>
+              <option value="INFO_RECEIVED">Annoncé au transporteur</option>
+              <option value="IN_TRANSIT">En route</option>
+              <option value="OUT_FOR_DELIVERY">En cours de livraison</option>
+              <option value="DELIVERED">Livré par le transporteur</option>
+              <option value="EXCEPTION">Incident</option>
+              <option value="FAILED_ATTEMPT">Tentative de livraison échouée</option>
+              <option value="RETURNED">Retourné à l’expéditeur</option>
+            </select>
+            <select class="gs-admin-filtre" data-filtre-suivis="etat" aria-label="État du suivi">
+              <option value="">Tous les états</option>
+              <option value="en_attente">En attente</option>
+              <option value="actif">Suivi</option>
+              <option value="arrete">Arrêté</option>
+              <option value="erreur">En erreur</option>
+            </select>
+          </div>
+          <div class="gs-tableau-cadre">
+            <table class="gs-tableau gs-tableau--suivis">
+              <thead>
+                <tr>
+                  <th scope="col">Numéro de suivi</th>
+                  <th scope="col">Chez le transporteur</th>
+                  <th scope="col">Achats</th>
+                  <th scope="col">Colis GoShip</th>
+                  <th scope="col">Dernière nouvelle</th>
+                  <th scope="col">Suivi</th>
+                </tr>
+              </thead>
+              <tbody data-lignes="suivis"></tbody>
+            </table>
+          </div>
+          <p class="gs-admin-vide" data-vide="suivis" hidden></p>
+          <div class="gs-pagination" data-pagination="suivis" hidden></div>
+        </section>
+      </div>
     </div>
 
     <!-- Analytics (outils/supabase-analytics.sql) : ce qui s'est passé et
@@ -1638,6 +1732,39 @@
       <button type="button" class="gs-bouton gs-bouton--plein" data-prog-motif-confirmer>Confirmer</button>
     </div>
   </div>
+</dialog>
+
+<!-- Piloter le suivi des transporteurs (supervision.js) : arrêter, reprendre, changer le
+     plafond mensuel (motif obligatoire, gardé au journal), suivre un numéro à la main
+     (une inscription du quota du fournisseur). L'administrateur seul ; la base le vérifie. -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="suivi-pilote" aria-labelledby="dlg-suivi-pilote-titre">
+  <form class="gs-form" data-suivi-pilote-form novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-suivi-pilote-titre" data-suivi-pilote-titre>Suivi des transporteurs</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide" data-suivi-pilote-aide></p>
+      <div class="gs-champ" data-suivi-pilote-bloc="numero" hidden>
+        <label for="suivi-pilote-numero">Numéro de suivi du transporteur</label>
+        <input type="text" id="suivi-pilote-numero" data-suivi-pilote-numero maxlength="60" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="gs-champ" data-suivi-pilote-bloc="valeur" hidden>
+        <label for="suivi-pilote-valeur">Pré-alertes suivies par mois, au plus</label>
+        <input type="number" id="suivi-pilote-valeur" data-suivi-pilote-valeur min="1" max="100000" step="1" inputmode="numeric">
+      </div>
+      <div class="gs-champ" data-suivi-pilote-bloc="motif" hidden>
+        <label for="suivi-pilote-motif">Motif (obligatoire, gardé au journal)</label>
+        <input type="text" id="suivi-pilote-motif" data-suivi-pilote-motif maxlength="300" autocomplete="off">
+      </div>
+      <p class="gs-form__erreur" data-suivi-pilote-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-suivi-pilote-confirmer>Confirmer</button>
+    </div>
+  </form>
 </dialog>
 
 <dialog class="gs-dialogue gs-fiche" data-dialogue="fiche" aria-labelledby="dlg-fiche-titre">

@@ -164,7 +164,8 @@ migrations(ordre, fichier, present) as (values
   (31, 'supabase-moteur-suivi.sql',    exists (select 1 from pg_proc where proname = 'traiter_suivis_externes')),
   (32, 'supabase-synchro-suivi.sql',   exists (select 1 from pg_proc where proname = 'planifier_suivis_externes')),
   (33, 'supabase-mes-suivis.sql',      exists (select 1 from pg_proc where proname = 'mes_suivis_externes')),
-  (34, 'supabase-alertes-suivi.sql',   exists (select 1 from pg_proc where proname = 'notifier_suivi_externe'))),
+  (34, 'supabase-alertes-suivi.sql',   exists (select 1 from pg_proc where proname = 'notifier_suivi_externe')),
+  (35, 'supabase-supervision-suivi.sql', exists (select 1 from pg_proc where proname = 'supervision_suivi'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,

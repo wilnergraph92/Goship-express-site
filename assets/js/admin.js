@@ -6134,6 +6134,7 @@
       }));
     }
     parcoursColis(colis, null);
+    sectionTransporteurColis(colis);
     var hist = sectionFiche('Historique', true);
     var ol = el('ol', 'gs-chrono');
     var attente = el('p', 'gs-fiche__attente', 'Chargement…');
@@ -6427,7 +6428,124 @@
   }
 
   // Le clic sur une ligne : la fiche du colis si la ligne en est un, sinon la fiche générique
+  /* Un suivi de transporteur (onglet « Suivi transporteurs », suivi universel Phase 6) :
+     ce qu'en dit le transporteur, ses achats, son colis s'il est arrivé, sa chronologie et
+     le journal des appels faits pour lui seul (API.admin.ficheSuivi). Rien ne s'y décide :
+     « livré » par le transporteur n'est jamais « reçu ». */
+  function motsSuivi() {
+    return window.GoshipSupervision || { STATUTS: {}, CODES: {}, ETATS: {}, FINS: {},
+      phraseSuivi: function (s) { return (s && (s.statut || s.code_resultat)) || ''; },
+      couleurStatut: function () { return ''; } };
+  }
+  function ouvrirFicheSuivi(id) {
+    var M = motsSuivi();
+    preparerFiche('Suivi transporteur', 'Chargement…', '', null);
+    montrerFiche();
+    var demande = ficheDemande;
+    API.admin.ficheSuivi(id).then(function (f) {
+      if (demande !== ficheDemande) return;
+      if (!f) { $('[data-fiche-titre]', dlgFiche).textContent = 'Suivi introuvable'; return; }
+      var s = f.suivi;
+      $('[data-fiche-titre]', dlgFiche).textContent = s.numero;
+      var st = $('[data-fiche-sous-titre]', dlgFiche);
+      st.textContent = s.transporteur_nom || s.transporteur || 'Transporteur non déterminé';
+      st.hidden = false;
+      $('[data-fiche-badge]', dlgFiche).appendChild(el('span', 'gs-badge ' + M.couleurStatut(s.statut), M.phraseSuivi(s)));
+
+      sectionFiche('Chez le transporteur');
+      champFiche('Statut', M.phraseSuivi(s));
+      champFiche('Ce que dit le transporteur', s.statut_original);
+      champFiche('Résultat', s.code_resultat ? M.CODES[s.code_resultat] || s.code_resultat : '');
+      champFiche('Dernier lieu', s.dernier_lieu);
+      champFiche('Dernière nouvelle', s.dernier_evenement_le ? O.date(s.dernier_evenement_le, true) : '');
+      champFiche('Livraison prévue par le transporteur', s.livraison_estimee_le ? O.date(s.livraison_estimee_le + 'T12:00:00') : '');
+      champFiche('Livré par le transporteur le', s.livre_vu_le ? O.date(s.livre_vu_le, true) : '');
+
+      sectionFiche('Le suivi');
+      champFiche('État', s.fin_motif ? M.FINS[s.fin_motif] || s.fin_motif : M.ETATS[s.etat] || s.etat);
+      champFiche('Demandé par', s.origine === 'equipe' ? 'L’équipe' : 'Une pré-alerte');
+      champFiche('Fournisseur', s.fournisseur === '17track' ? '17TRACK' : s.fournisseur);
+      champFiche('Inscrit le', s.inscrit_le ? O.date(s.inscrit_le, true) : 'Pas encore inscrit');
+      champFiche('Dernière lecture', s.derniere_synchro_le ? O.date(s.derniere_synchro_le, true) : '');
+      champFiche('Prochaine lecture', s.prochaine_synchro_le ? O.date(s.prochaine_synchro_le, true) : '');
+      champFiche('Dernière erreur', s.derniere_erreur);
+
+      var achats = sectionFiche('Achats annoncés');
+      var ul = el('ul', 'gs-fiche__liste');
+      (f.achats || []).forEach(function (a) {
+        var c = a.client ? [a.client.code, a.client.nom].filter(Boolean).join(' · ') : '';
+        ul.appendChild(ligneListe([a.magasin, a.description].filter(Boolean).join(' — ') || '—',
+          [c, O.date(a.cree_le, true)].filter(Boolean).join(' · '),
+          a.statut === 'recu' ? 'Reçue' : a.statut === 'annulee' ? 'Annulée' : 'En attente'));
+      });
+      achats.appendChild(ul);
+      if (!(f.achats || []).length) achats.appendChild(el('p', 'gs-fiche__attente', 'Aucun achat annoncé avec ce numéro.'));
+
+      if (f.colis) {
+        sectionFiche('Colis GoShip');
+        champFiche('N° de colis', f.colis.numero);
+        champFiche('Statut', STATUTS[f.colis.statut] || f.colis.statut);
+        champFiche('Enregistré le', O.date(f.colis.cree_le, true));
+        liensFiche.appendChild(boutonFiche('Voir le colis', 'gs-lien-bouton', function () { ouvrirColisParNumero(f.colis.numero); }));
+      }
+
+      var chrono = sectionFiche('Chronologie du transporteur', true);
+      var ol = el('ul', 'gs-fiche__liste');
+      (f.evenements || []).forEach(function (e) {
+        ol.appendChild(ligneListe(e.description || M.phraseSuivi(e), [e.lieu, O.date(e.survenu_le, true)].filter(Boolean).join(' · '),
+                                  e.statut ? M.STATUTS[e.statut] || e.statut : ''));
+      });
+      chrono.appendChild(ol);
+      if (!(f.evenements || []).length) chrono.appendChild(el('p', 'gs-fiche__attente', 'Aucun événement pour l’instant.'));
+
+      var journal = sectionFiche('Journal des appels au fournisseur', true);
+      var oj = el('ul', 'gs-fiche__liste');
+      (f.journal || []).forEach(function (j) {
+        oj.appendChild(ligneListe(j.operation, [j.code_http, j.code_erreur, j.duree_ms != null ? j.duree_ms + ' ms' : '']
+          .filter(function (x) { return x != null && x !== ''; }).join(' · '), [j.resultat, O.date(j.cree_le, true)].join(' · ')));
+      });
+      journal.appendChild(oj);
+      if (!(f.journal || []).length) {
+        journal.appendChild(el('p', 'gs-fiche__attente', 'Aucun appel fait pour ce seul numéro (les appels groupés n’y figurent pas).'));
+      }
+    }).catch(function (err) {
+      if (demande === ficheDemande) $('[data-fiche-titre]', dlgFiche).textContent = messageErreur(err);
+    });
+  }
+
+  // Dans la fiche d'un colis : ce qu'en dit son transporteur, pour l'équipe qui suit les
+  // transporteurs (tracking.view). Rien quand le numéro n'est pas suivi.
+  function sectionTransporteurColis(colis) {
+    if (!colis.suivi_transporteur || !peut('tracking.view') || !API.admin.suiviExterne) return;
+    var section = sectionFiche('Chez le transporteur', true);
+    var attente = el('p', 'gs-fiche__attente', 'Chargement…');
+    section.appendChild(attente);
+    var demande = ficheDemande, M = motsSuivi();
+    API.admin.suiviExterne(colis.suivi_transporteur).then(function (s) {
+      if (demande !== ficheDemande) return;
+      if (!s) { section.remove(); return; }
+      attente.remove();
+      var g = grilleFiche;
+      grilleFiche = $('dl', section);
+      champFiche('Statut', M.phraseSuivi(s));
+      champFiche('Dernier lieu', s.dernier_lieu);
+      champFiche('Dernière nouvelle', s.dernier_evenement_le ? O.date(s.dernier_evenement_le, true) : '');
+      grilleFiche = g;
+      if (s.id) {
+        var b = el('button', 'gs-lien-bouton', 'Voir le suivi');
+        b.type = 'button';
+        b.addEventListener('click', function () { ouvrirFicheSuivi(s.id); });
+        section.appendChild(b);
+      }
+    }).catch(function () {
+      if (demande === ficheDemande) section.remove();
+    });
+  }
+
   function ouvrirFicheDe(tr) {
+    // L'onglet « Suivi transporteurs » (supervision.js) désigne ses lignes par attribut
+    if (tr.hasAttribute('data-suivi-id')) { ouvrirFicheSuivi(tr.getAttribute('data-suivi-id')); return; }
+    if (tr.hasAttribute('data-colis-numero')) { ouvrirColisParNumero(tr.getAttribute('data-colis-numero')); return; }
     var d = FICHES.get(tr);
     if (d && d.colis) { ouvrirFicheColis(d.colis); return; }
     if (d && d.facture) { ouvrirFicheFacture(d.facture); return; }

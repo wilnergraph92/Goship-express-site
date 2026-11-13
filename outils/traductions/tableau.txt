@@ -1484,3 +1484,121 @@ transférés à la succursale
 Achat livré par le transporteur
 Incident chez le transporteur
 Numéro refusé par le transporteur
+Achat
+Achats
+Achats annoncés
+Allumées
+Annoncé au transporteur
+Arrêt automatique
+Arrêter
+Arrêter le suivi
+Arrêté
+Aucun achat annoncé avec ce numéro.
+Aucun appel fait pour ce seul numéro (les appels groupés n’y figurent pas).
+Aucun fournisseur
+Aucun suivi ne correspond à ces filtres.
+Aucun suivi pour l’instant.
+Aucune
+Ce numéro est déjà suivi.
+Ce numéro n’est pas pris en charge par le fournisseur.
+Ce que dit le transporteur
+Chez le transporteur
+Chronologie du transporteur
+Colis GoShip
+Demandé par
+Demandé par l’équipe
+Depuis le
+Dernier lieu
+Dernière erreur
+Dernière lecture
+Dernière lecture réussie
+Dernière nouvelle
+Disponible au point de retrait
+Désactivé
+En attente du premier scan
+En cours de livraison
+En cours de vérification
+En cours et terminés
+En douane
+En essai : rien n’est montré aux clients
+En partie allumées
+En route
+En service
+Entrez le numéro de suivi du transporteur.
+Erreurs (24 h)
+Fournisseur
+Fournisseur indisponible
+Incident
+Indiquez un motif (5 caractères au moins).
+Introuvable chez le transporteur
+Journal des appels au fournisseur
+La base n’est pas encore à jour pour le suivi des transporteurs.
+Le fournisseur revient en service : en production s’il est vérifié, sinon en essai (rien n’est montré aux clients).
+Le nombre de pré-alertes suivies automatiquement chaque mois, au plus (jours de Santo Domingo). Au-delà, elles attendent le mois suivant.
+Le numéro est inscrit chez le fournisseur à la minute suivante : cela utilise une inscription de son quota.
+Le suivi
+Le suivi des transporteurs n’a pas pu être lu.
+Les achats en attente qui demandent une action. Rien n'est corrigé tout seul : « livré » par le transporteur n'est jamais « reçu ». Retrouvez le colis à l'entrepôt, puis enregistrez-le depuis sa pré-alerte.
+Livraison prévue par le transporteur
+Livré par le transporteur
+Livré par le transporteur le
+Livré, pas reçu
+L’équipe
+Motif (obligatoire, gardé au journal)
+Non autorisé
+Notifications aux clients
+Numéro Amazon (TBA) : suivi limité
+Numéro de commande, pas de suivi
+Numéro de suivi du transporteur
+Numéro inscrit : il sera suivi dans une minute.
+Numéro non pris en charge
+Numéro refusé
+Numéro, magasin, client…
+Pas de suivi
+Pas encore de nouvelles
+Pas encore inscrit
+Plafond mensuel
+Plus aucun numéro n’est inscrit ni relu chez le fournisseur tant que le suivi n’est pas repris. Les clients gardent ce qu’ils voient déjà.
+Prochaine lecture
+Pré-alertes suivies ce mois
+Pré-alertes suivies par mois, au plus
+Quota restant
+Raison
+Rechercher un suivi
+Relectures en retard
+Reprendre le suivi
+Retourné à l’expéditeur
+Reçu chez un autre client
+Rien à surveiller : chaque achat suivi va son chemin.
+Réglage enregistré.
+Résultat
+Sans nouvelles
+Santé du suivi
+Statut chez le transporteur
+Suivi
+Suivi automatique allumé
+Suivi automatique éteint
+Suivi des transporteurs
+Suivi expiré
+Suivi introuvable
+Suivi transporteur
+Suivi transporteurs
+Suivis en cours
+Suivis en cours ou terminés
+Suivre ce numéro
+Suivre un numéro
+Tentative de livraison échouée
+Terminé : 30 jours sans nouvelles
+Terminé : arrivé à Miami
+Terminé : livré
+Terminés
+Tous les statuts
+Tous les suivis
+Tous les états
+Transporteur inconnu
+Une pré-alerte
+Voir le suivi
+Votre rôle ne permet pas de voir le suivi des transporteurs.
+Vérifié
+État du suivi
+Éteintes
