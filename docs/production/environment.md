@@ -82,8 +82,10 @@ secours. Le **backend reste l'adresse officielle de Supabase**
 pousse sur GitHub Pages et, avec `.htaccess`, sur la branche `hostinger` (un commit par
 mise en ligne, jamais forcé). Hostinger suit cette branche (déploiement Git automatique
 de hPanel, compte GitHub relié une fois) et met goshipexpress.net à jour à chaque commit. Aucun mot de
-passe Hostinger n'est rangé dans GitHub. Les pages et les scripts sont servis
-`Cache-Control: no-cache` (`.htaccess`) : rien à vider après une mise en ligne.
+passe Hostinger n'est rangé dans GitHub. Les pages sont servies `Cache-Control: no-cache`
+(`.htaccess`) ; dans la copie publiée, chaque script et feuille de style est appelé avec
+son empreinte (`site.css?v=…`, `outils/production/versionner.py`, lancé par `deploy.yml`)
+et gardé un an : un fichier changé change d'adresse. Rien à vider après une mise en ligne.
 
 Les sauvegardes ne dépendent pas du domaine du site (`outils/README-backup.md`,
 section K) : rien à changer de ce côté.

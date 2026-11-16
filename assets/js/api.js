@@ -579,6 +579,11 @@
     // n'arrive que si quelqu'un contourne le formulaire.
     if (msg.indexOf('database error saving new user') >= 0) return Erreur('inscription-refusee');
     if (statut === 429 || code.indexOf('rate_limit') >= 0) return Erreur('trop-de-tentatives');
+    // Double authentification (Supabase Auth) : code faux ou expiré, appareil inconnu
+    if (code === 'mfa_verification_failed' || code === 'mfa_verification_rejected' ||
+        msg.indexOf('invalid totp') >= 0) return Erreur('code-invalide');
+    if (code === 'mfa_factor_not_found' || code === 'mfa_challenge_expired') return Erreur('code-expire');
+    if (code === 'mfa_totp_enroll_not_enabled' || code === 'mfa_totp_enroll_disabled') return Erreur('double-auth-fermee');
     if (code === 'otp_expired' || code === 'session_not_found' || code === 'session_expired') return Erreur('lien-invalide');
     if (code === '42501' || code === 'PGRST301' || statut === 401 || statut === 403) return Erreur('non-autorise');
     // La fonction n'existe pas encore : le script SQL correspondant n'a pas été
@@ -696,6 +701,86 @@
 
     deconnecter: function () {
       return sb().then(function (c) { return c.auth.signOut({ scope: 'local' }); });
+    },
+
+    /* ---- Double authentification de l'équipe (outils/supabase-double-auth.sql) ----
+       Supabase Auth inscrit l'appareil et vérifie le code (TOTP, 6 chiffres) ; la base
+       décide : un compte de l'équipe qui a un appareil vérifié n'a aucune permission de
+       l'équipe tant que sa session n'a pas donné le code. Ici, seulement les appels. */
+    doubleAuth: {
+      // Ce que la page doit demander (code, inscription) ; null si la base n'a pas
+      // encore le fichier : la page ne demande rien, comme avant.
+      etat: function () {
+        return appelBase('ma_double_auth').catch(function (err) {
+          if (err && err.code === 'absent') return null;
+          throw err;
+        });
+      },
+      // Un nouvel appareil : QR code (image SVG en data:) et clé à taper à la main.
+      // Les inscriptions abandonnées (jamais vérifiées) sont retirées d'abord : Supabase
+      // en refuserait une de plus sous le même nom.
+      inscrire: function () {
+        var client;
+        return sb().then(function (c) {
+          client = c;
+          return c.auth.mfa.listFactors();
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          var abandonnes = ((res.data && res.data.all) || []).filter(function (f) { return f.status !== 'verified'; });
+          return Promise.all(abandonnes.map(function (f) { return client.auth.mfa.unenroll({ factorId: f.id }); }));
+        }).then(function () {
+          var jour = new Date().toISOString().slice(0, 16).replace('T', ' ');
+          return client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Goship Express ' + jour, issuer: 'Goship Express' });
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return { id: res.data.id, qr: res.data.totp.qr_code, cle: res.data.totp.secret };
+        });
+      },
+      // Le premier code de l'appareil qu'on vient d'inscrire : il devient « vérifié »
+      // et la session passe au niveau « aal2 ».
+      confirmer: function (id, code) {
+        return sb().then(function (c) {
+          return c.auth.mfa.challengeAndVerify({ factorId: id, code: String(code || '').replace(/\D/g, '') });
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          return true;
+        });
+      },
+      // Le code donné à la connexion : essayé sur chaque appareil vérifié du compte
+      // (deux téléphones ont deux codes différents), jusqu'au premier qui l'accepte.
+      verifier: function (code) {
+        var client, chiffres = String(code || '').replace(/\D/g, '');
+        return sb().then(function (c) {
+          client = c;
+          return c.auth.mfa.listFactors();
+        }).then(function (res) {
+          if (res.error) throw erreurSupabase(res.error);
+          var appareils = (res.data && res.data.totp) || [];
+          if (!appareils.length) throw Erreur('code-expire');
+          var i = 0, derniere = null;
+          function essayer() {
+            if (i >= appareils.length) throw derniere || Erreur('code-invalide');
+            return client.auth.mfa.challengeAndVerify({ factorId: appareils[i++].id, code: chiffres }).then(function (r) {
+              if (!r.error) return true;
+              derniere = erreurSupabase(r.error);
+              if (derniere.code !== 'code-invalide') throw derniere;
+              return essayer();
+            });
+          }
+          return essayer();
+        });
+      },
+      // Qui, dans l'équipe, a activé la sienne (users.view) ; null si la base n'a pas le fichier
+      equipe: function () {
+        return appelBase('double_auth_equipe').catch(function (err) {
+          if (err && err.code === 'absent') return null;
+          throw err;
+        });
+      },
+      // L'exiger de toute l'équipe, ou plus (settings.manage, code donné, motif journalisé)
+      regler: function (obligatoire, motif) {
+        return appelBase('regler_double_auth', { p_obligatoire: !!obligatoire, p_motif: String(motif || '') });
+      }
     },
 
     // rappel() quand la session se termine sans que la page l'ait demandé :
@@ -4767,6 +4852,18 @@
       return plusTard(true);
     },
 
+    // La double authentification vit dans Supabase Auth : la démonstration n'en a pas.
+    // etat() répond null, comme une base sans supabase-double-auth.sql : la page ne
+    // demande rien et n'affiche ni bandeau ni bouton.
+    doubleAuth: {
+      etat: function () { return plusTard(null); },
+      inscrire: function () { return echec('absent'); },
+      confirmer: function () { return echec('absent'); },
+      verifier: function () { return echec('absent'); },
+      equipe: function () { return plusTard(null); },
+      regler: function () { return echec('absent'); }
+    },
+
     // En démonstration, une session ne se termine que si un autre onglet se
     // déconnecte : on écoute le stockage du navigateur.
     surSessionPerdue: function (rappel) {
@@ -7117,6 +7214,8 @@
     inscrire: ferme, naissance: ferme, definirNaissance: ferme, portefeuille: ferme, utiliserPoints: ferme, mesAvantages: ferme,
     maBienvenue: ferme, monParrainage: ferme, noterInvitation: ferme, utiliserCodeParrainage: ferme, preferencesProgrammes: ferme,
     reglerAnniversaire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    doubleAuth: { etat: function () { return Promise.resolve(null); }, inscrire: ferme, confirmer: ferme, verifier: ferme,
+                  equipe: function () { return Promise.resolve(null); }, regler: ferme },
     surSessionPerdue: function () { return function () {}; },
     envoyerLienMotDePasse: ferme, attendreRecuperation: function () { return Promise.resolve(false); },
     fournisseursConnexion: function () { return Promise.resolve([]); }, connecterAvec: ferme,

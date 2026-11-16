@@ -23,6 +23,11 @@
     'non-autorise': 'Action réservée : votre rôle ne le permet pas, ou la session a expiré (reconnectez-vous).',
     'trop-de-tentatives': 'Trop de tentatives. Patientez quelques minutes.',
     'non-confirme': 'Adresse e-mail pas encore confirmée.',
+    // Double authentification (Supabase Auth)
+    'code-invalide': 'Code incorrect. Tapez le code affiché maintenant par l’application (il change toutes les 30 secondes).',
+    'code-expire': 'Ce code n’est plus valable. Recommencez.',
+    'double-auth-fermee': 'La double authentification n’est pas activée dans Supabase (Authentication > Multi-Factor).',
+    MFA_REQUIRED: 'Donnez d’abord le code de votre application d’authentification.',
     // Les refus de la base (outils/supabase-services.sql). Elle joint le plus
     // souvent une phrase plus précise, qui a la priorité (messageErreur).
     SHIPMENT_NOT_FOUND: 'Ce colis n’existe plus : rechargez la liste.',
@@ -191,11 +196,18 @@
       $('[data-avatar]').textContent = String(s.email || '?').replace(/@.*/, '').split(/[._-]+/)
         .filter(Boolean).slice(0, 2).map(function (m) { return m.charAt(0).toUpperCase(); }).join('') || '?';
       $('[data-barre-connecte]').hidden = false;
-      // Un compte de l'équipe entre ; un client est renvoyé vers son espace
-      return API.permissions().then(function (p) {
-        droits = p || droits;
-        appliquerDroits();
-        if (droits.equipe) ouvrirTableau(); else ecran('refuse');
+      // La double authentification d'abord : un compte de l'équipe protégé n'a aucune
+      // permission tant que le code n'est pas donné (la base le refuse d'elle-même).
+      // Une base sans supabase-double-auth.sql répond null : rien ne change.
+      return API.doubleAuth.etat().catch(function () { return null; }).then(function (m) {
+        doubleAuth = m;
+        if (m && m.code_requis) { ouvrirEcranCode(m); return null; }
+        // Un compte de l'équipe entre ; un client est renvoyé vers son espace
+        return API.permissions().then(function (p) {
+          droits = p || droits;
+          appliquerDroits();
+          if (droits.equipe) ouvrirTableau(); else ecran('refuse');
+        });
       });
     }).catch(function (err) {
       ecran('connexion');
@@ -225,6 +237,126 @@
     });
   });
 
+  /* ---- Double authentification (outils/supabase-double-auth.sql) -------------
+     La base décide ; la page ne fait que demander le code, ou faire inscrire un
+     appareil (QR code de Supabase Auth). Rien n'est gardé dans le navigateur. */
+  var doubleAuth = null;
+
+  function ouvrirEcranCode(m) {
+    ecran('code');
+    var saisie = !!m.active;
+    $('[data-code-bloc="saisie"]').hidden = !saisie;
+    $('[data-code-bloc="inscrire"]').hidden = saisie;
+    var champ = $('#adm-code');
+    champ.value = '';
+    if (saisie) champ.focus();
+  }
+
+  var formCode = $('form[data-form="double-auth-code"]');
+  formCode.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var champ = formCode.elements.code;
+    var code = champ.value.replace(/\D/g, '');
+    if (code.length !== 6) {
+      erreurFormulaire(formCode, 'Tapez les 6 chiffres du code.');
+      return;
+    }
+    erreurFormulaire(formCode, '');
+    var bouton = $('[data-envoyer]', formCode);
+    attente(bouton, 'Vérification…');
+    API.doubleAuth.verifier(code).then(function () {
+      attente(bouton);
+      champ.value = '';
+      demarrer();
+    }).catch(function (err) {
+      attente(bouton);
+      champ.value = '';
+      erreurFormulaire(formCode, messageErreur(err));
+      champ.focus();
+    });
+  });
+
+  // Le bandeau du tableau de bord et la ligne des réglages
+  function afficherDoubleAuth() {
+    var m = doubleAuth;
+    var visible = !!(m && m.equipe);
+    $('[data-double-auth-bandeau]').hidden = !(visible && !m.active);
+    $('[data-reglages-double-auth-ligne]').hidden = !visible;
+    $('[data-double-auth-reglages]').hidden = !visible;
+    if (visible) {
+      $('[data-reglages-double-auth]').textContent = m.active
+        ? 'Activée'
+        : 'Pas activée';
+    }
+  }
+
+  var dlgDoubleAuth = $('[data-dialogue="double-auth"]');
+  var formDoubleAuth = $('[data-double-auth-form]', dlgDoubleAuth);
+  var appareilEnCours = null;
+
+  function erreurDoubleAuth(texte) {
+    var p = $('[data-double-auth-erreur]', dlgDoubleAuth);
+    p.textContent = texte || '';
+    p.hidden = !texte;
+  }
+
+  function ouvrirDoubleAuth() {
+    appareilEnCours = null;
+    erreurDoubleAuth('');
+    $('[data-double-auth-attente]', dlgDoubleAuth).hidden = false;
+    $('[data-double-auth-etapes]', dlgDoubleAuth).hidden = true;
+    $('[data-double-auth-code]', dlgDoubleAuth).value = '';
+    $('[data-double-auth-qr]', dlgDoubleAuth).removeAttribute('src');
+    $('[data-double-auth-cle]', dlgDoubleAuth).textContent = '';
+    $('[data-double-auth-confirmer]', dlgDoubleAuth).disabled = true;
+    if (!dlgDoubleAuth.open) dlgDoubleAuth.showModal();
+    API.doubleAuth.inscrire().then(function (a) {
+      appareilEnCours = a.id;
+      // Le QR code de Supabase est une image SVG en data: (la CSP du tableau de bord
+      // l'autorise) : il ne passe par aucun autre site
+      if (/^data:image\/svg\+xml/.test(a.qr)) $('[data-double-auth-qr]', dlgDoubleAuth).src = a.qr;
+      $('[data-double-auth-cle]', dlgDoubleAuth).textContent = String(a.cle || '').replace(/(.{4})(?=.)/g, '$1 ');
+      $('[data-double-auth-attente]', dlgDoubleAuth).hidden = true;
+      $('[data-double-auth-etapes]', dlgDoubleAuth).hidden = false;
+      $('[data-double-auth-confirmer]', dlgDoubleAuth).disabled = false;
+      $('[data-double-auth-code]', dlgDoubleAuth).focus();
+    }).catch(function (err) {
+      $('[data-double-auth-attente]', dlgDoubleAuth).hidden = true;
+      erreurDoubleAuth(messageErreur(err));
+    });
+  }
+
+  formDoubleAuth.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (!appareilEnCours) return;
+    var champ = $('[data-double-auth-code]', dlgDoubleAuth);
+    var code = champ.value.replace(/\D/g, '');
+    if (code.length !== 6) { erreurDoubleAuth('Tapez les 6 chiffres du code.'); return; }
+    erreurDoubleAuth('');
+    var bouton = $('[data-double-auth-confirmer]', dlgDoubleAuth);
+    attente(bouton, 'Vérification…');
+    API.doubleAuth.confirmer(appareilEnCours, code).then(function () {
+      attente(bouton);
+      dlgDoubleAuth.close();
+      toast('Double authentification activée : le code sera demandé à chaque connexion.');
+      // La session a donné le code (aal2) : on relit ce que la base en dit
+      if ($('[data-ecran="code"]').hidden) {
+        API.doubleAuth.etat().then(function (m) { doubleAuth = m; afficherDoubleAuth(); }).catch(function () {});
+      } else {
+        demarrer();
+      }
+    }).catch(function (err) {
+      attente(bouton);
+      champ.value = '';
+      erreurDoubleAuth(messageErreur(err));
+      champ.focus();
+    });
+  });
+
+  $$('[data-action="double-auth-activer"]').forEach(function (b) {
+    b.addEventListener('click', ouvrirDoubleAuth);
+  });
+
   var deconnexionVoulue = false;
   $$('[data-action="deconnexion"]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -250,6 +382,7 @@
 
   function ouvrirTableau() {
     ecran('tableau');
+    afficherDoubleAuth();
     $('[data-demo-actions]').hidden = API.mode !== 'demo';
     appliquerReglages();
     choisirVue(etat.vue);
@@ -1502,9 +1635,11 @@
   var dlgMotif = $('[data-dialogue="motif"]');
   var formMotif = $('form[data-form="motif"]', dlgMotif);
   var actionMotif = null;
+  var attenteMotif = '';
 
   function demanderMotif(options, action) {
     actionMotif = action;
+    attenteMotif = options.attente || 'Annulation…';
     formMotif.reset();
     erreurFormulaire(formMotif, '');
     $('[data-motif-titre]', dlgMotif).textContent = options.titre;
@@ -1523,7 +1658,7 @@
     var motif = formMotif.motif.value.trim();
     if (!motif) { erreurFormulaire(formMotif, 'Indiquez le motif : il reste au journal.'); return; }
     var bouton = $('[data-motif-valider]', dlgMotif);
-    var fin = attente(bouton, 'Annulation…');
+    var fin = attente(bouton, attenteMotif);
     actionMotif(motif).then(function () {
       dlgMotif.close();
     }).catch(function (err) {
@@ -2045,10 +2180,47 @@
   };
 
   function chargerEquipe() {
-    return API.admin.equipe().then(afficherEquipe).catch(function (err) { toast(messageErreur(err), true); });
+    // La double authentification de chacun (double_auth_equipe) : un oui / non par compte,
+    // rien de plus. Une base qui ne l'a pas encore (ou une erreur) : la liste sans badge.
+    return Promise.all([API.admin.equipe(), API.doubleAuth.equipe().catch(function () { return null; })])
+      .then(function (r) { afficherEquipe(r[0], r[1]); })
+      .catch(function (err) { toast(messageErreur(err), true); });
   }
 
-  function afficherEquipe(membres) {
+  // La double authentification obligatoire (regler_double_auth) : l'état lu avec la liste
+  function afficherObligatoire(protections) {
+    var bloc = $('[data-double-auth-obligatoire]');
+    bloc.hidden = !protections;
+    if (!protections) return;
+    var oui = !!protections.obligatoire;
+    $('[data-double-auth-obligatoire-etat]', bloc).textContent = oui ? 'oui' : 'non';
+    var bouton = $('[data-action="double-auth-obligatoire"]', bloc);
+    bouton.textContent = oui ? 'Ne plus l’exiger' : 'Rendre obligatoire pour l’équipe';
+    bouton.setAttribute('data-obligatoire', oui ? 'oui' : 'non');
+  }
+
+  $('[data-action="double-auth-obligatoire"]').addEventListener('click', function (e) {
+    var allumer = e.currentTarget.getAttribute('data-obligatoire') !== 'oui';
+    demanderMotif({
+      titre: allumer ? 'Rendre la double authentification obligatoire' : 'Ne plus exiger la double authentification',
+      aide: allumer
+        ? 'Un compte de l’équipe sans appareil inscrit n’aura plus accès au tableau de bord avant d’en inscrire un. ' +
+          'Vérifiez d’abord que personne n’est en « Mot de passe seul ».'
+        : 'Les comptes sans appareil inscrit retrouveront l’accès avec leur seul mot de passe.',
+      bouton: allumer ? 'Rendre obligatoire' : 'Ne plus l’exiger',
+      attente: 'Enregistrement…'
+    }, function (motif) {
+      return API.doubleAuth.regler(allumer, motif).then(function () {
+        toast(allumer ? 'Double authentification obligatoire pour l’équipe.' : 'Double authentification de nouveau facultative.');
+        return chargerEquipe();
+      });
+    });
+  });
+
+  function afficherEquipe(membres, protections) {
+    afficherObligatoire(protections);
+    var appareils = {};
+    ((protections && protections.comptes) || []).forEach(function (c) { appareils[c.id] = c.appareils; });
     corpsEquipe.textContent = '';
     membres.forEach(function (m) {
       var tr = el('tr');
@@ -2060,6 +2232,12 @@
       tr.appendChild(tdEmail);
       var tdRole = cellule('Rôle');
       tdRole.appendChild(el('span', 'gs-badge gs-badge--role-' + m.role, ROLES[m.role] || m.role));
+      if (protections && m.id in appareils) {
+        tdRole.appendChild(document.createTextNode(' '));
+        tdRole.appendChild(appareils[m.id] > 0
+          ? el('span', 'gs-badge gs-badge--double-auth', 'Double authentification')
+          : el('span', 'gs-badge gs-badge--sans-double-auth', 'Mot de passe seul'));
+      }
       tr.appendChild(tdRole);
       var tdActions = el('td', 'gs-cellule-actions');
       if (peut('roles.manage') && !m.moi) {

@@ -38,7 +38,7 @@ jobs:
       matrix:
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
                mobile, production, rapports, frais, corrections, programmes, courriel-colis, courriel-pied, lieu-reception, courriel-reseaux, identite,
-               notifications, accuses, suivi-courriels, prealertes, suivi-externe, moteur-suivi, synchro-suivi, mes-suivis, alertes-suivi, supervision-suivi]
+               notifications, accuses, suivi-courriels, prealertes, suivi-externe, moteur-suivi, synchro-suivi, mes-suivis, alertes-suivi, supervision-suivi, double-auth, battement]
     steps:
       # Tout l'historique : plusieurs bancs rejouent la migration depuis une
       # version publiée plus ancienne (git show <commit>:outils/…)
@@ -86,6 +86,8 @@ jobs:
           python3 outils/essais-codes/essai-codes.py
       - name: Scripts shell (syntaxe)
         run: for f in outils/production/*.sh outils/sauvegarde-locale/*.sh; do bash -n "$f" && echo "ok $f"; done
+      - name: Empreintes des scripts publiés et cache du .htaccess (versionner.py)
+        run: python3 outils/production/essai-versionner.py
 
   # Le script de sauvegarde du code tourne sur le Mac du propriétaire (launchd) : il est
   # éprouvé sur macOS, avec le bash 3.2 de /bin/bash et les outils BSD, comme là-bas

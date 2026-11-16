@@ -42,3 +42,5 @@ supabase-synchro-suivi.sql
 supabase-mes-suivis.sql
 supabase-alertes-suivi.sql
 supabase-supervision-suivi.sql
+supabase-double-auth.sql
+supabase-battement.sql

@@ -7,6 +7,37 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — Lot 1 du contrôle qualité : double authentification de l'équipe et surveillance (16/11/2026)
+
+**Deux migrations à passer**, après les 35 premières et **sur décision écrite du CEO** :
+`supabase-double-auth.sql` (36e ; contrôle attendu `4 | f | f | t`) et `supabase-battement.sql`
+(37e ; contrôle attendu `1 | f | 1 | f`, puis `t` une fois l'adresse de Healthchecks posée).
+
+- **Double authentification de l'équipe** (code à 6 chiffres, Google ou Microsoft Authenticator) :
+  bandeau « Protégez votre compte », inscription par QR code, code demandé à chaque connexion,
+  état de chacun dans l'onglet Équipe. La base refuse toute permission de l'équipe à une session
+  sans code d'un compte qui a un appareil ; l'administrateur peut ensuite la rendre obligatoire
+  pour toute l'équipe (motif, journalisé). Clients et application mobile : rien ne change.
+- **Battement de la base vers Healthchecks.io** toutes les 30 minutes (pg_cron) : la file des
+  e-mails et les tâches planifiées ; silence ou `/fail` → alerte. Guide de mise en place (deux
+  contrôles, `battement_url`, `HEARTBEAT_URL`) dans `docs/production/monitoring.md`.
+
+Essais : `essai-double-auth.py` (45), `essai-double-auth-navigateur.mjs` (28), `essai-battement.py`
+(22) ; chaîne : `controle-securite.sql`, `sonder.sh`, `essais.yml`, README, CLAUDE.md,
+`docs/production/database.md`.
+
+## Non publié — Lot 2 du contrôle qualité : vitesse et contraste (16/11/2026)
+
+Aucune migration, aucune donnée touchée.
+
+- **Plus de renvoi des adresses en `.html`** (`.htaccess`) : chaque lien interne coûtait un aller-retour de plus (1 à 2 s sur un téléphone). La page est servie directement ; sa balise `canonical` désigne toujours l'adresse propre. Le renvoi de `www`, de la barre finale en trop et les adresses propres restent.
+- **Scripts et feuilles de style gardés un an** : dans la copie publiée seulement, `deploy.yml` ajoute à chaque lien l'empreinte du fichier (`?v=…`, `outils/production/versionner.py`, puis `--verifier`) ; le `.htaccess` ne garde longtemps que ces liens-là. Un fichier changé change d'adresse. Le dépôt garde des liens nus. `surveiller.sh` suit les liens versionnés.
+- **Photos Unsplash** : `srcset` et `sizes` sur toutes (cartes, bandeaux), plus seulement sur la grande photo d'accueil.
+- **Aperçu de lien** : les 82 pages sans photo prennent celle de l'accueil (`og:image`, `twitter:card`), connexion et inscription comprises.
+- **Contraste de l'orange** : l'orange des textes et boutons passe de `#f4600d` (3,2:1 sur blanc) à `#c2410c` (5,2:1) ; l'orange vif reste sur le bandeau bleu nuit et dans les graphiques. Gris secondaires assombris. axe : 0 défaut de contraste sur les pages publiques, le tableau de bord et « Mon compte ».
+
+Essais : `essai-versionner.py` (16, dans `essais.yml`), copie publiée chargée dans un navigateur (aucun 404, aucune erreur), axe sur 12 pages, bancs navigateur et démo.
+
 ## Non publié — Phase 6 du suivi universel : le suivi des transporteurs vu par l'équipe (13/11/2026)
 
 **Migration à passer**, après les 34 premières et **sur décision écrite du CEO** : `supabase-supervision-suivi.sql` (35e ; contrôle attendu `3 | 1 | false`). Elle n'ajoute que trois fonctions et un index, ne change aucune table, aucune donnée, aucune fonction existante, et se relance sans risque.

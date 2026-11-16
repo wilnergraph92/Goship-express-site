@@ -127,6 +127,19 @@ la base refuse d'elle-même. La matrice a une copie démo
 (`PERMISSIONS_DES_ROLES` dans `api.js`), comparée par
 `essai-permissions.py` ; les méthodes démo appellent `exiger(d, 'perm')`.
 
+**La double authentification de l'équipe** (`outils/supabase-double-auth.sql`, 16/11/2026) :
+Supabase Auth inscrit l'appareil et vérifie le code (TOTP) ; la règle est dans `peut()` et
+`est_admin()`, redéfinies là (recopie de `supabase.sql`, une condition de plus) : une permission
+de l'équipe (sans `:own`) demande `session_double_auth_ok()` — jeton `aal2`, ou aucun appareil
+vérifié (`auth.mfa_factors`) et pas obligatoire (`double_auth_reglage`, table fermée, changée
+seulement par `regler_double_auth(obligatoire, motif)` : `settings.manage`, session `aal2`,
+journalisé). Les permissions `:own` d'un client ne changent jamais. Page : `API.doubleAuth`
+(`etat` = `ma_double_auth()`, `inscrire`, `confirmer`, `verifier`, `equipe` = `double_auth_equipe()`,
+`regler`) ; `admin.js` montre l'écran `data-ecran="code"` avant les permissions, le bandeau, la
+fenêtre `data-dialogue="double-auth"`, les badges et le bouton de l'onglet Équipe. Démo et base
+sans le fichier : `etat()` répond null, rien ne s'affiche. Bancs : `essai-double-auth.py`,
+`essai-double-auth-navigateur.mjs`. Guide : `docs/production/double-authentification.md`.
+
 ## Facturation
 
 Transport facturé **5 $/lb**, plus **10 $ de frais de service** une seule
@@ -602,7 +615,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql`, `supabase-double-auth.sql`, `supabase-battement.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
@@ -641,6 +654,17 @@ Déploiement : **GitHub Pages depuis `main`**. Un `git push origin main`
 met le site en ligne. Les commits vont directement sur `main` — pas de
 branche pour un changement ordinaire.
 
+**Cache des scripts et feuilles de style** : dans la copie qui part en ligne (`_site`),
+`deploy.yml` ajoute à chaque lien `assets/css/…` et `assets/js/…` des pages l'empreinte
+du fichier (`?v=` + 10 signes du SHA-256, `outils/production/versionner.py`, puis
+`--verifier`) ; le `.htaccess` (gabarit `HTACCESS` de `build.py`) ne garde un an que ces
+liens-là, tout le reste est `no-cache`. **Le dépôt n'a jamais d'empreinte** (liens nus,
+vérifié par `essai-versionner.py`) : rien à faire quand on modifie un script. Une adresse
+en `.html` n'est plus renvoyée vers l'adresse propre (un aller-retour de moins par lien) ;
+la balise `canonical` désigne l'adresse propre. Photos Unsplash : `srcset` et `sizes`
+posés par `build.py` (`unsplash_tailles`) ; une page sans photo prend l'aperçu de
+l'accueil (`OG_IMAGE_DEFAUT`).
+
 ### La production (`docs/production/`, `outils/production/`)
 
 Tout ce qui sert à mettre en ligne, surveiller, sauvegarder, restaurer et
@@ -649,8 +673,11 @@ le lire avant de toucher à la base de production. `deploy.yml` refuse de
 publier un fichier de travail (`.md`, `.sql`, `.py`, clés, sauvegardes) ou une
 clé secrète, puis vérifie le site publié (`surveiller.sh`). Les contrôles
 `controle-securite.sql` et `controle-integrite.sql` sont en lecture seule ;
-`sante()` (`supabase-production.sql`) est la seule fonction ajoutée pour la
-surveillance. Une migration qui ajoute une fonction ouverte aux visiteurs doit
+`sante()` (`supabase-production.sql`) et `battement()` (`supabase-battement.sql` : toutes les
+30 min par pg_cron, `sante()` + tâches `goship-…` en échec → Healthchecks.io, `/fail` sinon ;
+adresse `battement_url` dans le coffre, `hc-ping.com` seulement) sont les fonctions ajoutées pour
+la surveillance ; GitHub ne lance `surveillance.yml` qu'environ toutes les 6 h, la base donne le
+rythme (`docs/production/monitoring.md`, « Healthchecks.io »). Une migration qui ajoute une fonction ouverte aux visiteurs doit
 l'ajouter à la liste blanche de `controle-securite.sql` (section 6), sinon le
 contrôle la signale. `essai-production.py` éprouve tout cela, sauvegarde et
 restauration comprises. Changements notables : `CHANGELOG.md` (non publié).
