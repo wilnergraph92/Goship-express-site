@@ -45,3 +45,4 @@ supabase-supervision-suivi.sql
 supabase-double-auth.sql
 supabase-battement.sql
 supabase-prealertes-equipe.sql
+supabase-index-cles.sql

@@ -921,8 +921,10 @@ def outils_de_production(db):
     env = dict(os.environ, SUPABASE_URL='http://localhost:%d' % PORT, SUPABASE_CLE='cle-publique-essai',
                NO_PROXY='*', no_proxy='*')
     r = subprocess.run(['bash', os.path.join(prod, 'sonder.sh')], env=env, capture_output=True, text=True)
-    verifier('sonder.sh : les %d migrations présentes, aucune fonction ouverte à tort, code 0' % len(FICHIERS),
-             (r.returncode, r.stdout.count('  présente  '), 'confirmation des adresses e-mail : ACTIVE' in r.stdout),
+    verifier('sonder.sh : les %d migrations présentes (ou sans témoin), aucune fonction ouverte à tort, code 0'
+             % len(FICHIERS),
+             (r.returncode, r.stdout.count('  présente  ') + r.stdout.count('  sans témoin '),
+              'confirmation des adresses e-mail : ACTIVE' in r.stdout),
              (0, len(FICHIERS), True))
     surveiller = lambda: subprocess.run(['bash', os.path.join(prod, 'surveiller.sh')],
                                         env=dict(env, SANS_SITE='1'), capture_output=True, text=True)

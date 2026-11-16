@@ -168,7 +168,8 @@ migrations(ordre, fichier, present) as (values
   (35, 'supabase-supervision-suivi.sql', exists (select 1 from pg_proc where proname = 'supervision_suivi')),
   (36, 'supabase-double-auth.sql',     exists (select 1 from pg_proc where proname = 'ma_double_auth')),
   (37, 'supabase-battement.sql',       exists (select 1 from pg_proc where proname = 'battement')),
-  (38, 'supabase-prealertes-equipe.sql', exists (select 1 from pg_proc where proname = 'modifier_prealerte'))),
+  (38, 'supabase-prealertes-equipe.sql', exists (select 1 from pg_proc where proname = 'modifier_prealerte')),
+  (39, 'supabase-index-cles.sql',      exists (select 1 from pg_indexes where indexname = 'suivis_externes_journal_suivi_idx'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,

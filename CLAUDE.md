@@ -625,7 +625,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql`, `supabase-double-auth.sql`, `supabase-battement.sql`, `supabase-prealertes-equipe.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql`, `supabase-double-auth.sql`, `supabase-battement.sql`, `supabase-prealertes-equipe.sql`, `supabase-index-cles.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune
@@ -671,7 +671,10 @@ du fichier (`?v=` + 10 signes du SHA-256, `outils/production/versionner.py`, pui
 liens-là, tout le reste est `no-cache`. **Le dépôt n'a jamais d'empreinte** (liens nus,
 vérifié par `essai-versionner.py`) : rien à faire quand on modifie un script. Une adresse
 en `.html` n'est plus renvoyée vers l'adresse propre (un aller-retour de moins par lien) ;
-la balise `canonical` désigne l'adresse propre. Photos Unsplash : `srcset` et `sizes`
+la balise `canonical` désigne l'adresse propre. **Polices servies par le site** (`assets/fonts`,
+`@font-face` en tête de `site.css`, préchargées par `build_head` : `POLICES_PRECHARGEES`) : plus de Google
+Fonts, la CSP n'autorise que `'self'` pour les polices et les styles ; une icône Material de plus = retélécharger
+le sous-ensemble (`assets/fonts/LICENCES.txt`). Photos Unsplash : `srcset` et `sizes`
 posés par `build.py` (`unsplash_tailles`) ; une page sans photo prend l'aperçu de
 l'accueil (`OG_IMAGE_DEFAUT`).
 
