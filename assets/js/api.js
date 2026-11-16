@@ -1185,6 +1185,20 @@
         });
       },
 
+      // Modifier une pré-alerte en attente, ou la supprimer (outils/supabase-prealertes-equipe.sql) :
+      // la base contrôle tout (mêmes règles qu'à la création), journalise avant, après et motif.
+      // champs : seules les clés envoyées changent — magasin, description, suivi_transporteur,
+      // valeur_usd (null = aucune), service. Modifier : shipments.edit ; supprimer :
+      // shipments.delete, motif obligatoire, jamais une pré-alerte reçue.
+      modifierPrealerte: function (id, champs, motif) {
+        return appelBase('modifier_prealerte', { p_prealerte: id, p_champs: champs || {},
+                                                 p_motif: motif ? String(motif) : null });
+      },
+
+      supprimerPrealerte: function (id, motif) {
+        return appelBase('supprimer_prealerte', { p_prealerte: id, p_motif: String(motif || '') });
+      },
+
       /* ---- La supervision du suivi externe (suivi universel, Phase 6) ----------
          L'onglet « Suivi transporteurs » (supervision.js) et la fiche d'un suivi. Tout
          vient de outils/supabase-supervision-suivi.sql : santé, cas à surveiller, liste,
@@ -5414,6 +5428,70 @@
           return p.statut === 'attente' && p.suivi_transporteur === r;
         }).sort(function (a, b) { return new Date(a.cree_le) - new Date(b.cree_le); })
           .slice(0, 20).map(function (p) { return prealerteDemo(d, p); }));
+      },
+
+      // Les copies démo de modifier_prealerte et supprimer_prealerte : mêmes refus, même
+      // journal, même réponse (outils/supabase-prealertes-equipe.sql)
+      modifierPrealerte: function (id, champs, motif) {
+        var d = lireDonnees(), moi;
+        try { moi = exiger(d, 'shipments.edit'); } catch (e) { return echec(e.code); }
+        champs = champs && typeof champs === 'object' ? champs : {};
+        var p = (d.prealertes || []).filter(function (x) { return x.id === id; })[0];
+        if (!p) return echec('PREALERT_NOT_FOUND');
+        if (p.statut !== 'attente') return echec('PREALERT_NOT_PENDING');
+        function voulu(cle) { return Object.prototype.hasOwnProperty.call(champs, cle) ? champs[cle] : p[cle]; }
+        var magasin = String(voulu('magasin') == null ? '' : voulu('magasin')).trim().slice(0, 80);
+        var desc = String(voulu('description') == null ? '' : voulu('description')).trim().slice(0, 300);
+        var suivi = suiviNormalise(voulu('suivi_transporteur'));
+        var service = String(voulu('service') == null ? '' : voulu('service')).trim() || 'aerien';
+        var brute = voulu('valeur_usd'), valeur = null;
+        if (brute != null && String(brute).trim() !== '') {
+          if (!/^\s*-?[0-9]+(\.[0-9]+)?\s*$/.test(String(brute))) return echec('INVALID_VALUE');
+          valeur = arrondi(Number(brute));
+        }
+        if (!magasin) return echec('PREALERT_STORE_REQUIRED');
+        if (!desc) return echec('PREALERT_DESCRIPTION_REQUIRED');
+        if (suivi && !/^[A-Z0-9-]{6,60}$/.test(suivi)) return echec('INVALID_TRACKING');
+        if (valeur != null && (valeur < 0 || valeur > 100000)) return echec('INVALID_VALUE');
+        if (['aerien', 'maritime', 'terrestre'].indexOf(service) < 0) return echec('INVALID_SERVICE');
+        if (suivi && suivi !== suiviNormalise(p.suivi_transporteur)) {
+          if (d.prealertes.some(function (x) {
+            return x.id !== p.id && x.client_id === p.client_id && x.statut === 'attente' &&
+                   suiviNormalise(x.suivi_transporteur) === suivi;
+          })) return echec('PREALERT_DUPLICATE');
+          if (d.colis.some(function (c) { return c.client_id === p.client_id && suiviNormalise(c.suivi_transporteur) === suivi; })) {
+            return echec('PREALERT_ALREADY_RECEIVED');
+          }
+        }
+        var nouveau = { magasin: magasin, description: desc, suivi_transporteur: suivi,
+                        valeur_usd: valeur, service: service };
+        var avant = {}, apres = {};
+        Object.keys(nouveau).forEach(function (k) {
+          var ancien = p[k] === undefined ? null : p[k];
+          if (JSON.stringify(ancien) !== JSON.stringify(nouveau[k])) { avant[k] = ancien; apres[k] = nouveau[k]; }
+        });
+        if (!Object.keys(apres).length) return plusTard(Object.assign(prealerteDemo(d, p), { deja: true }));
+        Object.keys(apres).forEach(function (k) { p[k] = apres[k]; });
+        // Un autre numéro : l'ancien suivi du transporteur ne parle plus de cet achat
+        if ('suivi_transporteur' in apres) p.suivi_externe_id = null;
+        journaliser(d, moi, 'prealerte.modification', 'prealerte', p.id, avant, apres, motif);
+        ecrireDonnees(d);
+        prevenir('colis');
+        return plusTard(Object.assign(prealerteDemo(d, p), { deja: false }));
+      },
+
+      supprimerPrealerte: function (id, motif) {
+        var d = lireDonnees(), moi;
+        try { moi = exiger(d, 'shipments.delete'); } catch (e) { return echec(e.code); }
+        if (String(motif || '').trim().length < 5) return echec('REASON_REQUIRED');
+        var p = (d.prealertes || []).filter(function (x) { return x.id === id; })[0];
+        if (!p) return echec('PREALERT_NOT_FOUND');
+        if (p.statut === 'recu') return echec('PREALERT_RECEIVED');
+        journaliser(d, moi, 'prealerte.suppression', 'prealerte', p.id, JSON.parse(JSON.stringify(p)), null, motif);
+        d.prealertes = d.prealertes.filter(function (x) { return x.id !== p.id; });
+        ecrireDonnees(d);
+        prevenir('colis');
+        return plusTard({ id: p.id, supprimee: true });
       },
 
       // Les copies démo de supervision_suivi, fiche_suivi_externe, suivi_externe,

@@ -2939,5 +2939,22 @@
   "Les comptes sans appareil inscrit retrouveront l’accès avec leur seul mot de passe.": "Kont ki pa gen aparèy anrejistre ap jwenn aksè ankò ak modpas yo sèlman.",
   "Rendre obligatoire": "Fè l obligatwa",
   "Double authentification obligatoire pour l’équipe.": "Otantifikasyon de etap obligatwa pou ekip la kounye a.",
-  "Double authentification de nouveau facultative.": "Otantifikasyon de etap pa obligatwa ankò."
+  "Double authentification de nouveau facultative.": "Otantifikasyon de etap pa obligatwa ankò.",
+  "Modifier la pré-alerte": "Modifye pre-alèt la",
+  "Numéro de suivi du vendeur": "Nimewo swivi machann lan",
+  "Valeur (US $)": "Valè (US $)",
+  "Le client voit la pré-alerte modifiée dans son espace et dans l'application. Un numéro de suivi changé est suivi à nouveau chez le transporteur.": "Kliyan an wè pre-alèt ki modifye a nan espas li ak nan aplikasyon an. Yon nimewo swivi ki chanje swiv ankò kote transpòtè a.",
+  "Supprimer la pré-alerte ?": "Efase pre-alèt la ?",
+  "Elle disparaît de la liste, de l'espace du client et de l'application. Le journal d'audit en garde une copie complète, avec le motif.": "Li disparèt nan lis la, nan espas kliyan an ak nan aplikasyon an. Jounal odit la kenbe yon kopi konplè, ak rezon an.",
+  "Cette pré-alerte n’existe plus : rechargez la liste.": "Pre-alèt sa a pa egziste ankò : rechaje lis la.",
+  "Cette pré-alerte n’est plus en attente : elle ne se modifie plus.": "Pre-alèt sa a pa an atant ankò : li pa ka modifye ankò.",
+  "Cette pré-alerte est rattachée à un colis : elle ne se supprime pas.": "Pre-alèt sa a mare ak yon koli : li pa ka efase.",
+  "Ce numéro de suivi est déjà annoncé par ce client dans une autre pré-alerte.": "Kliyan sa a deja anonse nimewo swivi sa a nan yon lòt pre-alèt.",
+  "Ce colis est déjà arrivé chez ce client.": "Koli sa a deja rive pou kliyan sa a.",
+  "Mode inconnu.": "Mòd enkoni.",
+  "Votre rôle ne permet pas cette action.": "Wòl ou pa pèmèt aksyon sa a.",
+  "L’opération n’a pas abouti. Réessayez.": "Operasyon an pa reyisi. Eseye ankò.",
+  "Rien n’a changé.": "Anyen pa chanje.",
+  "Pré-alerte modifiée.": "Pre-alèt la modifye.",
+  "Pré-alerte supprimée.": "Pre-alèt la efase."
 }

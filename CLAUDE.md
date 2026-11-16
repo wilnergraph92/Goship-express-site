@@ -297,7 +297,17 @@ scan, un suivi de vendeur sans colis : aucune, une ou plusieurs pré-alertes en 
 choisit) ne font que **lire** `prealertes` sous la règle existante `prealertes_lecture`. Le choix
 ouvre le formulaire colis rempli (événement `goship:nouveau-colis`, `admin.js`) ; c'est
 `creer_colis` qui crée le colis et `rapprocher_prealerte` qui passe la pré-alerte à « recu ».
-Aucun statut, aucun événement de colis n'est touché. Le transporteur affiché vient de
+Aucun statut, aucun événement de colis n'est touché. **Modifier et supprimer** (16/11/2026,
+`outils/supabase-prealertes-equipe.sql`) : `modifier_prealerte(pré-alerte, champs, motif)` (`shipments.edit`,
+pré-alerte en attente, mêmes contrôles que `creer_prealerte`, motif facultatif ; un numéro changé détache le suivi
+externe et en ouvre un nouveau si `suivre_prealertes` est allumé) et `supprimer_prealerte(pré-alerte, motif)`
+(`shipments.delete`, motif obligatoire, jamais une pré-alerte reçue ; la ligne est effacée comme quand le client la
+supprime, le journal en garde la copie) ; journal `prealerte.modification` / `prealerte.suppression`. Les règles
+`prealertes_modification` et `prealertes_suppression` ne laissent plus que le client écrire en direct (application
+mobile). Page : boutons `data-prealerte-modifier` / `data-prealerte-supprimer`, fenêtres `prealerte-modifier` et
+`prealerte-supprimer` (`prealertes.js`), message par l'événement `goship:toast` (`admin.js`). Copie démo :
+`modifierPrealerte`, `supprimerPrealerte` ; bancs `essai-prealertes-equipe.py`, `essai-prealertes.js` (section 6),
+`essai-prealertes-navigateur.mjs` (section 4). Le transporteur affiché vient de
 `GoshipTransporteur` (`transporteur.js` : UPS, USPS, Amazon Logistics, prouvés par la forme et la clé de
 contrôle ; sinon rien). Copie démo : `rapprocherPrealertesDemo` ; bancs `essai-prealertes.js` / `.py` /
 `-navigateur.mjs`.
@@ -615,7 +625,7 @@ donne « unterminated dollar-quoted string »). Ordre : `supabase.sql`,
 `supabase-facturation.sql`, `supabase-services.sql`,
 `supabase-evenements.sql`, `supabase-scanner.sql`, `supabase-finances.sql`,
 `supabase-tableau-de-bord.sql`, `supabase-analytics.sql`, `supabase-mobile.sql`,
-`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql`, `supabase-double-auth.sql`, `supabase-battement.sql` (liste de référence :
+`supabase-notifications.sql`, `supabase-production.sql`, `supabase-rapports.sql`, `supabase-compte.sql`, `supabase-regroupement.sql`, `supabase-connexion.sql`, `supabase-profil-complet.sql`, `supabase-frais-service.sql`, `supabase-corrections.sql`, `supabase-naissance.sql`, `supabase-fidelite.sql`, `supabase-anniversaires.sql`, `supabase-campagnes.sql`, `supabase-courriel-colis.sql`, `supabase-courriel-pied.sql`, `supabase-lieu-reception.sql`, `supabase-courriel-reseaux.sql`, `supabase-identite.sql`, `supabase-accuses.sql`, `supabase-suivi-courriels.sql`, `supabase-suivi-externe.sql`, `supabase-moteur-suivi.sql`, `supabase-synchro-suivi.sql`, `supabase-mes-suivis.sql`, `supabase-alertes-suivi.sql`, `supabase-supervision-suivi.sql`, `supabase-double-auth.sql`, `supabase-battement.sql`, `supabase-prealertes-equipe.sql` (liste de référence :
 `outils/migrations.txt`) — relancer l'un impose
 de relancer ceux qui le suivent. Elles sont écrites pour être **rejouables sans risque** :
 `add column if not exists`, valeurs par défaut neutres, aucune

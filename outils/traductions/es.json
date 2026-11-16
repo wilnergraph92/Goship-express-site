@@ -2939,5 +2939,22 @@
   "Les comptes sans appareil inscrit retrouveront l’accès avec leur seul mot de passe.": "Las cuentas sin dispositivo registrado recuperarán el acceso solo con su contraseña.",
   "Rendre obligatoire": "Hacerla obligatoria",
   "Double authentification obligatoire pour l’équipe.": "La autenticación en dos pasos ahora es obligatoria para el equipo.",
-  "Double authentification de nouveau facultative.": "La autenticación en dos pasos vuelve a ser opcional."
+  "Double authentification de nouveau facultative.": "La autenticación en dos pasos vuelve a ser opcional.",
+  "Modifier la pré-alerte": "Modificar la prealerta",
+  "Numéro de suivi du vendeur": "Número de seguimiento del vendedor",
+  "Valeur (US $)": "Valor (US $)",
+  "Le client voit la pré-alerte modifiée dans son espace et dans l'application. Un numéro de suivi changé est suivi à nouveau chez le transporteur.": "El cliente ve la prealerta modificada en su cuenta y en la aplicación. Un número de seguimiento cambiado se vuelve a seguir con el transportista.",
+  "Supprimer la pré-alerte ?": "¿Eliminar la prealerta?",
+  "Elle disparaît de la liste, de l'espace du client et de l'application. Le journal d'audit en garde une copie complète, avec le motif.": "Desaparece de la lista, de la cuenta del cliente y de la aplicación. El registro de auditoría guarda una copia completa, con el motivo.",
+  "Cette pré-alerte n’existe plus : rechargez la liste.": "Esta prealerta ya no existe: vuelva a cargar la lista.",
+  "Cette pré-alerte n’est plus en attente : elle ne se modifie plus.": "Esta prealerta ya no está en espera: ya no se puede modificar.",
+  "Cette pré-alerte est rattachée à un colis : elle ne se supprime pas.": "Esta prealerta está vinculada a un paquete: no se puede eliminar.",
+  "Ce numéro de suivi est déjà annoncé par ce client dans une autre pré-alerte.": "Este número de seguimiento ya fue anunciado por este cliente en otra prealerta.",
+  "Ce colis est déjà arrivé chez ce client.": "Este paquete ya llegó para este cliente.",
+  "Mode inconnu.": "Modo desconocido.",
+  "Votre rôle ne permet pas cette action.": "Su rol no permite esta acción.",
+  "L’opération n’a pas abouti. Réessayez.": "La operación no se completó. Inténtelo de nuevo.",
+  "Rien n’a changé.": "Nada cambió.",
+  "Pré-alerte modifiée.": "Prealerta modificada.",
+  "Pré-alerte supprimée.": "Prealerta eliminada."
 }

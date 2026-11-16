@@ -2939,5 +2939,22 @@
   "Les comptes sans appareil inscrit retrouveront l’accès avec leur seul mot de passe.": "Accounts with no registered device will get access back with their password alone.",
   "Rendre obligatoire": "Require it",
   "Double authentification obligatoire pour l’équipe.": "Two-factor authentication is now required for the team.",
-  "Double authentification de nouveau facultative.": "Two-factor authentication is optional again."
+  "Double authentification de nouveau facultative.": "Two-factor authentication is optional again.",
+  "Modifier la pré-alerte": "Edit the pre-alert",
+  "Numéro de suivi du vendeur": "Seller tracking number",
+  "Valeur (US $)": "Value (US $)",
+  "Le client voit la pré-alerte modifiée dans son espace et dans l'application. Un numéro de suivi changé est suivi à nouveau chez le transporteur.": "The customer sees the edited pre-alert in their account and in the app. A changed tracking number is tracked again with the carrier.",
+  "Supprimer la pré-alerte ?": "Delete the pre-alert?",
+  "Elle disparaît de la liste, de l'espace du client et de l'application. Le journal d'audit en garde une copie complète, avec le motif.": "It disappears from the list, the customer's account and the app. The audit log keeps a full copy, with the reason.",
+  "Cette pré-alerte n’existe plus : rechargez la liste.": "This pre-alert no longer exists: reload the list.",
+  "Cette pré-alerte n’est plus en attente : elle ne se modifie plus.": "This pre-alert is no longer pending: it can no longer be edited.",
+  "Cette pré-alerte est rattachée à un colis : elle ne se supprime pas.": "This pre-alert is linked to a package: it cannot be deleted.",
+  "Ce numéro de suivi est déjà annoncé par ce client dans une autre pré-alerte.": "This tracking number is already announced by this customer in another pre-alert.",
+  "Ce colis est déjà arrivé chez ce client.": "This package has already arrived for this customer.",
+  "Mode inconnu.": "Unknown mode.",
+  "Votre rôle ne permet pas cette action.": "Your role does not allow this action.",
+  "L’opération n’a pas abouti. Réessayez.": "The operation did not go through. Try again.",
+  "Rien n’a changé.": "Nothing changed.",
+  "Pré-alerte modifiée.": "Pre-alert updated.",
+  "Pré-alerte supprimée.": "Pre-alert deleted."
 }

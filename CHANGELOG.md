@@ -7,9 +7,24 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — Lot 1 du contrôle qualité : double authentification de l'équipe et surveillance (16/11/2026)
+## Non publié — l'équipe modifie ou supprime une pré-alerte (16/11/2026)
 
-**Deux migrations à passer**, après les 35 premières et **sur décision écrite du CEO** :
+**Migration à passer**, après les 37 premières et **sur décision écrite du CEO** : `supabase-prealertes-equipe.sql`
+(38e ; contrôle attendu `2 | f | 0`).
+
+- Onglet « Pré-alertes » : **Modifier** (magasin, contenu, numéro de suivi, valeur, mode ; administrateur, gérant,
+  employé ; pré-alerte en attente) et **Supprimer** (administrateur ; motif obligatoire ; jamais une pré-alerte
+  reçue). Mêmes contrôles qu'à la création ; chaque modification et suppression est au journal d'audit (avant, après,
+  motif ; copie complète pour une suppression).
+- Un numéro de suivi changé est suivi à nouveau chez le transporteur (si le suivi automatique est allumé).
+- L'équipe ne peut plus modifier ni effacer une pré-alerte en direct, sans trace ; le client garde ses droits
+  (application mobile).
+
+Essais : `essai-prealertes-equipe.py` (45), `essai-prealertes.js` (73), `essai-prealertes-navigateur.mjs` (45).
+
+## Lot 1 du contrôle qualité : double authentification de l'équipe et surveillance (16/11/2026)
+
+Publié le 16/11/2026 (PR #60), sur accord écrit du CEO ; **migrations exécutées en production le même jour**, avant la fusion :
 `supabase-double-auth.sql` (36e ; contrôle attendu `4 | f | f | t`) et `supabase-battement.sql`
 (37e ; contrôle attendu `1 | f | 1 | f`, puis `t` une fois l'adresse de Healthchecks posée).
 
@@ -26,7 +41,7 @@ Essais : `essai-double-auth.py` (45), `essai-double-auth-navigateur.mjs` (28), `
 (22) ; chaîne : `controle-securite.sql`, `sonder.sh`, `essais.yml`, README, CLAUDE.md,
 `docs/production/database.md`.
 
-## Non publié — Lot 2 du contrôle qualité : vitesse et contraste (16/11/2026)
+## Lot 2 du contrôle qualité : vitesse et contraste (16/11/2026)
 
 Aucune migration, aucune donnée touchée.
 

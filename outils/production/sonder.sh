@@ -80,7 +80,8 @@ supabase-mes-suivis.sql|mes_suivis_externes||non
 supabase-alertes-suivi.sql|etat_alertes_suivi||non
 supabase-supervision-suivi.sql|supervision_suivi||non
 supabase-double-auth.sql|ma_double_auth||non
-supabase-battement.sql|battement||non'
+supabase-battement.sql|battement||non
+supabase-prealertes-equipe.sql|supprimer_prealerte|p_prealerte=00000000-0000-0000-0000-000000000000&p_motif=sonde|non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"
