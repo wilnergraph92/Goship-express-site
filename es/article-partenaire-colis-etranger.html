@@ -2,16 +2,16 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://images.unsplash.com https://gpfdyslysqjmojgzggib.supabase.co https://*.google-analytics.com https://www.googletagmanager.com; connect-src 'self' https://gpfdyslysqjmojgzggib.supabase.co wss://gpfdyslysqjmojgzggib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://images.unsplash.com https://gpfdyslysqjmojgzggib.supabase.co https://*.google-analytics.com https://www.googletagmanager.com; connect-src 'self' https://gpfdyslysqjmojgzggib.supabase.co wss://gpfdyslysqjmojgzggib.supabase.co https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Su socio de confianza para recibir sus paquetes desde el extranjero — Blog de Goship Express</title>
+<title>Su socio de confianza para recibir sus paquetes desde el extranjero</title>
 <meta name="description" content="¿Alguna vez se ha preguntado cómo recibir sus compras internacionales de forma rápida, segura y sin complicaciones? Goship Express es la solución…">
 <meta name="theme-color" content="#061a3f">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Goship Express">
 <meta property="og:locale" content="es_DO">
-<meta property="og:title" content="Su socio de confianza para recibir sus paquetes desde el extranjero — Blog de Goship Express">
+<meta property="og:title" content="Su socio de confianza para recibir sus paquetes desde el extranjero">
 <meta property="og:description" content="¿Alguna vez se ha preguntado cómo recibir sus compras internacionales de forma rápida, segura y sin complicaciones? Goship Express es la solución…">
 <meta property="og:image" content="https://images.unsplash.com/photo-1592085198739-ffcad7f36b54?auto=format&amp;fit=crop&amp;w=1200&amp;h=630&amp;q=72">
 <meta name="twitter:card" content="summary_large_image">
@@ -19,10 +19,9 @@
 <link rel="icon" href="../assets/img/favicon-32.png?v=2026-09-28" type="image/png" sizes="32x32">
 <link rel="icon" href="../assets/img/favicon-64.png?v=2026-09-28" type="image/png" sizes="64x64">
 <link rel="apple-touch-icon" href="../assets/img/apple-touch-icon.png?v=2026-09-28">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://images.unsplash.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap">
+<link rel="preload" href="../assets/fonts/manrope-latin-400-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../assets/fonts/archivo-latin-400-900.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="../assets/css/site.css">
 <script src="../assets/js/config.js" defer></script>
 <script src="../assets/js/site.js" defer></script>
@@ -53,7 +52,7 @@
       <span style="color:var(--accent)">Cotización en 2 h</span>
       <a class="gs-bandeau-compte" href="connexion.html" data-session="non"><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Iniciar sesión</a>
       <a class="gs-bandeau-compte" href="mon-compte.html" data-session="oui" hidden><svg class="gs-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Mi cuenta</a>
-      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Crear cuenta</a>
+      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Crear mi cuenta</a>
     </div>
   </div>
 </div>
@@ -103,7 +102,7 @@
         </span>
       </a>
       <a class="gs-connexion-mobile" href="connexion.html" data-session="non">Iniciar sesión</a>
-      <a href="inscription.html" class="gs-cta hv-fill-cta" data-session="non" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Crear cuenta</a>
+      <a href="inscription.html" class="gs-cta hv-fill-cta" data-session="non" style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Crear mi cuenta</a>
       <a href="mon-compte.html" class="gs-cta hv-fill-cta" data-session="oui" hidden style="background:var(--accent);color:#fff;font-weight:700;font-size:14.5px;padding:15px 24px;border-radius:12px;white-space:nowrap;box-shadow:0 12px 26px -14px rgba(244,96,13,.95)">Mi cuenta</a>
     </div>
   </div>
@@ -154,7 +153,7 @@
       </div>
     </div>
     <div style="min-width:0">
-      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Servicios</h4>
+      <h2 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Servicios</h2>
       <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
         <a href="index.html#adresse" class="hv-accent" style="color:#a4b3d6">Dirección de recepción EE. UU.</a>
         <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Consolidación de paquetes</a>
@@ -164,7 +163,7 @@
       </div>
     </div>
     <div style="min-width:0">
-      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navegación</h4>
+      <h2 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Navegación</h2>
       <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
         <a href="index.html" class="hv-accent" style="color:#a4b3d6">Inicio</a>
         <a href="a-propos.html" class="hv-accent" style="color:#a4b3d6">Nosotros</a>
@@ -174,7 +173,7 @@
       </div>
     </div>
     <div style="min-width:0">
-      <h4 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Contáctenos</h4>
+      <h2 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Contáctenos</h2>
       <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
         <span style="color:#dde5f8;font-weight:700">+1 849 538-6262</span>
         <span style="word-break:break-word">infos@goshipexpress.net</span>

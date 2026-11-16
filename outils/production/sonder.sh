@@ -111,9 +111,14 @@ done <<< "$TEMOINS"
 
 echo
 echo "== Chaîne des migrations (outils/migrations.txt)"
-passe=0; manque=0
+# Les migrations qui n'ajoutent que des index : rien n'en est visible avec la clé publique.
+# Elles sont dites « sans témoin » et comptées à part ; controle-securite.sql (section 1),
+# lu avec SUPABASE_DB_URL, les vérifie vraiment.
+SANS_TEMOIN=" supabase-index-cles.sql "
+passe=0; manque=0; invisibles=0
 while read -r f; do
   case "$f" in ''|\#*) continue ;; esac
+  case "$SANS_TEMOIN" in *" $f "*) echo "  sans témoin $f (index seulement : voir controle-securite.sql)"; invisibles=$((invisibles + 1)); continue ;; esac
   if [ -n "${fichier_ko[$f]:-}" ] && [ -z "${fichier_ok[$f]:-}" ]; then echo "  ABSENTE   $f"; manque=$((manque + 1))
   elif [ -n "${fichier_ko[$f]:-}" ]; then echo "  PARTIELLE $f (une fonction témoin manque)"; manque=$((manque + 1))
   elif [ -n "${fichier_ok[$f]:-}" ]; then echo "  présente  $f"; passe=$((passe + 1))
@@ -140,7 +145,7 @@ else
 fi
 
 echo
-echo "== Résumé : $passe migration(s) présente(s), $manque absente(s) ou partielle(s) ; $ouvertes fonction(s) ouverte(s) aux visiteurs sans raison ; $inattendus réponse(s) inattendue(s)"
+echo "== Résumé : $passe migration(s) présente(s), $invisibles sans témoin, $manque absente(s) ou partielle(s) ; $ouvertes fonction(s) ouverte(s) aux visiteurs sans raison ; $inattendus réponse(s) inattendue(s)"
 # Code de sortie : 0 = chaîne complète et aucune exposition ; 1 = écart (le journal dit
 # lequel). SONDE_RAPPORT_SEUL=1 (pull request : la PR n'est pas responsable de l'état
 # de la production) : le rapport, toujours code 0.

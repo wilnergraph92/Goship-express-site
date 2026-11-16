@@ -49,7 +49,7 @@ MAIN_PAGES = [
      "Réception, consolidation, transport et livraison de colis entre les États-Unis, Santo Domingo et Haïti. Délais annoncés, prix clairs, colis suivis de bout en bout."),
     ('A-propos.dc.html', 'a-propos.html',
      'À propos — Goship Express',
-     "Goship Express est spécialisée dans le transport, la réception et la livraison de colis entre les États-Unis et Haïti, avec des solutions simples, rapides et adaptées."),
+     "Goship Express est spécialisée dans le transport, la réception et la livraison de colis entre les États-Unis et Haïti : des solutions simples, rapides, adaptées."),
     ('Nos-Services.dc.html', 'nos-services.html',
      'Nos services — Goship Express',
      "Adresse de réception aux USA, consolidation, fret maritime et aérien, dédouanement et livraison finale vers Haïti et Santo Domingo."),
@@ -214,10 +214,15 @@ def textes_compte(prefixes=None):
 # Numéro des icônes du site (favicon, écran d'accueil) : à changer avec le dessin.
 ICONES_VERSION = '2026-09-28'
 
-ICON_FONT = ('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,300,0,0'
-             '&amp;icon_names=directions_boat,flight,inventory_2,local_shipping,sensors,support_agent,timer&amp;display=block')
-TEXT_FONTS = ('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900'
-              '&amp;family=Manrope:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@500;600&amp;display=swap')
+# Les polices sont servies par le site (assets/fonts, @font-face en tête de site.css), plus
+# par Google Fonts : sa feuille de style bloquait l'affichage de chaque page (1,1 s sur un
+# téléphone, mesure du 16/11/2026) et chaque visite passait par un serveur de Google. Seuls
+# les alphabets latin et latin étendu sont gardés (français, anglais, espagnol, créole), et,
+# pour les icônes, les sept dessins dont le site se sert (le sous-ensemble que Google fabriquait
+# déjà). Une icône de plus : la retélécharger avec son nom (voir assets/fonts/LICENCES.txt).
+# On précharge les deux polices de la première vue ; les autres arrivent à la demande.
+POLICES_PRECHARGEES = ('manrope-latin-400-700.woff2', 'archivo-latin-400-900.woff2')
+POLICE_ICONES = 'material-symbols-outlined-sous-ensemble.woff2'
 
 
 # Politique de sécurité du contenu (CSP)
@@ -278,8 +283,8 @@ def csp(entete=False, mesure=False):
         "object-src 'none'",
         "form-action 'self'",
         'script-src ' + ' '.join(scripts),
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-        "font-src 'self' https://fonts.gstatic.com",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self'",
         'img-src ' + ' '.join(images),
         'connect-src ' + ' '.join(connexions),
     ]
@@ -763,10 +768,12 @@ def transform_header(body, page):
     h = replace_once(h, ACTIONS_OPEN, ACTIONS_OPEN.replace('<div ', '<div class="gs-actions" ')
                      + '\n      <!--langues:desktop--><!--/langues-->', page)
     h = replace_once(h, HEADER_PHONE, HEADER_PHONE.replace('<a ', '<a class="gs-header-phone" '), page)
-    # « Demander un devis » devient « Créer un compte » (« Mon compte » une fois connecté)
+    # « Demander un devis » devient « Créer mon compte » (« Mon compte » une fois connecté). Un seul
+    # libellé pour l'ouverture d'un compte, partout (contrôle qualité du 16/11/2026 : l'accueil en
+    # avait trois — « Créer un compte », « Créer mon compte », « Ouvrir mon compte gratuitement »)
     h = sub_count(r'<a href="(?:Contacts\.dc\.html)?#contact" (style="[^"]*" style-hover="[^"]*")>Demander un devis</a>',
                   r'<a class="gs-connexion-mobile" href="connexion.html" data-session="non">Se connecter</a>\n'
-                  r'      <a href="inscription.html" class="gs-cta" data-session="non" \1>Créer un compte</a>\n'
+                  r'      <a href="inscription.html" class="gs-cta" data-session="non" \1>Créer mon compte</a>\n'
                   r'      <a href="mon-compte.html" class="gs-cta" data-session="oui" hidden \1>Mon compte</a>', h, page)
     # page active
     nav_start = h.find('<nav ')
@@ -798,7 +805,7 @@ def transform_topbar(body, page):
                      lambda m: '<div class="gs-bandeau__actions" ' + m.group(1) + m.group(2).rstrip()
                      + '\n      <a class="gs-bandeau-compte" href="connexion.html" data-session="non">[[ico:user]]Se connecter</a>'
                      + '\n      <a class="gs-bandeau-compte" href="mon-compte.html" data-session="oui" hidden>[[ico:user]]Mon compte</a>'
-                     + '\n      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Créer un compte</a>'
+                     + '\n      <a class="gs-bandeau-inscription" href="inscription.html" data-session="non">Créer mon compte</a>'
                      + '\n    </div>',
                      haut, page, flags=re.S)
     return poser_icones_petites(haut) + body[fin:]
@@ -1162,9 +1169,9 @@ def page_specific(body, src, page):
                             '            <span style="width:9px;height:9px;border-top:2px solid #fff;border-right:2px solid #fff;transform:rotate(45deg);display:block"></span>\n'
                             '          </span>\n'
                             '        </a>\n', page)
-    # L'ouverture de compte mène au formulaire d'inscription
-    body = re.sub(r'<a href="Contacts\.dc\.html#contact"( style="[^"]*" style-hover="[^"]*">\s*Ouvrir mon compte gratuitement)',
-                  r'<a href="inscription.html"\1', body)
+    # L'ouverture de compte mène au formulaire d'inscription, sous le même libellé que partout
+    body = re.sub(r'<a href="Contacts\.dc\.html#contact"( style="[^"]*" style-hover="[^"]*">\s*)Ouvrir mon compte gratuitement',
+                  r'<a href="inscription.html"\1Créer mon compte', body)
     # Parallaxe discrète des éléments flottants (cartes, pastilles, halos)
     for debut, vitesse in PARALLAXE:
         body = body.replace(f'<div style="{debut}', f'<div data-parallax="{vitesse}" style="{debut}')
@@ -1436,13 +1443,13 @@ def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(),
         f'<link rel="icon" href="{prefix}assets/img/favicon-32.png?v={ICONES_VERSION}" type="image/png" sizes="32x32">',
         f'<link rel="icon" href="{prefix}assets/img/favicon-64.png?v={ICONES_VERSION}" type="image/png" sizes="64x64">',
         f'<link rel="apple-touch-icon" href="{prefix}assets/img/apple-touch-icon.png?v={ICONES_VERSION}">',
-        '<link rel="preconnect" href="https://fonts.googleapis.com">',
-        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>',
         '<link rel="preconnect" href="https://images.unsplash.com">',
-        f'<link rel="stylesheet" href="{TEXT_FONTS}">',
     ]
-    if uses_icons:
-        lines.append(f'<link rel="stylesheet" href="{ICON_FONT}">')
+    # « crossorigin » est obligatoire pour une police préchargée, même du même site :
+    # sans lui, le navigateur la télécharge deux fois
+    polices = POLICES_PRECHARGEES + ((POLICE_ICONES,) if uses_icons else ())
+    lines += [f'<link rel="preload" href="{prefix}assets/fonts/{nom}" as="font" type="font/woff2" crossorigin>'
+              for nom in polices]
     lines.append(f'<link rel="stylesheet" href="{prefix}assets/css/site.css">')
     for nom in ('config', 'site', 'fond') + tuple(scripts) + (('mesure',) if mesure else ()):
         lines.append(f'<script src="{prefix}assets/js/{nom}.js" defer></script>')
@@ -1515,12 +1522,28 @@ def convert(src, out, title=None, desc=None):
     # Image principale de chaque page : chargement prioritaire
     body = re.sub(r'(<section id="top"[^>]*>\s*<img )', r'\1fetchpriority="high" ', body, count=1)
 
+    # Des titres qui ne sautent pas de niveau (lecteurs d'écran, contrôle qualité du 16/11/2026) :
+    # les titres de colonnes du pied de page étaient des h4 posés juste après un h1 ou un h2 ;
+    # la carte « Où est mon colis ? » de l'accueil et les conseils d'un article, des h3 juste
+    # après le h1. Même apparence (les styles sont dans les balises), un niveau juste.
+    body = re.sub(r'<h4( style="font-size:13px;letter-spacing:\.16em[^"]*")>(.*?)</h4>', r'<h2\1>\2</h2>', body, flags=re.S)
+    if out == 'index.html':
+        body = re.sub(r'<h3( style="margin-top:14px;font-size:clamp\(24px,2\.6vw,34px\)[^"]*")>(Où est mon colis \?)</h3>',
+                      r'<h2\1>\2</h2>', body)
+    if out == 'article-conseils-livraison.html':
+        body = re.sub(r'<h3( style="font-size:clamp\(17px,1\.9vw,21px\)[^"]*")>(.*?)</h3>', r'<h2\1>\2</h2>', body, flags=re.S)
+
     check_leftovers(body, page)
 
     h1 = re.search(r'<h1[^>]*>(.*?)</h1>', body, re.S)
     h1_text = text_of(h1.group(1)) if h1 else ''
     if title is None:  # article
         title = f'{h1_text} — Blog Goship Express'
+        # Au-delà de 65 signes, Google coupe le titre (contrôle qualité du 16/11/2026) : le
+        # titre de l'article seul, que Google complète de lui-même par le nom du site. Les
+        # traductions suivent : elles traduisent ce titre comme celui de la page (h1).
+        if len(title) > 65:
+            title = h1_text
         first_p = re.search(r'<section[^>]*>\s*<div[^>]*>\s*<p[^>]*>(.*?)</p>', body[body.find('</section>'):], re.S)
         desc = shorten(text_of(first_p.group(1)))
     uses_icons = 'Material Symbols Outlined' in body
@@ -1598,7 +1621,10 @@ def build_compte():
 def build_admin():
     """Tableau de bord (réservé à l'équipe, en français uniquement)."""
     doc = open(os.path.join(PAGES, 'admin.html'), encoding='utf-8').read()
-    doc = poser_icones(doc.replace('[[fonts]]', TEXT_FONTS))
+    # Les polices du tableau de bord : les mêmes que le site, servies par lui (préchargées)
+    polices = '\n'.join(f'<link rel="preload" href="assets/fonts/{nom}" as="font" type="font/woff2" crossorigin>'
+                        for nom in POLICES_PRECHARGEES)
+    doc = poser_icones(doc.replace('[[polices]]', polices))
     # La même politique de sécurité que les autres pages : la page aux droits les
     # plus élevés ne doit pas être la seule à accepter un script venu d'ailleurs.
     doc = doc.replace('<meta charset="utf-8">\n',

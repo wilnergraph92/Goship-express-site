@@ -7,10 +7,31 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — l'équipe modifie ou supprime une pré-alerte (16/11/2026)
+## Non publié — lot confort du contrôle qualité (16/11/2026)
 
-**Migration à passer**, après les 37 premières et **sur décision écrite du CEO** : `supabase-prealertes-equipe.sql`
-(38e ; contrôle attendu `2 | f | 0`).
+**Migration à passer**, après les 38 premières et **sur décision écrite du CEO** : `supabase-index-cles.sql` (39e ;
+contrôle attendu `6 | 0`) — six index sur les clés étrangères signalées par Supabase, rien d'autre.
+
+- **Polices servies par le site** (`assets/fonts`, `@font-face` en tête de `site.css`, licences dans
+  `assets/fonts/LICENCES.txt`) : plus aucun appel à Google Fonts, dont la feuille bloquait l'affichage (1,1 s sur
+  téléphone) ; la CSP n'autorise plus que le site pour les polices et les styles.
+- **Titres** : un article dont le titre et « — Blog Goship Express » dépassent 65 signes garde son titre seul (39 titres
+  trop longs → 6, des titres d'articles eux-mêmes longs) ; trois descriptions ramenées sous 165 signes.
+- **Un seul libellé** pour ouvrir un compte : « Créer mon compte » (en-tête, bandeau, accueil), dans les quatre langues.
+- **Cibles tactiles** de 24 px au moins (pied de page, bandeau, liens des cartes, fils d'Ariane, « Mot de passe oublié »).
+- **Titres de section sans saut de niveau** (pied de page en h2, carte « Où est mon colis ? », conseils d'un article).
+- `sonder.sh` : une migration qui n'ajoute que des index est dite « sans témoin ».
+
+Laissés tels quels, expliqué dans la migration : `pg_net` dans le schéma public, les deux règles de lecture des
+notifications (pas redondantes), les index « jamais utilisés ». Le champ piège de l'inscription : seul un CAPTCHA
+protégerait mieux (nouveau prestataire, à décider).
+
+Essais : `essai-index-cles.py` (12) ; régression ci-dessous.
+
+## L'équipe modifie ou supprime une pré-alerte (16/11/2026)
+
+Publié le 16/11/2026 (PR #61) ; **migration 38 exécutée en production le même jour**, avant la fusion
+(`supabase-prealertes-equipe.sql`, contrôle `2 | f | 0`).
 
 - Onglet « Pré-alertes » : **Modifier** (magasin, contenu, numéro de suivi, valeur, mode ; administrateur, gérant,
   employé ; pré-alerte en attente) et **Supprimer** (administrateur ; motif obligatoire ; jamais une pré-alerte
