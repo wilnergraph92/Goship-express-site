@@ -4,7 +4,7 @@
    Chargé après site.css, par admin.html seulement : le site public n'en
    dépend pas. Le cadre (menu latéral, barre du haut) et l'habillage des
    cartes, aux couleurs de la marque — bleu nuit (--ink #061a3f, --ink2
-   #0d2b6b), orange (--accent #f4600d), bleu (--accent2 #1f5fe0). Aucune
+   #0d2b6b), orange (--accent #c2410c ; #f4600d pour les graphiques), bleu (--accent2 #1f5fe0). Aucune
    règle ici ne décide de ce qui s'affiche : les permissions et les données
    restent l'affaire de admin.js et de la base.
    Mêmes seuils que le site : 1023 px (le menu devient un tiroir), 759 px et
@@ -39,7 +39,7 @@
 .gs-td__nav button,.gs-td__lien{display:flex;align-items:center;gap:12px;width:100%;min-height:46px;padding:10px 14px;border:0;border-radius:14px;background:none;color:#c9d4ec;font:inherit;font-size:15px;font-weight:600;text-align:left;text-decoration:none;cursor:pointer;transition:background-color .2s ease,color .2s ease,box-shadow .2s ease}
 .gs-td__nav button:hover,.gs-td__menu .gs-td__lien:hover{background:rgba(255,255,255,.08);color:#fff}
 .gs-td__nav button:focus-visible,.gs-td__lien:focus-visible,.gs-td__replier:focus-visible{outline:2px solid #ff9a5c;outline-offset:2px}
-.gs-td__nav button[aria-selected="true"]{background:linear-gradient(135deg,#f4600d,#ff7b2f);color:#fff;box-shadow:0 14px 26px -14px rgba(244,96,13,.9)}
+.gs-td__nav button[aria-selected="true"]{background:linear-gradient(135deg,#c2410c,#c94c09);color:#fff;box-shadow:0 14px 26px -14px rgba(244,96,13,.9)}
 .gs-td__nav .gs-ico,.gs-td__lien .gs-ico{flex:none;width:20px;height:20px}
 .gs-td__libelle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .gs-td__nav .gs-admin-onglets__total{flex:none;padding:1px 9px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:12px;font-weight:700}
@@ -85,19 +85,19 @@
 .gs-td__nouveau .gs-ico{width:18px;height:18px}
 .gs-td__compte{display:flex;align-items:center;gap:10px;max-width:260px;height:44px;padding:0 10px 0 4px;border:1px solid var(--app-bord);border-radius:14px;background:#fff;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
 .gs-td__compte:hover,.gs-td__compte[aria-expanded="true"]{border-color:var(--ink)}
-.gs-td__compte .gs-ico{flex:none;width:16px;height:16px;color:#6b7690}
+.gs-td__compte .gs-ico{flex:none;width:16px;height:16px;color:#626d87}
 .gs-td__avatar{display:grid;flex:none;place-items:center;width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#0d2b6b,#1f5fe0);color:#fff;font-size:13px;font-weight:800;letter-spacing:.02em}
 .gs-td__qui{display:flex;flex-direction:column;min-width:0;line-height:1.2}
 .gs-td__email{overflow:hidden;font-size:13.5px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
-.gs-td__role{align-self:flex-start;margin-top:2px;padding:1px 7px;border-radius:999px;background:rgba(244,96,13,.12);color:#c4500b;font-size:11px;font-weight:800}
+.gs-td__role{align-self:flex-start;margin-top:2px;padding:1px 7px;border-radius:999px;background:rgba(244,96,13,.12);color:#a83d07;font-size:11px;font-weight:800}
 
 /* Les panneaux qui s'ouvrent sous la barre : alertes et compte */
 .gs-td__deroulant{position:relative}
 .gs-td__panneau{position:absolute;top:calc(100% + 10px);right:0;z-index:70;width:min(360px,calc(100vw - 32px));padding:14px;border:1px solid var(--app-bord);border-radius:18px;background:#fff;box-shadow:0 30px 60px -24px rgba(6,26,63,.45);animation:gs-dialogue .2s ease both}
 .gs-td__panneau--compte{width:240px;padding:8px}
-.gs-td__panneau-titre{margin:2px 4px 10px;overflow:hidden;font-size:13px;font-weight:800;letter-spacing:.06em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap;color:#6b7690}
+.gs-td__panneau-titre{margin:2px 4px 10px;overflow:hidden;font-size:13px;font-weight:800;letter-spacing:.06em;text-overflow:ellipsis;text-transform:uppercase;white-space:nowrap;color:#626d87}
 .gs-td__panneau--compte .gs-td__panneau-titre{display:flex;flex-direction:column;gap:2px;margin:6px 10px 8px;padding-bottom:10px;border-bottom:1px solid #eef2f8;letter-spacing:0;text-transform:none;color:var(--ink)}
-.gs-td__panneau-role{font-size:12.5px;font-weight:700;color:#c4500b}
+.gs-td__panneau-role{font-size:12.5px;font-weight:700;color:#a83d07}
 .gs-td__panneau .gs-td__lien{min-height:42px;border-radius:12px;color:var(--ink);font-size:14.5px}
 .gs-td__panneau .gs-td__lien:hover{background:#f3f6fb;color:var(--ink)}
 .gs-td__panneau .gs-alertes{max-height:min(60vh,420px);overflow-y:auto}
@@ -113,13 +113,13 @@
 .gs-apercu__titre::before{content:"";flex:none;width:4px;height:18px;border-radius:4px;background:var(--accent)}
 .gs-kpis{gap:14px}
 .gs-kpi{position:relative;gap:8px;min-height:128px;padding:18px 18px 16px;border-color:var(--app-bord);border-radius:var(--app-rayon);box-shadow:var(--app-ombre)}
-.gs-kpi__libelle{padding-right:52px;font-size:12px;letter-spacing:.05em;color:#6b7690}
+.gs-kpi__libelle{padding-right:52px;font-size:12px;letter-spacing:.05em;color:#626d87}
 .gs-kpi__valeur{font-size:28px;letter-spacing:-.02em}
 .gs-kpi__picto{position:absolute;top:16px;right:16px;display:grid;place-items:center;width:44px;height:44px;border-radius:14px}
 .gs-kpi__picto--bleu{background:#e8efff;color:#1f5fe0}
 .gs-kpi__picto--marine{background:#e7edf9;color:#0d2b6b}
 .gs-kpi__picto--vert{background:#dcfce7;color:#15803d}
-.gs-kpi__picto--orange{background:rgba(244,96,13,.12);color:#f4600d}
+.gs-kpi__picto--orange{background:rgba(244,96,13,.12);color:#c2410c}
 .gs-kpi__picto--rouge{background:#fee2e2;color:#dc2626}
 button.gs-kpi:hover{border-color:#cfd8e8}
 .gs-kpi--critique{border-color:#f7caca;background:linear-gradient(180deg,#fff,#fff6f6)}
@@ -212,7 +212,7 @@ button.gs-kpi--fort:hover{border-color:transparent;box-shadow:0 28px 50px -26px 
    bleu nuit (#061a3f, #0d2b6b), orange (#f4600d), bleu (#1f5fe0). Des cartes blanches
    posées sur une grille souple : une carte dont la partie n'est pas visible pour le rôle
    est masquée, et sa voisine prend toute la largeur. */
-.gs-vg{--vg-bord:#e6ebf3;--vg-doux:#6b7690;--vg-pale:#f3f6fb;--vg-barre:#e9eef6}
+.gs-vg{--vg-bord:#e6ebf3;--vg-doux:#626d87;--vg-pale:#f3f6fb;--vg-barre:#e9eef6}
 .gs-vg__tete{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 20px;margin:4px 0 20px}
 .gs-vg__intro{min-width:0}
 .gs-vg__titre{margin:0;font-family:'Archivo','Manrope',sans-serif;font-size:22px;font-weight:800;line-height:1.25;letter-spacing:-.015em;color:var(--ink)}
@@ -274,7 +274,7 @@ button.gs-vg__kpi:hover{background:#fafbfe}
 .gs-vg__kpi-pied{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0;font-size:13px;font-weight:600;color:var(--vg-doux)}
 .gs-vg__picto{display:grid;flex:none;place-items:center;width:52px;height:52px;border-radius:50%}
 .gs-vg__picto svg{width:22px;height:22px}
-.gs-vg__picto--orange{background:rgba(244,96,13,.12);color:#f4600d}
+.gs-vg__picto--orange{background:rgba(244,96,13,.12);color:#c2410c}
 .gs-vg__picto--vert{background:#dcfce7;color:#15803d}
 .gs-vg__picto--bleu{background:#e8efff;color:#1f5fe0}
 .gs-vg__picto--marine{background:#e7edf9;color:#0d2b6b}
@@ -345,12 +345,12 @@ button.gs-vg__kpi:hover{background:#fafbfe}
 .gs-vg__etiquette{position:absolute;padding:5px 10px;border-radius:9px;background:#061a3f;color:#fff;font-size:12.5px;font-weight:800;white-space:nowrap;transform:translate(-50%,calc(-100% - 16px));pointer-events:none}
 .gs-vg__etiquette--depart{background:#fff;color:var(--ink);box-shadow:0 8px 20px -12px rgba(6,26,63,.6)}
 .gs-vg__etiquette--DO{transform:translate(-30%,20px);background:#1f5fe0}
-.gs-vg__etiquette--HT{transform:translate(-70%,20px);background:#f4600d}
+.gs-vg__etiquette--HT{transform:translate(-70%,20px);background:#c2410c}
 
 /* Les clients : la carte sombre */
 .gs-vg__carte--sombre{display:flex;flex-direction:column;overflow:hidden;border-color:transparent;background:radial-gradient(320px 240px at 100% 0,rgba(244,96,13,.36),transparent 70%),radial-gradient(300px 260px at 0 100%,rgba(31,95,224,.35),transparent 70%),linear-gradient(160deg,#0d2b6b 0%,#061a3f 60%,#04122e 100%);color:#fff;box-shadow:0 30px 60px -34px rgba(6,26,63,.9)}
 .gs-vg__carte--sombre .gs-vg__carte-titre{color:#fff}
-.gs-vg__rond{display:grid;flex:none;place-items:center;width:48px;height:48px;padding:0;border:0;border-radius:50%;background:#f4600d;color:#fff;box-shadow:0 14px 28px -12px rgba(244,96,13,.9);cursor:pointer;transition:transform .2s ease}
+.gs-vg__rond{display:grid;flex:none;place-items:center;width:48px;height:48px;padding:0;border:0;border-radius:50%;background:#c2410c;color:#fff;box-shadow:0 14px 28px -12px rgba(244,96,13,.9);cursor:pointer;transition:transform .2s ease}
 .gs-vg__rond:hover{transform:translateY(-2px)}
 .gs-vg__rond .gs-ico{width:20px;height:20px}
 .gs-vg__clients{display:flex;flex:1;flex-direction:column;gap:6px;margin-top:22px}
@@ -400,7 +400,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-vg__etape{position:relative;min-width:0}
 .gs-vg__etape:not(:last-child)::after{content:"";position:absolute;top:19px;right:12px;left:52px;height:2px;border-radius:2px;background:#e3e9f3}
 .gs-vg__etape-bouton{display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:100%;padding:2px 14px 6px 2px;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer}
-.gs-vg__etape-rang{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#f4600d;color:#fff;font-size:14px;font-weight:800;box-shadow:0 10px 20px -12px rgba(244,96,13,.9)}
+.gs-vg__etape-rang{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#c2410c;color:#fff;font-size:14px;font-weight:800;box-shadow:0 10px 20px -12px rgba(244,96,13,.9)}
 .gs-vg__etape--fin .gs-vg__etape-rang{background:#16a34a;box-shadow:0 10px 20px -12px rgba(22,163,74,.9)}
 .gs-vg__etape-nom{min-height:2.6em;font-size:13.5px;font-weight:700;line-height:1.3;color:#4a5670}
 .gs-vg__etape-nombre{font-family:'Archivo','Manrope',sans-serif;font-size:28px;font-weight:800;line-height:1;color:var(--ink)}
@@ -487,7 +487,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
    lecteur du scanner, raccourcis clavier ------------------------------------------- */
 .gs-td__bandeau{margin:14px 24px 0;padding:12px 16px;border:1px solid #cfd8e8;border-radius:14px;background:#eef3fd;color:#1a3a7a;font-size:14.5px;line-height:1.5}
 .gs-td__bandeau--erreur{border-color:#f7caca;background:#fef3f2;color:#b42318}
-.gs-scan__lecteur{margin:8px 0 0;font-size:13.5px;color:#6b7690}
+.gs-scan__lecteur{margin:8px 0 0;font-size:13.5px;color:#626d87}
 .gs-scan__lecteur.is-actif{color:#15803d;font-weight:600}
 .gs-reglages__infos kbd{display:inline-block;min-width:1.6em;padding:0 5px;border:1px solid #cfd8e8;border-bottom-width:2px;border-radius:6px;background:#f7f9fd;font:600 12.5px/1.6 inherit;text-align:center}
 
@@ -500,12 +500,12 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-reglages__nav button[aria-selected="true"]{background:var(--ink);color:#fff}
 .gs-reglages__nav .gs-ico{flex:none;width:18px;height:18px}
 .gs-reglages__section h3{font-size:18px}
-.gs-reglages__aide{margin:6px 0 10px;font-size:14px;line-height:1.5;color:#6b7690}
+.gs-reglages__aide{margin:6px 0 10px;font-size:14px;line-height:1.5;color:#626d87}
 .gs-reglage{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;padding:14px 0;border-bottom:1px solid #eef2f8;cursor:pointer}
 .gs-reglage:last-child{border-bottom:0}
 .gs-reglage__texte{display:flex;flex-direction:column;gap:3px;min-width:0}
 .gs-reglage__texte strong{font-size:15px;color:var(--ink)}
-.gs-reglage__texte small{font-size:13.5px;line-height:1.45;color:#6b7690}
+.gs-reglage__texte small{font-size:13.5px;line-height:1.45;color:#626d87}
 .gs-reglage select{flex:none;min-width:170px}
 .gs-interrupteur{position:relative;flex:none;width:46px;height:26px;margin:0;border-radius:999px;background:#d6ddec;-webkit-appearance:none;appearance:none;cursor:pointer;transition:background-color .2s ease}
 .gs-interrupteur::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(6,26,63,.3);transition:transform .2s ease}
@@ -514,7 +514,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-interrupteur:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 .gs-reglages__infos{display:grid;gap:0;margin:10px 0 4px}
 .gs-reglages__infos div{display:grid;grid-template-columns:minmax(120px,190px) minmax(0,1fr);gap:12px;padding:11px 0;border-bottom:1px solid #eef2f8;font-size:14.5px}
-.gs-reglages__infos dt{font-weight:700;color:#6b7690}
+.gs-reglages__infos dt{font-weight:700;color:#626d87}
 .gs-reglages__infos dd{margin:0;overflow-wrap:anywhere;color:var(--ink)}
 .gs-reglages__actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .gs-reglages__actions .gs-ico{width:16px;height:16px}
@@ -637,7 +637,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-vg__direct-etat--pause i{background:#94a0b8}
 @keyframes gs-vg-pouls{0%{box-shadow:0 0 0 0 rgba(22,163,74,.5)}100%{box-shadow:0 0 0 8px rgba(22,163,74,0)}}
 .gs-vg__bouton[aria-pressed="false"]{border-color:#c7d6f7;background:#eef3fd;color:#1a4fbd}
-.gs-vg__bouton--plein{border-color:transparent;background:linear-gradient(135deg,#f4600d,#ff7b2f);color:#fff;box-shadow:0 14px 26px -14px rgba(244,96,13,.9)}
+.gs-vg__bouton--plein{border-color:transparent;background:linear-gradient(135deg,#c2410c,#c94c09);color:#fff;box-shadow:0 14px 26px -14px rgba(244,96,13,.9)}
 .gs-vg__bouton--plein:hover{border-color:transparent;background:#d4500a}
 .gs-vg__filtres{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 20px}
 .gs-vg__filtres-titre{display:inline-flex;align-items:center;gap:7px;margin-right:2px;font-size:14px;font-weight:800;color:#4a5670}
@@ -649,7 +649,7 @@ button.gs-vg__surveiller-case:hover{background:#fafbfe}
 .gs-vg__filtre select{max-width:150px;height:38px;padding:0 30px 0 2px;border:0;border-radius:999px;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%235b6782' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ink);font:inherit;font-size:14px;font-weight:800;text-overflow:ellipsis;-webkit-appearance:none;appearance:none;cursor:pointer}
 .gs-vg__filtre select:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
 .gs-vg__filtre select:disabled{cursor:not-allowed;opacity:.6}
-.gs-vg__filtre.is-actif{border-color:#f4600d;background:#fff4ec;color:#c4500b}
+.gs-vg__filtre.is-actif{border-color:#f4600d;background:#fff4ec;color:#a83d07}
 .gs-vg__filtres-effacer{font-size:14px}
 .gs-vg__filtres-total{margin:0 0 0 auto;font-size:14px;font-weight:700;color:var(--vg-doux)}
 .gs-vg__filtres-note{flex:1 1 100%;margin:0;font-size:13px;line-height:1.45;color:var(--vg-doux)}
@@ -732,13 +732,13 @@ html[data-animations="non"] .gs-vg__halo,html[data-animations="non"] .gs-vg__dir
 .gs-scan__journal li[data-numero]{cursor:pointer}
 .gs-scan__journal li[data-numero]:hover{background:#f5f7fb}
 .gs-fiche{width:min(720px,calc(100vw - 24px))}
-.gs-fiche__type{margin:0 0 4px;font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#6b7690}
+.gs-fiche__type{margin:0 0 4px;font-size:12.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#626d87}
 .gs-fiche__titre{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;word-break:break-word}
 .gs-fiche__badge:empty{display:none}
 .gs-fiche__grille{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 20px;margin:0}
 .gs-fiche__champ{min-width:0}
 .gs-fiche__champ--large{grid-column:1/-1}
-.gs-fiche__champ dt{margin-bottom:4px;font-size:13px;color:#6b7690}
+.gs-fiche__champ dt{margin-bottom:4px;font-size:13px;color:#626d87}
 .gs-fiche__champ dd{display:grid;gap:2px;margin:0;overflow-wrap:anywhere}
 .gs-fiche__valeur{font-size:15.5px;font-weight:700;color:var(--ink)}
 .gs-fiche__sous{font-size:13.5px;color:#5b6782}
@@ -754,7 +754,7 @@ html[data-animations="non"] .gs-vg__halo,html[data-animations="non"] .gs-vg__dir
 .gs-fiche__etape.is-actuel .gs-fiche__point{border-color:#f4600d;background:#f4600d;box-shadow:0 0 0 5px rgba(244,96,13,.18)}
 .gs-fiche__etape.is-fait,.gs-fiche__etape.is-actuel{color:var(--ink)}
 .gs-fiche__etape.is-actuel .gs-fiche__etape-nom{font-weight:800}
-.gs-fiche__etape-date{font-size:13px;color:#6b7690;white-space:nowrap}
+.gs-fiche__etape-date{font-size:13px;color:#626d87;white-space:nowrap}
 .gs-fiche__sections{display:grid;gap:18px}
 .gs-fiche__sections:empty{display:none}
 .gs-fiche__section{display:grid;gap:12px;padding-top:16px;border-top:1px solid #eef2f8}
@@ -764,7 +764,7 @@ html[data-animations="non"] .gs-vg__halo,html[data-animations="non"] .gs-vg__dir
 .gs-fiche__section .gs-fiche__grille:empty{display:none}
 .gs-fiche__codebarre{align-items:start}
 .gs-fiche__codebarre svg{width:min(260px,100%);height:44px}
-.gs-fiche__attente{margin:0;font-size:14px;color:#6b7690}
+.gs-fiche__attente{margin:0;font-size:14px;color:#626d87}
 .gs-fiche__liste{display:grid;gap:6px;margin:0;padding:0;list-style:none}
 .gs-fiche__liste:empty{display:none}
 .gs-fiche__ligne-corps{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:10px 12px;border:1px solid #eef2f8;border-radius:12px;background:#fafbfe;color:inherit;font:inherit;text-align:left}
@@ -802,11 +802,11 @@ button.gs-fiche__ligne-corps:focus-visible{outline:2px solid #1f5fe0;outline-off
 .gs-rapports__nom{margin:2px 0 0;font-size:20px;line-height:1.25;color:var(--ink)}
 .gs-rapports__periode{margin:4px 0 0;font-size:14px;color:#5b6782}
 .gs-rapports__boutons{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
-.gs-rapports__orientation{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#6b7690}
+.gs-rapports__orientation{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#626d87}
 .gs-rapports__kpis{margin:0 0 8px}
 .gs-rapports__partie{margin:22px 0 0}
 .gs-rapports__partie-titre{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:0 0 10px;font-size:17px;color:var(--ink)}
-.gs-rapports__total{font-size:13px;font-weight:600;color:#6b7690}
+.gs-rapports__total{font-size:13px;font-weight:600;color:#626d87}
 .gs-rapports__sous-titre{margin:16px 0 8px;font-size:14.5px;color:var(--ink)}
 .gs-rapports__partie .gs-pagination{margin-top:10px}
 .gs-tableau--rapport td{min-width:150px;max-width:320px;white-space:normal;vertical-align:top}
@@ -1257,7 +1257,7 @@ html[data-apparence="sombre"] body.gs-admin-body{--ink:#e7edf9;--ink2:#c3d0ee;--
 [data-apparence="sombre"] .gs-vg__periode,[data-apparence="sombre"] .gs-vg__bouton,[data-apparence="sombre"] .gs-vg__filtre{border-color:#1f2b48;background-color:#0e1830;color:#e7edf9}
 [data-apparence="sombre"] .gs-vg__bouton:hover{border-color:#8fb3ff}
 [data-apparence="sombre"] .gs-vg__bouton[aria-pressed="false"]{border-color:#2d4a86;background:#132b5c;color:#bcd1ff}
-[data-apparence="sombre"] .gs-vg__bouton--plein{border-color:transparent;background:linear-gradient(135deg,#f4600d,#ff7b2f);color:#fff}
+[data-apparence="sombre"] .gs-vg__bouton--plein{border-color:transparent;background:linear-gradient(135deg,#c2410c,#c94c09);color:#fff}
 [data-apparence="sombre"] .gs-vg__filtre.is-actif{border-color:#f4600d;background:rgba(244,96,13,.16);color:#ffb38a}
 [data-apparence="sombre"] .gs-vg__filtres-titre{color:#c3d0ee}
 [data-apparence="sombre"] .gs-vg__direct-etat--direct{background:rgba(22,163,74,.18);color:#4ade80}

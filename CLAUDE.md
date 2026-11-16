@@ -641,6 +641,17 @@ Déploiement : **GitHub Pages depuis `main`**. Un `git push origin main`
 met le site en ligne. Les commits vont directement sur `main` — pas de
 branche pour un changement ordinaire.
 
+**Cache des scripts et feuilles de style** : dans la copie qui part en ligne (`_site`),
+`deploy.yml` ajoute à chaque lien `assets/css/…` et `assets/js/…` des pages l'empreinte
+du fichier (`?v=` + 10 signes du SHA-256, `outils/production/versionner.py`, puis
+`--verifier`) ; le `.htaccess` (gabarit `HTACCESS` de `build.py`) ne garde un an que ces
+liens-là, tout le reste est `no-cache`. **Le dépôt n'a jamais d'empreinte** (liens nus,
+vérifié par `essai-versionner.py`) : rien à faire quand on modifie un script. Une adresse
+en `.html` n'est plus renvoyée vers l'adresse propre (un aller-retour de moins par lien) ;
+la balise `canonical` désigne l'adresse propre. Photos Unsplash : `srcset` et `sizes`
+posés par `build.py` (`unsplash_tailles`) ; une page sans photo prend l'aperçu de
+l'accueil (`OG_IMAGE_DEFAUT`).
+
 ### La production (`docs/production/`, `outils/production/`)
 
 Tout ce qui sert à mettre en ligne, surveiller, sauvegarder, restaurer et

@@ -65,6 +65,11 @@ jobs:
           # sans conséquence, une publication par deploy-pages ne passe jamais
           # par Jekyll. Gardé pour une publication par branche, si elle revenait.
           touch _site/.nojekyll
+          # Chaque script et feuille de style est appelé avec son empreinte
+          # (site.css?v=…) : le .htaccess les garde alors un an, et un fichier
+          # changé change d'adresse. Seulement dans cette copie, jamais dans le
+          # dépôt (voir outils/production/versionner.py).
+          python3 outils/production/versionner.py _site
           echo "--- Fichiers publiés ---"
           ls _site
 
@@ -89,6 +94,8 @@ jobs:
                       pass
           print('Aucun fichier de travail, aucune clé secrète dans le site publié.')
           PY
+          # Une page qui appellerait un script sans empreinte, ou avec une ancienne
+          python3 outils/production/versionner.py _site --verifier
 
       - name: Envoyer le site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

@@ -40,8 +40,7 @@ averti() { echo "ATTENTION $1"; avertissements=$((avertissements + 1)); }
 tolerant() { if [ "${SURVEILLANCE_TOLERANTE:-}" = 1 ]; then averti "$1 (toléré avant publication)"; else echec "$1"; fi; }
 
 # Une page lente ou un CDN qui se met à jour : trois essais, 20 s d'écart. Les
-# redirections sont suivies : goshipexpress.net renvoie index.html vers / et
-# connexion.html vers /connexion (.htaccess, « Adresses propres »).
+# redirections sont suivies (www.goshipexpress.net, barre finale en trop).
 recuperer() {
   local url="$1" sortie="$2" code
   for essai in 1 2 3; do
@@ -76,7 +75,9 @@ if [ "$code" = 200 ] && grep -q 'GoshipAPI' "$tmp/api"; then ok "assets/js/api.j
 code="$(recuperer "${SITE}admin.html" "$tmp/admin")"
 if [ "$code" = 200 ]; then
   absents=""
-  for js in $(grep -o 'src="assets/js/[^"]*\.js"' "$tmp/admin" | cut -d'"' -f2); do
+  # Publiés, les liens portent l'empreinte du fichier (?v=…, outils/production/versionner.py) :
+  # on demande l'adresse exacte que la page demande.
+  for js in $(grep -oE 'src="assets/js/[^"]*\.js(\?v=[0-9a-f]{10})?"' "$tmp/admin" | cut -d'"' -f2); do
     c="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE$js" 2>/dev/null || echo 000)"
     [ "$c" = 200 ] || absents="$absents $js ($c)"
   done

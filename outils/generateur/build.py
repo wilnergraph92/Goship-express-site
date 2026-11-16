@@ -523,11 +523,32 @@ def add_class(attrs, cls):
         set_attr(attrs, 'class', cls, before='style')
 
 
-def unsplash_srcset(src):
+def unsplash_srcset(src, largeurs=(640, 960, 1280, 1600, 2000)):
     m = re.search(r'([?&](?:amp;)?)w=(\d+)', src)
     maxw = int(m.group(2))
-    widths = [w for w in (640, 960, 1280, 1600, 2000) if w < maxw] + [maxw]
+    widths = [w for w in largeurs if w < maxw] + [maxw]
     return ', '.join(re.sub(r'w=\d+', f'w={w}', src) + f' {w}w' for w in widths)
+
+
+def unsplash_tailles(src, style):
+    """srcset et sizes d'une photo Unsplash : le téléphone prend la largeur qu'il affiche.
+
+    Sans srcset, un téléphone téléchargeait la photo d'une carte en 900 px de large
+    et celle d'un bandeau en 1 200 à 2 000 px (contrôle qualité du 16/11/2026,
+    affichage le plus lent : 4 à 5 s). La largeur d'origine reste la plus grande
+    proposée : un écran large n'y perd rien. Une photo en fond (position:absolute,
+    inset:0) occupe toute la largeur ; une photo de carte (900 px au plus), la
+    largeur de l'écran sur un téléphone et la moitié au plus sur un ordinateur ;
+    les autres, toute la largeur."""
+    m = re.search(r'[?&;]w=(\d+)', src)
+    if not m:
+        return None
+    maxw = int(m.group(1))
+    if 'position:absolute;inset:0' in style.replace(' ', ''):
+        return unsplash_srcset(src), '100vw'
+    if maxw <= 900:
+        return unsplash_srcset(src, (480, 720)), '(max-width: 700px) 100vw, 50vw'
+    return unsplash_srcset(src, (640, 960, 1280)), '100vw'
 
 
 def transform_tag(tag, attrs, page):
@@ -580,10 +601,10 @@ def transform_tag(tag, attrs, page):
                 set_attr(attrs, 'height', str(h), before='style')
             changed = True
         elif src and 'images.unsplash.com' in src:
-            m = re.search(r'[?&;]w=(\d+)', src)
-            if m and int(m.group(1)) >= 1800 and 'position:absolute;inset:0' in style.replace(' ', ''):
-                set_attr(attrs, 'srcset', unsplash_srcset(src), before='alt')
-                set_attr(attrs, 'sizes', '100vw', before='alt')
+            tailles = unsplash_tailles(src, style)
+            if tailles and get_attr(attrs, 'srcset') is None:
+                set_attr(attrs, 'srcset', tailles[0], before='alt')
+                set_attr(attrs, 'sizes', tailles[1], before='alt')
                 changed = True
         elif src and not src.startswith('assets/'):
             fail(f'{page}: image non gérée {src}')
@@ -1340,6 +1361,9 @@ def shorten(text, limit=158):
 OG_IMAGE_FIXE = {
     'index.html': 'https://images.unsplash.com/photo-1592085198739-ffcad7f36b54?auto=format&amp;fit=crop&amp;w=1200&amp;h=630&amp;q=72',
 }
+# Une page sans photo (contact, FAQ, conditions…) avait un aperçu de lien vide :
+# elle prend celle de l'accueil (contrôle qualité du 16/11/2026, 82 pages).
+OG_IMAGE_DEFAUT = OG_IMAGE_FIXE['index.html']
 
 
 def og_image_for(body):
@@ -1502,7 +1526,7 @@ def convert(src, out, title=None, desc=None):
     uses_icons = 'Material Symbols Outlined' in body
     jsonld = out in ('index.html', 'contacts.html')
     scripts = ('api',) if 'data-form="track"' in body else ()
-    doc = (build_head(title, desc, OG_IMAGE_FIXE.get(out) or og_image_for(body), uses_icons, jsonld, scripts=scripts,
+    doc = (build_head(title, desc, OG_IMAGE_FIXE.get(out) or og_image_for(body) or OG_IMAGE_DEFAUT, uses_icons, jsonld, scripts=scripts,
                        mesure=True)
            + body.rstrip('\n') + '\n</body>\n</html>\n')
     with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
@@ -1565,7 +1589,7 @@ def build_compte():
                    else ('api', 'lieux', 'compte'))
         # L'inscription porte mesure.js, qui n'y charge Google qu'une fois le compte
         # créé, pour compter l'inscription (voir mesure.js) ; les autres pages du compte, jamais.
-        head = build_head(title, desc, None, False, False, scripts=scripts, noindex=noindex,
+        head = build_head(title, desc, OG_IMAGE_DEFAUT, False, False, scripts=scripts, noindex=noindex,
                           mesure=out == 'inscription.html')
         with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
             f.write(head + body[:s] + main + body[e:])
@@ -1674,22 +1698,14 @@ ErrorDocument 404 /404.html
 #  Le visiteur voit goshipexpress.net/nos-services, pas nos-services.html,
 #  et goshipexpress.net/en/, pas en/index.html. Les fichiers gardent leur
 #  nom : les liens des pages aussi (ils marchent ainsi sur l'ordinateur, en
-#  file:, et sur GitHub Pages). Une adresse en .html est renvoyée une fois
-#  vers l'adresse propre (301, que le navigateur retient ensuite), avec ses
-#  paramètres (?retour=…) et son ancre (#…, le jeton d'une connexion par
-#  e-mail compris).
+#  file:, et sur GitHub Pages). Une adresse en .html est servie telle
+#  quelle, sans renvoi : chaque lien interne en .html coûtait un aller-retour
+#  de plus (1 à 2 s sur un téléphone, contrôle qualité du 16/11/2026). Le
+#  doublon ne gêne pas Google : chaque page désigne son adresse propre
+#  (<link rel="canonical">), et le plan du site ne liste qu'elle.
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-
-  # THE_REQUEST est l'adresse tapée par le visiteur, pas celle que la règle
-  # du bas fabrique : sans cette condition, les deux règles se renverraient
-  # la page à l'infini.
-  RewriteCond %{THE_REQUEST} ^[A-Z]+\ /([^?\ ]*/)?index(\.html)?[?\ ]
-  RewriteRule ^(.*/)?index(\.html)?$ /$1 [R=301,L]
-
-  RewriteCond %{THE_REQUEST} ^[A-Z]+\ /([^?\ ]+)\.html[?\ ]
-  RewriteRule ^(.+)\.html$ /$1 [R=301,L]
 
   # nos-services/ (barre en trop) : vers nos-services. Un vrai dossier (en/)
   # garde sa barre.
@@ -1705,19 +1721,33 @@ ErrorDocument 404 /404.html
 </IfModule>
 
 # --- Cache ----------------------------------------------------------------
-#  Les pages, les scripts et les feuilles de style ne portent pas de numéro
-#  de version dans leur nom : une copie gardée une semaine montrerait une
-#  page neuve avec un script ancien. Le navigateur redemande donc à chaque
-#  visite ; s'il n'y a rien de neuf, le serveur répond « 304 » sans renvoyer
-#  le fichier. Les images et les polices changent rarement : un jour.
-#  (L'ancien WordPress imposait une semaine à tout, un mois aux scripts.)
+#  Les pages ne portent pas de numéro de version : le navigateur les
+#  redemande à chaque visite ; s'il n'y a rien de neuf, le serveur répond
+#  « 304 » sans renvoyer le fichier. Les images et les polices changent
+#  rarement : un jour. (L'ancien WordPress imposait une semaine à tout.)
+#
+#  Les scripts et les feuilles de style sont appelés par les pages avec leur
+#  empreinte (site.css?v=3fa2c19e0b), posée à la publication dans la copie
+#  qui part en ligne (deploy.yml, outils/production/versionner.py) : un
+#  fichier changé change d'adresse, la copie gardée ne peut donc jamais être
+#  ancienne. Ceux-là seulement sont gardés un an. Sans « v= » (un lien écrit
+#  à la main, une page ouverte avant la publication), même règle que les
+#  pages : rien n'est gardé.
 <IfModule mod_expires.c>
   ExpiresActive Off
+</IfModule>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{QUERY_STRING} (^|&)v=[0-9a-f]{10}(&|$)
+  RewriteRule \.(js|css)$ - [E=GS_VERSIONNE:1]
 </IfModule>
 <IfModule mod_headers.c>
   Header unset Expires
   <FilesMatch "\.(html?|js|css|txt|xml)$">
     Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable" env=GS_VERSIONNE
   </FilesMatch>
   <FilesMatch "\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$">
     Header set Cache-Control "public, max-age=86400"
