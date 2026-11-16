@@ -183,6 +183,59 @@ function nomTransporteur(n) { var t = global.window.GoshipTransporteur(n); retur
   verifier('colis supprimé : la pré-alerte reste « reçue », sans colis (on delete set null)',
            [supprimee.statut, supprimee.colis_id], ['recu', null]);
 
+  console.log('\n6. Modifier et supprimer (copie démo de supabase-prealertes-equipe.sql : mêmes refus)');
+  var enAttente = (await A.prealertes({ statut: 'attente' })).lignes;
+  var cible = enAttente.filter(function (p) { return p.suivi_transporteur; })[0];
+  var autre = enAttente.filter(function (p) { return p.client_id === cible.client_id && p.id !== cible.id && p.suivi_transporteur; })[0];
+  await API.deconnecter();
+  await API.connecter('employe@goship.demo', 'demo1234');
+  var m = await A.modifierPrealerte(cible.id, { magasin: ' Shein US ', suivi_transporteur: '1z999aa1 0123456791',
+                                                valeur_usd: '42.5', service: 'maritime' }, 'Numéro corrigé');
+  verifier('l\'employée modifie : magasin, numéro remis en forme, valeur, mode',
+           [m.magasin, m.suivi_transporteur, m.valeur_usd, m.service, m.statut, m.deja],
+           ['Shein US', '1Z999AA10123456791', 42.5, 'maritime', 'attente', false]);
+  var j = donnees().journal.filter(function (x) { return x.action === 'prealerte.modification'; }).pop();
+  verifier('journal : seulement les champs changés, motif',
+           [Object.keys(j.apres).sort(), j.motif], [['magasin', 'service', 'suivi_transporteur', 'valeur_usd'], 'Numéro corrigé']);
+  verifier('rien de changé : « déjà »', (await A.modifierPrealerte(cible.id, { magasin: 'Shein US' })).deja, true);
+  verifier('valeur effacée (null)', (await A.modifierPrealerte(cible.id, { valeur_usd: null })).valeur_usd, null);
+  verifier('magasin vide : refusé', await code(A.modifierPrealerte(cible.id, { magasin: ' ' })), 'PREALERT_STORE_REQUIRED');
+  verifier('contenu vide : refusé', await code(A.modifierPrealerte(cible.id, { description: '' })), 'PREALERT_DESCRIPTION_REQUIRED');
+  verifier('numéro illisible : refusé', await code(A.modifierPrealerte(cible.id, { suivi_transporteur: 'AB#12' })), 'INVALID_TRACKING');
+  verifier('valeur négative : refusée', await code(A.modifierPrealerte(cible.id, { valeur_usd: -1 })), 'INVALID_VALUE');
+  verifier('valeur qui n\'est pas un nombre : refusée', await code(A.modifierPrealerte(cible.id, { valeur_usd: 'beaucoup' })),
+           'INVALID_VALUE');
+  verifier('mode inconnu : refusé', await code(A.modifierPrealerte(cible.id, { service: 'bateau' })), 'INVALID_SERVICE');
+  if (autre) {
+    verifier('numéro d\'une autre pré-alerte du même client : refusé',
+             await code(A.modifierPrealerte(cible.id, { suivi_transporteur: autre.suivi_transporteur })), 'PREALERT_DUPLICATE');
+  }
+  var recue = (await A.prealertes({ statut: 'recu' })).lignes[0];
+  verifier('pré-alerte reçue : ne se modifie plus', await code(A.modifierPrealerte(recue.id, { magasin: 'X' })), 'PREALERT_NOT_PENDING');
+  verifier('pré-alerte inconnue', await code(A.modifierPrealerte('inconnue', { magasin: 'X' })), 'PREALERT_NOT_FOUND');
+  verifier('l\'employée ne supprime pas (shipments.delete)',
+           await code(A.supprimerPrealerte(cible.id, 'Doublon annoncé deux fois')), 'non-autorise');
+  await API.deconnecter();
+  await API.connecter('gerant@goship.demo', 'demo1234');
+  verifier('le gérant non plus', await code(A.supprimerPrealerte(cible.id, 'Doublon annoncé deux fois')), 'non-autorise');
+  await API.deconnecter();
+  await API.connecter('admin@goship.demo', 'demo1234');
+  verifier('motif trop court : refusé', await code(A.supprimerPrealerte(cible.id, 'non')), 'REASON_REQUIRED');
+  verifier('pré-alerte reçue : ne se supprime pas', await code(A.supprimerPrealerte(recue.id, 'Pour voir ce qui arrive')),
+           'PREALERT_RECEIVED');
+  var copie = JSON.parse(JSON.stringify(donnees().prealertes.filter(function (p) { return p.id === cible.id; })[0]));
+  var s = await A.supprimerPrealerte(cible.id, 'Doublon annoncé deux fois');
+  verifier('l\'administrateur supprime', [s.supprimee, donnees().prealertes.some(function (p) { return p.id === cible.id; })],
+           [true, false]);
+  var js = donnees().journal.filter(function (x) { return x.action === 'prealerte.suppression'; }).pop();
+  verifier('journal : copie complète et motif', [JSON.stringify(js.avant) === JSON.stringify(copie), js.motif],
+           [true, 'Doublon annoncé deux fois']);
+  verifier('une seconde fois : introuvable', await code(A.supprimerPrealerte(cible.id, 'Doublon encore')), 'PREALERT_NOT_FOUND');
+  var annulee = (await A.prealertes({ statut: 'annulee' })).lignes[0];
+  if (annulee) {
+    verifier('une pré-alerte annulée se supprime', (await A.supprimerPrealerte(annulee.id, 'Annulée par la cliente')).supprimee, true);
+  }
+
   var n = resultats.filter(Boolean).length;
   console.log('\n' + resultats.length + ' vérifications, ' + n + ' réussies.');
   process.exit(n === resultats.length ? 0 : 1);

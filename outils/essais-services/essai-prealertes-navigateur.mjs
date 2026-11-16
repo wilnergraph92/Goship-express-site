@@ -208,6 +208,9 @@ try {
   verifier('employé : voit l\'onglet et les 4 pré-alertes encore en attente', lignes.length, 4);
   verifier('employé : peut enregistrer le colis (shipments.create)',
     await page.$$eval('[data-prealerte-colis]', (b) => b.length), 4);
+  verifier('employé : « Modifier » sur chaque pré-alerte en attente, jamais « Supprimer » (shipments.delete)',
+    [await page.$$eval('[data-prealerte-modifier]', (b) => b.length), await page.$$eval('[data-prealerte-supprimer]', (b) => b.length)],
+    [4, 0]);
   await page.selectOption('[data-langue-tableau]', 'en');
   await page.waitForTimeout(400);
   verifier('en anglais : titre et colonnes traduits',
@@ -222,6 +225,65 @@ try {
     'ℹ PAS ENCORE DE COLIS : PRÉ-ALERTE TROUVÉE');
   await capture(page, '9-scanner-sombre');
   await page.evaluate(() => document.documentElement.setAttribute('data-apparence', 'clair'));
+
+  console.log('\n4. Modifier et supprimer une pré-alerte (administrateur)');
+  await page.evaluate(() => window.GoshipAPI.deconnecter());
+  await connecter(page, 'admin@goship.demo');
+  await onglet(page, 'prealertes');
+  lignes = await lignesPrealertes(page);
+  const nombre = lignes.length;
+  verifier('administrateur : « Modifier » et « Supprimer » sur chaque pré-alerte en attente',
+    [await page.$$eval('[data-prealerte-modifier]', (b) => b.length), await page.$$eval('[data-prealerte-supprimer]', (b) => b.length)],
+    [nombre, nombre]);
+  await page.click('[data-lignes="prealertes"] tr:first-child [data-prealerte-modifier]');
+  await page.waitForSelector('[data-dialogue="prealerte-modifier"][open]');
+  const avantModif = await page.$eval('[data-dialogue="prealerte-modifier"] [name="magasin"]', (n) => n.value);
+  const suiviAvant = await page.$eval('[data-dialogue="prealerte-modifier"] [name="suivi_transporteur"]', (n) => n.value);
+  verifier('la fenêtre s\'ouvre remplie avec la pré-alerte', avantModif === lignes[0][2].split('\n')[0], true);
+  await capture(page, '11-prealerte-modifier');
+  await page.fill('[data-dialogue="prealerte-modifier"] [name="magasin"]', '');
+  await page.click('[data-dialogue="prealerte-modifier"] [data-envoyer]');
+  verifier('magasin vide : la page le dit sans rien envoyer',
+    await page.$eval('[data-dialogue="prealerte-modifier"] [data-form-erreur]', (n) => n.textContent), 'Indiquez le magasin.');
+  await page.fill('[data-dialogue="prealerte-modifier"] [name="magasin"]', 'Magasin corrigé');
+  await page.fill('[data-dialogue="prealerte-modifier"] [name="suivi_transporteur"]', 'ab#12');
+  await page.click('[data-dialogue="prealerte-modifier"] [data-envoyer]');
+  await page.waitForFunction(() => !document.querySelector('[data-dialogue="prealerte-modifier"] [data-form-erreur]').hidden);
+  verifier('numéro illisible : refusé, la fenêtre reste ouverte',
+    await page.$eval('[data-dialogue="prealerte-modifier"] [data-form-erreur]', (n) => n.textContent),
+    'Numéro de suivi illisible : lettres et chiffres seulement, de 6 à 60.');
+  await page.fill('[data-dialogue="prealerte-modifier"] [name="suivi_transporteur"]', suiviAvant);
+  await page.fill('[data-dialogue="prealerte-modifier"] [name="motif"]', 'Nom du magasin corrigé');
+  await page.click('[data-dialogue="prealerte-modifier"] [data-envoyer]');
+  await page.waitForFunction(() => !document.querySelector('[data-dialogue="prealerte-modifier"]').open);
+  lignes = await lignesPrealertes(page);
+  verifier('enregistré : la fenêtre se ferme sans question, la ligne montre le nouveau magasin',
+    lignes.some((l) => l[2].startsWith('Magasin corrigé')), true);
+  verifier('le message le confirme', await page.$eval('[data-toast]', (n) => n.textContent), 'Pré-alerte modifiée.');
+  await page.click('[data-lignes="prealertes"] tr:first-child [data-prealerte-supprimer]');
+  await page.waitForSelector('[data-dialogue="prealerte-supprimer"][open]');
+  await page.fill('[data-dialogue="prealerte-supprimer"] [name="motif"]', 'non');
+  await page.click('[data-dialogue="prealerte-supprimer"] [data-envoyer]');
+  verifier('motif trop court : la page le dit',
+    await page.$eval('[data-dialogue="prealerte-supprimer"] [data-form-erreur]', (n) => n.textContent),
+    'Indiquez un motif (5 caractères au moins).');
+  await capture(page, '12-prealerte-supprimer');
+  await page.fill('[data-dialogue="prealerte-supprimer"] [name="motif"]', 'Doublon : annoncée deux fois');
+  await page.click('[data-dialogue="prealerte-supprimer"] [data-envoyer]');
+  await page.waitForFunction(() => !document.querySelector('[data-dialogue="prealerte-supprimer"]').open);
+  lignes = await lignesPrealertes(page);
+  verifier('supprimée : une ligne de moins', lignes.length, nombre - 1);
+  verifier('… et le journal d\'audit en garde la copie et le motif',
+    await page.evaluate(() => {
+      const j = JSON.parse(localStorage.getItem('gse-demo-donnees')).journal.filter((x) => x.action === 'prealerte.suppression').pop();
+      return [!!j.avant, j.motif];
+    }), [true, 'Doublon : annoncée deux fois']);
+  await page.selectOption('[data-filtre-prealertes]', 'recu');
+  await lignesPrealertes(page);
+  verifier('pré-alerte reçue : ni « Modifier » ni « Supprimer »',
+    [await page.$$eval('[data-prealerte-modifier]', (b) => b.length), await page.$$eval('[data-prealerte-supprimer]', (b) => b.length)],
+    [0, 0]);
+  await page.selectOption('[data-filtre-prealertes]', 'attente');
 
   const tel = await (await contexte(navigateur, 390, 844)).newPage();
   tel.on('pageerror', (e) => erreursJs.push(String(e)));

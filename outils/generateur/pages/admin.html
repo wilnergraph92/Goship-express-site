@@ -1772,6 +1772,84 @@
 <!-- Piloter le suivi des transporteurs (supervision.js) : arrêter, reprendre, changer le
      plafond mensuel (motif obligatoire, gardé au journal), suivre un numéro à la main
      (une inscription du quota du fournisseur). L'administrateur seul ; la base le vérifie. -->
+<!-- Modifier une pré-alerte en attente (prealertes.js) : la base contrôle et journalise
+     (modifier_prealerte, outils/supabase-prealertes-equipe.sql) -->
+<dialog class="gs-dialogue" data-dialogue="prealerte-modifier" aria-labelledby="dlg-prealerte-modifier-titre">
+  <form class="gs-form" data-form="prealerte-modifier" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-prealerte-modifier-titre">Modifier la pré-alerte</h2>
+        <p class="gs-dialogue__sous-titre" data-prealerte-client></p>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="pa-magasin">Magasin</label>
+          <input id="pa-magasin" name="magasin" type="text" maxlength="80" required autocomplete="off">
+        </div>
+        <div class="gs-champ">
+          <label for="pa-service">Mode</label>
+          <select id="pa-service" name="service">
+            <option value="aerien">Aérien</option>
+            <option value="maritime">Maritime</option>
+            <option value="terrestre">Terrestre</option>
+          </select>
+        </div>
+      </div>
+      <div class="gs-champ">
+        <label for="pa-description">Contenu</label>
+        <input id="pa-description" name="description" type="text" maxlength="300" required autocomplete="off">
+      </div>
+      <div class="gs-form__grille">
+        <div class="gs-champ">
+          <label for="pa-suivi">Numéro de suivi du vendeur</label>
+          <input id="pa-suivi" name="suivi_transporteur" type="text" maxlength="60" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="gs-champ">
+          <label for="pa-valeur">Valeur (US $)</label>
+          <input id="pa-valeur" name="valeur_usd" type="number" min="0" max="100000" step="0.01" inputmode="decimal">
+        </div>
+      </div>
+      <div class="gs-champ">
+        <label for="pa-motif">Motif <span class="gs-facultatif">(facultatif, gardé au journal)</span></label>
+        <input id="pa-motif" name="motif" type="text" maxlength="300" autocomplete="off">
+      </div>
+      <p class="gs-dialogue__aide">Le client voit la pré-alerte modifiée dans son espace et dans l'application. Un numéro de suivi changé est suivi à nouveau chez le transporteur.</p>
+      <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-envoyer>Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Supprimer une pré-alerte (prealertes.js) : administrateur, motif obligatoire, copie
+     complète gardée au journal (supprimer_prealerte) -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="prealerte-supprimer" aria-labelledby="dlg-prealerte-supprimer-titre">
+  <form class="gs-form" data-form="prealerte-supprimer" novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-prealerte-supprimer-titre">Supprimer la pré-alerte ?</h2>
+        <p class="gs-dialogue__sous-titre" data-prealerte-resume></p>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Elle disparaît de la liste, de l'espace du client et de l'application. Le journal d'audit en garde une copie complète, avec le motif.</p>
+      <div class="gs-champ">
+        <label for="pa-sup-motif">Motif (obligatoire, gardé au journal)</label>
+        <input id="pa-sup-motif" name="motif" type="text" maxlength="300" required autocomplete="off">
+      </div>
+      <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--danger" data-envoyer>Supprimer</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Inscrire un appareil (double authentification) : QR code et clé de Supabase Auth, puis
      le premier code. Rien n'est gardé par la page : la clé n'est montrée qu'ici, une fois. -->
 <dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="double-auth" aria-labelledby="dlg-double-auth-titre">

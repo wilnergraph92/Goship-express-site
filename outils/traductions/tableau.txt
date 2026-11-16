@@ -1640,3 +1640,24 @@ Les comptes sans appareil inscrit retrouveront l’accès avec leur seul mot de 
 Rendre obligatoire
 Double authentification obligatoire pour l’équipe.
 Double authentification de nouveau facultative.
+Modifier la pré-alerte
+Numéro de suivi du vendeur
+Valeur (US $)
+Le client voit la pré-alerte modifiée dans son espace et dans l'application. Un numéro de suivi changé est suivi à nouveau chez le transporteur.
+Supprimer la pré-alerte ?
+Elle disparaît de la liste, de l'espace du client et de l'application. Le journal d'audit en garde une copie complète, avec le motif.
+Cette pré-alerte n’existe plus : rechargez la liste.
+Cette pré-alerte n’est plus en attente : elle ne se modifie plus.
+Cette pré-alerte est rattachée à un colis : elle ne se supprime pas.
+Indiquez le magasin.
+Indiquez le contenu du colis.
+Ce numéro de suivi est déjà annoncé par ce client dans une autre pré-alerte.
+Ce colis est déjà arrivé chez ce client.
+Numéro de suivi illisible : lettres et chiffres seulement, de 6 à 60.
+La valeur doit être comprise entre 0 et 100 000 $.
+Mode inconnu.
+Votre rôle ne permet pas cette action.
+L’opération n’a pas abouti. Réessayez.
+Rien n’a changé.
+Pré-alerte modifiée.
+Pré-alerte supprimée.
