@@ -110,6 +110,11 @@
   }
 
   var minuteurToast = null;
+  // Un autre script du tableau de bord (prealertes.js) demande un message : même bandeau
+  document.addEventListener('goship:toast', function (e) {
+    var d = e.detail || {};
+    if (d.message) toast(String(d.message), !!d.erreur);
+  });
   function toast(message, erreur) {
     var t = $('[data-toast]');
     t.textContent = message;
