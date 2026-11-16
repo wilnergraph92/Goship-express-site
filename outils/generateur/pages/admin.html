@@ -158,6 +158,8 @@
     <!-- Réseau coupé (événement « offline » du navigateur) : rien ne part, rien
          n'est affiché comme enregistré tant que le serveur n'a pas répondu. -->
     <p class="gs-td__bandeau gs-td__bandeau--erreur" data-hors-ligne role="alert" hidden><strong>Connexion perdue.</strong> Certaines fonctionnalités sont indisponibles : aucune opération n'est enregistrée tant que la connexion n'est pas revenue.</p>
+    <!-- Un compte de l'équipe sans double authentification (ma_double_auth, outils/supabase-double-auth.sql) -->
+    <p class="gs-td__bandeau gs-td__bandeau--double-auth" data-double-auth-bandeau role="status" hidden><strong>Protégez votre compte.</strong> Activez la double authentification : un code à 6 chiffres de votre téléphone, en plus du mot de passe. <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--plein" data-action="double-auth-activer">Activer</button></p>
     <p class="gs-td__bandeau" data-bureau-ancien role="status" hidden><strong>Mettez à jour l'application GoShip Express.</strong> Cette version du poste de travail est trop ancienne pour certaines fonctions du tableau de bord.</p>
     <section class="gs-rapide__resultats" data-rapide-resultats aria-label="Résultats de la recherche rapide" aria-live="polite" hidden></section>
 
@@ -198,6 +200,33 @@
         <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
         <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Se connecter</button>
       </form>
+    </div>
+  </section>
+
+  <!-- Le code de la double authentification : la base refuse cette session à l'équipe tant
+       qu'il n'est pas donné (outils/supabase-double-auth.sql). Si la double authentification
+       est obligatoire et qu'aucun appareil n'est inscrit, la carte propose d'en inscrire un. -->
+  <section class="gs-admin-ecran" data-ecran="code" hidden>
+    <div class="gs-admin-carte">
+      <span class="gs-admin-carte__ico">[[ico:shield]]</span>
+      <h1>Code de vérification</h1>
+      <div data-code-bloc="saisie">
+        <p>Ouvrez votre application d'authentification et tapez le code à 6 chiffres affiché pour Goship Express.</p>
+        <form class="gs-form" data-form="double-auth-code" novalidate>
+          <div class="gs-champ">
+            <label for="adm-code">Code à 6 chiffres</label>
+            <input id="adm-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required spellcheck="false">
+          </div>
+          <p class="gs-form__erreur" data-form-erreur role="alert" hidden></p>
+          <button class="gs-bouton gs-bouton--plein" type="submit" data-envoyer>Vérifier</button>
+        </form>
+      </div>
+      <div data-code-bloc="inscrire" hidden>
+        <p>La double authentification est obligatoire pour l'équipe. Inscrivez votre téléphone pour continuer.</p>
+        <button type="button" class="gs-bouton gs-bouton--plein" data-action="double-auth-activer">Inscrire mon téléphone</button>
+      </div>
+      <p class="gs-admin-carte__aide">Téléphone perdu ? Demandez au propriétaire du compte Supabase de retirer l'ancien appareil.</p>
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="deconnexion">Se déconnecter</button>
     </div>
   </section>
 
@@ -1072,6 +1101,12 @@
         <p class="gs-form__erreur" data-form-erreur hidden role="alert"></p>
         <div class="gs-equipe__pied"><button type="submit" class="gs-bouton gs-bouton--petit gs-bouton--plein">Donner ce rôle</button></div>
       </form>
+      <!-- La double authentification obligatoire pour toute l'équipe (regler_double_auth,
+           settings.manage, code donné, motif) : montrée seulement quand la base la connaît -->
+      <div class="gs-equipe__double-auth" data-double-auth-obligatoire data-permission="settings.manage" hidden>
+        <p><strong>Double authentification obligatoire :</strong> <span data-double-auth-obligatoire-etat></span></p>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="double-auth-obligatoire"></button>
+      </div>
       <div class="gs-tableau-cadre">
         <table class="gs-tableau gs-tableau--equipe">
           <thead>
@@ -1737,6 +1772,37 @@
 <!-- Piloter le suivi des transporteurs (supervision.js) : arrêter, reprendre, changer le
      plafond mensuel (motif obligatoire, gardé au journal), suivre un numéro à la main
      (une inscription du quota du fournisseur). L'administrateur seul ; la base le vérifie. -->
+<!-- Inscrire un appareil (double authentification) : QR code et clé de Supabase Auth, puis
+     le premier code. Rien n'est gardé par la page : la clé n'est montrée qu'ici, une fois. -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="double-auth" aria-labelledby="dlg-double-auth-titre">
+  <form class="gs-form" data-double-auth-form novalidate>
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-double-auth-titre">Double authentification</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-attente" data-double-auth-attente><span class="gs-roue" aria-hidden="true"></span>Préparation…</p>
+      <div data-double-auth-etapes hidden>
+        <p class="gs-dialogue__aide">1. Installez une application d'authentification sur votre téléphone (Google Authenticator, Microsoft Authenticator…).</p>
+        <p class="gs-dialogue__aide">2. Dans l'application, ajoutez un compte et scannez ce QR code.</p>
+        <img class="gs-double-auth__qr" data-double-auth-qr alt="QR code à scanner avec l'application d'authentification" width="200" height="200">
+        <p class="gs-dialogue__aide">Impossible de scanner ? Tapez cette clé dans l'application :</p>
+        <p class="gs-double-auth__cle"><code data-double-auth-cle translate="no"></code></p>
+        <div class="gs-champ">
+          <label for="double-auth-code">3. Tapez le code à 6 chiffres affiché par l'application</label>
+          <input id="double-auth-code" data-double-auth-code type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" spellcheck="false">
+        </div>
+      </div>
+      <p class="gs-form__erreur" data-double-auth-erreur role="alert" hidden></p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--contour" data-action="fermer">Annuler</button>
+      <button type="submit" class="gs-bouton gs-bouton--plein" data-double-auth-confirmer disabled>Activer</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="suivi-pilote" aria-labelledby="dlg-suivi-pilote-titre">
   <form class="gs-form" data-suivi-pilote-form novalidate>
     <div class="gs-dialogue__tete">
@@ -1916,9 +1982,11 @@
           <div><dt>E-mail</dt><dd data-email></dd></div>
           <div><dt>Rôle</dt><dd data-reglages-role></dd></div>
           <div><dt>Permissions</dt><dd data-reglages-permissions></dd></div>
+          <div data-reglages-double-auth-ligne hidden><dt>Double authentification</dt><dd data-reglages-double-auth></dd></div>
         </dl>
         <p class="gs-reglages__aide">Un rôle ne se change que depuis l'onglet « Équipe », par un administrateur. La base vérifie chaque permission à chaque action : un menu masqué ici n'est qu'un confort.</p>
         <div class="gs-reglages__actions">
+          <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="double-auth-activer" data-double-auth-reglages hidden>[[ico:lock]]Inscrire un appareil</button>
           <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="reglages-equipe" data-permission="users.view">[[ico:shield]]Voir ce que chaque rôle peut faire</button>
           <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-action="deconnexion">[[ico:log-out]]Se déconnecter</button>
         </div>

@@ -1602,3 +1602,41 @@ Votre rôle ne permet pas de voir le suivi des transporteurs.
 Vérifié
 État du suivi
 Éteintes
+Protégez votre compte.
+Activez la double authentification : un code à 6 chiffres de votre téléphone, en plus du mot de passe.
+Activer
+Code de vérification
+Ouvrez votre application d'authentification et tapez le code à 6 chiffres affiché pour Goship Express.
+Code à 6 chiffres
+Vérifier
+Vérification…
+La double authentification est obligatoire pour l'équipe. Inscrivez votre téléphone pour continuer.
+Inscrire mon téléphone
+Téléphone perdu ? Demandez au propriétaire du compte Supabase de retirer l'ancien appareil.
+Double authentification
+Inscrire un appareil
+1. Installez une application d'authentification sur votre téléphone (Google Authenticator, Microsoft Authenticator…).
+2. Dans l'application, ajoutez un compte et scannez ce QR code.
+Impossible de scanner ? Tapez cette clé dans l'application :
+3. Tapez le code à 6 chiffres affiché par l'application
+Activée
+Pas activée
+Mot de passe seul
+Tapez les 6 chiffres du code.
+Double authentification activée : le code sera demandé à chaque connexion.
+Code incorrect. Tapez le code affiché maintenant par l’application (il change toutes les 30 secondes).
+Ce code n’est plus valable. Recommencez.
+La double authentification n’est pas activée dans Supabase (Authentication > Multi-Factor).
+Donnez d’abord le code de votre application d’authentification.
+Double authentification obligatoire :
+oui
+non
+Ne plus l’exiger
+Rendre obligatoire pour l’équipe
+Rendre la double authentification obligatoire
+Ne plus exiger la double authentification
+Un compte de l’équipe sans appareil inscrit n’aura plus accès au tableau de bord avant d’en inscrire un. Vérifiez d’abord que personne n’est en « Mot de passe seul ».
+Les comptes sans appareil inscrit retrouveront l’accès avec leur seul mot de passe.
+Rendre obligatoire
+Double authentification obligatoire pour l’équipe.
+Double authentification de nouveau facultative.

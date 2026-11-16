@@ -55,7 +55,7 @@ la surveillance : ouverte aux visiteurs, elle ne rend que
 |---|---|
 | Workflow en échec | GitHub envoie un e-mail à la personne qui a modifié le workflow en dernier (réglage : GitHub > Settings > Notifications > Actions, « Send notifications for failed workflows only ») |
 | Seconde personne | secret `ALERTE_WEBHOOK` : un sujet ntfy.sh (notification sur téléphone : installer l'application ntfy, s'abonner au sujet — un nom long et imprévisible), un webhook Slack ou Discord. Envoyé à chaque CRITIQUE de `surveillance.yml` ; message sans donnée (« CRITIQUE » + lien du journal) |
-| Surveillance de la surveillance | secret `HEARTBEAT_URL` (Healthchecks.io, gratuit) : chaque passage réussi l'appelle, chaque échec appelle `/fail`. Réglé sur « période 30 min, grâce 30 min », Healthchecks prévient (e-mail, SMS, plusieurs personnes) si GitHub Actions ne tourne plus |
+| Surveillance de la surveillance | Healthchecks.io (gratuit), **deux contrôles** : « GoShip — base » reçoit `battement()` de la base toutes les 30 min (`supabase-battement.sql`, réglage `battement_url`) ; « GoShip — GitHub » reçoit chaque passage de `surveillance.yml` (secret `HEARTBEAT_URL`). Un échec appelle `/fail` ; un silence trop long déclenche l'alerte de Healthchecks (e-mail, SMS, plusieurs personnes). Mise en place : section suivante |
 | Supabase | e-mails d'usage (quota à 80 %), d'incident, de sécurité (*Advisors*) au propriétaire du projet — vérifier l'adresse dans Supabase > Organization > Team |
 | Échecs d'envoi de messages | onglet Notifications du tableau de bord, et `controle-integrite.sql` (envois en échec sur 24 h) |
 
@@ -66,9 +66,36 @@ la surveillance : ouverte aux visiteurs, elle ne rend que
 - GitHub peut retarder un workflow planifié de plusieurs minutes, et **suspend
   les workflows planifiés d'un dépôt public sans activité depuis 60 jours**
   (GitHub prévient par e-mail ; réactiver dans l'onglet Actions) ;
-- sans `HEARTBEAT_URL`, rien n'alerte si GitHub Actions lui-même s'arrête ;
+- sans `HEARTBEAT_URL` ni `battement_url`, rien n'alerte si GitHub Actions ou la base
+  s'arrêtent (section « Healthchecks.io ») ;
 - au 26/09/2026, l'exécution **planifiée** de `surveillance.yml` n'a pas encore
   été observée (lancée à la main : verte). La vérifier dans l'onglet Actions.
+
+## Healthchecks.io : la mise en place (15 minutes, une fois)
+
+Pourquoi deux contrôles : GitHub ne lance les tâches planifiées d'un dépôt gratuit qu'« au
+mieux » (mesuré au contrôle qualité du 16/11/2026 : en moyenne toutes les 6 h 24, jusqu'à
+10 h 48). La base, elle, tourne chaque minute : c'est elle qui donne le rythme de 30 minutes.
+
+1. Créer un compte gratuit sur https://healthchecks.io (offre « Hobby », gratuite, sans carte).
+2. **Contrôle « GoShip — base »** : *Add Check*, nom « GoShip — base », *Period* **30 minutes**,
+   *Grace* **30 minutes**. Copier son adresse (`https://hc-ping.com/…`).
+3. Dans Supabase > SQL Editor, une seule ligne (l'adresse reste dans le coffre, jamais dans
+   le dépôt) :
+   `select public.definir_reglage('battement_url', 'https://hc-ping.com/<identifiant>');`
+   puis `select public.battement();` doit répondre `"envoye": true` ; le contrôle passe au vert
+   dans la minute.
+4. **Contrôle « GoShip — GitHub »** : *Add Check*, *Period* **12 heures**, *Grace* **2 heures**
+   (le rythme réel de GitHub ; 30 min sonnerait sans arrêt). Copier son adresse dans GitHub >
+   Settings > Secrets and variables > Actions > *New repository secret* : nom `HEARTBEAT_URL`.
+   Lancer « Surveillance de la production » à la main (onglet Actions) : le contrôle passe au vert.
+5. *Integrations* : e-mail (déjà là), et si possible une seconde personne (inviter dans le
+   projet) ou l'application mobile / SMS. Tester avec *Send test notification*.
+
+Ce qui sonne : la base ou pg_cron arrêtés (silence > 30 min), la file des e-mails en retard ou
+une tâche `goship-…` en échec (`/fail` immédiat, la raison dans le corps), GitHub Actions
+suspendu ou en échec. Ce qui ne sonne pas plus vite qu'avant : le site lui-même (Hostinger) est
+vérifié par `surveillance.yml`, donc au rythme de GitHub.
 
 ## Les journaux
 

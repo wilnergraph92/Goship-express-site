@@ -7,6 +7,25 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — Lot 1 du contrôle qualité : double authentification de l'équipe et surveillance (16/11/2026)
+
+**Deux migrations à passer**, après les 35 premières et **sur décision écrite du CEO** :
+`supabase-double-auth.sql` (36e ; contrôle attendu `4 | f | f | t`) et `supabase-battement.sql`
+(37e ; contrôle attendu `1 | f | 1 | f`, puis `t` une fois l'adresse de Healthchecks posée).
+
+- **Double authentification de l'équipe** (code à 6 chiffres, Google ou Microsoft Authenticator) :
+  bandeau « Protégez votre compte », inscription par QR code, code demandé à chaque connexion,
+  état de chacun dans l'onglet Équipe. La base refuse toute permission de l'équipe à une session
+  sans code d'un compte qui a un appareil ; l'administrateur peut ensuite la rendre obligatoire
+  pour toute l'équipe (motif, journalisé). Clients et application mobile : rien ne change.
+- **Battement de la base vers Healthchecks.io** toutes les 30 minutes (pg_cron) : la file des
+  e-mails et les tâches planifiées ; silence ou `/fail` → alerte. Guide de mise en place (deux
+  contrôles, `battement_url`, `HEARTBEAT_URL`) dans `docs/production/monitoring.md`.
+
+Essais : `essai-double-auth.py` (45), `essai-double-auth-navigateur.mjs` (28), `essai-battement.py`
+(22) ; chaîne : `controle-securite.sql`, `sonder.sh`, `essais.yml`, README, CLAUDE.md,
+`docs/production/database.md`.
+
 ## Non publié — Lot 2 du contrôle qualité : vitesse et contraste (16/11/2026)
 
 Aucune migration, aucune donnée touchée.
