@@ -49,22 +49,14 @@ ErrorDocument 404 /404.html
 #  Le visiteur voit goshipexpress.net/nos-services, pas nos-services.html,
 #  et goshipexpress.net/en/, pas en/index.html. Les fichiers gardent leur
 #  nom : les liens des pages aussi (ils marchent ainsi sur l'ordinateur, en
-#  file:, et sur GitHub Pages). Une adresse en .html est renvoyée une fois
-#  vers l'adresse propre (301, que le navigateur retient ensuite), avec ses
-#  paramètres (?retour=…) et son ancre (#…, le jeton d'une connexion par
-#  e-mail compris).
+#  file:, et sur GitHub Pages). Une adresse en .html est servie telle
+#  quelle, sans renvoi : chaque lien interne en .html coûtait un aller-retour
+#  de plus (1 à 2 s sur un téléphone, contrôle qualité du 16/11/2026). Le
+#  doublon ne gêne pas Google : chaque page désigne son adresse propre
+#  (<link rel="canonical">), et le plan du site ne liste qu'elle.
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-
-  # THE_REQUEST est l'adresse tapée par le visiteur, pas celle que la règle
-  # du bas fabrique : sans cette condition, les deux règles se renverraient
-  # la page à l'infini.
-  RewriteCond %{THE_REQUEST} ^[A-Z]+\ /([^?\ ]*/)?index(\.html)?[?\ ]
-  RewriteRule ^(.*/)?index(\.html)?$ /$1 [R=301,L]
-
-  RewriteCond %{THE_REQUEST} ^[A-Z]+\ /([^?\ ]+)\.html[?\ ]
-  RewriteRule ^(.+)\.html$ /$1 [R=301,L]
 
   # nos-services/ (barre en trop) : vers nos-services. Un vrai dossier (en/)
   # garde sa barre.
@@ -80,19 +72,33 @@ ErrorDocument 404 /404.html
 </IfModule>
 
 # --- Cache ----------------------------------------------------------------
-#  Les pages, les scripts et les feuilles de style ne portent pas de numéro
-#  de version dans leur nom : une copie gardée une semaine montrerait une
-#  page neuve avec un script ancien. Le navigateur redemande donc à chaque
-#  visite ; s'il n'y a rien de neuf, le serveur répond « 304 » sans renvoyer
-#  le fichier. Les images et les polices changent rarement : un jour.
-#  (L'ancien WordPress imposait une semaine à tout, un mois aux scripts.)
+#  Les pages ne portent pas de numéro de version : le navigateur les
+#  redemande à chaque visite ; s'il n'y a rien de neuf, le serveur répond
+#  « 304 » sans renvoyer le fichier. Les images et les polices changent
+#  rarement : un jour. (L'ancien WordPress imposait une semaine à tout.)
+#
+#  Les scripts et les feuilles de style sont appelés par les pages avec leur
+#  empreinte (site.css?v=3fa2c19e0b), posée à la publication dans la copie
+#  qui part en ligne (deploy.yml, outils/production/versionner.py) : un
+#  fichier changé change d'adresse, la copie gardée ne peut donc jamais être
+#  ancienne. Ceux-là seulement sont gardés un an. Sans « v= » (un lien écrit
+#  à la main, une page ouverte avant la publication), même règle que les
+#  pages : rien n'est gardé.
 <IfModule mod_expires.c>
   ExpiresActive Off
+</IfModule>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{QUERY_STRING} (^|&)v=[0-9a-f]{10}(&|$)
+  RewriteRule \.(js|css)$ - [E=GS_VERSIONNE:1]
 </IfModule>
 <IfModule mod_headers.c>
   Header unset Expires
   <FilesMatch "\.(html?|js|css|txt|xml)$">
     Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable" env=GS_VERSIONNE
   </FilesMatch>
   <FilesMatch "\.(png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf)$">
     Header set Cache-Control "public, max-age=86400"
