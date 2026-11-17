@@ -556,6 +556,30 @@ def unsplash_tailles(src, style):
     return unsplash_srcset(src, (640, 960, 1280)), '100vw'
 
 
+# Photos principales servies par le site plutôt que par Unsplash (décision du CEO du
+# 17/11/2026). Celle de l'accueil attendait 1,7 s avant de commencer à se télécharger sur
+# un téléphone (nouvelle connexion vers images.unsplash.com), et pesait 303 Ko en 960 px :
+# copiée dans assets/img/photos en WebP qualité 50 (118 Ko en 960 px ; un dégradé presque
+# opaque la recouvre aux trois quarts), elle part avec la page. La licence d'Unsplash
+# permet de servir la photo depuis le site. Une photo de plus : ses cinq largeurs
+# (640 à 2 000 px) dans assets/img/photos, puis son nom ici. Seule la photo en fond
+# d'une section (position:absolute;inset:0) est concernée ; ses autres usages, comme
+# la carte du blog, restent chez Unsplash.
+PHOTOS_LOCALES = {'photo-1724597500306-a4cbb7d1324e': 'accueil-porte-conteneurs'}
+PHOTOS_LOCALES_LARGEURS = (640, 960, 1280, 1600, 2000)
+
+
+def photo_locale(src, style):
+    """(src, srcset) de la copie servie par le site, ou None."""
+    m = re.search(r'/(photo-[0-9a-f]+-[0-9a-f]+)\?', src)
+    nom = PHOTOS_LOCALES.get(m.group(1)) if m else None
+    if not nom or 'position:absolute;inset:0' not in style.replace(' ', ''):
+        return None
+    chemin = 'assets/img/photos/' + nom + '-{}.webp'
+    return (chemin.format(PHOTOS_LOCALES_LARGEURS[-1]),
+            ', '.join(f'{chemin.format(w)} {w}w' for w in PHOTOS_LOCALES_LARGEURS))
+
+
 def transform_tag(tag, attrs, page):
     changed = False
 
@@ -604,6 +628,12 @@ def transform_tag(tag, attrs, page):
             if w and get_attr(attrs, 'width') is None:
                 set_attr(attrs, 'width', str(w), before='style')
                 set_attr(attrs, 'height', str(h), before='style')
+            changed = True
+        elif src and 'images.unsplash.com' in src and photo_locale(src, style):
+            locale, srcset = photo_locale(src, style)
+            set_attr(attrs, 'src', locale)
+            set_attr(attrs, 'srcset', srcset, before='alt')
+            set_attr(attrs, 'sizes', '100vw', before='alt')
             changed = True
         elif src and 'images.unsplash.com' in src:
             tailles = unsplash_tailles(src, style)
@@ -1406,8 +1436,10 @@ LOCAL_BUSINESS = {
 }
 
 
-def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(), noindex=False, mesure=False):
-    """mesure : page publique, qui charge mesure.js (Google Analytics) s'il est réglé."""
+def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(), noindex=False, mesure=False,
+               photo=None):
+    """mesure : page publique, qui charge mesure.js (Google Analytics) s'il est réglé.
+    photo : (src, srcset) de la photo principale servie par le site, préchargée."""
     esc = attr_escape
     mesure = mesure and mesure_active()
     lines = [
@@ -1448,6 +1480,11 @@ def build_head(title, desc, og_image, uses_icons, jsonld, prefix='', scripts=(),
     # « crossorigin » est obligatoire pour une police préchargée, même du même site :
     # sans lui, le navigateur la télécharge deux fois
     polices = POLICES_PRECHARGEES + ((POLICE_ICONES,) if uses_icons else ())
+    # La photo principale servie par le site part avant les polices : c'est elle que le
+    # téléphone attend pour afficher la page (le plus grand élément, LCP)
+    if photo:
+        lines.append(f'<link rel="preload" as="image" href="{prefix}{photo[0]}" imagesrcset="{photo[1]}" '
+                     'imagesizes="100vw" fetchpriority="high">')
     lines += [f'<link rel="preload" href="{prefix}assets/fonts/{nom}" as="font" type="font/woff2" crossorigin>'
               for nom in polices]
     lines.append(f'<link rel="stylesheet" href="{prefix}assets/css/site.css">')
@@ -1549,8 +1586,9 @@ def convert(src, out, title=None, desc=None):
     uses_icons = 'Material Symbols Outlined' in body
     jsonld = out in ('index.html', 'contacts.html')
     scripts = ('api',) if 'data-form="track"' in body else ()
+    photo = re.search(r'<img fetchpriority="high" src="(assets/img/photos/[^"]+)" srcset="([^"]+)"', body)
     doc = (build_head(title, desc, OG_IMAGE_FIXE.get(out) or og_image_for(body) or OG_IMAGE_DEFAUT, uses_icons, jsonld, scripts=scripts,
-                       mesure=True)
+                       mesure=True, photo=photo.groups() if photo else None)
            + body.rstrip('\n') + '\n</body>\n</html>\n')
     with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
         f.write(doc)
