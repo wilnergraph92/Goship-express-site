@@ -7,10 +7,11 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
-## Non publié — lot confort du contrôle qualité (16/11/2026)
+## Lot confort du contrôle qualité (16/11/2026)
 
-**Migration à passer**, après les 38 premières et **sur décision écrite du CEO** : `supabase-index-cles.sql` (39e ;
-contrôle attendu `6 | 0`) — six index sur les clés étrangères signalées par Supabase, rien d'autre.
+Publié le 16/11/2026 (PR #62) ; **migration 39 exécutée en production le même jour**, avant la fusion, sur accord
+écrit du CEO (`supabase-index-cles.sql`, contrôle `6 | 0`) — six index sur les clés étrangères signalées par
+Supabase, rien d'autre.
 
 - **Polices servies par le site** (`assets/fonts`, `@font-face` en tête de `site.css`, licences dans
   `assets/fonts/LICENCES.txt`) : plus aucun appel à Google Fonts, dont la feuille bloquait l'affichage (1,1 s sur
