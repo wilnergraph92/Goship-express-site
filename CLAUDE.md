@@ -676,7 +676,9 @@ la balise `canonical` désigne l'adresse propre. **Polices servies par le site**
 Fonts, la CSP n'autorise que `'self'` pour les polices et les styles ; une icône Material de plus = retélécharger
 le sous-ensemble (`assets/fonts/LICENCES.txt`). Photos Unsplash : `srcset` et `sizes`
 posés par `build.py` (`unsplash_tailles`) ; une page sans photo prend l'aperçu de
-l'accueil (`OG_IMAGE_DEFAUT`).
+l'accueil (`OG_IMAGE_DEFAUT`). La photo en fond de l'accueil est servie par le site
+(`PHOTOS_LOCALES`, `assets/img/photos`, cinq largeurs WebP, préchargée) ; `traduire.py`
+réécrit aussi les `srcset` des traductions.
 
 ### La production (`docs/production/`, `outils/production/`)
 

@@ -7,6 +7,21 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — la photo de l'accueil servie par le site (17/11/2026)
+
+Décision du CEO du 17/11/2026. Aucune migration.
+
+- La grande photo de l'accueil (et de l'article « entreprise fiable », la même) vient du site
+  (`assets/img/photos/accueil-porte-conteneurs-*.webp`, cinq largeurs, WebP qualité 50) et non plus
+  d'Unsplash : plus de connexion à ouvrir vers un autre serveur (1,7 s d'attente mesurées sur
+  téléphone le 16/11), 118 Ko au lieu de 240 Ko sur un téléphone. Préchargée en tête de page, avant
+  les polices. `build.py` : `PHOTOS_LOCALES` ; `traduire.py` réécrit aussi les `srcset`.
+- Les autres photos restent chez Unsplash.
+
+Décisions du CEO notées le même jour : D1 (Google Analytics sans bandeau) gardé tel quel ; D2
+(WhatsApp) gardé, à configurer plus tard ; D3 : règle gratuite de mots de passe dans Supabase,
+pas l'offre Pro ; CAPTCHA plus tard (il bloquerait les versions installées de l'application).
+
 ## Lot confort du contrôle qualité (16/11/2026)
 
 Publié le 16/11/2026 (PR #62) ; **migration 39 exécutée en production le même jour**, avant la fusion, sur accord

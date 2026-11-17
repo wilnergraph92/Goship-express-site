@@ -492,6 +492,9 @@ def poser_canonique(src, langue, page):
 def adapter_sous_dossier(src, langue):
     """Chemins relatifs vers assets/ et favicon.ico, langue du document et locale."""
     src = re.sub(r'(\s(?:href|src)=")(assets/|favicon\.ico)', r'\1../\2', src)
+    # Les srcset des photos servies par le site (photo de l'accueil) : chaque adresse
+    src = re.sub(r'(\s(?:srcset|imagesrcset)=")([^"]*)"',
+                 lambda m: m.group(1) + re.sub(r'(^|,\s*)assets/', r'\1../assets/', m.group(2)) + '"', src)
     src = src.replace('<html lang="fr">', f'<html lang="{langue}">', 1)
     src = src.replace('<meta property="og:locale" content="fr_FR">',
                       f'<meta property="og:locale" content="{LANGUES[langue]["locale"]}">', 1)
