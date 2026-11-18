@@ -98,7 +98,7 @@ La porte ne verrouille **pas** N0a : elle lit `communication_arret` sans verrou 
 - (H1) une transaction autorisée tient N0 partagé de la porte à son COMMIT ;
 - (H2) en lecture validée, une requête lancée après l'obtention d'un verrou voit toute transaction validée avant cette obtention, parce que PostgreSQL rend une validation visible avant de relâcher ses verrous ;
 - (H3) pg_net n'envoie une requête qu'après le COMMIT de la transaction qui l'a déposée, et jamais si elle est annulée ;
-- (H4) pg_net applique `timeout_milliseconds` à un appel en cours.
+- (H4) pg_net retire une requête de sa file AVANT de commencer l'appel, et applique `timeout_milliseconds` à partir de ce moment.
 
 **Propriété 1** : aucune transaction ne valide une autorisation après G.
 
@@ -110,9 +110,28 @@ Une transaction T qui demande N0 partagé **après** G ne l'obtient qu'après la
 
 T lit ensuite l'état par une requête postérieure à l'obtention du verrou. Par H2, elle voit `arret_demande` ou `arret_confirme`. La porte refuse.
 
-**Propriété 2** : après C, aucune requête validée n'est encore en transmission.
+**Propriété 2** : après C, aucune requête validée ne peut encore être transmise.
 
-À C, `communication_transmissions_en_cours() = 0` a été constaté **après** G. Par la propriété 1, aucune requête n'est déposée après G. Celles qui l'ont été avant G ont toutes, à ce moment, une réponse enregistrée ou un délai écoulé. Par H4, pg_net a alors terminé ou abandonné l'appel.
+> **Corrigée après la revue indépendante n° 2 (constat IR2-01).** La première version comptait la fenêtre de délai à partir du **dépôt** de la requête. Avec une file pg_net en retard, une requête pouvait quitter la file et partir **après** un `STOP_CONFIRMED`. Le défaut est corrigé dans les brouillons (commit `37148d6`).
+
+**Mécanisme.**
+- Chaque envoi garde sa requête (`requete`), qui n'est jamais effacée tant qu'elle n'est pas résolue.
+- `sortie_file_vue_le` note le **premier instant où nous voyons** la requête absente de la file. `communication_observer_sorties` le pose ; elle est appelée par la lecture des réponses et par le constat d'arrêt, avant de compter.
+- Une requête est « en transmission » (`communication_en_transmission`) tant qu'elle n'a pas de réponse ET qu'elle remplit l'une de ces conditions :
+  - elle est encore dans la file ;
+  - nous ne l'avons pas encore vue hors de la file ;
+  - nous l'avons vue hors de la file depuis moins que le délai HTTP + 60 s.
+- Le compte se fait **par requête**, quel que soit le statut de l'envoi.
+
+**Démonstration.** Soit une requête R déposée avant G. R est prise en charge par pg_net à un instant P. Nous la voyons hors de la file à l'instant O ≥ P : on ne peut pas voir absente de la file une requête que pg_net n'en a pas encore retirée.
+
+Par H4, l'appel est terminé ou abandonné au plus tard à P + délai, donc avant O + délai + 60 s.
+
+À C, `communication_transmissions_en_cours() = 0` a été constaté après G. Pour chaque R, l'une de ces deux situations est vraie :
+- elle a une réponse : l'appel est terminé ;
+- O + délai + 60 s est passé : l'appel est terminé par H4.
+
+Une requête encore dans la file, ou pas encore vue dehors, est **comptée** : l'arrêt reste en attente. Par la propriété 1, aucune requête nouvelle n'apparaît après G.
 
 **Conclusion** : après un `STOP_CONFIRMED`, aucune transaction ne peut produire un nouvel envoi, et aucun envoi déjà autorisé n'est encore en route.
 
@@ -187,7 +206,7 @@ Notation :
   2. pg_net transmet ;
   3. le fournisseur accepte, mais la réponse est perdue ou le délai expire ;
   4. `communication_lire_reponse` passe l'envoi à `incertain`, sans nouvel essai.
-- Pour K, la transmission est terminée une fois le délai HTTP + 60 s écoulé, ou quand une réponse d'erreur est enregistrée. L'arrêt peut alors être confirmé.
+- Pour K, la transmission est terminée quand une réponse est enregistrée, ou quand le délai HTTP + 60 s est écoulé depuis que la requête a été **vue hors de la file**. L'arrêt peut alors être confirmé.
 - **Autorisé** : l'envoi incertain reste tel quel. Il est rapproché par les retours du fournisseur, ou clos après 72 h.
 - **Interdit** : un renvoi automatique, ou une relance pendant l'arrêt. `relancer_envoi_communication` crée une ligne `attente` que la porte refuse.
 - **Doublon** : possible **seulement** par une relance manuelle de l'administrateur, après la levée de l'arrêt et avec la case « risque de doublon » cochée. Ce point est inchangé.
@@ -208,6 +227,10 @@ Notation :
 3. Si pg_net est arrêté, une requête validée reste dans sa file : l'arrêt reste `STOP_PENDING / TRANSMISSIONS_EN_COURS`. C'est honnête, mais l'arrêt ne peut pas être confirmé tant que pg_net ne l'a pas traitée. **Vider la file de pg_net reste interdit** : elle est partagée avec le transactionnel.
 4. La « pause du canal » déclenchée par un code de Meta n'est **pas** un arrêt confirmé : elle est écrite sans N0, au mieux, et journalisée comme telle. Seul l'arrêt d'urgence donne la garantie.
 5. Un compte propriétaire de la base, dans le SQL Editor, peut tout contourner. C'est vrai pour tout le projet.
+6. **Lectures de modèles chez Meta** (`net.http_get`, revue n° 2, IR2-16) : elles passent par la porte, donc aucune n'est **autorisée** après G. En revanche, celles déposées avant G ne sont **pas comptées** dans les transmissions. Ce sont des lectures de notre propre compte, qui n'envoient rien à un client. La garantie « aucun message ne part » n'en dépend pas. À compter aussi si le CEO veut que l'arrêt couvre toute requête sortante.
+7. **Levée concurrente** (revue n° 2, IR2-03) : chaque appui sur « Arrêt » est daté et journalisé (`derniere_demande_le`), même si l'arrêt est déjà en place. Une levée qui a commencé **avant** un appui refuse de lever (`STOP_REQUESTED_DURING_LIFT`). Elle attend au plus 5 s.
+8. **Motif** : il est tronqué à 300 caractères (IR2-04). L'arrêt ne dépend jamais de la saisie.
+9. **Ligne d'arrêt absente** (IR2-11) : la porte refuse tout (état illisible), les fonctions d'arrêt lèvent une erreur, et un déclencheur interdit d'effacer la ligne.
 
 ---
 
@@ -218,5 +241,5 @@ Notation :
 | H1 | Un verrou consultatif de transaction est tenu jusqu'au COMMIT ou à l'annulation ; annulé avec une sous-transaction qui échoue | Documentation de PostgreSQL (rapporté) | T-01C |
 | H2 | Lecture validée : chaque requête d'une fonction VOLATILE prend un nouvel instantané. Une validation est visible avant que ses verrous ne soient relâchés. | Documentation et comportement connu de PostgreSQL (rapporté) | T-01C, T-01D |
 | H3 | pg_net n'envoie qu'après le COMMIT de la transaction qui a déposé la requête | Documentation de pg_net (rapporté) | T-01-bis, T-01C |
-| H4 | pg_net applique `timeout_milliseconds` ; `net.http_request_queue` et `net._http_response` ont la forme supposée | À vérifier sur pg_net 0.20.4 | T-01E |
+| H4 | pg_net retire la requête de sa file avant l'appel, puis applique `timeout_milliseconds` ; `net.http_request_queue` et `net._http_response` ont la forme supposée | À vérifier sur pg_net 0.20.4 (ordre interne : retrait, appel, réponse) | T-01F |
 | H5 | Une nouvelle demande de verrou partagé attend derrière une demande exclusive déjà en attente | Gestionnaire de verrous de PostgreSQL (rapporté) | T-02 |
