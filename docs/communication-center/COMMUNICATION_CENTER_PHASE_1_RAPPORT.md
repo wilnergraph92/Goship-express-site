@@ -11,6 +11,21 @@
 
 Ce rapport résume et rassemble ces documents. En cas de différence, les documents détaillés font foi.
 
+> **Correctif Phase 1.2 (18/11/2026).** La revue indépendante Phase 1.1
+> (`COMMUNICATION_CENTER_PHASE_1_1_RAPPORT.md`, verdict ÉCHEC) a relevé des affirmations fausses ou non
+> prouvées dans ce rapport. Elles sont corrigées ci-dessous, à leur place, sous la mention
+> **« [Corrigé 1.2] »**. Les documents de conception, les brouillons SQL et le plan d'essais ont été
+> réécrits ; le détail est dans `COMMUNICATION_CENTER_PHASE_1_2_RAPPORT.md`. Ce rapport est conservé
+> comme trace de la Phase 1 ; **la conception en vigueur est celle de la Phase 1.2**.
+>
+> Erreurs principales de la Phase 1, désormais corrigées dans la conception :
+> - lien de désinscription non cliquable : `courriel_gabarit` échappe le pied [C1] ;
+> - consentement sans preuve que le contact appartient au client [C2] ;
+> - empreinte qui ne couvrait pas le contenu tenu par Meta [C3] ;
+> - voies séparées dans la base mais pas chez les fournisseurs [C4] ;
+> - conservation « pour toujours » supposée, sans chemin d'effacement [C5] ;
+> - STOP tardif refusé [C6].
+
 ---
 
 ## 0. Résumé pour le CEO
@@ -19,17 +34,29 @@ Ce rapport résume et rassemble ces documents. En cas de différence, les docume
    bienvenue) **ne changent pas d'un octet**. Les messages commerciaux ont leurs propres tables, leur
    propre file d'attente, leur propre travailleur, leurs propres règles de consentement. Ils n'entrent
    jamais dans le fil de notifications de l'application mobile (décision D-E).
+   **[Corrigé 1.2]** Cette séparation n'était vraie que dans la base : chez Brevo et chez Meta, les
+   deux voies partageaient compte, expéditeur et numéro. La conception 1.2 exige des identités d'envoi
+   commerciales séparées, sans repli (ARCHITECTURE §6).
 2. **Tout naît éteint.** Interrupteur général coupé, canaux coupés, plafonds à 0 (= rien ne part),
    mode « essai » (seule la liste d'essai reçoit), tâche planifiée créée **inactive**. Chaque mise en
    route est une action de l'administrateur, journalisée, sur votre décision écrite.
 3. **Le gérant crée, modifie et programme ; seul l'administrateur approuve** (décision D-D).
    L'approbation porte une **empreinte** du contenu : la moindre modification après approbation
    l'annule.
+   **[Corrigé 1.2]** Faux pour WhatsApp : le contenu est tenu par Meta, et l'empreinte omettait le pied,
+   l'adresse, l'expéditeur et `site_url`. L'empreinte 1.2 couvre le contenu relu chez Meta et tout
+   l'environnement d'envoi (ARCHITECTURE §5.3–5.4).
 4. **Aucun consentement par défaut** (décision D-I). Le client coche lui-même une case jamais
    pré-cochée dans « Mon compte ». Chaque accord et chaque retrait sont gardés **pour toujours**, avec
    le texte exact lu par le client. L'équipe peut noter un retrait, **jamais** un accord.
+   **[Corrigé 1.2]** « Pour toujours » était une hypothèse : les durées sont désormais BLOQUÉES jusqu'à
+   l'avis du juriste, avec une purge approuvée par deux administrateurs. Le consentement n'est actif
+   qu'après confirmation par le contact lui-même (lien e-mail, message WhatsApp depuis le numéro), et
+   un changement de contact est une invalidation, jamais un retrait.
 5. **Le recueil du consentement reste fermé tant qu'un texte n'est pas marqué « approuvé par le
    juriste »** (décision D-F) : la base l'impose.
+   **[Corrigé 1.2]** La base impose une **attestation saisie par un administrateur**, avec la référence
+   de l'avis ; elle ne peut pas vérifier l'avis lui-même.
 6. **Deux plafonds de dépense indépendants** (global par jour, et par campagne), vérifiés **avant**
    chaque envoi, et une **réserve Brevo** qui protège les e-mails de connexion et d'inscription.
 7. **Constat important sur WhatsApp** : Meta ne livre plus de messages marketing aux numéros
@@ -38,6 +65,9 @@ Ce rapport résume et rassemble ces documents. En cas de différence, les docume
 8. **Coexistence WhatsApp** (garder le numéro actuel) : possible, mais seulement par un partenaire
    agréé par Meta. Recommandation : demander 2 à 3 devis ; à défaut, un numéro GoShip dédié au
    marketing. **Le numéro actuel n'est ni migré ni déconnecté.**
+   **[Corrigé 1.2]** La revue a montré que la Coexistence ferait peser le marketing sur la note de
+   qualité du numéro du service client. La conception 1.2 recommande d'**étudier en priorité un numéro
+   dédié** ; aucune acquisition sans votre autorisation écrite.
 9. **Coût réel aujourd'hui : 0 $.** Avec 69 clients et la moitié qui accepte, le marketing WhatsApp
    coûterait environ 3 à 4 $ par mois. Aucune activation payante n'est proposée.
 10. **Brouillons SQL non validés, volontairement** : la Phase 1 n'autorise aucune exécution. Les
@@ -124,6 +154,10 @@ sont vertes.
  puis appelle la base avec la clé PUBLIQUE et une signature interne. Elle ne détient aucune clé
  capable de contourner les règles de sécurité de la base.
 ```
+
+**[Corrigé 1.2]** Formulation trompeuse : la fonction SQL appelée s'exécute avec tous les droits et
+contourne la sécurité par ligne par construction ; la clé publique n'authentifie rien ; **la seule
+porte est la signature**. Les opérations permises et leur justification sont listées dans SECURITY §6.4.
 
 ### 4.2 Vie d'une campagne
 
@@ -298,6 +332,10 @@ l'offre gratuite.
 
 **Mesuré en production (60 jours)** : 93 e-mails le jour le plus chargé (28/09), moins de 25
 d'habitude ; une inscription = 3 e-mails (confirmation + bienvenue + adresse de Miami).
+**[Corrigé 1.2]** Les e-mails de connexion sont une **borne basse** (`auth.users` ne garde qu'une date
+par compte et par type), pas une mesure. La conception 1.2 sépare le « connu » de l'« estimé », compte
+le transactionnel en attente, et utilise des fenêtres glissantes (l'heure de renouvellement de Brevo
+n'est pas connue).
 
 **Protection en couches :**
 1. Pas de quota vérifié saisi → e-mail commercial fermé.
@@ -383,6 +421,8 @@ trancher : « Apt 46780 » et « ABX-46780 » désignent-ils la même boîte ?
 Prix publics relevés le 18/11/2026 dans des sources secondaires, **à confirmer sur les grilles
 officielles** avant tout achat. Ils sont inscrits dans la base comme « non vérifiés » et bloquent
 l'envoi tant qu'un administrateur ne les a pas vérifiés.
+**[Corrigé 1.2]** Plus aucun prix n'est écrit dans les brouillons : la table des tarifs naît vide et ne
+reçoit une ligne qu'avec sa preuve. Tous les territoires, Haïti compris, naissent bloqués.
 
 | Élément | Prix indicatif | Aujourd'hui | Deviendrait payant… |
 |---|---|---|---|
@@ -473,6 +513,8 @@ sont pas touchées.
 8. **Variables** — `{{email}}` et `{{telephone}}` dans le marketing ? (conception : non).
 9. **Conservation** — registre de consentement et suppressions : toujours ; file commerciale :
    24 mois ; retours des fournisseurs : 90 jours.
+   **[Corrigé 1.2]** Ce ne sont que des propositions : aucune durée n'est appliquée sans l'avis écrit du
+   juriste (SECURITY §7).
 10. **PR #46 et #48** — dans quel ordre.
 
 ---

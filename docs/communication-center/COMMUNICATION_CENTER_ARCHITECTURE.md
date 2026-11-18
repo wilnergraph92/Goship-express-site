@@ -1,459 +1,434 @@
-# GoShip Express — Communication Center
-# COMMUNICATION_CENTER_ARCHITECTURE.md — Phase 1 (Architecture & Security Design)
+# GoShip Express — Centre de communication
+# COMMUNICATION_CENTER_ARCHITECTURE.md — version Phase 1.2
 
 | | |
 |---|---|
-| Date | 18 November 2026 |
-| Status | **Design for CEO approval. Nothing implemented, executed, activated or deployed.** |
-| Companion documents | `COMMUNICATION_CENTER_SECURITY.md`, `COMMUNICATION_CENTER_DATABASE.md`, `brouillons-sql/40…43` (guarded drafts, never executed), `COMMUNICATION_CENTER_PHASE_0_AUDIT.md` |
-| Inputs | Approved Phase 0 audit; CEO decisions D-A … D-J and additional requirements 1–10 (18/11/2026) |
+| Date | 18 novembre 2026 |
+| Version | **Phase 1.2** — corrige la version Phase 1 après la revue indépendante Phase 1.1 (`COMMUNICATION_CENTER_PHASE_1_1_RAPPORT.md`) |
+| Statut | **Conception à approuver par le CEO.** Rien n'est mis en œuvre, exécuté, activé ni déployé |
+| Documents liés | `COMMUNICATION_CENTER_SECURITY.md`, `COMMUNICATION_CENTER_DATABASE.md`, `COMMUNICATION_CENTER_TESTING.md`, `brouillons-sql/40…43` (gardés, jamais exécutés), `COMMUNICATION_CENTER_PHASE_1_2_RAPPORT.md` |
+
+Les identifiants entre crochets (**[C1]**, **[H4]**, **[M7]**…) renvoient aux constats de la revue 1.1.
 
 ---
 
-## 1. Design principles (binding for Phases 2–7)
+## 1. Principes (opposables aux Phases 2 à 7)
 
-1. **Two lanes, never mixed.** Transactional (existing engine, unchanged) and marketing (new) have
-   separate tables, queues, workers, priorities, consent models and feeds. A marketing message is never
-   written to `notifications`, `notification_envois`, `mon_resume` or `messages_recents` (D-E).
-2. **The existing transactional behaviour is preserved byte for byte.** No existing function, table,
-   trigger, rule, cron job or API contract is modified. The only touch on an existing object is one
-   *additional* `AFTER UPDATE` trigger on `clients` that can never block the write (§5.6), and the
-   permission matrix gaining new entries.
-3. **Everything decided in the database**, like the rest of GoShip: consent, eligibility, approval,
-   spending, quotas, quiet hours. Pages only display and request; the database refuses on its own.
-4. **Born off.** Every switch starts disabled, every limit starts at 0 (= blocked), the cron job is
-   created inactive, mode starts at `essai` (test-allowlist only). Activation is a sequence of explicit,
-   journaled admin actions, each gated by a CEO decision.
-5. **Fail closed.** Unknown quota, unverified tariff, unapproved template, missing postal address,
-   missing consent text, missing variable, unknown outcome of an API call → nothing is sent.
-6. **Evidence is immutable.** Consent ledger, provider events, audit journal: append-only, enforced by
-   triggers even against the SQL Editor.
-7. **A duplicate is worse than a miss** for marketing: unknown outcomes are never retried automatically.
+1. **Deux voies, jamais mélangées — dans la base ET chez les fournisseurs** [C4]. Transactionnel
+   (existant, inchangé) et commercial (nouveau) ont leurs tables, leur file, leur travailleur, leurs
+   règles de consentement **et leurs identités d'envoi** : compte, expéditeur et clés e-mail
+   commerciaux ; numéro WhatsApp commercial. Le commercial n'utilise jamais une clé ou un expéditeur du
+   transactionnel, même en repli. Un message commercial n'est jamais écrit dans `notifications`,
+   `notification_envois`, `mon_resume` ni `messages_recents` (décision D-E).
+2. **Le transactionnel est préservé à l'octet près.** Aucune fonction, table, règle, tâche planifiée ni
+   contrat d'API existant n'est modifié ; `courriel_gabarit` et `expedier_envoi` ne sont ni modifiés ni
+   réutilisés pour le commercial [C1]. Seuls changent : la liste des permissions (7 ajouts, dans toutes
+   ses copies [H10]) et un déclencheur **ajouté** sur `clients`, qui ne peut jamais bloquer [M13].
+3. **Tout se décide dans la base**, comme le reste de GoShip. Les pages affichent et demandent ; la base
+   refuse d'elle-même.
+4. **Tout naît éteint ou BLOQUÉ.** Interrupteurs coupés, plafonds à 0, mode « essai », tâche planifiée
+   créée inactive, quota Brevo, limite WhatsApp, identité légale, adresse postale, numéro commercial,
+   tarifs et territoires : **vides tant qu'une preuve ou une décision n'est pas enregistrée**.
+5. **Échec fermé.** Valeur inconnue, preuve absente, modèle non vérifiable chez Meta, variable non
+   résolue, clé absente, issue inconnue d'un appel : **rien ne part**.
+6. **Les preuves sont immuables**, avec **une seule** exception : la purge approuvée par deux
+   administrateurs [C5].
+7. **Un doublon est pire qu'un message manqué** : une issue inconnue n'est jamais renvoyée seule [H8].
+8. **Une opposition ne se perd jamais** : aucun âge maximal pour un STOP, une plainte ou une
+   désinscription [C6].
 
 ---
 
-## 2. Updated architecture diagrams
+## 2. Schémas d'architecture (mis à jour)
 
-### 2.1 Component view
+### 2.1 Vue d'ensemble
 
 ```text
-                    ┌───────────────────────── Supabase (production gpfdyslysqjmojgzggib) ─────────────────────────┐
- admin.html         │                                                                                               │
- "Communications"   │  PostgREST RPC (RLS + exiger_permission + aal2)                                               │
- tab (admin,gérant) ├──► campaign / template / segment / consent / settings functions  (communications.*)           │
-                    │                                                                                               │
- mon-compte.html    │  ┌───────────── TRANSACTIONAL LANE (existing, unchanged) ─────────────┐                      │
- (+ app later)      │  │ colis_historique / evenements_facturation / scheduler              │                      │
- consent toggles ───┼─►│   → notification_regles → notifications ('app' feed, mobile)       │                      │
- (own data only)    │  │   → notification_envois → traiter_notifications()  [goship-notif…] │──┐                   │
-                    │  │ welcome e-mails (courriels_bienvenue)                              │  │                   │
- desinscription     │  └────────────────────────────────────────────────────────────────────┘  │ pg_net            │
- .html (public) ────┼─► desinscrire_communication(token)  [anon, HMAC-verified]                 │                   │
-                    │                                                                          ├──► Expo Push      │
-                    │  ┌───────────── MARKETING LANE (new) ──────────────────────────────────┐ ├──► Brevo (e-mail) │
-                    │  │ communication_reglages (switches, limits, mode, quotas)            │ │    + Supabase    │
-                    │  │ communication_textes_consentement → communication_consentements    │ │      Auth SMTP   │
-                    │  │ communication_suppressions · communication_destinataires_essai     │ ├──► Meta Cloud API │
-                    │  │ communication_modeles · _segments · _campagnes (approval+fingerprint)│ │   (WhatsApp)     │
-                    │  │ communication_destinataires (frozen audience)                      │ │                  │
-                    │  │ communication_envois (queue) → traiter_communications()            │─┘                  │
-                    │  │   [goship-communications, born INACTIVE, yields to transactional]  │                    │
-                    │  │ communication_tarifs · communication_depenses_jour (spend ledger)  │                    │
-                    │  │ communication_evenements_fournisseur (immutable) · fenêtres 24 h   │                    │
-                    │  └────────────────────────────────────────────────────────────────────┘                    │
-                    │            ▲ communication_recevoir_evenement(provider, raw, HMAC)  [anon, HMAC-verified]  │
-                    │            │                                                                                │
-                    │  Edge Function "communication-webhooks" (Phase 3, first Edge Function of the project):     │
-                    │    verifies Meta X-Hub-Signature-256 / Brevo secret+IPs, re-signs, calls the RPC with the   │
-                    │    PUBLISHABLE key — holds no key able to bypass RLS                                       │
-                    └────────────────────────────────────────────────────────────────────────────────────────────┘
-                                 ▲ webhooks                      ▲ one-click unsubscribe (RFC 8058 POST)
-                          Meta (statuses, inbound, STOP)    Mailbox providers (Gmail, Yahoo…)
+ admin.html, onglet « Communications » (admin, gérant)  ──► fonctions SQL communications.* (permission + 2FA)
+ mon-compte.html (+ application plus tard) ──► état / demande / retrait de SON consentement (contact masqué)
+ confirmation-communication.html (public, bouton) ──► confirmer_consentement_communication(jeton)   [anon]
+ desinscription.html (public, bouton)             ──► desinscrire_communication(jeton signé)        [anon]
+
+ ┌──────────── VOIE TRANSACTIONNELLE (existante, INCHANGÉE) ─────────────────┐
+ │ colis, facturation, bienvenue → notifications (fil mobile)               │   identité e-mail
+ │ → notification_envois → traiter_notifications()                          │── transactionnelle ──► Brevo (compte actuel)
+ │ courriel_gabarit, expedier_envoi : non modifiés                          │   + e-mails de connexion Supabase Auth
+ └───────────────────────────────────────────────────────────────────────────┘   numéro WhatsApp actuel (non touché)
+ ┌──────────── VOIE COMMERCIALE (nouvelle) ──────────────────────────────────┐
+ │ réglages (éteints, BLOQUÉS) · consentement demande→confirmé (immuable)    │   identité e-mail
+ │ suppressions · liste d'essai · indicatifs · tarifs · codes fournisseurs   │── commerciale séparée ──► Brevo (compte ou
+ │ modèles (+ image relue chez Meta) · segments · campagnes (empreinte,      │   (décision C4)          expéditeur commercial)
+ │   volume approuvé) · audience figée (contact exact)                       │
+ │ communication_envois → traiter_communications()                           │── numéro WhatsApp ──────► Meta Cloud API
+ │   (créée INACTIVE, cède la place au transactionnel)                       │   commercial (décision C4)
+ │ dépenses du jour (verrou) · conservation et purge à quatre yeux           │
+ └───────────────────────────────────────────────────────────────────────────┘
+          ▲ communication_recevoir_evenement(fournisseur, texte brut, HMAC)  [anon, signature seule porte]
+ Fonction Edge « communication-webhooks » (Phase 3) : Meta (X-Hub-Signature-256 sur le corps brut),
+ Brevo (jeton secret + adresses IP, protections plus faibles, à confirmer), désinscription en un clic.
+ Elle ne détient AUCUNE clé capable de contourner la sécurité de la base ; c'est la fonction SQL qu'elle
+ appelle qui s'exécute avec tous les droits, et sa seule protection est la signature (SECURITY §6).
 ```
 
-### 2.2 Campaign lifecycle (D-D)
+### 2.2 Vie d'un consentement [C2, H6, H7]
 
 ```text
- gérant/admin: create ─► brouillon ─submit─► en_attente_approbation ─approve (ADMIN ONLY)─► programmee
-                            ▲   ◄── withdraw / reject (reason) ──┘                           │ planifiee_le reached
-                            └──────────── back to draft (before launch, clears approval) ────┤ + switches on
-                                                                                              ▼ audience frozen
-  annulee ◄─ cancel (draft/pending: creator perm; approved/running: ADMIN) ─  en_cours ──► terminee
-                                                         en_pause ◄─ pause (gérant/admin) ─┘  ▲
-                                                             └──── resume (ADMIN, fingerprint re-checked) ─┘
-                                                         echec (launch impossible)
+ (aucune ligne) = AUCUN consentement
+     │ le client coche, dans SA langue, le texte attesté ; le contact exact lui est montré (masqué)
+     ▼
+ en_attente ──── e-mail : clic sur le bouton de la page ouverte par le lien signé (usage unique, durée limitée)
+     │      └─── WhatsApp : « OUI 1234 » (ou YES, SÍ, WI) envoyé DEPUIS le numéro concerné
+     ▼
+ confirme ──► seul état qui permet un envoi commercial, et seulement pour le contact ACTUEL
+     │
+     ├─ retire   ◄── case décochée · lien de désinscription · STOP · plainte · opposition Meta · demande à l'équipe
+     └─ invalide ◄── e-mail ou numéro changé · compte supprimé · (jamais un « retrait »)
+ L'équipe ne peut jamais confirmer ni accorder. Lever une suppression ne rend jamais le consentement.
+ Toutes les écritures prennent le verrou client+canal ; à heure égale, le retrait ou l'invalidation gagne.
 ```
 
-Approval binds a **SHA-256 fingerprint** of: channels, segment criteria (copied at submission),
-fallback language, schedule, both spending caps, test flag, and every template's content fingerprint.
-Any later change — including a new template version — invalidates it; the worker refuses to launch a
-campaign whose fingerprint no longer matches (`EMPREINTE_CHANGEE` → paused).
-
-### 2.3 Message lifecycle (marketing queue)
+### 2.3 Vie d'une campagne [D-D, C3, H9, H13]
 
 ```text
- attente ──(eligibility re-check)──► supprime            (consent withdrawn, STOP, suppressed, off allowlist, missing variable)
-    │ (quiet hours / frequency cap → postponed, stays attente)
-    │ (spend/quota reservation refused → postponed to next day, or campaign paused if campaign cap)
+ brouillon ─soumettre─► en_attente_approbation ─approuver (ADMIN : empreinte, volume, coût, Meta)─► programmee
+     ▲  ◄── retirer / refuser (motif) ──┘   ▲                                                         │
+     └── remettre_en_brouillon ─────────────┼─────────────────────────────────────────────────────────┤ heure venue
+                                            └─ AUDIENCE_DEPASSEE (volume réel > approuvé + seuil) ◄───┤
+                                                                                                      ▼
+  annulee ◄─ annuler ─                                      en_cours ──────────────────────────► terminee
+                                    en_pause ◄─ pause (gérant/admin) ─┘ ▲   pauses automatiques : EMPREINTE_CHANGEE,
+                                        └── reprendre (ADMIN, empreinte revérifiée) ┘   MODELE_META_*, PLAFOND_CAMPAGNE_*,
+                                                                                        PIED_COMMERCIAL_INCOMPLET, CODE_<meta>
+```
+
+### 2.4 Vie d'un message commercial [H4, H5, H8]
+
+```text
+ attente ─(revérifié : consentement, suppression, contact inchangé, liste d'essai)─► supprime
+    │ heures / fréquence (sous verrou client) → décalé ; plafond du jour → demain 9 h ; plafond campagne → pause
     ▼
- traitement ──2xx──► envoye ──webhook──► livre ──webhook──► lu (WhatsApp only)
-    │ 429/5xx (attempt < 3) ──► nouvel_essai ──(2 min, 10 min, 1 h)──► traitement
-    │ 429/5xx (attempt = 3) ──► abandon   (dead-letter queue, visible, admin-relaunchable)
-    │ 4xx / unknown outcome ──► echec     (never retried automatically)
- campaign cancelled before send ──► annule
-```
-
-### 2.4 Consent lifecycle (D-I)
-
-```text
- (no row) = NOT consented ──customer ticks box with counsel-approved text vN──► accorde (vN, target hash, source, time)
-      ▲                                                                          │
-      └── retire ◄── customer unticks · unsubscribe link · WhatsApp STOP · complaint · staff on request
-                     · e-mail/phone changed (target hash no longer matches) · account deleted
- Staff can NEVER record a grant. Lifting a suppression never restores consent.
+ traitement ──2xx──► envoye ──retour──► livre ──retour──► lu (WhatsApp)
+    │ 429 / 5xx (essai < 3) → nouvel_essai (2 min, 10 min, 1 h) → au 3e : abandon (messages morts)
+    │ autre 4xx → echec
+    │ délai dépassé, réseau, pas de réponse → INCERTAIN ── rapprochement par la référence « communication:<id> »
+    │                                                    └─ 72 h sans preuve : reste incertain (clos), jamais renvoyé seul
+ campagne annulée avant l'envoi → annule
 ```
 
 ---
 
-## 3. CEO decisions — how the design implements them
+## 3. Décisions du CEO et leur traduction
 
-| # | Decision | Implementation |
+| # | Décision | Mise en œuvre |
 |---|---|---|
-| D-A | Throwaway PostgreSQL + provider sandboxes, no Supabase Pro | §9 test & staging strategy; reassessment checkpoint before Phase 7 |
-| D-B | Investigate Coexistence, keep current number | §6.2 assessment; no migration/disconnection anywhere in the plan |
-| D-C | Verify Brevo plan, quota, Auth usage; protect Auth e-mails | §6.3; measured usage; `communication_brevo_disponible()` reserve; e-mail marketing blocked until quota is verified |
-| D-D | Gérant creates/edits/schedules; admin approval mandatory | `communications.approve` admin-only; worker launches only approved + fingerprint-matching campaigns |
-| D-E | Marketing separate from mobile transactional feed; API contracts preserved | Separate tables/queue; no write to `notifications`; no change to any RPC used by the app |
-| D-F | Consent & privacy requirements for DR, HT, US; flag counsel wording | `SECURITY.md` §5; DB refuses consent capture until a text is marked counsel-approved with a reference |
-| D-G | Postal address pending, do not invent | `adresse_postale` null → e-mail marketing cannot go to production; §7.1 lists what the CEO must confirm |
-| D-H | Miami address pending; identify authoritative source; change nothing | §7.2; `{{adresse_miami}}` variable refused until `adresse_miami_validee` |
-| D-I | Opt-in via customer account; default no consent | `mes_consentements_communication` / `regler_mon_consentement_communication`; no row = no consent; never pre-ticked |
-| D-J | Inspect PRs #46, #48; do not merge/modify | §8 |
-
-Additional requirements 1–10 → see the traceability table in §12.
+| D-A | Base jetable + bacs à sable, pas de Supabase Pro | `COMMUNICATION_CENTER_TESTING.md` ; réévaluation avant la Phase 7 |
+| D-B | Étudier la Coexistence, ne pas toucher au numéro | §6.2 ; aucun repli sur le numéro actuel ; rien ne migre ni ne déconnecte |
+| D-C | Vérifier Brevo, protéger les e-mails de connexion | §5.6 ; e-mail commercial fermé sans quota prouvé ; réserve ; fenêtres glissantes |
+| D-D | Gérant : créer, modifier, programmer (et mettre en pause) ; admin : approuver | `communications.approve` réservé à l'administrateur ; SECURITY §2 |
+| D-E | Marketing hors du fil transactionnel mobile | Tables à part ; aucune écriture dans `notifications` ni `messages_recents` |
+| D-F | Exigences RD, Haïti, USA ; textes à valider | SECURITY §5 ; textes ⚖️ ; la base exige une attestation (pas une vérification) |
+| D-G | Adresse postale en attente | `identite_legale`, `adresse_postale` BLOQUÉES ; pas d'e-mail commercial sans elles |
+| D-H | Adresse de Miami en attente | `{{adresse_miami}}` refusée tant que non validée ; e-mail seulement |
+| D-I | Consentement par l'espace client, aucun par défaut | §5.2 ; confirmé par le contact lui-même |
+| D-J | PR #46, #48 examinées sans y toucher | §8 |
+| Phase 1.2 | Identité e-mail commerciale distincte ; étudier un numéro WhatsApp dédié ; rien acheter ni configurer | §6 ; décisions attendues §11 |
 
 ---
 
-## 4. Queues, priorities and scheduling
+## 4. Files, priorités, planification
 
-| | Transactional (existing) | Marketing (new) |
+| | Transactionnel (existant) | Commercial (nouveau) |
 |---|---|---|
-| Queue table | `notification_envois` | `communication_envois` |
-| Worker | `traiter_notifications()` | `traiter_communications()` |
-| Cron job | `goship-notifications` (every minute) | `goship-communications` (every minute, **created inactive**) |
-| Batch | 50 / pass | `lot_par_minute` = 20 / pass (setting) |
-| Priority | Always first | **Yields**: if more than `attente_transactionnel_max` (50) transactional deliveries are due, the marketing pass sends nothing |
-| Retry | 30 s, 2 min, 10 min, incl. network/no-response | 2 min, 10 min, 1 h; **only** 429/5xx; unknown outcome = `echec`, no retry |
-| Dead letter | `echec` with `ABANDON_…` | `abandon` status + `messages_morts` health counter |
-| Dedup | unique `notifications.cle`; unique (notification, canal, cible) | unique `cle` = `campagne:<id>:<client>:<canal>`; unique (campagne, client, canal) in the frozen audience |
-| Concurrency | `for update skip locked` | same, plus campaign row lock during launch and spend reservation |
+| File | `notification_envois` | `communication_envois` (natures `campagne` et `confirmation`) |
+| Travailleur | `traiter_notifications()` | `traiter_communications()` |
+| Tâche | `goship-notifications` (chaque minute) | `goship-communications` (chaque minute, **créée inactive**) |
+| Lot | 50 par passage | `lot_par_minute` = 20 |
+| Priorité | Toujours d'abord | **Cède** : plus de `attente_transactionnel_max` (50) envois transactionnels dus → aucun envoi commercial ce passage |
+| Délai HTTP | défaut de pg_net (inchangé) | explicite : `delai_http_ms` = 20 000 [H8] |
+| Nouvel essai | 30 s, 2 min, 10 min, y compris réseau | 2 min, 10 min, 1 h ; **seulement** 429 et 5xx ; issue inconnue = `incertain` |
+| Messages morts | `echec` `ABANDON_…` | `abandon`, relance manuelle par l'administrateur [M4] |
+| Doublons | clé unique existante | clé `campagne:<id>:<client>:<canal>` ; audience unique (campagne, client, canal) |
+| Concurrence | `skip locked` | `skip locked` + verrou du jour [H1] + verrou du client [H4] + verrou de la campagne [M7] |
 
-**Scheduling:** a campaign carries `planifiee_le`; the worker launches due, approved campaigns one per
-pass (bounded work). **Quiet hours**: 09:00–19:00 in the recipient's local time (Haïti →
-America/Port-au-Prince, DO → America/Santo_Domingo, US/unknown → America/New_York), messages outside the
-window are postponed, not dropped. **Frequency cap**: max 1 marketing message per customer per 24 h and
-2 per 7 days across channels (settings). All values to be confirmed by counsel (FTSA/TCPA).
+**Planification.** `planifiee_le` ; une campagne lancée par passage. **Heures permises** 9 h–19 h à
+l'heure du destinataire (Haïti, Santo Domingo, heure de l'Est par défaut) ; **fréquence** 1 par jour et
+2 par semaine, tous canaux, messages en cours compris [H4]. À confirmer par le juriste.
 
-**pg_net capacity:** marketing adds ≤ 20 HTTP calls/minute to the shared pg_net queue, well under its
-throughput; the transactional lane remains dominant and first.
-
----
-
-## 5. Component design
-
-### 5.1 Provider abstraction
-Marketing has its own adapter functions — `communication_appel_email` (Brevo or Resend per the existing
-`email_fournisseur` setting) and `communication_appel_whatsapp` (Meta Cloud API) — and a shared response
-reader. **`expedier_envoi` is not refactored** (Phase 0 suggested it; requirement 7 overrides: the
-transactional path must not change). The campaign engine only knows `canal` + `fournisseur`; switching
-Brevo↔Resend is a setting; a new provider = one adapter function + tariff rows + webhook mapping.
-Marketing may use its **own sender and WhatsApp number** through optional Vault settings
-(`communication_expediteur`, `communication_whatsapp_numero_id`), falling back to the transactional ones.
-
-### 5.2 Spending limits (requirement 1)
-Independent and cumulative, all checked **under row lock before** each provider call
-(`communication_reserver`):
-1. **Global daily** — `plafond_jour_usd` and `plafond_jour_messages` across all campaigns and channels
-   (Santo Domingo calendar day), ledger `communication_depenses_jour`.
-2. **Per campaign** — `plafond_cout_usd` and `plafond_messages`, approved as part of the fingerprint.
-3. **Brevo quota** — §6.3.
-Reaching a campaign cap pauses the campaign (`PLAFOND_CAMPAGNE_*`); reaching a global cap postpones
-remaining messages to the next day 09:00. Estimates use **admin-verified** tariffs only; reservations are
-never refunded (estimates stay ≥ actual cost: Meta bills delivered messages only).
-
-### 5.3 Test-recipient allowlist (requirement 3)
-`communication_destinataires_essai`, admin-managed (`communications.manage`, reason, journaled). Enforced
-**server-side twice**: when the audience is frozen and immediately before each send
-(`communication_raison_exclusion`). In mode `essai` (default) and for every campaign flagged `essai`,
-nobody outside the list can receive. A customer can only be added if they personally consented on that
-channel; team accounts receive tests by virtue of their job (reason recorded).
-
-### 5.4 Templates and personalisation
-Closed variable list that exists in the schema: `{{prenom}}` (first word of `nom_complet`),
-`{{nom_complet}}`, `{{code}}`, `{{adresse_miami}}` (refused until D-H). E-mail and phone are deliberately
-**not** offered (data minimisation; CEO can request). Optional author fallback `{{prenom|Bonjour}}`.
-Missing value without fallback → recipient excluded at freeze time (`VARIABLE_MANQUANTE`) and re-checked
-at send; a rendered text containing `{{` or `}}` is never sent. Template text is plain text, HTML-escaped
-by the database. WhatsApp templates record the Meta name, Meta language code, category
-(MARKETING/UTILITY) and Meta approval status; an approved template is frozen (new version on edit).
-
-### 5.5 Segmentation
-Closed criteria (no SQL from pages): registered within N days, without parcels, active within N days,
-inactive for N days, parcels in transit, delivered parcels, countries, languages. Consent, suppression,
-valid target, allowlist and US-marketing restriction are **always** added. Preview returns **counts
-only** (eligible / excluded by reason). The audience is frozen **at launch** (so late withdrawals are
-honoured) and re-checked per message.
-
-### 5.6 Consent capture (D-I, requirement 4)
-Customer account page (`mon-compte.html`, later the app): per channel, an **unticked** toggle with the
-exact counsel-approved text. Granting stores text version + SHA-256 of the text + language + hash of the
-target address + source + timestamp. Withdrawal is always one click. A trigger on `clients` records an
-automatic withdrawal when the e-mail/phone changes or the account is deleted; it swallows its own errors
-(never blocks the customer's write). Mobile app: same RPCs in a later app release; installed versions are
-unaffected (they never call these functions).
-
-### 5.7 Webhooks and inbound messages
-One Edge Function (`communication-webhooks`, Deno, plain JS allowed, folder outside the published site —
-`supabase/functions/` is not under the Pages publishing scope; `deploy.yml` must also exclude it).
-Routes: `GET /meta` (hub.challenge verification with `META_VERIFY_TOKEN`), `POST /meta` (verify
-`X-Hub-Signature-256` with `META_APP_SECRET` over the raw body), `POST /brevo` (secret token in URL +
-Brevo IP ranges), `POST /desinscription` (RFC 8058 one-click). It normalises each event to
-`{id, type, message_id, code, survenu_le[, telephone, texte]}`, signs the raw normalised text with
-`communication_cle_webhook` (also stored in Vault), and calls `communication_recevoir_evenement` with the
-**publishable** key. The SQL verifies the HMAC, rejects replays (unique provider event id) and events
-older than 24 h, updates statuses, and on STOP / complaint / hard bounce / provider unsubscribe writes
-suppression + consent withdrawal. Inbound message **bodies are never stored** (keyword check only);
-only a hashed "last inbound" time is kept for the 24-hour service window. History sync offered by
-Coexistence must be **declined** (data minimisation).
-
-Until the Edge Function exists: e-mail tracking can reuse the polling approach already proven for
-transactional Brevo e-mails (separate function, separate column), WhatsApp statuses stay `envoye`
-(accepted ≠ delivered, shown as such), and the unsubscribe link works through the public page + RPC.
-
-### 5.8 Admin interface (Phase 4 outline)
-New tab "Communications" in the "Gestion" group, `data-permission="communications.view"`, views per
-master plan §8 (Overview, New campaign, Segments, Templates, WhatsApp, E-mail, Automations, Scheduled,
-History, Analytics, Settings). "Automations" shows the **existing** `notification_regles` (transactional,
-`settings.manage`, unchanged RPCs) and, separately, marketing automations. It also absorbs the screens of
-closed PR #13 (delivery centre, rules, test) as read views over existing RPCs. Every label goes through
-`tableau.txt` (4 languages); every `API.admin` method gets its demo implementation (read-only sample
-data, sends refused); `admin.html` is edited in `outils/generateur/pages/`.
-
-### 5.9 Monitoring
-`sante_communications()` (switches, Brevo headroom today, today's spend, queue by status, dead letters,
-stuck items, worker active); cron job named `goship-…` so `battement()` already reports its failures;
-Phase 2 adds integrity lines to `controle-integrite.sql` (stuck > 15 min, dead letters, spend > 80 % of
-cap, Brevo headroom < reserve) and the two anon RPCs to the `controle-securite.sql` whitelist.
-Analytics never presents untracked data as zero: e-mail "read" = not tracked; WhatsApp "delivered/read"
-= not tracked until the webhook is live.
-
-### 5.10 Marketing automations (Phase 5)
-Only marketing automations are new (e.g. inactive-customer reactivation). An automation is approved once
-by an admin with its own caps and fingerprint; each run creates a campaign instance that inherits that
-approval and is subject to all lane rules. Transactional automations (welcome, received, shipped,
-available, delivered) **already exist** and are not rebuilt (Phase 0 conflict C1).
+**pg_cron** accepte des intervalles en secondes ; la minute suffit et reste alignée sur le
+transactionnel [L1].
 
 ---
 
-## 6. External provider assessments
+## 5. Composants
 
-### 6.1 Email — Brevo (keep) vs Resend
-Brevo is already configured, domain-authenticated (DKIM via Brevo CNAMEs, DMARC `p=quarantine`, observed
-18/11/2026) and tracked. **Keep Brevo** for marketing too (master plan: "use the existing provider if
-suitable"); Resend stays a switchable alternative through the same adapter. Two points to verify in
-Brevo's terms before activation: (a) marketing through the transactional API vs Brevo's campaign product
-(the design keeps contacts in GoShip's database — no duplicate customer database at Brevo); (b) the
-"Sent with Brevo" footer and limits on the free plan.
+### 5.1 Habillage des e-mails commerciaux [C1, M8]
+`communication_courriel_commercial` (brouillon 43 §4.3) : un habillage **propre au commercial**, qui
+n'utilise ni ne modifie `courriel_gabarit`. Chaque **texte** est échappé ; le lien de désinscription est
+placé dans `href="…"` (adresse échappée pour un attribut) et forme donc un **vrai lien cliquable**. Le
+pied porte la raison de l'envoi, le lien, l'identité légale et l'adresse postale. Il renvoie **null —
+donc refus d'envoi —** si la clé de signature des liens, l'identité légale ou l'adresse postale manquent
+(les deux dernières restent BLOQUÉES jusqu'à la décision D-G). La version de l'habillage
+(`habillage-commercial-v1`) entre dans l'empreinte d'approbation. En-têtes : `List-Unsubscribe` (et
+`List-Unsubscribe-Post` en un clic quand la fonction Edge existe). Preuves exigées : TESTING groupe 7.
 
-### 6.2 WhatsApp — Coexistence assessment (D-B)
+### 5.2 Consentement confirmé par le contact [C2, H6, H7, M1, M14]
+- **Écran** : pour chaque canal, l'état (`aucun`, `en_attente`, `confirme`, `retire`, `invalide`), le
+  **contact exact masqué** (« j•••@gmail.com », « +509 •••• ••12 »), le texte attesté **dans la langue de
+  l'écran**, sans repli silencieux sur une autre langue.
+- **Demande** : exige la version et la langue exactes du texte affiché ; crée l'étape `demande` (en
+  attente) et une confirmation. Limites : 5 changements et 3 demandes de confirmation par canal et par 24 h.
+- **E-mail** : le travailleur envoie un e-mail de confirmation (nature `confirmation`) avec un jeton de
+  256 bits, dont seule l'empreinte est gardée, à usage unique, valable 168 h. La page appelle la
+  fonction **au clic sur un bouton**, jamais au chargement (les robots de messagerie ouvrent les liens).
+  Refus si le contact a changé ou si un retrait a eu lieu depuis la demande.
+- **WhatsApp** : le client envoie « OUI 1234 » (ou YES, SÍ, WI) **depuis le numéro concerné** au numéro
+  commercial affiché. Le code est tiré au hasard, et le message doit venir du numéro dont l'empreinte est
+  celle de la demande. Mots à valider (juriste, Meta).
+- **Jamais** un consentement activé parce que l'équipe a saisi un numéro : l'équipe ne peut ni demander
+  ni confirmer pour un client.
+- **Changement de contact** : invalidation, avec l'empreinte de l'ancien contact ; le nouveau n'hérite
+  de rien.
+- **Retrait** : toujours permis, sans limite, effet immédiat.
 
-| Topic | Finding (public sources, to confirm with Meta/partner) |
-|---|---|
-| What it is | The same number keeps working in the WhatsApp Business **app** while also connected to the **Cloud API**; app messages stay free, API messages are billed normally |
-| Onboarding | Only through **Embedded Signup** run by a Meta **Tech Provider / Solution Partner** (BSP such as 360dialog, Telnyx, YCloud…), or GoShip registering itself as a Tech Provider (Meta app review + business verification; reported as hard to reverse) |
-| Number requirements | WhatsApp Business app ≥ 2.24.17; number actively used in the app ≥ 7 days (GoShip's +1 849 538-6262 presumably qualifies — to confirm it is on the **Business** app, not the consumer app) |
-| Operational constraints | The phone must open the app roughly every 13–14 days or the API link drops; reduced API throughput (sources say 5–20 msg/s, irrelevant at GoShip's volume); some app features don't sync (groups, labels, quick replies, catalog…); Cloud API calling unavailable |
-| History sync | Optional import of past chats/contacts within 24 h of onboarding — **recommend declining** (data minimisation) |
-| Risk to current operations | Low if onboarding is done by an experienced partner; the number is **not** migrated or disconnected. Mis-handled onboarding is the main risk → do it with a partner, outside business hours, with rollback = disconnect the API link (app keeps working) |
+### 5.3 Modèles WhatsApp vérifiés chez Meta [C3, H9, M10]
+Le contenu qui fait foi est celui **relu chez Meta** (brouillon 42 §2). Méthode **prévue, à confirmer** :
+la liste des modèles du compte WhatsApp Business par l'API Graph (nom, langue, statut, catégorie,
+composants). L'image est normalisée (type, format, texte, boutons : type, texte, adresse, téléphone) et
+hachée. Vérifications :
+- à l'**approbation du modèle** (image fraîche, APPROVED, MARKETING) → `empreinte_meta_approuvee` ;
+- à l'**approbation de la campagne** et au **lancement** ;
+- pendant l'envoi, à chaque lot, avec une image de moins de `modele_meta_fraicheur_min` (60 min) —
+  **pas avant chaque message**, une requête par message serait excessive (limite documentée).
 
-**Market reality that affects value, independent of Coexistence:** Meta has **paused delivery of
-marketing templates to US numbers (+1, US area codes) since 01/04/2025** (still reported active in
-November 2026). Sources disagree on whether all +1 numbers are affected; **Dominican numbers are also +1
-(809/829/849)** — if Meta applies the pause by country code, WhatsApp marketing would reach only Haitian
-customers (37 of 69 today). The design already encodes this (`autorise = false` for US; DO to be verified
-before activation). Utility templates are unaffected.
+Différence, statut autre qu'APPROVED, catégorie autre que MARKETING, image absente ou trop vieille :
+**pause** de la campagne avec la raison, journalisée. Tant que la méthode de lecture n'est pas
+confirmée sur un compte d'essai, **aucun modèle WhatsApp ne peut être approuvé** (échec fermé).
+**Versionnement** : un modèle approuvé est figé ; toute modification crée une nouvelle version, à
+approuver de nouveau, et chez Meta un nouveau nom (`…_v2`).
 
-**Recommendation:** pursue Coexistence through a **BSP/Tech Provider** (obtain 2–3 quotes; check fees,
-data-processing terms, region support, history-sync opt-out). Fallback if unsuitable: a **dedicated
-GoShip marketing number** on the Cloud API directly (no BSP needed), which also gives marketing its own
-quality rating and keeps the support number's reputation isolated. Both options remain compatible with the
-design (`communication_whatsapp_numero_id`). No action before CEO approval.
+### 5.4 Empreinte d'approbation complète [H9]
+Elle couvre : les champs de la campagne ; chaque modèle (empreinte locale **et** image Meta approuvée) ;
+l'**environnement d'envoi** — identité légale, adresse postale, expéditeur (haché), nom d'expéditeur,
+numéro commercial (haché), `site_url`, version de l'habillage, textes du pied (4 langues),
+`adresse_miami()` si validée. Tout changement invalide l'approbation : refus à l'approbation, pause au
+lancement et pendant l'envoi. Chaque envoi garde l'empreinte du contenu réellement envoyé.
 
-### 6.3 Brevo quota and Supabase Auth protection (D-C, requirement 2)
+### 5.5 Dépenses et plafonds [H1, H11, H13, M7]
+- **Verrou du jour pris d'abord**, puis somme de toutes les lignes du jour, puis réservation : deux
+  travailleurs, même sur deux canaux, passent l'un après l'autre.
+- Plafonds **globaux** (USD et messages), **par campagne** (dans l'empreinte), **limite quotidienne de
+  destinataires du numéro WhatsApp** (valeur attribuée par Meta, BLOQUÉE tant qu'elle n'est pas connue).
+- La campagne est **relue sous verrou** : une pause validée arrête les lots suivants ; les messages déjà
+  remis à pg_net suivent leur cours.
+- Un refus définitif ne rend pas la réservation ; une erreur avant l'appel l'annule (sous-transaction).
+- **Volume** : l'administrateur approuve un volume et un coût réels ; au lancement, au-delà du volume
+  approuvé + seuil (10 %) ou des plafonds, la campagne retourne en attente d'approbation
+  (`AUDIENCE_DEPASSEE`).
 
-**Measured (production, read-only, last 60 days):** busiest day 93 e-mails (28/09, launch), typically
-< 25/day; each sign-up = 3 e-mails (Auth confirmation + welcome + Miami address); 28 Auth confirmations,
-1 password reset; 136 welcome e-mails; 155 engine e-mails.
-**Not verifiable from this environment:** the Brevo subscription tier and quota (requires the Brevo
-dashboard, or an authorised read-only `GET /v3/account` call with the stored key — not done). Public
-sources: free plan = **300 e-mails/day, shared by API and SMTP relay** (i.e. Auth + transactional +
-marketing); Starter ≈ US$9/month for 5,000 e-mails/month (no daily cap; verify).
+### 5.6 Protection de Brevo [D-C, H2, H3, M12]
+- E-mail commercial **fermé** tant que le quota n'est pas saisi **avec sa preuve** (page Brevo, date)
+  par `verifier_quota_brevo`.
+- Tant que le commercial partage le compte du transactionnel, il ne prend que : quota − réserve
+  (150/24 h) − connexion **estimée** (borne basse) − transactionnel **connu** (envoyé **et en attente**)
+  − commercial réservé.
+- Fenêtres **glissantes** de 24 h et 30 jours : l'heure de renouvellement de Brevo n'est pas supposée.
+- Calcul **une fois par passage**.
+- Une identité commerciale sur un **compte Brevo séparé** supprime le partage (décision C4).
 
-**Protection, in layers:**
-1. E-mail marketing is **closed** until an admin records the verified quota (`brevo_quota_jour` /
-   `brevo_quota_mois`, journaled, dated).
-2. Marketing may only use `quota − reserve (150/day default) − Auth e-mails today − transactional
-   e-mails today − marketing already reserved` — computed before every e-mail, under lock.
-3. Monthly plans: the reserve is kept for every remaining day of the month.
-4. Optional structural isolation (CEO choice, §10): move **Supabase Auth SMTP** to a separate sender
-   service so marketing can never touch it, or upgrade Brevo so the shared limit is no longer binding.
+### 5.7 Désinscription, suppression, opposition [C6, H5, M4]
+- Suppression par **canal** et **contact exact**.
+- Le lien bloque le contact qui a **reçu** le message, jamais la nouvelle adresse.
+- STOP, plainte, opposition Meta, désinscription chez le fournisseur : jamais refusés pour leur âge.
+- Suppression manuelle par l'équipe (`communications.consents`). Levée : administrateur, motif ; elle ne
+  rend jamais le consentement. Une nouvelle inscription **confirmée par le contact** lève ses propres
+  désinscriptions et STOP (règle à valider par le juriste), jamais une plainte, un rebond ou une
+  suppression manuelle.
+- **Le transactionnel n'est jamais touché** : aucune fonction transactionnelle ne lit ces tables, et les
+  identités séparées limitent les effets chez les fournisseurs (§6).
 
-**Action for the CEO:** Brevo > *My plan / Usage*: note plan name, daily and monthly limits, renewal
-date; Supabase > Authentication > SMTP: confirm Brevo is the SMTP host (expected, per go-no-go 28/09).
+### 5.8 Issues incertaines [H8]
+Statut `incertain` ; délai HTTP explicite ; rapprochement tardif par la référence `communication:<id>`
+(`biz_opaque_callback_data` pour WhatsApp ; en-tête `X-Mailin-custom` pour Brevo, **à confirmer**). Après
+72 h sans preuve, l'envoi reste incertain (clos). **Jamais renvoyé seul.** Relance manuelle : administrateur,
+motif de 10 caractères au moins, case « j'accepte le risque de doublon », nouvel envoi soumis à toutes les
+règles, journal.
+
+### 5.9 Indicatifs téléphoniques [H12]
+Table des préfixes ; le territoire se lit par le préfixe le plus long. Haïti, République dominicaine
+(1809, 1829, 1849), Porto Rico (1787, 1939), Jamaïque (1876, 1658) sont listés **non autorisés** ; tout
+autre +1 reste « NANP_AUTRE » jusqu'au chargement de la liste officielle de NANPA (États-Unis, Canada,
+autres territoires, en Phase 2). Un territoire ne s'ouvre qu'avec une **preuve** (confirmation écrite de
+Meta) et un **tarif vérifié**.
+
+### 5.10 Conservation et purge [C5]
+Voir SECURITY §7 et DATABASE §5 :
+- une durée par catégorie, **BLOQUÉE** tant que le juriste ne l'a pas fixée (pas de purge automatique
+  sans durée) ;
+- purge demandée par un administrateur (ou notée sur demande d'une personne), **approuvée par un autre
+  administrateur**, exécutée par une fonction unique ;
+- seule exception à l'immuabilité, et journal des purges sans les données effacées.
+
+### 5.11 Mode démonstration (critères de développement de la Phase 2)
+- `api.js` : une implémentation démo pour **chaque** méthode `API.admin.communications.*` et pour les
+  fonctions de consentement de « Mon compte ». Données d'exemple en `localStorage`.
+- **Aucun envoi** : les méthodes d'envoi répondent `MODE_DEMO`.
+- Consentement simulé jusqu'à `en_attente`, avec une confirmation simulée par un bouton marqué « démo ».
+- `PERMISSIONS_DES_ROLES` reçoit les 7 permissions ; `exiger(d, 'communications.…')` dans chaque méthode.
+- Formes de réponse identiques à la base, comparées par `essai-communications.js` ; essai dans le
+  navigateur avec `config.js` vide.
+
+### 5.12 Quatre langues
+- Textes de consentement, pied commercial, e-mail de confirmation, mots de confirmation et de STOP,
+  pages de confirmation et de désinscription : **fr, en, es, ht**, tous ⚖️.
+- Libellés du tableau de bord : `tableau.txt` + 3 traductions + `traduire.py`.
+- Modèles WhatsApp : la langue créole chez Meta est **à confirmer** ; à défaut, le client haïtien reçoit
+  le modèle de la langue de repli choisie dans la campagne, jamais un texte non approuvé.
+
+### 5.13 Interface (Phase 4, rappel)
+Onglet « Communications » du groupe « Gestion », `data-permission="communications.view"`, 11 vues du
+cahier des charges. « Automatisations » montre les règles transactionnelles **existantes** (lecture ;
+modification sous `settings.manage`, RPC inchangées) et, à part, les automatisations commerciales.
+`admin.html` se modifie dans `outils/generateur/pages/`.
+
+### 5.14 Surveillance
+`sante_communications()` donne :
+- les réglages et le disponible Brevo, séparé en **connu** et **estimé** ;
+- les dépenses du jour et la file par statut ;
+- les messages morts, les incertains, les envois bloqués et les erreurs sur 24 h ;
+- **le signal C4** : les e-mails transactionnels refusés pour adresse bloquée ;
+- l'état du travailleur.
+
+La tâche porte le préfixe `goship-…`, donc `battement()` en signale les échecs. En Phase 2, des lignes
+seront ajoutées à `controle-integrite.sql`, et les trois fonctions publiques à la liste blanche de
+`controle-securite.sql`.
 
 ---
 
-## 7. Address decisions prepared for the CEO
+## 6. Identités d'envoi séparées [C4] — étude
 
-### 7.1 D-G — postal address required in marketing e-mails (pending, nothing assumed)
-US CAN-SPAM requires a **valid physical postal address** of the sender in every commercial e-mail: a
-street address, a USPS-registered PO Box, or a private mailbox registered with a Commercial Mail
-Receiving Agency. Please confirm:
-1. Exact legal sender name (the site's structured data says "Goship Express LLC" — confirm).
-2. An address **where GoShip actually receives mail** (street, unit/suite, city, state, ZIP).
-3. Whether the Medley warehouse address is GoShip's own premises or a **third-party facility** (the
-   "ABX-46780" account format suggests a forwarder's warehouse) — if third-party, it may not be a valid
-   sender address; a PO Box or CMRA mailbox is a compliant alternative.
-4. Whether DR/Haiti offices should also appear (optional, trust).
-Recorded via `valider_adresse_postale(adresse, motif)` by an admin after your written confirmation.
+### 6.1 E-mail
 
-### 7.2 D-H — Miami address: sources found and canonical proposal (nothing changed)
+| Option | Isole la réputation de domaine | Isole les listes de blocage | Isole le quota | Coût | Statut |
+|---|---|---|---|---|---|
+| A. Même compte Brevo, même expéditeur | non | non | non | 0 | **écartée** |
+| B. Même compte Brevo, **sous-domaine commercial** (ex. `news.goshipexpress.net`, à choisir) et expéditeur distinct | en partie (domaine) | **non vérifié** : la liste de blocage du transactionnel de Brevo semble tenue au niveau du compte | non | 0 | possible **si** Brevo confirme par écrit le comportement de ses listes |
+| C. **Compte Brevo commercial séparé** + sous-domaine | oui | oui (comptes distincts) | oui | offre à choisir ; conditions de Brevo sur plusieurs comptes à vérifier | **recommandée** |
+| D. Autre fournisseur pour le commercial (ex. Resend) + sous-domaine | oui | oui | oui | offre à choisir | possible |
 
-| Variant | Where | Content |
+**Décision provisoire de conception** : identité commerciale distincte (sous-domaine + expéditeur +
+clés propres). Les brouillons n'ont **aucun repli** sur l'identité transactionnelle.
+
+- `brevo_compte_partage = true` tant que l'option C ou D n'est pas en place : le quota partagé est alors
+  protégé par la réserve.
+- **Ni sous-domaine, ni DNS, ni compte, ni clé ne sont créés** avant l'autorisation écrite du CEO.
+- **Ne pas affirmer** que deux expéditeurs du même compte sont indépendants tant que Brevo ne l'a pas
+  confirmé.
+
+### 6.2 WhatsApp
+
+| | Coexistence sur le numéro actuel | **Numéro dédié au marketing** (recommandé à l'étude) |
 |---|---|---|
-| **A. Customer receiving address** | `adresse_miami()` in `outils/supabase.sql` (comment: "fait foi"), copy in `supabase-naissance.sql`; `mon-compte.html` address table; `index.html` table; mobile `config.js`; welcome e-mail; `build.py` ("exactement comme Goship Express l'a fourni (19/10/2026)") | `8140 NW 74th Ave Unit 3` / **`ABX-46780`** / Medley / Florida / 33166 / United States / **786 525-2944** (+ customer name and code) |
-| **B. Company address on public pages** | banner and footer of every page (`build.py` constants), JSON-LD `streetAddress` | `8140 NW 74th Ave, Unit 3, **Apt 46780**`, Medley, Florida 33166; company phone +1 849 538-6262 |
-| C. Legacy e-mail footer text | `assets/js/notifications.js` (`PIED_ADRESSE`, manual WhatsApp/e-mail) | `8140 NW 74th Ave, Unit 3, Medley, FL 33166` (no suite) |
-| D. App agency card | mobile `config.js` | `8140 NW 74th Ave Unit 3, Medley, FL 33166` |
+| Numéro du service client | partagé avec le marketing | intact, aucun lien avec l'API commerciale |
+| Note de qualité, blocages, signalements | **une campagne mal reçue pèse sur le numéro du service client** | limités au numéro commercial |
+| Mise en place | par un partenaire agréé par Meta ; risque de manipulation du numéro existant | Cloud API directe possible ; pas de partenaire obligatoire (à confirmer) |
+| Contraintes | ouvrir l'application environ toutes les deux semaines ; fonctions non synchronisées ; débit réduit | numéro à acquérir et à faire vérifier |
+| Coût | frais du partenaire (devis) | numéro (devis) ; aucun frais de partenaire si direct |
+| Conformité de la décision B | aucune migration, mais le numéro est relié à l'API | **le numéro actuel n'est pas touché du tout** |
 
-**Authoritative source today:** variant A as encoded in `adresse_miami()` — it is the most recent data
-explicitly provided by GoShip (19/10/2026) and declared authoritative in the code. **Proposal:** two
-distinct concepts, one source each: (1) *customer receiving address* = `adresse_miami()` (database),
-read by site, app and e-mails; (2) *company postal/contact address* = the D-G answer, stored once and
-injected by `build.py`. Decide whether "Apt 46780" (B) and "ABX-46780" (A) are the same mailbox
-identifier. Nothing is changed until you decide.
-
----
-
-## 8. Open PRs (D-J) — inspected, not modified
-
-| PR | Content | Conflicts with this project | Recommendation |
-|---|---|---|---|
-| **#46** "Meta Pixel" (open, base `3c4c51a`, ~30 commits behind `main`) | Adds `metaPixel` to `config.js`, Pixel loading in `mesure.js` (public pages only, no auto-config, blocked on URLs with non-ad parameters, GPC/DNT respected), CSP entries in `build.py`, a new privacy-policy section generated by `build.py` in 4 languages, 92 regenerated pages | (1) **Same files** we will need for the privacy-policy marketing section (`build.py` `confidentialite_*`, `confidentialite.html` × 4) → merge conflicts; (2) predates the 16/11 CSP/fonts change (`'self'` only) → needs rebase; (3) campaign links carrying `utm_*` will load the Pixel on landing pages — acceptable but must be disclosed in the privacy policy; (4) no customer data or messaging overlap | Decide #46 **before** Phase 2's privacy-policy work; if kept, rebase it first so the marketing section is written on top. No functional dependency |
-| **#48** "AI Command Center — Phase 0 audit" (open draft, document only) | Plans `ia_*` tables, an Edge Function gateway holding the Claude API key, permission `ia.commander`, a migration in the chain, the rule "no message sent to a customer by AI", approval fingerprints | (1) Both projects append migrations at the end of the chain and both edit `permissions_du_role` (3 SQL copies + `api.js`) → **sequence them**, never in parallel; (2) both introduce the **first Edge Function** → agree one convention (folder, deploy workflow, secrets doc, `deploy.yml` exclusion); (3) its "Customer Service" agent must never be given any `communications.*` sending function — compatible with its own rule; (4) the 9 helper functions it found executable by `anon` are unrelated but worth the same hygiene | Treat as a **sequencing** dependency only. If both proceed, the Communication Center migrations take numbers 40–43 and the AI ones follow (or vice versa), decided by the CEO |
+**Décision provisoire de conception** : étudier en priorité un **numéro dédié**. Les brouillons n'utilisent
+que `communication_whatsapp_numero_id`, `communication_whatsapp_jeton` et
+`communication_whatsapp_waba_id`, **jamais** les réglages du numéro actuel. Aucune acquisition,
+migration, activation ni configuration sans l'autorisation écrite du CEO.
 
 ---
 
-## 9. Testing and staging strategy (D-A)
+## 7. Adresses (D-G, D-H) — inchangé, en attente
 
-| Layer | How, without Supabase Pro |
-|---|---|
-| Database logic | New `outils/essais-services/essai-communications.py` on the **existing throwaway-PostgreSQL harness** (whole chain 1→43, doubles for `auth`, `vault`, `net`, `cron`): permissions per role, consent ledger immutability, fingerprint, allowlist, caps under 4 concurrent workers, Brevo reserve arithmetic, quiet hours, frequency, STOP, unsubscribe token, webhook HMAC + replay, idempotency, and **regression: the transactional engine's outputs are identical before/after** (`essai-notifications.py` unchanged and green) |
-| Demo copy | `essai-communications.js` for the `api.js` demo implementation (read-only, sends refused) |
-| Browser | `essai-communications-navigateur.mjs` (Playwright, demo mode, empty `config.js`, Supabase calls blocked) |
-| E-mail provider | Brevo with sandbox header (`X-Sib-Sandbox: drop`) — accepted, never delivered; then live tests only to the allowlist after CEO authorisation |
-| WhatsApp provider | Meta **test number** + up to 5 registered test recipients (Meta's own sandbox); production number only after Coexistence decision and CEO authorisation |
-| Edge Function | Local `supabase functions serve` with recorded Meta/Brevo payloads and signature fixtures |
-| Staging reassessment | Before Phase 7: decide whether a real staging project is required (Pro ~US$25/month, or pausing Speed Express to free a free-tier slot) |
-
----
-
-## 10. Provider cost analysis (requirement 10) — **no paid activation proposed in this phase**
-
-All figures are public list prices observed 18/11/2026 from secondary sources; **each must be confirmed
-on the provider's official page before any purchase**. They are entered in `communication_tarifs` as
-`verifie = false` and block sending until an admin verifies them.
-
-| Item | Unit price | Today | When it would become paid |
-|---|---|---|---|
-| Supabase | Free; Pro US$25/month | Free | Only if a staging project/branching or PITR is decided |
-| Supabase Edge Functions | Included (free tier: 500k invocations/month) | none deployed | Not expected at GoShip volume |
-| Brevo | Free 300 e-mails/day; Starter ≈ US$9/month (5k e-mails/month) | Free assumed — **unverified** | When marketing + Auth + transactional approach the daily cap |
-| Resend (alternative) | Free 3,000/month (100/day); Pro ≈ US$20/month | unused | Only if chosen for marketing or Auth isolation |
-| Meta WhatsApp — marketing | ≈ US$0.074 per delivered message (HT, DO: "Rest of Latin America"); US ≈ 0.025 but **not delivered** (pause) | not configured | Per message, only after activation |
-| Meta WhatsApp — utility | ≈ US$0.0113 (HT/DO), ≈ US$0.0034–0.004 (US); free inside the 24 h window | not configured | Not used by marketing |
-| BSP / Tech Provider (Coexistence) | Varies: from markup-only to a monthly platform fee — **quote required** | — | If Coexistence chosen |
-| Dedicated number (fallback) | Low monthly cost for a number able to receive verification — **quote required** | — | If Coexistence rejected |
-| Legal counsel (US/FL, DR, HT) | One-off, quote required | — | Before consent capture goes live (required) |
-| Apple Developer (iOS consent screen/push) | US$99/year | missing | Only for iOS |
-
-**Scenario (illustrative, today's base):** 69 customers; suppose 50 % opt in per channel.
-WhatsApp: ≈ 19 Haitian recipients reachable (+ ≈ 9 Dominican if not affected by the +1 pause) × 2
-campaigns/month × US$0.074 ≈ **US$2.8–4.1/month**. E-mail: ≈ 35 × 2 = 70 e-mails/month → within free
-tier. At 1,000 customers with the same assumptions: WhatsApp ≈ US$40–60/month, e-mail ≈ 1,000/month
-(free tier insufficient on campaign days → Starter). The spending caps bound every scenario regardless.
+- **D-G** : il faut l'identité légale exacte et une adresse où GoShip reçoit réellement son courrier
+  (rue, suite, ville, État, code postal), ou une boîte postale USPS, ou une boîte privée enregistrée. Il
+  faut aussi savoir si l'entrepôt de Medley est un local de GoShip ou d'un prestataire (le format
+  « ABX-46780 » évoque un compte chez un transitaire). Ces valeurs sont saisies par
+  `valider_identite_expediteur`, avec la référence de la décision écrite du CEO.
+- **D-H** : source qui fait foi aujourd'hui : `adresse_miami()` (« ABX-46780 », 786 525-2944). Le site
+  affiche ailleurs « Apt 46780 » ; deux autres variantes existent (sans suite). Proposition : deux
+  notions, une source chacune (réception des clients, adresse de l'entreprise). **Rien n'est changé.**
 
 ---
 
-## 11. Rollback and recovery (requirement 9)
+## 8. PR ouvertes (D-J) — examinées, non modifiées
 
-| Situation | Action | Effect on existing operations |
+| PR | Conflit | Recommandation |
 |---|---|---|
-| Stop all marketing immediately | `regler_communications({"campagnes_actives": false}, motif)` (admin, journaled) — the worker still reads pending responses, sends nothing | None |
-| Stop one channel | `email_actif` / `whatsapp_actif` = false (queued items wait, nothing lost) | None |
-| Stop one campaign | pause (gérant/admin) or cancel (admin) — unsent items → `annule` | None |
-| Stop the worker | `cron.alter_job(<id>, active := false)` | None |
-| Bad migration in Phase 2 | Migrations are **additive only** (new tables/functions, one non-blocking trigger, permission entries). Rollback = switches off + worker off; then a reviewed "retreat" script drops the new trigger and restores `permissions_du_role` from `supabase.sql`; tables kept (evidence) | Transactional untouched by design; verified by regression bench |
-| Site/UI regression | `git revert` + republication (proven path) | Site only |
-| Provider incident (Brevo/Meta) | Temporary errors → retry ≤ 3 then dead-letter; caps bound spend; transactional lane unaffected (separate queue) | None |
-| Restore of the database from backup | Daily encrypted `pg_dump` includes all new tables. **Vault secrets are not restorable** into a new project: provider keys and `communication_cle_desinscription` / `communication_cle_webhook` must be re-entered; old unsubscribe links then fail → the page falls back to "log in to unsubscribe" + mailto; procedure added to `docs/production/disaster-recovery.md` in Phase 2 | Same as today for provider keys |
-| Duplicate-send suspicion | Unique keys make a second send impossible for the same campaign/customer/channel; unknown outcomes are never retried | — |
+| #46 pixel Meta | Mêmes fichiers que la future section « Communications commerciales » de la politique de confidentialité (`build.py`, `confidentialite.html` × 4) ; en retard sur `main` ; un lien de campagne avec `utm_*` chargera le pixel ; les pages de confirmation et de désinscription doivent **exclure** tout script de mesure [L3] | Décider #46 **avant** le travail sur la politique de confidentialité |
+| #48 Centre de Commandement IA | Les deux ajoutent des migrations en fin de chaîne, modifient `permissions_du_role` (toutes ses copies) et introduisent la première fonction Edge ; l'agent « Service client » ne doit jamais recevoir de fonction `communications.*` qui envoie | Les ordonner l'un **après** l'autre ; une seule convention pour les fonctions Edge |
 
 ---
 
-## 12. Traceability — additional requirements 1–10
+## 9. Retour arrière et reprise [M9]
 
-| # | Requirement | Where |
+| Situation | Action | Limites |
 |---|---|---|
-| 1 | Independent global daily and per-campaign spending limits | §5.2; `communication_reserver`, `communication_depenses_jour`, campaign caps in fingerprint |
-| 2 | Protect Brevo authentication e-mail quota | §6.3; `communication_brevo_disponible` |
-| 3 | Strict server-side test allowlist | §5.3; `communication_destinataires_essai`, `communication_raison_exclusion` (freeze + send) |
-| 4 | Complete consent evidence and withdrawal history | §5.6; immutable `communication_consentements`, counsel-approved texts with fingerprint |
-| 5 | Transactional and marketing strictly separated | §1, §4; separate tables, consent models, feeds |
-| 6 | Independent queues and priorities | §4 |
-| 7 | Preserve existing transactional behaviour | §1.2, §5.1 (no refactor of `expedier_envoi`), regression bench §9 |
-| 8 | Exact permission matrix Admin/Gérant | `SECURITY.md` §2 |
-| 9 | Rollback and recovery | §11 |
-| 10 | External costs before paid activation | §10 |
+| Tout arrêter | `campagnes_actives = false` (journalisé) ; le travailleur lit encore les réponses, n'envoie rien | — |
+| Un canal, une campagne | couper le canal ; pause ou annulation | — |
+| Le travailleur | `cron.alter_job(<id>, active := false)` | — |
+| Migration défaillante (Phase 2) | tout éteindre ; script de retrait `retrait-communications.sql`, **préparé et relu en Phase 2**, qui remet `permissions_du_role` dans sa définition **d'avant le fichier 40, recopiée littéralement dans le script** (jamais « relancer `supabase.sql` », qui contiendra alors les nouvelles permissions) et retire le déclencheur de `clients` | Les tables restent (preuves) ; aucune ligne de consentement n'est effacée hors purge approuvée |
+| Après activation | les messages partis ne se rappellent pas ; les consentements et retraits recueillis **doivent** être gardés ; un retour arrière n'efface jamais une opposition | Les liens de désinscription des messages déjà envoyés doivent continuer de marcher (page + fonction gardées) |
+| Restauration de la base | les tables sont dans la sauvegarde ; **les secrets du coffre ne le sont pas** : le poivre `communication_poivre` doit être ressaisi depuis sa **copie hors ligne** (sinon : échec fermé, aucun envoi, et les suppressions restent applicables par l'identifiant client) ; les clés des liens aussi (sinon les anciens liens renvoient vers « connectez-vous pour vous désinscrire ») | Procédure à ajouter à `docs/production/disaster-recovery.md` en Phase 2 |
 
 ---
 
-## 13. Implementation roadmap (each step requires explicit CEO approval)
+## 10. Coûts (exigence 10) — aucune activation payante proposée
 
-| Phase | Content | Exit criteria | Est. effort |
-|---|---|---|---|
-| **1** (this) | Architecture, security, database design; guarded SQL drafts | CEO approval | done |
-| **2a** | Foundation + consent migrations (40, 41) on throwaway DB; permission matrix in `supabase.sql` + `api.js`; `essai-communications.py`/`.js`; regression of all existing benches | All benches green; no change in transactional outputs; migrations reviewed; **not executed in production** | 5–7 sessions |
-| **2b** | Campaign + queue migrations (42, 43); worker with simulated providers; concurrency, caps, quiet hours, STOP, unsubscribe, webhook HMAC | Same | 6–8 sessions |
-| **2c** | Customer consent UI (web, 4 languages) + privacy-policy section (after PR #46 decision) + `desinscription.html` | Counsel-approved wording received (D-F) | 3–4 sessions |
-| **Prod-A** | Run 40–43 in production (backup verified first, `appliquer-chaine.sh`), everything OFF; consent capture opens only when texts are counsel-approved | CEO written GO | 1 session |
-| **3** | Edge Function; Brevo sandbox; Meta test number; Coexistence via partner (or dedicated number) | CEO authorises live tests to allowlist only | 5–6 sessions + partner lead time |
-| **4** | Communication Center UI (11 views, demo mode, translations) | Browser benches green | 7–9 sessions |
-| **5** | Marketing automations (reactivation) | | 2–3 sessions |
-| **6** | Analytics & monitoring (integrity checks, health) | | 2 sessions |
-| **7** | QA A–M, staging reassessment, staged activation: test mode → first real campaign to a small consented group, caps at minimum | CEO GO at each stage | 3–4 sessions |
+Aucun prix n'est écrit dans les brouillons : `communication_tarifs` naît **vide** et ne reçoit une
+ligne qu'avec sa preuve (grille officielle, date). Indications relevées dans des sources **secondaires**
+le 18/11/2026, **non vérifiées**, à confirmer sur les grilles officielles :
 
-Mobile consent screen: separate repo, after 2c, EAS/store release; no impact on installed versions.
+| Élément | Indication | Statut |
+|---|---|---|
+| Supabase | gratuit ; Pro 25 $/mois | pas d'achat (D-A) |
+| Brevo | gratuit 300/jour ; Starter ≈ 9 $/mois ; compte séparé (option C) : offre à choisir | offre actuelle **non vérifiée** |
+| WhatsApp marketing | ≈ 0,074 $ par message remis (Haïti, RD) ; États-Unis non livrés (pause rapportée) | grille officielle de Meta à lire |
+| Numéro dédié ou partenaire Coexistence | devis | — |
+| Juriste (USA/Floride, RD, Haïti) | devis | obligatoire avant le recueil |
+
+Les plafonds global, par campagne et par numéro bornent toute dépense, quel que soit le scénario.
 
 ---
 
-## 14. Decisions still needed from the CEO (to be answered before or during Phase 2)
+## 11. Informations extérieures et décisions en attente
 
-1. **D-G** postal address (§7.1). 2. **D-H** canonical Miami address and whether Apt 46780 ≡ ABX-46780.
-3. **Brevo plan** facts (§6.3) and whether to isolate Auth SMTP. 4. **Coexistence partner** quotes vs
-dedicated number. 5. **Counsel** engagement for consent texts, privacy policy, quiet hours, STOP wording.
-6. **Four-eyes** (`quatre_yeux`): may an admin approve a campaign they created? (default: allowed,
-journaled). 7. **Template approval** by gérant? (design: gérant drafts, admin approves templates).
-8. **Variables** `{{email}}` / `{{telephone}}` in marketing (design: excluded). 9. **Retention**:
-marketing queue 24 months, provider events 90 days, consent ledger and suppressions kept indefinitely
-(proof) — confirm with counsel. 10. **PR #46 / #48** sequencing.
+| # | Point | Connu | Non vérifié | Preuve nécessaire | Responsable | Décision attendue du CEO |
+|---|---|---|---|---|---|---|
+| 1 | Adresse postale légale | aucune adresse confirmée pour l'envoi commercial | adresse où GoShip reçoit son courrier | décision écrite + justificatif (bail, USPS, CMRA) | CEO | adresse à afficher |
+| 2 | Identité juridique | « Goship Express LLC » dans les données du site | nom exact enregistré | registre (Sunbiz) | CEO | nom exact |
+| 3 | Adresse de Miami canonique | `adresse_miami()` = ABX-46780 ; site = Apt 46780 | identité des deux | confirmation du prestataire de l'entrepôt | CEO | variante officielle |
+| 4 | Offre et quota Brevo | 300/jour pour l'offre gratuite (sources secondaires) | offre réelle du compte | capture Brevo > Mon offre, datée | CEO / admin | saisie par `verifier_quota_brevo` |
+| 5 | SMTP de Supabase Auth | Brevo configuré le 28/09 (go-no-go) | réglage actuel | capture Supabase > Auth > SMTP | CEO / admin | confirmation |
+| 6 | Listes de blocage Brevo entre expéditeurs | une liste du transactionnel existe (rapporté) | portée (compte ou expéditeur) | réponse écrite de Brevo ou doc officielle | admin | option C, B ou D |
+| 7 | Restrictions WhatsApp US / RD | pause marketing US rapportée depuis le 01/04/2025 | portée sur les +1 non américains | confirmation écrite de Meta | partenaire / Meta | territoires à ouvrir |
+| 8 | Tarifs officiels | estimations secondaires | grille officielle | grille Meta et Brevo datée | admin | saisie par `verifier_tarif_communication` |
+| 9 | Langues de modèles Meta (créole) | fr, en, es acceptées (connu) | créole haïtien | liste officielle de Meta | admin | langue de repli pour les clients haïtiens |
+| 10 | Coexistence du numéro actuel | conditions générales publiques | éligibilité de CE numéro | partenaire agréé | CEO | étudier ou écarter |
+| 11 | Numéro dédié | possible en Cloud API (connu) | éligibilité, coût | devis, vérification Meta | CEO | acquérir ou non |
+| 12 | Limite quotidienne et note de qualité | attribuées par Meta | valeurs du numéro commercial | gestionnaire WhatsApp de Meta | admin | saisie par `regler_whatsapp_commercial` |
+| 13 | Textes de consentement et désinscription | brouillons en 4 langues | conformité | avis écrit du juriste | juriste | attestation |
+| 14 | Durées de conservation et d'effacement | propositions (SECURITY §7) | durées légales par juridiction | avis écrit du juriste | juriste | saisie par `regler_conservation_communication` |
+| 15 | Ordre des PR #46 et #48 | conflits identifiés | — | — | CEO | ordre |
+
+Autres décisions du CEO : quatre yeux sur les campagnes (par défaut : non, journalisé) ; approbation des
+modèles réservée à l'administrateur (conception : oui) ; pas d'e-mail ni de téléphone en variable ;
+option e-mail C/B/D ; numéro dédié.
+
+---
+
+## 12. Feuille de route (chaque étape exige l'autorisation écrite du CEO)
+
+| Phase | Contenu | Condition de sortie |
+|---|---|---|
+| 1.2 (celle-ci) | corrections de conception | votre décision sur le rapport 1.2 |
+| 2a | 40, 41 sur base jetable ; toutes les copies des permissions ; mode démo ; bancs | tous les groupes de TESTING concernés verts ; aucun changement du transactionnel |
+| 2b | 42, 43 ; travailleur avec fournisseurs simulés | groupes 7 à 14 verts |
+| 2c | pages Mon compte, confirmation, désinscription (4 langues) ; politique de confidentialité (après #46) | textes attestés par le juriste |
+| Prod-A | 40–43 en production, sauvegarde vérifiée, **tout éteint** | GO écrit |
+| 3 | fonction Edge ; Brevo bac à sable ; numéro d'essai Meta ; lecture des modèles confirmée | essais réels vers la liste d'essai seulement, sur autorisation |
+| 4–7 | interface, automatisations commerciales, statistiques, qualité, activation par étapes | GO à chaque étape |

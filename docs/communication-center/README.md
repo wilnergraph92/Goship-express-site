@@ -7,12 +7,18 @@ par le CEO avant la suivante.
 | Fichier | Phase | État |
 |---|---|---|
 | `COMMUNICATION_CENTER_PHASE_0_AUDIT.md` | 0 — audit en lecture seule | approuvé le 18/11/2026 |
-| `COMMUNICATION_CENTER_PHASE_1_RAPPORT.md` | 1 — rapport complet de la phase (résumé de tous les livrables) | en attente d'approbation |
-| `COMMUNICATION_CENTER_ARCHITECTURE.md` | 1 — architecture, coûts, feuille de route, retour arrière | en attente d'approbation |
-| `COMMUNICATION_CENTER_SECURITY.md` | 1 — permissions, menaces, exigences juridiques, risques | en attente d'approbation |
-| `COMMUNICATION_CENTER_DATABASE.md` | 1 — tables, fonctions, place dans la chaîne | en attente d'approbation |
-| `brouillons-sql/40…43-*.sql` | 1 — **brouillons jamais exécutés** | chaque fichier commence par une garde qui l'arrête |
+| `COMMUNICATION_CENTER_PHASE_1_RAPPORT.md` | 1 — rapport de la phase (corrigé en 1.2 : mentions « [Corrigé 1.2] ») | remplacé par la conception 1.2 |
+| `COMMUNICATION_CENTER_PHASE_1_1_RAPPORT.md` | 1.1 — revue indépendante, verdict ÉCHEC | référence des constats C, H, M, L |
+| `COMMUNICATION_CENTER_PHASE_1_2_RAPPORT.md` | 1.2 — corrections, traçabilité, verdict | **en attente de la décision du CEO** |
+| `COMMUNICATION_CENTER_ARCHITECTURE.md` | conception en vigueur (1.2) | en attente |
+| `COMMUNICATION_CENTER_SECURITY.md` | conception en vigueur (1.2) | en attente |
+| `COMMUNICATION_CENTER_DATABASE.md` | conception en vigueur (1.2) | en attente |
+| `COMMUNICATION_CENTER_TESTING.md` | plan d'essais (aucun exécuté) | en attente |
+| `brouillons-sql/40…43-*.sql` | **brouillons jamais exécutés** | chaque fichier commence par une garde qui l'arrête |
 
 **Les brouillons SQL ne font pas partie de la chaîne** (`outils/migrations.txt`) et ne doivent être
-exécutés nulle part. En Phase 2, après accord du CEO, ils deviendront des fichiers de `outils/`, éprouvés
-d'abord sur une base jetable.
+exécutés nulle part. En Phase 2, après accord écrit du CEO, ils deviendront des fichiers de `outils/`,
+éprouvés d'abord sur une base jetable.
+
+**Règle de livraison (consigne du CEO, 18/11/2026)** : chaque phase se termine par un rapport complet,
+en français, sur le modèle de celui de la Phase 0 (fichier rangé dans ce dossier).
