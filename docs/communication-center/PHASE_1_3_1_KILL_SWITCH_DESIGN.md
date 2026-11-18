@@ -78,6 +78,8 @@ C'est **le dernier contrôle qui compte** pour l'arrêt. La relecture sous N5 (`
 |---|---|---|
 | N0 | consultatif `interrupteurs` | partagé : la porte, seulement. Exclusif : arrêt, confirmation, levée, réglages d'envoi (`regler_communications`, quota, numéro, issues HTTP) |
 | N0a | la ligne `communication_arret` (FOR UPDATE) | fonctions d'arrêt seulement, **après** N0 |
+
+**Délais** (révisés après la revue indépendante, IR-04) : N0 exclusif 3 s, ligne d'arrêt 2 s, soit 5 s au plus, sous le délai d'exécution des comptes connectés (8 s chez Supabase, rapporté). Les deux attentes sont explicites et finissent sur une réponse (`STOP_PENDING` ou `STOP_NOT_CONFIRMED`), jamais sur une erreur muette. La pause du canal par un code de Meta est écrite **en dernier** dans le webhook, et ne touche pas `communication_arret`.
 | N1 → N5 | campagne, client, consentement, envoi, compteurs | inchangés (Phase 1.3) |
 
 **Ordre des fonctions d'arrêt** : N0 (exclusif, tenté), **puis** N0a. Aucune ne prend N0a avant N0, ni une autre table.
@@ -142,12 +144,12 @@ Notation :
 - **Doublon** : aucun. Si la réponse de W est perdue, W passe à `incertain` sans nouvel essai (scénario G).
 
 **Scénario B — l'administrateur demande l'arrêt pendant qu'un travailleur tient N0 partagé**
-- C'est le scénario A, vu du côté de S. S attend, au plus 5 s, la fin de **cette** transaction, qui ne porte qu'un envoi (quelques millisecondes).
+- C'est le scénario A, vu du côté de S. S attend, au plus 3 s (puis 2 s pour la ligne d'arrêt), la fin de **cette** transaction, qui ne porte qu'un envoi (quelques millisecondes).
 - Les nouvelles demandes de N0 partagé, faites **après** celle de S, attendent derrière S (ordre d'arrivée des demandes, H5 à éprouver). Si H5 était fausse, de nouveaux envois pourraient être autorisés pendant l'attente de S. Ils sont **avant** G, donc légitimes, et S finirait en `STOP_PENDING` faute d'avoir obtenu le verrou. **Aucun faux « confirmé »** dans les deux cas.
 - **Doublon** : aucun.
 
-**Scénario C — le verrou exclusif n'est pas obtenu en 5 s**
-- **Verrous** : une ou des transactions tiennent N0 partagé plus de 5 s. Un seul chemin le permet : une transaction longue de la porte, par exemple une lecture de modèles Meta lente ou une attente de verrou bornée à 2 s par `lock_timeout`. Le lancement de campagne ne prend plus N0 (1.3.1).
+**Scénario C — le verrou exclusif n'est pas obtenu dans le délai (3 s)**
+- **Verrous** : une ou des transactions tiennent N0 partagé plus de 3 s. Un seul chemin le permet : une transaction longue de la porte, par exemple une lecture de modèles Meta lente ou une attente de verrou bornée à 2 s par `lock_timeout`. Le lancement de campagne ne prend plus N0 (1.3.1).
 - **Ordre** :
   1. S abandonne l'attente, **sans** contourner le verrou ;
   2. S prend N0a et écrit `arret_demande` (durable) ;

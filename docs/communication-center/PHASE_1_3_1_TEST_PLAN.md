@@ -70,7 +70,7 @@ Les détails complets (préconditions, données, étapes) sont dans `PHASE_1_3_T
   6. rejouer 1 à 5 avec G1 (gérant), puis avec E1 (employé) ;
   7. tenter `update communication_arret set etat = 'arret_confirme'` en tant que fonction d'essai, sans `autorisations_closes_le`.
 - **Résultat attendu** :
-  - 1 → au bout d'environ 5 s, `{"etat":"STOP_PENDING","raison":"VERROU_NON_OBTENU","n0_exclusif_obtenu":false}` ; la table est en `arret_demande`, avec `autorisations_closes_le` null ;
+  - 1 → au bout d'environ 3 s, `{"etat":"STOP_PENDING","raison":"VERROU_NON_OBTENU","n0_exclusif_obtenu":false}` ; la table est en `arret_demande`, avec `autorisations_closes_le` null ;
   - 3 → Y reçoit `ARRET_URGENCE` ;
   - 5 → `STOP_CONFIRMED` (ou `STOP_PENDING / TRANSMISSIONS_EN_COURS`, puis `STOP_CONFIRMED`) ;
   - 6 → G1 est accepté, E1 est refusé ;
