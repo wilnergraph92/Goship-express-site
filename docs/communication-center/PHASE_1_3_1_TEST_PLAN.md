@@ -283,13 +283,77 @@ Les détails complets (préconditions, données, étapes) sont dans `PHASE_1_3_T
 
 ---
 
+## 2 bis. Essais ajoutés après les revues indépendantes n° 1 et n° 2
+
+### T-01G — File pg_net en retard : jamais « confirmé » pendant une transmission (IR2-01)
+- **Criticité** : BLOQUANT · **Environnement** : E2
+- **Étapes** :
+  1. arrêter le processus de travail de pg_net ;
+  2. valider 3 envois ;
+  3. attendre 5 min (au-delà de délai + 60 s depuis le dépôt) ;
+  4. demander l'arrêt, puis le vérifier : la réponse doit être `STOP_PENDING / TRANSMISSIONS_EN_COURS = 3` ;
+  5. relancer pg_net en le ralentissant (faux serveur qui répond en 15 s) ;
+  6. vérifier toutes les secondes.
+  
+  Relever aussi l'ordre interne de pg_net 0.20.4 : retrait de la file, appel, puis réponse.
+- **Résultat attendu** : `STOP_CONFIRMED` n'apparaît qu'**après** l'enregistrement de la dernière réponse, ou après délai + 60 s comptés depuis `sortie_file_vue_le` ; aucune requête n'est reçue par le faux serveur après `STOP_CONFIRMED`.
+- **Échec** : `STOP_CONFIRMED` pendant qu'une requête est encore dans la file ou en cours d'appel.
+- **État** : NON EXÉCUTÉ
+
+### T-01H — Levée et arrêt concurrents (IR2-03, IR2-04, IR2-11)
+- **Criticité** : BLOQUANT · **Environnement** : E3
+- **Étapes** :
+  1. arrêt confirmé ;
+  2. A lève l'arrêt pendant qu'une connexion tient N0 partagé 4 s ;
+  3. B appuie sur « Arrêt » pendant l'attente de A ;
+  4. arrêt avec un motif de 2 000 caractères ;
+  5. dans une copie d'essai, tentative de `delete from communication_arret`.
+- **Résultat attendu** :
+  - 2 et 3 → A est refusée (`STOP_REQUESTED_DURING_LIFT`) ; l'état reste arrêté ; l'appui de B est journalisé ;
+  - 4 → arrêt écrit, motif tronqué à 300 caractères ;
+  - 5 → refusé (`ARRET_LIGNE_PERMANENTE`).
+- **État** : NON EXÉCUTÉ
+
+### T-05C — Purge des confirmations jamais envoyées (IR2-05, IR-01)
+- **Criticité** : ÉLEVÉ · **Environnement** : E1
+- **Étapes** : avec `confirmations_actives = false`, 5 demandes de consentement par e-mail (envois en `attente`), puis la purge à l'échéance « confirmations » ; ensuite une confirmation en `traitement` ; ensuite l'effacement d'une personne qui a une confirmation en `traitement`.
+- **Résultat attendu** :
+  - la purge réussit, et les 5 envois passent en `supprime` (`CONFIRMATION_PURGEE`) ;
+  - avec un envoi en `traitement`, l'erreur `PURGE_RETRY` est donnée et rien n'est effacé, puis la purge réussit après la réponse.
+- **État** : NON EXÉCUTÉ
+
+### T-07D — STOP WhatsApp sans empreinte calculable (IR2-06, IR-08)
+- **Criticité** : BLOQUANT · **Environnement** : E1
+- **Étapes** :
+  1. poivre retiré du coffre de doublure ;
+  2. STOP entrant signé ;
+  3. même STOP rejoué après la remise du poivre ;
+  4. STOP pendant une saturation du débit (`webhook_max_minute` dépassé) ;
+  5. STOP avec un horodatage illisible, puis futur.
+- **Résultat attendu** :
+  - 2 → une erreur, et **aucune** ligne écrite, pas même le rejeu ;
+  - 3 → le STOP est appliqué (suppression et retrait) ;
+  - 4 et 5 → le STOP est appliqué, et la fenêtre n'est pas touchée en 5.
+- **État** : NON EXÉCUTÉ
+
+### T-14C — Découpeurs naïfs (IR-22, IR2-08)
+- **Criticité** : MOYEN · **Environnement** : E1
+- **Étapes** : passer chaque brouillon dans trois découpeurs simulés, avec continuation après erreur :
+  - un découpage sur « ; » ;
+  - un découpage sur « ; » hors apostrophes ;
+  - un découpage sur « ; » hors apostrophes et hors commentaires.
+- **Résultat attendu** : avec les deux premiers, la session est fermée par la couche 4 avant toute création.
+  - Le troisième est la **limite connue** (IR2-08) : le résultat est consigné.
+- **État** : NON EXÉCUTÉ
+
 ## 3. Récapitulatif
 
 | Groupe | Essais | Exécutés |
 |---|---|---|
 | Phase 1.3 | T-01, T-01-bis, T-02 à T-20 (21) | **0** |
 | Phase 1.3.1 | T-01B, T-01C, T-01D, T-01E, T-01F, T-03B, T-04B, T-05B, T-06B, T-07B, T-07C, T-14B, T-20B (13) | **0** |
-| **Total** | **34** | **0** |
+| Après les revues indépendantes | T-01G, T-01H, T-05C, T-07D, T-14C (5) | **0** |
+| **Total** | **39** | **0** |
 
 Ordre recommandé, après autorisation :
 1. T-14 et T-14B (garde, chaîne) ;
