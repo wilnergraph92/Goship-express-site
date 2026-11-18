@@ -1,11 +1,11 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.3 (18/11/2026) — garde à trois couches : voir l'en-tête de
+-- Version Phase 1.3.1 (18/11/2026) — garde à trois couches : voir l'en-tête de
 -- 40-supabase-communications-fondation.sql (bloc DO, puis TOUT le contenu dans une chaîne inerte).
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -13,9 +13,14 @@ select $brouillon_goship_non_executable$
 -- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
+-- Couche 4 (Phase 1.3.1, IR-22) : un outil qui découperait ce texte à chaque point-virgule, sans comprendre les
+-- chaînes, et continuerait après les erreurs, exécuterait CETTE instruction en premier : elle
+-- ferme sa propre connexion, et rien de ce qui suit ne peut s'exécuter dans cette session. Dans
+-- tout client correct, elle est du texte, comme le reste.
+select pg_catalog.pg_terminate_backend(pg_catalog.pg_backend_pid());
 
 -- =============================================================================
 -- Goship Express — Centre de communication : modèles (et leur empreinte chez Meta),
@@ -77,7 +82,7 @@ create table if not exists public.communication_modeles (
 );
 create index if not exists communication_modeles_remplace_idx on public.communication_modeles (remplace_id) where remplace_id is not null;
 alter table public.communication_modeles enable row level security;
-revoke all on public.communication_modeles from anon, authenticated;
+revoke all on public.communication_modeles from anon, authenticated, service_role;
 
 -- L'empreinte d'un modèle : tout ce qui change le message (revue 1.1, H9).
 create or replace function public.communication_empreinte_modele(m public.communication_modeles)
@@ -101,7 +106,13 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  if old.statut = 'approuve'
+  -- 1.3.1 (IR-10) : l'empreinte est TOUJOURS celle du contenu (recalculée ici, jamais fournie) ;
+  -- un modèle archivé ne revient jamais (il serait redevenu modifiable puis approuvable)
+  new.empreinte := public.communication_empreinte_modele(new);
+  if tg_op = 'UPDATE' and old.statut = 'archive' then
+    raise exception 'TEMPLATE_LOCKED' using detail = 'Un modèle archivé ne se modifie ni ne revient : créez une nouvelle version.', hint = 'goship';
+  end if;
+  if tg_op = 'UPDATE' and old.statut = 'approuve'
      and ((new.nom, new.canal, new.langue, new.version, new.sujet, new.corps, new.variables, new.whatsapp_nom_meta,
            new.whatsapp_langue_meta, new.whatsapp_categorie, new.empreinte, new.empreinte_meta_approuvee,
            new.approuve_par, new.approuve_le)
@@ -259,7 +270,7 @@ create table if not exists public.communication_modeles_meta (
 );
 create index if not exists communication_modeles_meta_idx on public.communication_modeles_meta (modele_id, recu_le desc);
 alter table public.communication_modeles_meta enable row level security;
-revoke all on public.communication_modeles_meta from anon, authenticated;
+revoke all on public.communication_modeles_meta from anon, authenticated, service_role;
 
 -- L'image normalisée des composants : type, format, texte, boutons (type, texte, adresse,
 -- téléphone), dans l'ordre de Meta ; tout autre champ est ignoré pour que l'empreinte ne
@@ -295,6 +306,11 @@ declare
   v_requete bigint;
   v_id bigint;
 begin
+  -- Phase 1.3.1 : une requête vers Meta est une SORTIE ; elle exige d'être passée par la porte
+  -- (communication_autoriser_sortie('lecture_meta', 'whatsapp')) dans CETTE transaction.
+  if not public.communication_sortie_autorisee() then
+    raise exception 'SORTIE_NON_AUTORISEE';
+  end if;
   select * into m from public.communication_modeles where id = p_modele;
   if m.canal <> 'whatsapp' then
     return null;
@@ -413,7 +429,7 @@ create table if not exists public.communication_segments (
   maj_le    timestamptz not null default now()
 );
 alter table public.communication_segments enable row level security;
-revoke all on public.communication_segments from anon, authenticated;
+revoke all on public.communication_segments from anon, authenticated, service_role;
 
 create or replace function public.communication_criteres_valides(p_criteres jsonb)
 returns void
@@ -607,6 +623,10 @@ create table if not exists public.communication_campagnes (
   terminee_le           timestamptz,
   arret_motif           text,
   messages_reserves     integer not null default 0,
+  -- 1.3.1 (IR-07) : au lancement, le NOMBRE de retenus et d'exclus par canal et par raison —
+  -- jamais la liste des personnes exclues
+  retenus               integer,
+  exclusions            jsonb,
   cout_reserve_usd      numeric(12, 5) not null default 0,
   maj_le                timestamptz not null default now(),
   maj_par               uuid
@@ -614,29 +634,46 @@ create table if not exists public.communication_campagnes (
 create index if not exists communication_campagnes_dues_idx on public.communication_campagnes (planifiee_le) where statut = 'programmee';
 create index if not exists communication_campagnes_segment_idx on public.communication_campagnes (segment_id) where segment_id is not null;
 alter table public.communication_campagnes enable row level security;
-revoke all on public.communication_campagnes from anon, authenticated;
+revoke all on public.communication_campagnes from anon, authenticated, service_role;
 
 -- 4.1 L'environnement d'envoi : tout ce qui, hors de la campagne et des modèles, change le
 -- message reçu (revue 1.1, H9). Les valeurs du coffre n'entrent dans l'empreinte que hachées.
 -- « habillage-commercial-v1 » est la version de communication_courriel_commercial (43) : toute
 -- modification de cette fonction doit changer ce numéro, ce qui invalide les approbations.
+-- 1.3.1 (IR-05) : en PL/pgSQL — en « language sql », sa création échouait (elle appelle
+-- communication_textes_pied_tous, créée seulement en 43, et PostgreSQL valide le corps d'une
+-- fonction SQL à sa création). (IR-19) : l'empreinte couvre aussi le CODE des fonctions qui
+-- fabriquent et envoient le message, le fournisseur e-mail et l'adresse de désinscription en un
+-- clic : modifier l'une d'elles invalide les approbations, sans numéro de version à changer à la main.
 create or replace function public.communication_environnement_envoi()
 returns jsonb
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
-  select jsonb_build_object(
+declare
+  r public.communication_reglages;
+begin
+  select * into r from public.communication_reglages;
+  return jsonb_build_object(
     'identite_legale', r.identite_legale, 'adresse_postale', r.adresse_postale,
     'expediteur', encode(extensions.digest(coalesce(public.lire_reglage('communication_expediteur'), ''), 'sha256'), 'hex'),
     'nom_expediteur', coalesce(public.lire_reglage('communication_nom'), ''),
     'numero_whatsapp', encode(extensions.digest(coalesce(public.lire_reglage('communication_whatsapp_numero_id'), ''), 'sha256'), 'hex'),
+    'fournisseur_email', coalesce(public.lire_reglage('communication_email_fournisseur'), ''),
+    'url_un_clic', coalesce(public.lire_reglage('communication_url_un_clic'), ''),
     'site_url', coalesce(public.lire_reglage('site_url'), ''),
     'habillage', 'habillage-commercial-v1',
+    'code', (select encode(extensions.digest(string_agg(pg_catalog.pg_get_functiondef(p.oid), '|' order by p.proname), 'sha256'), 'hex')
+               from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public'
+                and p.proname in ('communication_courriel_commercial', 'communication_rendre', 'communication_valeurs_client',
+                                  'communication_textes_pied', 'communication_appel_email', 'communication_appel_whatsapp',
+                                  'communication_jeton_desinscription')),
     'textes_pied', encode(extensions.digest(public.communication_textes_pied_tous()::text, 'sha256'), 'hex'),
-    'adresse_miami', case when r.adresse_miami_validee then public.adresse_miami() end)
-  from public.communication_reglages r
+    'adresse_miami', case when r.adresse_miami_validee then public.adresse_miami() end);
+end;
 $$;
 
 -- 4.2 L'empreinte de la campagne : champs + modèles (empreinte locale ET image Meta approuvée)
@@ -798,6 +835,16 @@ declare
   v_nouveau text;
   v_volume jsonb;
 begin
+  -- 1.3.1 (IR-17) : action connue et droit minimal AVANT tout verrou ou lecture (un client ne
+  -- doit pas pouvoir savoir si une campagne existe, ni verrouiller une ligne)
+  if p_action is null or p_action not in ('soumettre', 'retirer', 'approuver', 'refuser', 'remettre_en_brouillon',
+                                          'mettre_en_pause', 'reprendre', 'annuler') then
+    perform public.erreur_metier('INVALID_ACTION', 'Action inconnue.');
+  end if;
+  if not (public.peut('communications.create') or public.peut('communications.pause')
+          or public.peut('communications.approve')) then
+    perform public.exiger_permission('communications.create');
+  end if;
   select * into p from public.communication_campagnes where id = p_campagne for update;
   if not found then
     perform public.erreur_metier('NOT_FOUND', 'Campagne introuvable.');
@@ -894,7 +941,11 @@ begin
     end if;
     if p.statut in ('terminee', 'annulee', 'echec') then perform public.erreur_metier('INVALID_TRANSITION', 'Campagne déjà close.'); end if;
     if length(trim(coalesce(p_motif, ''))) < 5 then perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi.'); end if;
-    -- Ce qui n'est pas parti ne partira pas ; ce qui est parti ou incertain garde son statut
+    -- Ce qui n'est pas parti ne partira pas ; ce qui est parti ou incertain garde son statut.
+    -- 1.3.1 (IR-13) : lignes verrouillées d'abord PAR IDENTIFIANT CROISSANT (même règle que la
+    -- purge) : deux opérations sur des ensembles qui se recoupent ne peuvent plus s'attendre.
+    perform 1 from public.communication_envois
+     where campagne_id = p.id and statut in ('attente', 'nouvel_essai') order by id for update;
     update public.communication_envois set statut = 'annule', maj_le = now()
      where campagne_id = p.id and statut in ('attente', 'nouvel_essai');
     update public.communication_campagnes set arret_motif = trim(p_motif), terminee_le = now() where id = p.id;
@@ -936,7 +987,7 @@ create table if not exists public.communication_destinataires (
 create index if not exists communication_destinataires_modele_idx on public.communication_destinataires (modele_id);
 create index if not exists communication_destinataires_client_idx on public.communication_destinataires (client_id) where client_id is not null;
 alter table public.communication_destinataires enable row level security;
-revoke all on public.communication_destinataires from anon, authenticated;
+revoke all on public.communication_destinataires from anon, authenticated, service_role;
 drop trigger if exists communication_destinataires_immuable on public.communication_destinataires;
 create trigger communication_destinataires_immuable
   before update or delete on public.communication_destinataires
@@ -967,7 +1018,7 @@ begin
     'public.communication_empreinte_campagne(public.communication_campagnes)',
     'public.communication_volume_campagne(public.communication_campagnes)',
     'public.communication_manques(public.communication_campagnes)'] loop
-    execute 'revoke execute on function ' || f || ' from public, anon, authenticated';
+    execute 'revoke execute on function ' || f || ' from public, anon, authenticated, service_role';
   end loop;
   foreach f in array array[
     'public.apercu_audience_communication(jsonb, text[], boolean)',

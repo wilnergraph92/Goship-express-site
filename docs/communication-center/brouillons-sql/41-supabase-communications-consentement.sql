@@ -1,11 +1,11 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.3 (18/11/2026) — garde à trois couches : voir l'en-tête de
+-- Version Phase 1.3.1 (18/11/2026) — garde à trois couches : voir l'en-tête de
 -- 40-supabase-communications-fondation.sql (bloc DO, puis TOUT le contenu dans une chaîne inerte).
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -13,9 +13,14 @@ select $brouillon_goship_non_executable$
 -- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
+-- Couche 4 (Phase 1.3.1, IR-22) : un outil qui découperait ce texte à chaque point-virgule, sans comprendre les
+-- chaînes, et continuerait après les erreurs, exécuterait CETTE instruction en premier : elle
+-- ferme sa propre connexion, et rien de ce qui suit ne peut s'exécuter dans cette session. Dans
+-- tout client correct, elle est du texte, comme le reste.
+select pg_catalog.pg_terminate_backend(pg_catalog.pg_backend_pid());
 
 -- =============================================================================
 -- Goship Express — Centre de communication : le consentement, les changements de contact,
@@ -276,13 +281,21 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+-- Phase 1.3.1 (revue indépendante IR-05, IR-07, IR-16) : TROIS blocs indépendants. Avant, un
+-- seul bloc attrapait tout : une erreur dans la demande de purge (par exemple 43 pas encore
+-- appliqué) annulait AUSSI les invalidations de consentement — et un contact repris plus tard
+-- aurait retrouvé un ancien accord. Le journal ne garde que le code d'erreur (jamais sqlerrm,
+-- qui peut recopier une valeur).
 declare
   v_canal text;
   v_ancienne text;
   v_change boolean;
+  v_etat text;
+  v_empreintes text[];
 begin
-  begin
-    foreach v_canal in array array['email', 'whatsapp'] loop
+  -- 1. Invalidation, canal par canal (chacun dans son propre bloc)
+  foreach v_canal in array array['email', 'whatsapp'] loop
+    begin
       v_change := (new.supprime_le is not null and old.supprime_le is null)
                or (v_canal = 'email' and public.communication_normaliser('email', new.email)
                                          is distinct from public.communication_normaliser('email', old.email))
@@ -302,34 +315,61 @@ begin
         update public.communication_confirmations set annule_le = clock_timestamp()
          where client_id = new.id and canal = v_canal and utilise_le is null and annule_le is null;
       end if;
-    end loop;
-    -- Phase 1.3 (C6) : un fuseau déclaré devient caduc si le pays ou la région change (il est
-    -- aussi ignoré par communication_fuseau ; on l'efface pour ne rien garder d'inutile).
+    exception when others then
+      get stacked diagnostics v_etat = returned_sqlstate;
+      begin
+        insert into public.communication_erreurs (source, code, detail)
+        values ('communication_suivre_client:invalidation', v_etat, v_canal);
+      exception when others then null;
+      end;
+    end;
+  end loop;
+
+  -- 2. Un fuseau déclaré devient caduc si le pays ou la région change (1.3, C6)
+  begin
     if new.pays is distinct from old.pays or new.region is distinct from old.region then
       delete from public.communication_fuseaux_clients where client_id = new.id;
     end if;
-    -- Phase 1.3 (C5) : la suppression du compte, demandée par la personne elle-même, ouvre
-    -- d'office une demande d'effacement de ses données commerciales. Demandeur = la personne ;
-    -- un administrateur (forcément un autre compte) l'approuve ; la purge s'exécute ensuite.
-    -- Entre-temps, ses consentements sont invalidés (ci-dessus) : plus rien ne lui est envoyé.
+  exception when others then
+    get stacked diagnostics v_etat = returned_sqlstate;
+    begin
+      insert into public.communication_erreurs (source, code) values ('communication_suivre_client:fuseau', v_etat);
+    exception when others then null;
+    end;
+  end;
+
+  -- 3. Suppression du compte : demande d'effacement ouverte d'office (demandeur = la personne ;
+  --    un AUTRE compte l'approuve). Dès qu'UNE table du Centre cite la personne. Les empreintes
+  --    de ses contacts sont prises dans old.* : supprimer_mon_compte vide l'e-mail et le
+  --    téléphone dans le même UPDATE, après quoi on ne pourrait plus retrouver ses fenêtres
+  --    WhatsApp ni ses suppressions (IR-07).
+  begin
     if new.supprime_le is not null and old.supprime_le is null
        and (exists (select 1 from public.communication_consentements k where k.client_id = new.id)
+            or exists (select 1 from public.communication_confirmations f where f.client_id = new.id)
             or exists (select 1 from public.communication_fuseaux_clients z where z.client_id = new.id)
+            or exists (select 1 from public.communication_destinataires_essai t where t.client_id = new.id)
+            or exists (select 1 from public.communication_suppressions s where s.client_id = new.id)
+            or exists (select 1 from public.communication_destinataires dd where dd.client_id = new.id)
             or exists (select 1 from public.communication_envois e where e.client_id = new.id))
        and not exists (select 1 from public.communication_demandes_purge d
                         where d.type = 'personne' and d.client_id = new.id and d.statut in ('demandee', 'approuvee')) then
-      insert into public.communication_demandes_purge (type, client_id, motif, demandee_par)
-      values ('personne', new.id, 'Suppression du compte demandée par la personne', new.id);
+      select coalesce(array_agg(x) filter (where x is not null), '{}') into v_empreintes
+        from unnest(array[public.communication_empreinte('email', old.email),
+                          public.communication_empreinte('whatsapp', public.telephone_international(old.telephone, old.pays))]) x;
+      insert into public.communication_demandes_purge (type, client_id, motif, demandee_par, empreintes)
+      values ('personne', new.id, 'Suppression du compte demandée par la personne', new.id, v_empreintes);
     end if;
   exception when others then
+    get stacked diagnostics v_etat = returned_sqlstate;
     begin
-      insert into public.communication_erreurs (source, code, detail)
-      values ('communication_suivre_client', sqlstate, left(sqlerrm, 300));
-    exception when others then
-      null;                                        -- même le journal en échec ne bloque pas le client
+      insert into public.communication_erreurs (source, code) values ('communication_suivre_client:purge', v_etat);
+    exception when others then null;
     end;
-    raise warning 'communication_suivre_client : %', sqlstate;
   end;
+  -- Limite connue (IR-16) : une annulation par délai (statement_timeout, query_canceled) n'est
+  -- pas attrapée par « when others » ; N3 n'est tenu par un travailleur que quelques
+  -- millisecondes (lock_timeout 2 s), ce qui la rend improbable. Essai T-18.
   return new;
 end;
 $$;
@@ -486,8 +526,7 @@ declare
                            'confirmation_validite_h', 'changements_consentement_jour', 'demandes_confirmation_jour',
                            'quatre_yeux', 'adresse_miami_validee',
                            'debit_max_minute', 'marge_fenetre_min', 'webhook_max_minute', 'brevo_quota_validite_jours'];
-  -- arret_urgence n'est PAS ici : il ne se pose que par arreter_communications, ne se lève que
-  -- par lever_arret_communications (motif, journal).
+  -- L'arrêt d'urgence n'est PAS un réglage : table communication_arret, fonctions de §4.8.
 begin
   perform public.exiger_permission('communications.manage');
   if length(trim(coalesce(p_motif, ''))) < 5 then
@@ -546,6 +585,15 @@ begin
   if v_apres.email_actif and (v_apres.identite_legale is null or v_apres.adresse_postale is null) then
     perform public.erreur_metier('SENDER_IDENTITY_BLOCKED',
       'Identité légale et adresse postale non validées par le CEO (décision D-G) : l''e-mail commercial reste coupé.');
+  end if;
+  -- 1.3.1 (IR-11) : tant que le commercial PARTAGE le compte Brevo du transactionnel, une plainte
+  -- ou un blocage sur un e-mail commercial peut atteindre les e-mails de colis, de facture et de
+  -- connexion (comportement de Brevo rapporté, non éprouvé). L'e-mail commercial reste fermé
+  -- jusqu'à la décision C4 du CEO (compte séparé).
+  if v_apres.email_actif and v_apres.brevo_compte_partage
+     and coalesce(public.lire_reglage('communication_email_fournisseur'), 'brevo') = 'brevo' then
+    perform public.erreur_metier('SHARED_PROVIDER_ACCOUNT',
+      'Le compte Brevo est partagé avec les e-mails de colis et de connexion : e-mail commercial fermé (décision C4).');
   end if;
   if v_apres.email_actif and (v_apres.brevo_quota_verifie_le is null
                                or coalesce(public.lire_reglage('communication_email_cle_api'), '') = ''
@@ -676,6 +724,11 @@ begin
   perform public.exiger_permission('communications.manage');
   if length(trim(coalesce(p_preuve, ''))) < 10 then
     perform public.erreur_metier('PROOF_REQUIRED', 'Preuve obligatoire (liste NANPA, confirmation écrite de Meta, date).');
+  end if;
+  -- 1.3.1 (IR-23) : dans le plan nord-américain (+1), un territoire se lit sur 4 chiffres au moins
+  -- (1 + indicatif régional) : « 1 » ou « 18 » classeraient d'un coup Canada et Caraïbes en « US »
+  if p_prefixe like '1%' and length(p_prefixe) < 4 and p_territoire <> 'NANP_AUTRE' then
+    perform public.erreur_metier('PREFIX_TOO_SHORT', 'Un indicatif +1 se classe sur 4 chiffres au moins (exemple : 1305).');
   end if;
   insert into public.communication_indicatifs (prefixe, territoire, autorise_marketing, verifie, preuve, verifie_par, verifie_le)
   values (p_prefixe, p_territoire, p_autorise, true, trim(p_preuve), auth.uid(), now())
@@ -827,18 +880,76 @@ end;
 $$;
 
 
--- 4.8 L'ARRÊT D'URGENCE (Phase 1.3, correction 1) ---------------------------------------------------
+-- 4.8 L'ARRÊT D'URGENCE (Phase 1.3.1 — remplace la version 1.3, qui écrivait l'arrêt SANS le verrou
+-- exclusif après 5 s et le présentait comme fait). Conception complète et preuves :
+-- docs/communication-center/PHASE_1_3_1_KILL_SWITCH_DESIGN.md.
+--
+-- RÈGLE : un arrêt n'est déclaré RÉUSSI (STOP_CONFIRMED, état arret_confirme) que si
+--   (1) N0 a été obtenu en EXCLUSIF dans la transaction de la demande ou après elle : aucune
+--       transaction autorisée n'était alors en cours, et toute transaction qui demande N0 ensuite
+--       lit l'état d'arrêt et refuse ;
+--   (2) plus aucune requête déjà validée n'attend d'être transmise par pg_net ;
+--   (3) l'état est écrit avec synchronous_commit = on (durable avant la réponse).
+-- Sinon : STOP_PENDING (la demande est écrite, plus rien de NOUVEAU n'est autorisé par une
+-- transaction qui la lit, mais l'arrêt n'est pas prouvé) ou STOP_NOT_CONFIRMED (rien n'a pu
+-- être écrit par cet appel). Un délai dépassé ne contourne JAMAIS le verrou.
+-- Ordre des verrous de toutes les fonctions d'arrêt : N0 (exclusif, tenté) PUIS la ligne de
+-- communication_arret. Aucune autre table n'est verrouillée.
+
+-- Le constat commun, appelé par les trois fonctions ci-dessous, la ligne d'arrêt DÉJÀ verrouillée.
+-- p_n0_exclusif : la transaction appelante tient-elle N0 en exclusif ?
+create or replace function public.communication_conclure_arret(p_n0_exclusif boolean)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  a public.communication_arret;
+  v_transmissions integer;
+  v_partages integer;
+begin
+  select * into a from public.communication_arret;               -- verrouillée par l'appelant
+  if a.etat = 'actif' then
+    return jsonb_build_object('etat', 'STOP_NOT_REQUESTED');
+  end if;
+  if a.etat = 'arret_confirme' then
+    return jsonb_build_object('etat', 'STOP_CONFIRMED', 'confirme_le', a.confirme_le);
+  end if;
+  -- (1) Les autorisations : seulement sous N0 exclusif
+  if a.autorisations_closes_le is null then
+    if not p_n0_exclusif then
+      -- Indication (non une preuve) : verrous consultatifs PARTAGÉS détenus en ce moment
+      select count(*) into v_partages from pg_catalog.pg_locks l
+       where l.locktype = 'advisory' and l.mode = 'ShareLock' and l.granted;
+      update public.communication_arret
+         set tentatives = tentatives + 1, derniere_tentative_le = clock_timestamp(),
+             derniere_raison = 'VERROU_NON_OBTENU', maj_le = clock_timestamp();
+      return jsonb_build_object('etat', 'STOP_PENDING', 'raison', 'VERROU_NON_OBTENU',
+                                'transactions_autorisees_actives_indicatif', v_partages,
+                                'demande_le', a.demande_le);
+    end if;
+    update public.communication_arret
+       set autorisations_closes_le = clock_timestamp(), maj_le = clock_timestamp();
+  end if;
+  -- (2) Les requêtes déjà validées encore chez pg_net (43 §13, lecture seule de pg_net)
+  v_transmissions := public.communication_transmissions_en_cours();
+  if v_transmissions > 0 then
+    update public.communication_arret
+       set tentatives = tentatives + 1, derniere_tentative_le = clock_timestamp(),
+           derniere_raison = 'TRANSMISSIONS_EN_COURS', maj_le = clock_timestamp();
+    return jsonb_build_object('etat', 'STOP_PENDING', 'raison', 'TRANSMISSIONS_EN_COURS',
+                              'transmissions_en_cours', v_transmissions, 'demande_le', a.demande_le);
+  end if;
+  update public.communication_arret
+     set etat = 'arret_confirme', confirme_le = clock_timestamp(), tentatives = tentatives + 1,
+         derniere_tentative_le = clock_timestamp(), derniere_raison = null, maj_le = clock_timestamp();
+  perform public.auditer('communication.arret_confirme', 'communication_arret', 'arret', null, null);
+  return jsonb_build_object('etat', 'STOP_CONFIRMED', 'confirme_le', clock_timestamp());
+end;
+$$;
+
 -- Couper : administrateur ET gérant (communications.pause — couper ne peut que protéger).
--- 1. Prend N0 en EXCLUSIF, 5 secondes au plus : attend la fin des transactions d'envoi déjà
---    commencées (une ligne chacune), et bloque celles qui voudraient commencer.
--- 2. Écrit l'arrêt, avec ou sans le verrou : si le verrou n'a pas été obtenu à temps, l'arrêt
---    est écrit QUAND MÊME (une coupure ne doit jamais échouer) ; le dernier contrôle de chaque
---    envoi, sous N5, relit les réglages et le verra (au pire, un envoi déjà validé à l'instant
---    même part encore — dit dans la réponse).
--- 3. Les messages déjà REMIS au fournisseur (validés avant l'arrêt, dans la file de pg_net ou
---    déjà partis) ne sont PAS rappelés : pg_net est partagé avec le transactionnel et sa file
---    n'est pas touchée (exigence du CEO). Leur nombre est rendu et journalisé.
--- Ce qui attend dans la file reste « attente » : rien n'est perdu, rien ne part avant la levée.
 create or replace function public.arreter_communications(p_motif text)
 returns jsonb
 language plpgsql
@@ -846,56 +957,150 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_attendu boolean := true;
-  v_remis integer;
+  a public.communication_arret;
+  v_n0 boolean;
+  v_resultat jsonb;
 begin
   perform public.exiger_permission('communications.pause');
   if length(trim(coalesce(p_motif, ''))) < 5 then
     perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi vous coupez tout (5 caractères au moins).');
   end if;
-  perform set_config('lock_timeout', '5s', true);
+  perform set_config('synchronous_commit', 'on', true);          -- l'état écrit est durable au COMMIT
+  -- Délais courts et explicites (IR-04) : 3 s pour N0, 2 s pour la ligne, sous le délai
+  -- d'exécution des comptes connectés (8 s rapporté chez Supabase, à vérifier)
+  perform set_config('lock_timeout', '3s', true);
+  -- 1. N0 EXCLUSIF, 5 s au plus. Pendant l'attente, les nouvelles demandes de N0 partagé
+  --    attendent derrière celle-ci (à éprouver) : rien de nouveau n'est autorisé.
   begin
     perform public.communication_verrou_interrupteurs(true);
+    v_n0 := true;
   exception when lock_not_available then
-    v_attendu := false;                                     -- on coupe quand même, sans attendre
+    v_n0 := false;                                               -- PAS de contournement : on le dira
+  end;
+  perform set_config('lock_timeout', '2s', true);
+  -- 2. La ligne d'arrêt (5 s au plus : un autre arrêt ou une levée en cours)
+  begin
+    select * into a from public.communication_arret for update;
+  exception when lock_not_available then
+    return jsonb_build_object('etat', 'STOP_NOT_CONFIRMED', 'raison', 'ARRET_CONCURRENT_EN_COURS',
+                              'conseil', 'Réessayez : un autre arrêt ou une levée est en cours.');
   end;
   perform set_config('lock_timeout', '0', true);
-  update public.communication_reglages
-     set arret_urgence = true, arret_motif = trim(p_motif), arret_le = clock_timestamp(), arret_par = auth.uid(),
-         maj_le = now(), maj_par = auth.uid();
-  select count(*) into v_remis from public.communication_envois where statut = 'traitement';
-  perform set_config('goship.motif', trim(p_motif), true);
-  perform public.auditer('communication.arret_urgence', 'communication_reglages', 'reglages', null,
-                         jsonb_build_object('envois_en_cours_attendus', v_attendu, 'deja_remis_au_fournisseur', v_remis));
-  return jsonb_build_object('ok', true, 'arret_le', clock_timestamp(), 'envois_en_cours_attendus', v_attendu,
-                            'deja_remis_au_fournisseur', v_remis);
+  -- 3. La DEMANDE, écrite si elle ne l'est pas déjà (jamais « confirmée » ici)
+  if a.etat = 'actif' then
+    update public.communication_arret
+       set etat = 'arret_demande', demande_le = clock_timestamp(), demande_par = auth.uid(), motif = trim(p_motif),
+           autorisations_closes_le = null, confirme_le = null, tentatives = 0, derniere_tentative_le = null,
+           derniere_raison = null, leve_le = null, leve_par = null, motif_levee = null, maj_le = clock_timestamp();
+    perform set_config('goship.motif', trim(p_motif), true);
+    perform public.auditer('communication.arret_demande', 'communication_arret', 'arret', null,
+                           jsonb_build_object('n0_exclusif', v_n0));
+  end if;
+  -- 4. Le constat : CONFIRMED seulement si N0 exclusif est tenu ET plus rien n'est chez pg_net
+  v_resultat := public.communication_conclure_arret(v_n0);
+  return v_resultat || jsonb_build_object('n0_exclusif_obtenu', v_n0);
 end;
 $$;
 
--- Lever l'arrêt : administrateur seulement, motif de 10 caractères au moins, journalisé. Les
--- envois en attente repartent SOUS TOUTES LES RÈGLES (consentement, heures, empreinte de la
--- campagne…) ; une campagne qui ne doit pas reprendre s'annule ou se met en pause avant.
+-- Terminer un arrêt EN ATTENTE : nouvelle tentative sûre (même règle, même ordre des verrous).
+-- Appelée par l'écran (bouton « Vérifier l'arrêt », ou à intervalles pendant l'attente) et,
+-- sans attente, par le travailleur au début de chaque passage (communication_confirmer_arret_auto).
+create or replace function public.confirmer_arret_communications()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n0 boolean;
+begin
+  perform public.exiger_permission('communications.pause');
+  perform set_config('synchronous_commit', 'on', true);
+  perform set_config('lock_timeout', '3s', true);
+  begin
+    perform public.communication_verrou_interrupteurs(true);
+    v_n0 := true;
+  exception when lock_not_available then
+    v_n0 := false;
+  end;
+  perform set_config('lock_timeout', '2s', true);
+  begin
+    perform 1 from public.communication_arret for update;
+  exception when lock_not_available then
+    return jsonb_build_object('etat', 'STOP_NOT_CONFIRMED', 'raison', 'ARRET_CONCURRENT_EN_COURS');
+  end;
+  perform set_config('lock_timeout', '0', true);
+  return public.communication_conclure_arret(v_n0) || jsonb_build_object('n0_exclusif_obtenu', v_n0);
+end;
+$$;
+
+-- La même, sans permission ni attente : appelée par le travailleur (procédure, 43 §8.6), qui ne
+-- tient alors AUCUN verrou. Tentative non bloquante de N0 exclusif (pg_try_advisory_xact_lock).
+create or replace function public.communication_confirmer_arret_auto()
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n0 boolean;
+begin
+  if (select etat from public.communication_arret) <> 'arret_demande' then
+    return null;
+  end if;
+  perform set_config('synchronous_commit', 'on', true);
+  v_n0 := pg_try_advisory_xact_lock(hashtextextended('goship-communication:interrupteurs', 0));
+  perform 1 from public.communication_arret for update nowait;   -- une autre tentative en cours : on laisse
+  return public.communication_conclure_arret(v_n0);
+exception when lock_not_available then
+  return null;
+end;
+$$;
+
+-- L'état, pour l'écran (communications.view) : rien n'est modifié.
+create or replace function public.etat_arret_communications()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.exiger_permission('communications.view');
+  return (select to_jsonb(a) - 'demande_par' - 'leve_par' from public.communication_arret a)
+         || jsonb_build_object('transmissions_en_cours', public.communication_transmissions_en_cours());
+end;
+$$;
+
+-- Lever l'arrêt : administrateur seulement, motif de 10 caractères au moins, journalisé. N0
+-- exclusif SANS délai (lever peut attendre ; couper, non). Les envois en attente repartent SOUS
+-- TOUTES LES RÈGLES (consentement, heures, empreinte de la campagne…) ; une campagne qui ne doit
+-- pas reprendre s'annule ou se met en pause avant.
 create or replace function public.lever_arret_communications(p_motif text)
 returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  a public.communication_arret;
 begin
   perform public.exiger_permission('communications.manage');
   if length(trim(coalesce(p_motif, ''))) < 10 then
     perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi l''envoi peut reprendre (10 caractères au moins).');
   end if;
   perform public.communication_verrou_interrupteurs(true);
-  update public.communication_reglages
-     set arret_urgence = false, maj_le = now(), maj_par = auth.uid()
-   where arret_urgence;
-  if not found then
+  select * into a from public.communication_arret for update;
+  if a.etat = 'actif' then
     perform public.erreur_metier('INVALID_TRANSITION', 'Aucun arrêt d''urgence en cours.');
   end if;
+  update public.communication_arret
+     set etat = 'actif', autorisations_closes_le = null, confirme_le = null, leve_le = clock_timestamp(),
+         leve_par = auth.uid(), motif_levee = trim(p_motif), maj_le = clock_timestamp();
   perform set_config('goship.motif', trim(p_motif), true);
-  perform public.auditer('communication.arret_leve', 'communication_reglages', 'reglages', null, null);
-  return jsonb_build_object('ok', true);
+  perform public.auditer('communication.arret_leve', 'communication_arret', 'arret',
+                         jsonb_build_object('etat', a.etat), jsonb_build_object('etat', 'actif'));
+  return jsonb_build_object('ok', true, 'etat', 'actif');
 end;
 $$;
 
@@ -1000,8 +1205,10 @@ $$;
 
 
 -- 5. Droits ----------------------------------------------------------------------------------------
-revoke execute on function public.communication_mots_confirmation() from public, anon, authenticated;
-revoke execute on function public.communication_suivre_client() from public, anon, authenticated;
+revoke execute on function public.communication_mots_confirmation() from public, anon, authenticated, service_role;
+revoke execute on function public.communication_suivre_client() from public, anon, authenticated, service_role;
+revoke execute on function public.communication_conclure_arret(boolean) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_confirmer_arret_auto() from public, anon, authenticated, service_role;
 
 -- La confirmation par lien est la seule fonction de ce fichier ouverte SANS compte (à ajouter à
 -- la liste blanche de controle-securite.sql, section 6) : protégée par un jeton aléatoire de
@@ -1034,6 +1241,8 @@ begin
     'public.demander_purge_communication(text, text, uuid, text)',
     'public.approuver_purge_communication(bigint, boolean, text)',
     'public.arreter_communications(text)',
+    'public.confirmer_arret_communications()',
+    'public.etat_arret_communications()',
     'public.lever_arret_communications(text)',
     'public.verifier_issue_http(text, integer, text, text)',
     'public.regler_fuseau_region(text, text, text)',

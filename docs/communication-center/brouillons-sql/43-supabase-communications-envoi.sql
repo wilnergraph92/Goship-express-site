@@ -1,11 +1,11 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.3 (18/11/2026) — garde à trois couches : voir l'en-tête de
+-- Version Phase 1.3.1 (18/11/2026) — garde à trois couches : voir l'en-tête de
 -- 40-supabase-communications-fondation.sql (bloc DO, puis TOUT le contenu dans une chaîne inerte).
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -13,9 +13,14 @@ select $brouillon_goship_non_executable$
 -- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
+-- Couche 4 (Phase 1.3.1, IR-22) : un outil qui découperait ce texte à chaque point-virgule, sans comprendre les
+-- chaînes, et continuerait après les erreurs, exécuterait CETTE instruction en premier : elle
+-- ferme sa propre connexion, et rien de ce qui suit ne peut s'exécuter dans cette session. Dans
+-- tout client correct, elle est du texte, comme le reste.
+select pg_catalog.pg_terminate_backend(pg_catalog.pg_backend_pid());
 
 -- =============================================================================
 -- Goship Express — Centre de communication : la file commerciale, son travailleur, l'habillage
@@ -77,16 +82,21 @@ create table if not exists public.communication_envois (
   nature            text not null default 'campagne' check (nature in ('campagne', 'confirmation')),
   campagne_id       uuid references public.communication_campagnes (id),
   destinataire_id   bigint references public.communication_destinataires (id),
-  confirmation_id   bigint references public.communication_confirmations (id),
+  -- 1.3.1 (IR-01) : « on delete set null » — l'effacement d'une confirmation (purge) ne bute plus
+  -- sur l'envoi qui la cite (avant : violation de clé étrangère, purge impossible)
+  confirmation_id   bigint references public.communication_confirmations (id) on delete set null,
   client_id         uuid,
   canal             text not null check (canal in ('email', 'whatsapp')),
-  cle               text not null unique,                     -- campagne:<id>:<client>:<canal> | confirmation:<id>
+  -- 1.3.1 (IR-02) : la clé ne contient PLUS l'identifiant du client (il survivait à l'effacement) :
+  -- campagne:<campagne>:<destinataire> | confirmation:<id> ; « efface:<id> » après une purge
+  cle               text not null unique,
   cible_empreinte   text,                                     -- le contact EXACT visé (revue 1.1, H5)
   territoire        text,
   statut            text not null default 'attente' check (statut in (
                       'attente', 'traitement', 'envoye', 'livre', 'lu', 'echec',
                       'nouvel_essai', 'supprime', 'annule', 'abandon', 'incertain')),
-  fournisseur       text not null default '',
+  -- 1.3.1 (IR-06) : choisi UNE fois (au lancement ou à la mise en file) et seul utilisé à l'appel
+  fournisseur       text not null check (fournisseur in ('meta', 'brevo', 'resend')),
   tentative         integer not null default 0,
   prochain_essai_le timestamptz not null default now(),
   verrouille_le     timestamptz,
@@ -107,7 +117,8 @@ create table if not exists public.communication_envois (
   lu_le             timestamptz,
   maj_le            timestamptz not null default now(),
   check (nature <> 'campagne' or (campagne_id is not null and destinataire_id is not null)),
-  check (nature <> 'confirmation' or confirmation_id is not null)
+  check (nature <> 'confirmation' or confirmation_id is not null
+         or statut not in ('attente', 'traitement', 'nouvel_essai'))   -- confirmation effacée : envoi clos
 );
 create index if not exists communication_envois_dus_idx
   on public.communication_envois (prochain_essai_le) where statut in ('attente', 'nouvel_essai');
@@ -121,7 +132,7 @@ create index if not exists communication_envois_destinataire_idx on public.commu
 create index if not exists communication_envois_confirmation_idx on public.communication_envois (confirmation_id) where confirmation_id is not null;
 create index if not exists communication_envois_incertains_idx on public.communication_envois (maj_le) where statut = 'incertain' and incertain_clos_le is null;
 alter table public.communication_envois enable row level security;
-revoke all on public.communication_envois from anon, authenticated;
+revoke all on public.communication_envois from anon, authenticated, service_role;
 
 
 -- 2. Heures et fréquence (revue 1.1, H4 ; Phase 1.3, C6) ------------------------------------------
@@ -226,9 +237,17 @@ declare
   v_debit integer;
   v_raison text;
 begin
+  -- 1.3.1 (IR-25) : la sérialisation des compteurs suppose READ COMMITTED (chaque requête voit
+  -- ce qui a été validé avant elle) ; on le vérifie au lieu de le supposer
+  if current_setting('transaction_isolation') <> 'read committed' then
+    raise exception 'ISOLATION_NON_SUPPORTEE';
+  end if;
   perform public.communication_verrou('compteurs');                                 -- N5
   select * into r from public.communication_reglages;                              -- relu SOUS N5
-  v_raison := public.communication_interrupteur_ferme(r, p_envoi.nature, p_envoi.canal);
+  -- Défense de plus (Phase 1.3.1) : la décision a été prise à la porte (N0 partagé tenu jusqu'au
+  -- COMMIT, communication_autoriser_sortie) ; cette relecture n'est PAS ce qui rend l'arrêt sûr.
+  v_raison := public.communication_interrupteur_ferme(r, (select a.etat from public.communication_arret a),
+                                                      p_envoi.nature, p_envoi.canal);
   if v_raison is not null then
     return v_raison;
   end if;
@@ -409,7 +428,7 @@ as $$
 declare
   cl public.clients;
   v_cle text := public.lire_reglage('communication_email_cle_api');
-  v_fournisseur text := coalesce(nullif(public.lire_reglage('communication_email_fournisseur'), ''), 'brevo');
+  v_fournisseur text := p_envoi.fournisseur;          -- 1.3.1 (IR-06) : celui de l'envoi, jamais relu
   v_expediteur text := public.lire_reglage('communication_expediteur');
   v_nom text := public.lire_reglage('communication_nom');
   v_un_clic text := public.lire_reglage('communication_url_un_clic');
@@ -417,6 +436,10 @@ declare
   v_delai integer := (select delai_http_ms from public.communication_reglages);
   v_requete bigint;
 begin
+  -- Phase 1.3.1 : aucune requête sans être passé par la porte, dans CETTE transaction
+  if not public.communication_sortie_autorisee() then
+    raise exception 'SORTIE_NON_AUTORISEE';
+  end if;
   select * into cl from public.clients where id = p_envoi.client_id;
   if coalesce(v_cle, '') = '' or coalesce(v_expediteur, '') = '' or coalesce(v_nom, '') = '' or p_html is null then
     raise exception 'NON_CONFIGURE';
@@ -429,6 +452,9 @@ begin
     if coalesce(v_un_clic, '') <> '' then
       v_entetes := v_entetes || jsonb_build_object('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
     end if;
+  end if;
+  if v_fournisseur not in ('brevo', 'resend') then
+    raise exception 'NON_CONFIGURE';
   end if;
   if v_fournisseur = 'resend' then
     select net.http_post(
@@ -468,6 +494,9 @@ declare
   v_delai integer := (select delai_http_ms from public.communication_reglages);
   v_requete bigint;
 begin
+  if not public.communication_sortie_autorisee() then              -- Phase 1.3.1 : la porte
+    raise exception 'SORTIE_NON_AUTORISEE';
+  end if;
   if coalesce(v_jeton, '') = '' or coalesce(v_numero_id, '') = '' then
     raise exception 'NON_CONFIGURE';
   end if;
@@ -541,6 +570,18 @@ begin
       v_issue := 'incertain';                               -- une 5xx ne prouve jamais un refus
     end if;
     v_issue := coalesce(v_issue, case when p_code = 429 then 'incertain' else 'echec' end);
+    -- 1.3.1 (IR-20) : 401/403 = clé ou compte refusé ; le travailleur met alors la campagne en
+    -- pause au lieu de consommer toute l'audience (communication_traiter_un). Le code d'erreur
+    -- de Meta dans le corps est gardé (sans le texte du fournisseur).
+    if p_code in (401, 403) then
+      update public.communication_envois set statut = 'echec', code_erreur = 'AUTH_FOURNISSEUR_' || p_code,
+             verrouille_le = null, maj_le = now() where id = p_envoi.id and statut = 'traitement';
+      return;
+    end if;
+    if p_envoi.fournisseur = 'meta' and (v_json -> 'error' ->> 'code') ~ '^[0-9]{1,9}$' then
+      update public.communication_envois set code_erreur = 'META_' || (v_json -> 'error' ->> 'code')
+       where id = p_envoi.id and statut = 'traitement';
+    end if;
   else
     v_issue := 'incertain';                                 -- délai, réseau, pas de réponse, code inattendu
   end if;
@@ -556,7 +597,7 @@ begin
     update public.communication_envois set statut = 'abandon', code_erreur = 'ABANDON_HTTP_' || p_code,
            verrouille_le = null, maj_le = now() where id = p_envoi.id and statut = 'traitement';
   elsif v_issue = 'echec' then
-    update public.communication_envois set statut = 'echec', code_erreur = 'HTTP_' || p_code,
+    update public.communication_envois set statut = 'echec', code_erreur = coalesce(code_erreur, 'HTTP_' || p_code),
            verrouille_le = null, maj_le = now() where id = p_envoi.id and statut = 'traitement';
   else
     -- Le message est PEUT-ÊTRE parti. Jamais renvoyé seul. Un code, jamais le texte du fournisseur.
@@ -641,21 +682,32 @@ begin
     if found then
       perform public.communication_lire_reponse(e, x.status_code, x.content, x.error_msg);
       v_lus := v_lus + 1;
-    elsif e.verrouille_le < now() - interval '10 minutes' then
+    elsif e.verrouille_le < now() - interval '10 minutes'
+          -- 1.3.1 (IR-15) : jamais « incertain » tant que la requête est ENCORE dans la file de pg_net
+          -- (elle peut partir plus tard) : on attend qu'elle l'ait quittée
+          and not exists (select 1 from net.http_request_queue q where q.id = e.requete) then
       perform public.communication_lire_reponse(e, null, null, 'SANS_REPONSE');
       v_lus := v_lus + 1;
     end if;
   end loop;
-  -- Incertains de plus de 72 h sans preuve : restent incertains, marqués clos (H8)
+  -- Incertains de plus de 72 h sans preuve : restent incertains, marqués clos (H8).
+  -- 1.3.1 (IR-13) : lignes prises en « skip locked » — cette fonction tient déjà des lignes
+  -- « traitement » ; attendre ici une ligne tenue par une purge pourrait former un cycle.
   update public.communication_envois set incertain_clos_le = now()
-   where statut = 'incertain' and incertain_clos_le is null and maj_le < now() - interval '72 hours';
+   where id in (select x.id from public.communication_envois x
+                 where x.statut = 'incertain' and x.incertain_clos_le is null and x.maj_le < now() - interval '72 hours'
+                 for update skip locked);
+  perform public.communication_lire_modeles_meta();              -- lecture seule des réponses de Meta
   perform public.communication_nettoyer_compteurs();
   return v_lus;
 end;
 $$;
 
--- 8.2 Préparer : relire les images Meta, lancer UNE campagne due. Sous N0 partagé : un arrêt
--- d'urgence ou l'interrupteur général coupé empêche aussi les lancements et les appels à Meta.
+-- 8.2 Préparer : lancer UNE campagne due. Phase 1.3.1 : NE prend PLUS N0 — un lancement ne dépose
+-- aucune requête (il crée des lignes « attente » qui passeront une à une par la porte). Tenir N0
+-- pendant un lancement de milliers de lignes aurait pu faire attendre l'arrêt d'urgence plus que
+-- son délai. L'état d'arrêt est lu simplement : un lancement qui le croise ne crée que des envois
+-- qui ne partiront pas. Les lectures de modèles chez Meta sont à part (8.2 bis), sous la porte.
 create or replace function public.communication_preparer()
 returns text
 language plpgsql
@@ -669,25 +721,13 @@ declare
   v_raison text;
   v_volume jsonb;
 begin
-  perform public.communication_verrou_interrupteurs(false);                         -- N0 partagé
-  select * into r from public.communication_reglages;
-  if r.arret_urgence then
+  if (select a.etat from public.communication_arret a) is distinct from 'actif' then
     return 'ARRET_URGENCE';
   end if;
+  select * into r from public.communication_reglages;
   if not r.campagnes_actives then
     return 'CAMPAGNES_COUPEES';
   end if;
-  perform public.communication_lire_modeles_meta();
-
-  -- Images Meta à rafraîchir : modèles des campagnes programmées dans l'heure ou en cours
-  perform public.communication_demander_modele_meta(mm.id)
-     from public.communication_modeles mm
-    where mm.canal = 'whatsapp' and mm.statut = 'approuve'
-      and mm.id::text in (select jsonb_path_query(cc.modeles, '$.whatsapp.*') #>> '{}'
-                            from public.communication_campagnes cc
-                           where cc.statut = 'en_cours' or (cc.statut = 'programmee' and cc.planifiee_le <= now() + interval '1 hour'))
-      and not exists (select 1 from public.communication_modeles_meta s
-                       where s.modele_id = mm.id and s.demande_le > now() - make_interval(mins => greatest(r.modele_meta_fraicheur_min / 2, 5)));
 
   -- Le lancement d'une campagne due (une par passage) : N1 sur la campagne, puis des lignes NEUVES
   for c in select * from public.communication_campagnes
@@ -727,22 +767,37 @@ begin
                              jsonb_build_object('motif', 'AUDIENCE_DEPASSEE', 'volume', v_volume, 'approuve', c.audience_approuvee));
       return 'AUDIENCE_DEPASSEE';
     end if;
-    insert into public.communication_destinataires (campagne_id, client_id, canal, langue, modele_id, cible_empreinte,
-                                                    territoire, retenu, raison)
-    select c.id, k.id, ca.canal, lg.langue, ((c.modeles -> ca.canal) ->> lg.langue)::uuid,
-           public.communication_empreinte(ca.canal, public.communication_cible(k.id, ca.canal)),
-           case when ca.canal = 'whatsapp' then public.communication_territoire(public.communication_cible(k.id, 'whatsapp')) end,
-           ex.raison is null, ex.raison
-      from public.communication_segment_clients(c.criteres) k
-      cross join unnest(c.canaux) as ca(canal)
-      cross join lateral (select case when (c.modeles -> ca.canal) ? cl.langue then cl.langue else c.langue_repli end langue
-                            from public.clients cl where cl.id = k.id) lg
-      cross join lateral (select public.communication_raison_exclusion(k.id, ca.canal, c.essai) raison) ex
-    on conflict (campagne_id, client_id, canal) do nothing;
+    -- 1.3.1 (IR-07) : l'audience figée ne garde QUE les personnes retenues. Les exclus (sans
+    -- consentement, supprimés, hors fuseau…) ne laissent qu'un COMPTE par canal et par raison,
+    -- dans la campagne : ni leur identifiant ni l'empreinte de leur contact ne sont gardés.
+    with audience as materialized (
+      select k.id client_id, ca.canal, lg.langue, ex.raison
+        from public.communication_segment_clients(c.criteres) k
+        cross join unnest(c.canaux) as ca(canal)
+        cross join lateral (select case when (c.modeles -> ca.canal) ? cl.langue then cl.langue else c.langue_repli end langue
+                              from public.clients cl where cl.id = k.id) lg
+        cross join lateral (select public.communication_raison_exclusion(k.id, ca.canal, c.essai) raison) ex
+    ), retenus as (
+      insert into public.communication_destinataires (campagne_id, client_id, canal, langue, modele_id, cible_empreinte,
+                                                      territoire, retenu, raison)
+      select c.id, a.client_id, a.canal, a.langue, ((c.modeles -> a.canal) ->> a.langue)::uuid,
+             public.communication_empreinte(a.canal, public.communication_cible(a.client_id, a.canal)),
+             case when a.canal = 'whatsapp' then public.communication_territoire(public.communication_cible(a.client_id, 'whatsapp')) end,
+             true, null
+        from audience a where a.raison is null
+      on conflict (campagne_id, client_id, canal) do nothing
+      returning 1
+    )
+    update public.communication_campagnes
+       set exclusions = (select coalesce(jsonb_object_agg(x.canal || ':' || x.raison, x.n), '{}'::jsonb)
+                           from (select a.canal, a.raison, count(*) n from audience a
+                                  where a.raison is not null group by a.canal, a.raison) x),
+           retenus = (select count(*) from retenus)
+     where id = c.id;
     insert into public.communication_envois (nature, campagne_id, destinataire_id, client_id, canal, cle, cible_empreinte,
                                              territoire, fournisseur)
     select 'campagne', d2.campagne_id, d2.id, d2.client_id, d2.canal,
-           'campagne:' || d2.campagne_id || ':' || d2.client_id || ':' || d2.canal, d2.cible_empreinte, d2.territoire,
+           'campagne:' || d2.campagne_id || ':' || d2.id, d2.cible_empreinte, d2.territoire,
            case d2.canal when 'whatsapp' then 'meta'
                          else coalesce(nullif(public.lire_reglage('communication_email_fournisseur'), ''), 'brevo') end
       from public.communication_destinataires d2 where d2.campagne_id = c.id and d2.retenu
@@ -750,6 +805,36 @@ begin
     update public.communication_campagnes set statut = 'en_cours', lancee_le = now(), maj_le = now() where id = c.id;
     return 'LANCEE';
   end loop;
+  return null;
+end;
+$$;
+
+-- 8.2 bis Les images des modèles chez Meta (Phase 1.3.1) : une SORTIE (requête vers Meta), donc
+-- par la porte (nature « lecture_meta » : seul l'arrêt la bloque), N0 partagé jusqu'au COMMIT.
+create or replace function public.communication_rafraichir_modeles_meta()
+returns text
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '2s'
+as $$
+declare
+  r public.communication_reglages;
+  v_raison text;
+begin
+  v_raison := public.communication_autoriser_sortie('lecture_meta', 'whatsapp');
+  if v_raison is not null then
+    return v_raison;
+  end if;
+  select * into r from public.communication_reglages;
+  perform public.communication_demander_modele_meta(mm.id)
+     from public.communication_modeles mm
+    where mm.canal = 'whatsapp' and mm.statut = 'approuve'
+      and mm.id::text in (select jsonb_path_query(cc.modeles, '$.whatsapp.*') #>> '{}'
+                            from public.communication_campagnes cc
+                           where cc.statut = 'en_cours' or (cc.statut = 'programmee' and cc.planifiee_le <= now() + interval '1 hour'))
+      and not exists (select 1 from public.communication_modeles_meta s
+                       where s.modele_id = mm.id and s.demande_le > now() - make_interval(mins => greatest(r.modele_meta_fraicheur_min / 2, 5)));
   return null;
 end;
 $$;
@@ -768,8 +853,8 @@ declare
   r public.communication_reglages;
 begin
   select * into r from public.communication_reglages;
-  if r.arret_urgence then
-    return '{}';
+  if (select a.etat from public.communication_arret a) is distinct from 'actif' then
+    return '{}';                                              -- simple économie : la porte décide
   end if;
   if (select count(*) from public.notification_envois
        where statut = 'attente' and prochain_essai_le <= now()) > r.attente_transactionnel_max then
@@ -820,24 +905,31 @@ declare
   v_fenetre timestamptz;
   v_site text := regexp_replace(coalesce(public.lire_reglage('site_url'), ''), '/?$', '/');
 begin
-  -- N0 : les interrupteurs, relus APRÈS le verrou. Un écrivain (arrêt, réglage) qui tient N0
-  -- en exclusif fait attendre ici ; quand il a fini, on lit SA valeur.
-  perform public.communication_verrou_interrupteurs(false);
-  select * into r from public.communication_reglages;
   select * into e from public.communication_envois where id = p_envoi;              -- lecture sans verrou
   if not found or e.statut not in ('attente', 'nouvel_essai') or e.prochain_essai_le > now() then
     return 'PAS_DU';
   end if;
-  v_raison := public.communication_interrupteur_ferme(r, e.nature, e.canal);
+  -- N0 et POINT D'AUTORISATION (Phase 1.3.1) : la porte unique. Elle tient N0 partagé jusqu'au
+  -- COMMIT de cet envoi et lit l'état d'arrêt APRÈS l'avoir obtenu. Refus : rien n'est modifié,
+  -- l'envoi reste en attente.
+  v_raison := public.communication_autoriser_sortie(e.nature, e.canal);
   if v_raison is not null then
-    return v_raison;                                        -- l'envoi reste en attente : rien n'est perdu
+    return v_raison;
   end if;
+  select * into r from public.communication_reglages;              -- même état que la porte (N0 tenu)
 
   -- N1 : la campagne AVANT l'envoi (même ordre que l'annulation, 42 §4.6)
   if e.nature = 'campagne' then
     select * into c from public.communication_campagnes where id = e.campagne_id for update;
     if c.statut is distinct from 'en_cours' then
       return 'CAMPAGNE_' || coalesce(c.statut, 'INCONNUE');
+    end if;
+    -- 1.3.1 (IR-20) : le fournisseur a refusé la clé ou le compte dans l'heure : pause (N1 tenu)
+    if exists (select 1 from public.communication_envois x
+                where x.fournisseur = e.fournisseur and x.code_erreur like 'AUTH_FOURNISSEUR%'
+                  and x.maj_le > now() - interval '1 hour') then
+      update public.communication_campagnes set statut = 'en_pause', arret_motif = 'AUTH_FOURNISSEUR', maj_le = now() where id = c.id;
+      return 'AUTH_FOURNISSEUR';
     end if;
   end if;
   -- N2, N3 : le client (fréquence) et son consentement sur ce canal (un retrait en cours attend
@@ -849,6 +941,13 @@ begin
    where id = p_envoi and statut in ('attente', 'nouvel_essai') for update skip locked;
   if not found then
     return 'DEJA_PRIS';
+  end if;
+  -- 1.3.1 (IR-14) : une RELANCE dont l'original a finalement été remis (retour tardif du
+  -- fournisseur) ne part pas : ce serait un doublon
+  if e.relance_de is not null and exists (select 1 from public.communication_envois o
+                                           where o.id = e.relance_de and o.statut in ('envoye', 'livre', 'lu')) then
+    update public.communication_envois set statut = 'supprime', code_erreur = 'ORIGINAL_REMIS', maj_le = now() where id = e.id;
+    return 'ORIGINAL_REMIS';
   end if;
 
   -- Le contact a changé depuis le gel (ou la demande) : jamais envoyé à la nouvelle adresse (H5)
@@ -893,7 +992,8 @@ begin
       return 'FREQUENCE';
     end if;
     -- Campagne à mettre en pause : permis ici, la ligne est déjà à nous (N1)
-    if m.statut is distinct from 'approuve' then
+    -- 1.3.1 (IR-10) : le contenu envoyé doit être celui dont l'empreinte a été approuvée
+    if m.statut is distinct from 'approuve' or m.empreinte is distinct from public.communication_empreinte_modele(m) then
       update public.communication_campagnes set statut = 'en_pause', arret_motif = 'MODELE_INDISPONIBLE', maj_le = now() where id = c.id;
       return 'MODELE_INDISPONIBLE';
     end if;
@@ -989,6 +1089,7 @@ begin
     end if;
     update public.communication_envois
        set statut = 'traitement', requete = v_requete, tentative = tentative + 1, verrouille_le = now(), remis_le = now(),
+           code_erreur = null,
            cout_estime_usd = v_cout, maj_le = now(),
            empreinte_contenu = encode(extensions.digest(coalesce(v_html, array_to_string(v_params, '|'), ''), 'sha256'), 'hex')
      where id = e.id;
@@ -1001,7 +1102,8 @@ begin
          set statut = 'echec', code_erreur = case when sqlerrm = 'NON_CONFIGURE' then 'NON_CONFIGURE' else 'ERREUR_INTERNE' end,
              maj_le = now()
        where id = e.id;
-      insert into public.communication_erreurs (source, code, detail) values ('communication_traiter_un', sqlstate, left(sqlerrm, 300));
+      insert into public.communication_erreurs (source, code, detail)
+      values ('communication_traiter_un', sqlstate, case when sqlerrm ~ '^[A-Z_]{3,40}$' then sqlerrm else '' end);
       return 'ECHEC';
   end;
 end;
@@ -1041,11 +1143,27 @@ declare
   v_code text;
 begin
   perform pg_catalog.set_config('search_path', '', false);
+  -- Phase 1.3.1 : un arrêt EN ATTENTE est terminé ici s'il peut l'être (aucun verrou tenu à ce
+  -- moment ; tentative non bloquante de N0 exclusif). Ne dit jamais « confirmé » sans preuve.
+  begin
+    perform public.communication_confirmer_arret_auto();
+  exception when others then
+    get stacked diagnostics v_etat = returned_sqlstate;
+    insert into public.communication_erreurs (source, code) values ('traiter_communications:arret', v_etat);
+  end;
+  commit;
   begin
     perform public.communication_lire_reponses();
   exception when others then
     get stacked diagnostics v_etat = returned_sqlstate;
     insert into public.communication_erreurs (source, code) values ('traiter_communications:reponses', v_etat);
+  end;
+  commit;
+  begin
+    perform public.communication_rafraichir_modeles_meta();
+  exception when others then
+    get stacked diagnostics v_etat = returned_sqlstate;
+    insert into public.communication_erreurs (source, code) values ('traiter_communications:modeles', v_etat);
   end;
   commit;
   begin
@@ -1062,7 +1180,9 @@ begin
       v_res := public.communication_traiter_un(v_id);
     exception when others then
       get stacked diagnostics v_etat = returned_sqlstate;
-      v_code := case when v_etat in ('55P03', '40P01', '57014') then 'REESSAI' else 'ERREUR' end;
+      -- 57014 (annulation par délai) n'est pas attrapée par « when others » : la procédure entière
+      -- s'arrête alors, et le passage suivant reprend (IR-25)
+      v_code := case when v_etat in ('55P03', '40P01') then 'REESSAI' else 'ERREUR' end;
       insert into public.communication_erreurs (source, code, detail)
       values ('traiter_communications:envoi', v_etat, v_code || ' envoi ' || v_id);
       -- Erreur qui n'est pas un conflit de verrou : l'envoi n'est jamais parti (sous-transaction
@@ -1126,7 +1246,7 @@ create table if not exists public.communication_evenements_fournisseur (
 );
 create index if not exists communication_evenements_envoi_idx on public.communication_evenements_fournisseur (envoi_id) where envoi_id is not null;
 alter table public.communication_evenements_fournisseur enable row level security;
-revoke all on public.communication_evenements_fournisseur from anon, authenticated;
+revoke all on public.communication_evenements_fournisseur from anon, authenticated, service_role;
 drop trigger if exists communication_evenements_immuable on public.communication_evenements_fournisseur;
 create trigger communication_evenements_immuable
   before update or delete on public.communication_evenements_fournisseur
@@ -1139,7 +1259,7 @@ create table if not exists public.communication_fenetres_whatsapp (
   dernier_entrant  timestamptz not null
 );
 alter table public.communication_fenetres_whatsapp enable row level security;
-revoke all on public.communication_fenetres_whatsapp from anon, authenticated;
+revoke all on public.communication_fenetres_whatsapp from anon, authenticated, service_role;
 
 -- Les mots qui arrêtent tout, quatre langues. Liste À FAIRE VALIDER (juriste, D-F).
 create or replace function public.communication_mot_simple(p_texte text)
@@ -1165,14 +1285,17 @@ $$;
 
 -- Le compteur des retours par minute et par fournisseur (Phase 1.3, C7) : une limite de débit
 -- DANS la base, qui ne dépend pas de la fonction Edge.
+-- 1.3.1 (IR-25) : huit « éclats » par minute, pour que les retours d'un même fournisseur ne
+-- s'attendent pas tous sur une seule ligne jusqu'au COMMIT ; la limite porte sur leur somme.
 create table if not exists public.communication_webhook_debit (
   minute       timestamptz not null,
   fournisseur  text not null,
+  eclat        smallint not null default 0 check (eclat between 0 and 7),
   appels       integer not null default 0,
-  primary key (minute, fournisseur)
+  primary key (minute, fournisseur, eclat)
 );
 alter table public.communication_webhook_debit enable row level security;
-revoke all on public.communication_webhook_debit from anon, authenticated;
+revoke all on public.communication_webhook_debit from anon, authenticated, service_role;
 
 -- Phase 1.3 (C7) — ce qui change :
 --   · ACCÈS : n'est PLUS ouverte à « anon ». Seul le rôle communication_webhook (créé SANS
@@ -1231,24 +1354,11 @@ begin
      or coalesce(p_signature, '') !~ '^[0-9a-f]{64}$' then
     return jsonb_build_object('ok', false);
   end if;
-  -- Débit (C7) : compté AVANT la signature, pour qu'un flot d'appels faux soit lui aussi borné
-  select * into r from public.communication_reglages;
-  insert into public.communication_webhook_debit (minute, fournisseur, appels)
-  values (date_trunc('minute', clock_timestamp()), p_fournisseur, 1)
-  on conflict (minute, fournisseur) do update set appels = public.communication_webhook_debit.appels + 1
-  returning appels into v_appels;
-  if v_appels > r.webhook_max_minute then
-    return jsonb_build_object('ok', false, 'sature', true);
-  end if;
-  v_cle := public.lire_reglage('communication_cle_webhook');
-  if coalesce(v_cle, '') = ''
-     or p_signature <> encode(extensions.hmac(p_fournisseur || ':' || p_charge, v_cle, 'sha256'), 'hex') then
-    raise log 'goship communication webhook signature refusee fournisseur=%', p_fournisseur;   -- détection d'abus (journaux)
-    return jsonb_build_object('ok', false);
-  end if;
+  -- 1.3.1 (IR-08) : un STOP ne doit JAMAIS être perdu. Ordre : forme ; puis débit, SAUF pour un
+  -- message entrant ; puis signature. Un horodatage illisible ou dans le futur ne fait plus
+  -- refuser un message entrant : il est simplement ignoré (la fenêtre de 24 h n'est pas touchée).
   begin
     p := p_charge::jsonb;
-    v_survenu := (p ->> 'survenu_le')::timestamptz;
   exception when others then
     return jsonb_build_object('ok', false, 'format', true);
   end;
@@ -1258,24 +1368,60 @@ begin
                                          'complaint', 'unsubscribe', 'blocked', 'inbound') then
     return jsonb_build_object('ok', false, 'format', true);
   end if;
+  begin
+    v_survenu := (p ->> 'survenu_le')::timestamptz;
+  exception when others then
+    v_survenu := null;
+  end;
+  select * into r from public.communication_reglages;
+  if v_type <> 'inbound' then
+    -- Débit (C7), compté AVANT la signature (un flot d'appels faux est lui aussi borné), sur huit
+    -- éclats par minute ; jamais pour un message entrant
+    insert into public.communication_webhook_debit (minute, fournisseur, eclat, appels)
+    values (date_trunc('minute', clock_timestamp()), p_fournisseur, (txid_current() % 8)::smallint, 1)
+    on conflict (minute, fournisseur, eclat) do update set appels = public.communication_webhook_debit.appels + 1;
+    select coalesce(sum(w.appels), 0) into v_appels from public.communication_webhook_debit w
+     where w.minute = date_trunc('minute', clock_timestamp()) and w.fournisseur = p_fournisseur;
+    if v_appels > r.webhook_max_minute then
+      return jsonb_build_object('ok', false, 'sature', true);   -- la fonction Edge répond 5xx : le fournisseur réessaie
+    end if;
+  end if;
+  v_cle := public.lire_reglage('communication_cle_webhook');
+  if coalesce(v_cle, '') = ''
+     or p_signature <> encode(extensions.hmac(p_fournisseur || ':' || p_charge, v_cle, 'sha256'), 'hex') then
+    raise log 'goship communication webhook signature refusee fournisseur=%', p_fournisseur;   -- détection d'abus (journaux)
+    return jsonb_build_object('ok', false);
+  end if;
   if v_survenu > now() + interval '5 minutes' then
-    return jsonb_build_object('ok', false, 'futur', true);
+    if v_type <> 'inbound' then
+      return jsonb_build_object('ok', false, 'futur', true);
+    end if;
+    v_survenu := null;                                          -- entrant : traité, sans horodatage
   end if;
 
-  -- L'envoi concerné, LU SANS VERROU : par l'identifiant du fournisseur, sinon par la référence
+  -- L'envoi concerné, LU SANS VERROU. 1.3.1 (IR-06) : par la RÉFÉRENCE d'abord (posée par nous),
+  -- puis par l'identifiant du fournisseur
   if v_type <> 'inbound' then
-    select id, campagne_id into v_envoi, v_campagne from public.communication_envois
-     where fournisseur = p_fournisseur and message_id = p ->> 'message_id';
-    if v_envoi is null and (p ->> 'reference') ~ '^communication:[0-9]{1,18}$' then
+    if (p ->> 'reference') ~ '^communication:[0-9]{1,18}$' then
       v_ref := split_part(p ->> 'reference', ':', 2)::bigint;
       select id, campagne_id into v_envoi, v_campagne from public.communication_envois
        where id = v_ref and fournisseur = p_fournisseur;
     end if;
+    if v_envoi is null then
+      select id, campagne_id into v_envoi, v_campagne from public.communication_envois
+       where fournisseur = p_fournisseur and message_id = p ->> 'message_id';
+    end if;
   end if;
-  -- Rejeu : l'identifiant de l'événement est unique ; un événement déjà reçu ne refait rien
+  -- Rejeu : l'identifiant de l'événement est unique ; un événement déjà reçu ne refait rien.
+  -- 1.3.1 (IR-07) : pour un message ENTRANT, ni son identifiant chez Meta ni rien qui le relie au
+  -- numéro n'est gardé — seulement l'empreinte SHA-256 de son identifiant, pour le rejeu.
   insert into public.communication_evenements_fournisseur (fournisseur, evenement_id, type, message_id, reference, envoi_id, code, survenu_le)
-  values (p_fournisseur, left(p ->> 'id', 200), v_type, left(p ->> 'message_id', 200), left(p ->> 'reference', 60),
-          v_envoi, left(p ->> 'code', 60), v_survenu)
+  values (p_fournisseur,
+          case when v_type = 'inbound' then 'in:' || encode(extensions.digest(p ->> 'id', 'sha256'), 'hex')
+               else left(p ->> 'id', 200) end,
+          v_type,
+          case when v_type = 'inbound' then null else left(p ->> 'message_id', 200) end,
+          left(p ->> 'reference', 60), v_envoi, left(p ->> 'code', 60), v_survenu)
   on conflict (fournisseur, evenement_id) do nothing
   returning id into v_id;
   if v_id is null then
@@ -1352,16 +1498,6 @@ begin
   if p ->> 'code' is not null then
     select * into a from public.communication_codes_fournisseur where fournisseur = p_fournisseur and code = p ->> 'code';
   end if;
-  -- N0 exclusif d'abord si le code demande de couper le canal (jamais après un autre verrou)
-  if a.action = 'pause_canal' then
-    begin
-      perform public.communication_verrou_interrupteurs(true);
-    exception when lock_not_available then
-      null;                                                  -- on coupe quand même (cf. arreter_communications)
-    end;
-    update public.communication_reglages set whatsapp_actif = false, maj_le = now() where p_fournisseur = 'meta';
-    insert into public.communication_erreurs (source, code, detail) values ('fournisseur', 'PAUSE_CANAL', p_fournisseur || ':' || (p ->> 'code'));
-  end if;
   -- N1 la campagne, N3 le consentement (si l'événement peut retirer), puis N4 l'envoi, RELU
   if v_campagne is not null then
     perform 1 from public.communication_campagnes where id = v_campagne for update;
@@ -1399,7 +1535,10 @@ begin
   elsif a.action = 'pause_campagne' and e.campagne_id is not null then
     update public.communication_campagnes set statut = 'en_pause', arret_motif = 'CODE_' || (p ->> 'code'), maj_le = now()
      where id = e.campagne_id and statut = 'en_cours';
-  elsif a.action = 'reporter_destinataire' and e.relance_de is null and e.campagne_id is not null then
+  -- Phase 1.3.1 : un report CRÉE un nouvel envoi ; il exige donc un code dont le sens est VÉRIFIÉ
+  -- (communication_codes_fournisseur.verifie). Les actions qui ne font que protéger (suppression,
+  -- pauses) restent appliquées même non vérifiées : elles ne peuvent qu'empêcher un envoi.
+  elsif a.action = 'reporter_destinataire' and a.verifie and e.relance_de is null and e.campagne_id is not null then
     insert into public.communication_envois (nature, campagne_id, destinataire_id, client_id, canal, cle, cible_empreinte,
                                              territoire, fournisseur, prochain_essai_le, relance_de)
     values ('campagne', e.campagne_id, e.destinataire_id, e.client_id, e.canal, e.cle || ':report', e.cible_empreinte,
@@ -1420,6 +1559,16 @@ begin
       values (e.client_id, e.canal, 'retire', case v_type when 'complaint' then 'plainte' else 'lien_desinscription' end,
               e.cible_empreinte);
     end if;
+  end if;
+  -- Coupure du canal demandée par un code de Meta (Phase 1.3.1) : écrite SANS prendre N0 (un
+  -- retour de fournisseur ne doit pas attendre les envois), donc AU MIEUX — ce n'est PAS un arrêt
+  -- confirmé et rien ne le présente comme tel : un envoi déjà autorisé peut encore valider. Écrite EN DERNIER (IR-04) :
+  -- la ligne des réglages n'est tenue qu'un instant. Elle est journalisée ; pour une garantie, l'administrateur utilise l'arrêt d'urgence (41 §4.8).
+  -- Avant 1.3.1, elle tentait N0 exclusif puis écrivait « quand même » : même défaut que l'arrêt.
+  if a.action = 'pause_canal' then
+    update public.communication_reglages set whatsapp_actif = false, maj_le = now() where p_fournisseur = 'meta';
+    insert into public.communication_erreurs (source, code, detail)
+    values ('fournisseur', 'PAUSE_CANAL_NON_CONFIRMEE', p_fournisseur || ':' || (p ->> 'code'));
   end if;
   return jsonb_build_object('ok', true);
 end;
@@ -1453,15 +1602,26 @@ begin
   if not found then
     return jsonb_build_object('ok', false);
   end if;
-  if e.cible_empreinte is null then
-    -- Envoi anonymisé par une purge (1.3, C5) : plus rien n'est lié à ce lien ni à la personne,
-    -- et ses consentements sont anonymisés (aucun envoi possible) ; on le dit sans rien révéler.
-    return jsonb_build_object('ok', true, 'canal', e.canal);
+  -- 1.3.1 (IR-09) : ne JAMAIS répondre « fait » sans avoir rien écrit.
+  --   · personne EFFACÉE (clé « efface:… ») : ses consentements sont anonymisés, rien ne peut plus
+  --     lui être envoyé à partir de ce compte : réponse vraie, « efface » ;
+  --   · empreinte effacée à l'échéance « empreintes » : on ne sait plus quel contact bloquer :
+  --     « lien_expire », et la page propose les autres moyens (compte, réponse STOP, équipe).
+  -- La purge à l'échéance « envois » GARDE l'empreinte du contact (jusqu'à « empreintes ») : un
+  -- vieux lien reste efficace aussi longtemps qu'un consentement peut l'être.
+  if e.cle like 'efface:%' then
+    return jsonb_build_object('ok', true, 'canal', e.canal, 'efface', true);
   end if;
+  if e.cible_empreinte is null then
+    return jsonb_build_object('ok', false, 'lien_expire', true, 'canal', e.canal);
+  end if;
+  -- 1.3.1 (IR-13) : N3 AVANT l'insertion de la suppression (même ordre que les retours des
+  -- fournisseurs, qui prennent N3 puis insèrent) — sinon un clic et une plainte simultanés
+  -- s'attendaient l'un l'autre sur l'index unique des suppressions.
+  perform public.communication_verrou('consentement:' || e.client_id || ':' || e.canal);
   insert into public.communication_suppressions (canal, cible_empreinte, client_id, raison, source)
   values (e.canal, e.cible_empreinte, e.client_id, 'desinscription', 'lien')
   on conflict do nothing;
-  perform public.communication_verrou('consentement:' || e.client_id || ':' || e.canal);
   -- Le retrait n'est écrit que si le consentement actif porte sur CE contact
   if public.communication_consentement_actuel(e.client_id, e.canal)
      and public.communication_empreinte(e.canal, public.communication_cible(e.client_id, e.canal)) = e.cible_empreinte then
@@ -1542,8 +1702,14 @@ declare
   v_operation text := 'anonymiser';
 begin
   if p_categorie = 'envois' then
+    -- 1.3.1 (IR-09) : l'empreinte du contact est GARDÉE ici (elle fait marcher les vieux liens de
+    -- désinscription) et n'est effacée qu'à l'échéance « empreintes ». (IR-13) : lignes
+    -- verrouillées d'abord par identifiant croissant.
+    perform 1 from public.communication_envois
+     where cree_le < p_avant and statut not in ('attente', 'traitement', 'nouvel_essai') and client_id is not null
+     order by id for update;
     update public.communication_envois
-       set client_id = null, message_id = null, requete = null, cible_empreinte = null, empreinte_contenu = null
+       set client_id = null, message_id = null, requete = null, empreinte_contenu = null
      where cree_le < p_avant and statut not in ('attente', 'traitement', 'nouvel_essai')
        and (client_id is not null or cible_empreinte is not null or message_id is not null);
   elsif p_categorie = 'destinataires' then
@@ -1558,7 +1724,10 @@ begin
     delete from public.communication_fenetres_whatsapp where dernier_entrant < p_avant;
     v_operation := 'effacer';
   elsif p_categorie = 'suppressions' then
-    update public.communication_suppressions set client_id = null, motif = null where cree_le < p_avant and client_id is not null;
+    -- 1.3.1 (IR-07) : aussi les champs de levée et l'auteur (texte libre, comptes de l'équipe)
+    update public.communication_suppressions
+       set client_id = null, motif = null, motif_levee = null, leve_par = null, auteur_id = null
+     where cree_le < p_avant and (client_id is not null or motif is not null or motif_levee is not null);
   elsif p_categorie = 'erreurs' then
     delete from public.communication_erreurs where cree_le < p_avant;
     v_operation := 'effacer';
@@ -1572,6 +1741,13 @@ begin
     get diagnostics v_n = row_count;
     insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, avant, execute_par)
     values (p_demande, 'communication_suppressions', 'effacer', v_n, p_avant, auth.uid());
+    -- 1.3.1 (IR-09) : l'empreinte des envois DÉJÀ anonymisés part à cette échéance seulement
+    update public.communication_envois set cible_empreinte = null
+     where cree_le < p_avant and client_id is null and cible_empreinte is not null
+       and statut not in ('attente', 'traitement', 'nouvel_essai');
+    get diagnostics v_n = row_count;
+    insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, avant, execute_par)
+    values (p_demande, 'communication_envois', 'anonymiser', v_n, p_avant, auth.uid());
     return;
   else
     perform public.erreur_metier('INVALID_CATEGORY', 'Catégorie inconnue.');
@@ -1603,9 +1779,13 @@ begin
   get diagnostics v_n = row_count;
   insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, execute_par)
   values (p_demande, 'communication_evenements_fournisseur', 'anonymiser', v_n, auth.uid());
-  -- Envois : plus rien qui mène à la personne (client, contact, fournisseur, requête, contenu)
+  -- Envois : plus rien qui mène à la personne (client, contact, fournisseur, requête, contenu).
+  -- 1.3.1 (IR-02) : la clé aussi (elle contenait l'identifiant du client) ; (IR-13) : lignes
+  -- verrouillées d'abord par identifiant croissant, comme l'annulation de campagne.
+  perform 1 from public.communication_envois where client_id = p_client order by id for update;
   update public.communication_envois
      set client_id = null, message_id = null, requete = null, cible_empreinte = null, empreinte_contenu = null,
+         cle = 'efface:' || id,
          statut = case when statut in ('attente', 'nouvel_essai') then 'supprime' else statut end,
          code_erreur = case when statut in ('attente', 'nouvel_essai') then 'EFFACEMENT' else code_erreur end
    where client_id = p_client;
@@ -1618,7 +1798,9 @@ begin
   insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, execute_par)
   values (p_demande, 'communication_destinataires', 'anonymiser', v_n, auth.uid());
   -- Suppressions : déliées du compte, empreinte GARDÉE
-  update public.communication_suppressions set client_id = null, motif = null where client_id = p_client;
+  update public.communication_suppressions
+     set client_id = null, motif = null, motif_levee = null, leve_par = null, auteur_id = null
+   where client_id = p_client;
   get diagnostics v_n = row_count;
   insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, execute_par)
   values (p_demande, 'communication_suppressions', 'anonymiser', v_n, auth.uid());
@@ -1636,6 +1818,28 @@ $$;
 
 
 -- 13. Santé et planificateur -------------------------------------------------------------------------------
+-- Les requêtes DÉJÀ VALIDÉES qui n'ont peut-être pas encore quitté la base (Phase 1.3.1). Lecture
+-- SEULE des tables de pg_net (rien n'y est écrit, ni effacé : pg_net est partagé avec le
+-- transactionnel). Une requête est encore « en transmission » tant que : elle est dans la file de
+-- pg_net ; OU elle n'a pas de réponse ET son délai HTTP (delai_http_ms) + 60 s n'est pas écoulé
+-- depuis sa remise (pg_net l'a peut-être prise et l'appel est en cours). Au-delà, pg_net a
+-- terminé ou abandonné l'appel. Hypothèses à éprouver sur la version de pg_net installée
+-- (0.20.4 en production, rapporté) : nom et clé de net.http_request_queue, application du délai.
+create or replace function public.communication_transmissions_en_cours()
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select count(*)::integer
+    from public.communication_envois e
+   where e.statut = 'traitement' and e.requete is not null
+     and not exists (select 1 from net._http_response x where x.id = e.requete)
+     and (exists (select 1 from net.http_request_queue q where q.id = e.requete)
+          or e.remis_le > now() - make_interval(secs => (select r.delai_http_ms from public.communication_reglages r) / 1000.0 + 60))
+$$;
+
 create or replace function public.sante_communications()
 returns jsonb
 language plpgsql
@@ -1647,6 +1851,8 @@ begin
   perform public.exiger_permission('communications.view');
   return jsonb_build_object(
     'reglages', (select to_jsonb(r) - 'identite_validee_par' - 'maj_par' - 'brevo_quota_verifie_par' from public.communication_reglages r),
+    'arret', (select to_jsonb(a) - 'demande_par' - 'leve_par' from public.communication_arret a),
+    'transmissions_en_cours', public.communication_transmissions_en_cours(),
     'brevo', public.communication_brevo_disponible(),
     'depenses_du_jour', (select coalesce(jsonb_agg(to_jsonb(d)), '[]'::jsonb)
                            from public.communication_depenses_jour d where d.jour = public.communication_jour()),
@@ -1724,6 +1930,7 @@ begin
     'public.communication_lire_reponse(public.communication_envois, integer, text, text)',
     'public.communication_demander_envoi_confirmation(bigint)',
     'public.communication_lire_reponses()', 'public.communication_preparer()', 'public.communication_candidats()',
+    'public.communication_rafraichir_modeles_meta()', 'public.communication_transmissions_en_cours()',
     'public.communication_traiter_un(bigint)', 'public.communication_clore_campagnes()',
     'public.communication_nettoyer_compteurs()',
     'public.communication_mot_simple(text)', 'public.communication_est_stop(text)',

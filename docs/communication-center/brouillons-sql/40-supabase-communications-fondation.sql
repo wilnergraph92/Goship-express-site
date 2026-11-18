@@ -1,7 +1,7 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.3 (18/11/2026) : corrections techniques et durcissement
--- (docs/communication-center/PHASE_1_3_TECHNICAL_CORRECTIONS.md), après la revue 1.1 et 1.2.
+-- Version Phase 1.3.1 (18/11/2026) : arrêt d'urgence prouvé et constats de la revue indépendante
+-- (docs/communication-center/PHASE_1_3_1_*.md), après les Phases 1.1, 1.2 et 1.3.
 -- =============================================================================
 -- Ce fichier est un BROUILLON de conception, rangé dans docs/ (jamais publié, jamais
 -- dans outils/migrations.txt). Il n'a été exécuté sur AUCUNE base, même jetable : les
@@ -27,7 +27,7 @@
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -35,9 +35,14 @@ select $brouillon_goship_non_executable$
 -- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3.1) : ne pas exécuter.';
 end;
 $brouillon$;
+-- Couche 4 (Phase 1.3.1, IR-22) : un outil qui découperait ce texte à chaque point-virgule, sans comprendre les
+-- chaînes, et continuerait après les erreurs, exécuterait CETTE instruction en premier : elle
+-- ferme sa propre connexion, et rien de ce qui suit ne peut s'exécuter dans cette session. Dans
+-- tout client correct, elle est du texte, comme le reste.
+select pg_catalog.pg_terminate_backend(pg_catalog.pg_backend_pid());
 
 -- =============================================================================
 -- Goship Express — Centre de communication : la fondation
@@ -66,77 +71,8 @@ $brouillon$;
 -- =============================================================================
 
 
--- 1. Les permissions -----------------------------------------------------------------
--- supabase.sql fait foi. Cette fonction existe en TROIS copies identiques aujourd'hui
--- (supabase.sql, supabase-naissance.sql, supabase-suivi-externe.sql) et en une copie démo
--- (PERMISSIONS_DES_ROLES, assets/js/api.js). En Phase 2, les QUATRE copies SQL et la copie
--- démo reçoivent ensemble les sept permissions ci-dessous, mot pour mot (revue 1.1, H10) :
--- sinon relancer supabase-naissance.sql ou supabase-suivi-externe.sql après ce fichier
--- retirerait les permissions du Centre, et essai-programmes.py, essai-suivi-externe.py,
--- essai-permissions.py/.js échoueraient. Un essai de Phase 2 compare les cinq copies.
---
---   communications.view      voir le Centre, l'historique, les statistiques, les dépenses
---   communications.create    brouillons (campagnes, modèles, segments), soumettre, retirer,
---                            programmer, remettre en brouillon avant lancement, annuler un
---                            brouillon ou une soumission
---   communications.test      envoyer un essai, aux seuls destinataires d'essai
---   communications.pause     mettre en pause une campagne programmée ou en cours
---   communications.approve   approuver ou refuser campagnes et modèles ; reprendre ; annuler
---                            une campagne approuvée ; approuver une demande de purge ;
---                            relancer un message incertain ou mort
---   communications.manage    réglages, interrupteurs, plafonds, quotas, tarifs, indicatifs,
---                            liste d'essai, textes de consentement, identité légale et
---                            adresse postale (après décision du CEO), demandes de purge,
---                            levée d'une suppression
---   communications.consents  lire l'historique de consentement d'un client ; noter un
---                            RETRAIT qu'il demande ; ajouter une suppression manuelle
---                            (jamais un accord à sa place)
--- Gérant : view, create, test, pause, consents. Employé et client : aucune.
--- La double authentification (aal2) s'applique d'elle-même : permissions de l'équipe.
-create or replace function public.permissions_du_role(p_role text)
-returns text[]
-language sql
-immutable
-set search_path = ''
-as $$
-  select case p_role
-    when 'admin' then array[
-      'clients.view', 'clients.create', 'clients.edit',
-      'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
-      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
-      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
-      'payments.view', 'payments.create', 'payments.cancel',
-      'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
-      'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
-      'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
-      'tracking.view', 'tracking.manage',
-      'communications.view', 'communications.create', 'communications.test', 'communications.pause',
-      'communications.approve', 'communications.manage', 'communications.consents']
-    when 'gerant' then array[
-      'clients.view', 'clients.create', 'clients.edit',
-      'shipments.view', 'shipments.create', 'shipments.edit',
-      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
-      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
-      'payments.view', 'payments.create', 'payments.cancel',
-      'reports.view', 'reports.create',
-      'users.view',
-      'birthdays.view', 'programs.view',
-      'tracking.view',
-      'communications.view', 'communications.create', 'communications.test', 'communications.pause',
-      'communications.consents']
-    when 'employe' then array[
-      'clients.view', 'clients.create',
-      'shipments.view', 'shipments.create', 'shipments.edit',
-      'shipments.scan', 'shipments.change_status', 'shipments.view_history',
-      'invoices.view', 'payments.view',
-      'tracking.view']
-    when 'client' then array[
-      'clients.view:own', 'clients.edit:own',
-      'shipments.view:own', 'shipments.view_history:own',
-      'invoices.view:own', 'payments.view:own']
-    else array[]::text[]
-  end
-$$;
+-- 1. Les permissions : déplacées en fin de fichier (§13 bis, Phase 1.3.1, IR-22) — remplacer une
+-- fonction EXISTANTE en dernier : si l'exécution s'arrête avant, rien de l'existant n'a changé.
 
 
 -- 2. Les réglages ------------------------------------------------------------------------
@@ -173,14 +109,8 @@ create table if not exists public.communication_reglages (
   -- Le quota vérifié ne vaut que pour un temps : au-delà, il redevient NON VÉRIFIÉ (1.3, C3).
   -- Choix de conception de GoShip, pas une règle de Brevo : à confirmer par le CEO.
   brevo_quota_validite_jours  integer not null default 30 check (brevo_quota_validite_jours between 1 and 90),
-  -- ARRÊT D'URGENCE (Phase 1.3, correction 1) : coupe TOUT ce que le Centre envoie (campagnes,
-  -- e-mails de confirmation, lectures de modèles chez Meta), pour tous les travailleurs, dès
-  -- qu'il est écrit. Posé par arreter_communications (communications.pause : administrateur
-  -- et gérant), levé seulement par lever_arret_communications (communications.manage).
-  arret_urgence               boolean not null default false,
-  arret_motif                 text,
-  arret_le                    timestamptz,
-  arret_par                   uuid,
+  -- L'ARRÊT D'URGENCE n'est plus ici (Phase 1.3.1) : il a sa propre table, communication_arret
+  -- (§2 bis), écrite seulement par les fonctions d'arrêt (41 §4.8), jamais par un réglage.
   -- Débit, délais, fenêtres d'envoi (heure locale du destinataire), fréquence
   -- lot_par_minute : taille d'UN passage du travailleur. debit_max_minute : plafond GLOBAL
   -- (tous travailleurs, tous canaux) d'envois remis au fournisseur par minute, compté sous le
@@ -223,7 +153,50 @@ create table if not exists public.communication_reglages (
 );
 insert into public.communication_reglages (id) values (true) on conflict (id) do nothing;
 alter table public.communication_reglages enable row level security;
-revoke all on public.communication_reglages from anon, authenticated;
+revoke all on public.communication_reglages from anon, authenticated, service_role;
+
+
+-- 2 bis. L'arrêt d'urgence (Phase 1.3.1 — remplace arret_urgence de la Phase 1.3) ----------------
+-- Trois états, et un seul sens pour chacun :
+--   actif           rien n'est demandé ;
+--   arret_demande   l'arrêt est DEMANDÉ et durablement écrit : toute transaction qui lit cet état
+--                   (sous N0 partagé, après l'avoir obtenu) REFUSE d'autoriser un envoi. Ce n'est
+--                   PAS un arrêt confirmé : une transaction qui avait lu « actif » juste avant peut
+--                   encore valider son envoi ; des requêtes déjà validées peuvent encore être
+--                   chez pg_net. Réponse : STOP_PENDING ;
+--   arret_confirme  deux faits sont PROUVÉS : (1) N0 a été obtenu en EXCLUSIF dans la transaction
+--                   de la demande ou APRÈS elle (autorisations_closes_le) — donc plus aucune
+--                   transaction autorisée n'est en cours et aucune ne peut plus l'être ; (2) plus
+--                   aucune requête validée n'attend d'être transmise par pg_net. Réponse :
+--                   STOP_CONFIRMED.
+-- Le passage à arret_confirme ne se fait QUE sous N0 exclusif (contrainte de la table + 41 §4.8).
+-- Un délai dépassé ne fait JAMAIS passer à arret_confirme : il laisse arret_demande, et une
+-- nouvelle tentative (manuelle, ou automatique au début de chaque passage du travailleur)
+-- termine l'arrêt proprement.
+create table if not exists public.communication_arret (
+  id                       boolean primary key default true check (id),
+  etat                     text not null default 'actif' check (etat in ('actif', 'arret_demande', 'arret_confirme')),
+  demande_le               timestamptz,
+  demande_par              uuid,
+  motif                    text check (motif is null or length(motif) between 5 and 300),
+  autorisations_closes_le  timestamptz,      -- N0 exclusif obtenu avec ou après la demande
+  confirme_le              timestamptz,
+  tentatives               integer not null default 0,
+  derniere_tentative_le    timestamptz,
+  derniere_raison          text,             -- VERROU_NON_OBTENU, TRANSMISSIONS_EN_COURS…
+  leve_le                  timestamptz,
+  leve_par                 uuid,
+  motif_levee              text check (motif_levee is null or length(motif_levee) between 10 and 300),
+  maj_le                   timestamptz not null default now(),
+  check (etat = 'actif' or (demande_le is not null and motif is not null)),
+  check (etat <> 'actif' or (autorisations_closes_le is null and confirme_le is null)),
+  check (etat <> 'arret_confirme' or (autorisations_closes_le is not null and confirme_le is not null
+                                       and confirme_le >= autorisations_closes_le
+                                       and autorisations_closes_le >= demande_le))
+);
+insert into public.communication_arret (id) values (true) on conflict (id) do nothing;
+alter table public.communication_arret enable row level security;
+revoke all on public.communication_arret from anon, authenticated, service_role;
 
 
 -- 3. Les petites aides -----------------------------------------------------------------
@@ -332,12 +305,12 @@ as $$
   select pg_advisory_xact_lock(hashtextextended('goship-communication:' || p_sujet, 0))
 $$;
 
--- N0 : partagé (envois) ou exclusif (écriture d'un interrupteur). Un écrivain exclusif attend
--- la fin des transactions d'envoi EN COURS (une seule ligne de file chacune, quelques
--- millisecondes) ; toute transaction d'envoi qui commence ENSUITE attend qu'il ait fini, puis
--- relit les réglages : l'arrêt a un instant précis, après lequel aucun envoi n'est validé.
--- (Les demandes de verrou sont servies dans l'ordre d'arrivée par PostgreSQL : un écrivain en
--- attente n'est pas doublé par de nouveaux lecteurs — à éprouver, PHASE_1_3_TEST_PLAN T-01/T-02.)
+-- N0 : partagé (toute transaction qui AUTORISE une requête sortante, par
+-- communication_autoriser_sortie — et rien d'autre) ou exclusif (arrêt, levée, réglages
+-- d'envoi). Obtenir N0 en exclusif PROUVE qu'aucune transaction autorisée n'est en cours : elles
+-- tiennent toutes N0 partagé de leur autorisation jusqu'à leur COMMIT.
+-- Phase 1.3.1 : AUCUNE fonction n'écrit plus un état d'arrêt « confirmé » sans l'avoir obtenu.
+-- (Ordre de service des demandes de verrou par PostgreSQL : à éprouver, PHASE_1_3_1_TEST_PLAN.)
 create or replace function public.communication_verrou_interrupteurs(p_exclusif boolean)
 returns void
 language plpgsql
@@ -352,10 +325,11 @@ begin
 end;
 $$;
 
--- Ce qui interdit un envoi, d'après les réglages LUS SOUS N0 : null = permis, sinon le code.
--- Appelée deux fois par envoi : après N0 (décision) et sous N5 (dernier contrôle, qui voit aussi
--- un arrêt écrit sans attendre le verrou, cf. arreter_communications, 41).
-create or replace function public.communication_interrupteur_ferme(r public.communication_reglages,
+-- Ce qui interdit une sortie, d'après l'état d'arrêt et les réglages : null = permis, sinon le
+-- code. Natures : « campagne », « confirmation » (e-mail de confirmation du consentement),
+-- « lecture_meta » (lecture d'un modèle chez Meta : n'envoie rien à un client ; seul l'arrêt la
+-- bloque). Tout état d'arrêt autre que « actif », ou illisible, ferme tout.
+create or replace function public.communication_interrupteur_ferme(r public.communication_reglages, p_arret text,
                                                                    p_nature text, p_canal text)
 returns text
 language sql
@@ -363,14 +337,58 @@ immutable
 set search_path = ''
 as $$
   select case
-    when r is null or r.arret_urgence is not false then 'ARRET_URGENCE'      -- réglages illisibles : fermé
+    when p_arret is distinct from 'actif' then 'ARRET_URGENCE'
+    when r is null then 'REGLAGES_ILLISIBLES'
     when coalesce(p_canal, '') not in ('email', 'whatsapp')
-      or coalesce(p_nature, '') not in ('campagne', 'confirmation') then 'INCONNU'
+      or coalesce(p_nature, '') not in ('campagne', 'confirmation', 'lecture_meta') then 'INCONNU'
+    when p_nature = 'lecture_meta' then null
     when p_nature = 'campagne' and not r.campagnes_actives then 'CAMPAGNES_COUPEES'
     when p_nature = 'confirmation' and not r.confirmations_actives then 'CONFIRMATIONS_COUPEES'
     when p_canal = 'email' and not r.email_actif then 'EMAIL_COUPE'
     when p_canal = 'whatsapp' and not r.whatsapp_actif then 'WHATSAPP_COUPE'
   end
+$$;
+
+-- LA PORTE UNIQUE des sorties (Phase 1.3.1). Toute transaction qui va déposer une requête chez
+-- pg_net (net.http_post, net.http_get) l'appelle d'abord, dans la MÊME transaction :
+--   1. N0 PARTAGÉ — tenu jusqu'au COMMIT ou à l'annulation de la transaction ;
+--   2. PUIS lecture de l'état d'arrêt et des réglages (requête postérieure au verrou, donc
+--      nouvel instantané : elle voit tout arrêt validé avant l'obtention du verrou) ;
+--   3. si tout est ouvert, marque la transaction comme autorisée (goship.sortie_autorisee =
+--      identifiant de la transaction). Les fonctions d'appel (43 §5, 42 §2) REFUSENT de déposer
+--      une requête si cette marque manque : la règle n'est pas une convention, elle est vérifiée.
+-- C'est le POINT D'AUTORISATION. Le dernier contrôle de l'arrêt pour un envoi est ICI ; la
+-- relecture sous N5 (communication_reserver) n'est qu'une défense de plus.
+create or replace function public.communication_autoriser_sortie(p_nature text, p_canal text)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r public.communication_reglages;
+  v_arret text;
+  v_raison text;
+begin
+  perform public.communication_verrou_interrupteurs(false);                      -- N0 partagé
+  select a.etat into v_arret from public.communication_arret a;                 -- APRÈS le verrou
+  select * into r from public.communication_reglages;
+  v_raison := public.communication_interrupteur_ferme(r, v_arret, p_nature, p_canal);
+  if v_raison is null then
+    perform set_config('goship.sortie_autorisee', txid_current()::text, true);
+  end if;
+  return v_raison;
+end;
+$$;
+
+-- Vraie seulement dans une transaction qui est passée par la porte, avec succès.
+create or replace function public.communication_sortie_autorisee()
+returns boolean
+language sql
+volatile
+set search_path = ''
+as $$
+  select coalesce(current_setting('goship.sortie_autorisee', true), '') = txid_current()::text
 $$;
 
 
@@ -404,7 +422,7 @@ insert into public.communication_indicatifs (prefixe, territoire, preuve) values
   ('1',    'NANP_AUTRE', 'Tout autre +1 : non classé tant que la liste NANPA n''est pas chargée')
 on conflict (prefixe) do nothing;
 alter table public.communication_indicatifs enable row level security;
-revoke all on public.communication_indicatifs from anon, authenticated;
+revoke all on public.communication_indicatifs from anon, authenticated, service_role;
 
 -- Le territoire d'un numéro international (chiffres), par le préfixe le plus long.
 create or replace function public.communication_territoire(p_numero text)
@@ -432,7 +450,7 @@ create table if not exists public.communication_erreurs (
   cree_le   timestamptz not null default now()
 );
 alter table public.communication_erreurs enable row level security;
-revoke all on public.communication_erreurs from anon, authenticated;
+revoke all on public.communication_erreurs from anon, authenticated, service_role;
 
 
 -- 6. Le consentement commercial ---------------------------------------------------------------
@@ -455,7 +473,7 @@ create table if not exists public.communication_textes_consentement (
   check (statut <> 'atteste_juridique' or (reference_juridique is not null and atteste_par is not null))
 );
 alter table public.communication_textes_consentement enable row level security;
-revoke all on public.communication_textes_consentement from anon, authenticated;
+revoke all on public.communication_textes_consentement from anon, authenticated, service_role;
 
 -- 6.2 Le registre. Une ligne par étape, jamais modifiée hors de la purge contrôlée (§12) :
 --   demande    le client a coché la case (texte, langue, contact masqué affichés) : EN ATTENTE
@@ -507,7 +525,7 @@ create table if not exists public.communication_consentements (
 create index if not exists communication_consentements_client_idx
   on public.communication_consentements (client_id, canal, cree_le desc, id desc);
 alter table public.communication_consentements enable row level security;
-revoke all on public.communication_consentements from anon, authenticated;
+revoke all on public.communication_consentements from anon, authenticated, service_role;
 
 -- 6.3 Les jetons de confirmation (C2) : un par demande. Le jeton n'est JAMAIS gardé en clair
 -- (seulement son SHA-256) ; usage unique ; durée limitée ; lié à l'empreinte du contact au
@@ -536,7 +554,7 @@ create index if not exists communication_confirmations_attente_idx
 create index if not exists communication_confirmations_consentement_idx
   on public.communication_confirmations (consentement_id);
 alter table public.communication_confirmations enable row level security;
-revoke all on public.communication_confirmations from anon, authenticated;
+revoke all on public.communication_confirmations from anon, authenticated, service_role;
 
 -- L'état d'un client sur un canal : aucun, en_attente, confirme, retire, invalide — et s'il
 -- permet un envoi (« actif »). À heure égale, retrait et invalidation passent devant.
@@ -607,7 +625,7 @@ create unique index if not exists communication_suppressions_active_idx
 create index if not exists communication_suppressions_client_idx
   on public.communication_suppressions (client_id) where client_id is not null;
 alter table public.communication_suppressions enable row level security;
-revoke all on public.communication_suppressions from anon, authenticated;
+revoke all on public.communication_suppressions from anon, authenticated, service_role;
 
 -- Supprimée ? Empreinte inconnue (poivre absent) : on répond « oui » (échec fermé).
 create or replace function public.communication_supprimee(p_canal text, p_cible_empreinte text)
@@ -636,7 +654,7 @@ create table if not exists public.communication_destinataires_essai (
   primary key (client_id, canal)
 );
 alter table public.communication_destinataires_essai enable row level security;
-revoke all on public.communication_destinataires_essai from anon, authenticated;
+revoke all on public.communication_destinataires_essai from anon, authenticated, service_role;
 
 create or replace function public.communication_est_essai(p_client uuid, p_canal text)
 returns boolean
@@ -666,7 +684,7 @@ create table if not exists public.communication_tarifs (
   primary key (fournisseur, canal, categorie, territoire)
 );
 alter table public.communication_tarifs enable row level security;
-revoke all on public.communication_tarifs from anon, authenticated;
+revoke all on public.communication_tarifs from anon, authenticated, service_role;
 
 -- 9.2 Ce que fait le Centre d'un code d'erreur d'un fournisseur (revue 1.1, H11). Les actions
 -- sont des choix de conception PRUDENTS ; la signification exacte de chaque code est à
@@ -692,7 +710,7 @@ insert into public.communication_codes_fournisseur (fournisseur, code, action, d
    'Rapporté : trop de messages vers le même destinataire. Reporté une seule fois, 24 h plus tard. À confirmer.')
 on conflict (fournisseur, code) do nothing;
 alter table public.communication_codes_fournisseur enable row level security;
-revoke all on public.communication_codes_fournisseur from anon, authenticated;
+revoke all on public.communication_codes_fournisseur from anon, authenticated, service_role;
 
 -- 9.3 Ce que prouve une réponse HTTP d'erreur d'un fournisseur (Phase 1.3, correction 4).
 -- Une réponse 5xx NE PROUVE PAS que le message a été refusé : le fournisseur a pu l'accepter
@@ -713,7 +731,7 @@ create table if not exists public.communication_issues_http (
   primary key (fournisseur, code_http)
 );
 alter table public.communication_issues_http enable row level security;
-revoke all on public.communication_issues_http from anon, authenticated;
+revoke all on public.communication_issues_http from anon, authenticated, service_role;
 
 
 -- 10. Les dépenses du jour et le débit (revue 1.1, H1 ; Phase 1.3, correction 3) ---------------
@@ -730,7 +748,7 @@ create table if not exists public.communication_depenses_jour (
   primary key (jour, fournisseur, canal)
 );
 alter table public.communication_depenses_jour enable row level security;
-revoke all on public.communication_depenses_jour from anon, authenticated;
+revoke all on public.communication_depenses_jour from anon, authenticated, service_role;
 
 -- Le débit GLOBAL : envois remis au fournisseur par minute (tous travailleurs, tous canaux),
 -- compté sous N5. Remplace la limite « par passage », qui ne valait que pour un travailleur.
@@ -739,7 +757,7 @@ create table if not exists public.communication_debit_minute (
   envois   integer not null default 0 check (envois >= 0)
 );
 alter table public.communication_debit_minute enable row level security;
-revoke all on public.communication_debit_minute from anon, authenticated;
+revoke all on public.communication_debit_minute from anon, authenticated, service_role;
 
 
 -- 11. Le quota Brevo (revue 1.1, H2, H3, M12) -------------------------------------------------------
@@ -846,7 +864,8 @@ $$;
 --   1. un fuseau DÉCLARÉ pour ce client (par lui, ou par l'équipe qui l'a vérifié), valable
 --      tant que son pays et sa région n'ont pas changé ;
 --   2. sinon HT → America/Port-au-Prince, DO → America/Santo_Domingo (un seul fuseau IANA par
---      pays) ;
+--      pays). HYPOTHÈSE ASSUMÉE (1.3.1, IR-23) : pour ces deux pays, le pays du PROFIL vaut lieu de
+--      résidence ; un client HT qui vit à Miami doit déclarer son fuseau (Mon compte, Phase 2c) ;
 --   3. sinon US → le fuseau de son État, SEULEMENT si cet État figure dans
 --      communication_fuseaux_regions, saisi avec sa preuve (base IANA, date). Aucune ligne
 --      n'est créée ici : la table est vide, et un État à plusieurs fuseaux (Floride, Texas,
@@ -868,7 +887,7 @@ create table if not exists public.communication_fuseaux_regions (
   primary key (pays, region)
 );
 alter table public.communication_fuseaux_regions enable row level security;
-revoke all on public.communication_fuseaux_regions from anon, authenticated;
+revoke all on public.communication_fuseaux_regions from anon, authenticated, service_role;
 
 create table if not exists public.communication_fuseaux_clients (
   client_id    uuid primary key references public.clients (id) on delete cascade,
@@ -880,7 +899,7 @@ create table if not exists public.communication_fuseaux_clients (
   cree_le      timestamptz not null default now()
 );
 alter table public.communication_fuseaux_clients enable row level security;
-revoke all on public.communication_fuseaux_clients from anon, authenticated;
+revoke all on public.communication_fuseaux_clients from anon, authenticated, service_role;
 
 -- Un nom de fuseau que le serveur connaît vraiment (pas d'abréviation, pas de décalage fixe).
 create or replace function public.communication_fuseau_valide(p_fuseau text)
@@ -965,7 +984,7 @@ insert into public.communication_conservation (categorie, apres) values
   ('empreintes', 'effacer')
 on conflict (categorie) do nothing;
 alter table public.communication_conservation enable row level security;
-revoke all on public.communication_conservation from anon, authenticated;
+revoke all on public.communication_conservation from anon, authenticated, service_role;
 
 -- 12.2 Les demandes de purge : demandées par un administrateur (communications.manage), ou
 -- notées sur demande d'une personne (droit d'effacement, communications.consents), APPROUVÉES
@@ -976,7 +995,10 @@ create table if not exists public.communication_demandes_purge (
   id             bigint generated always as identity primary key,
   type           text not null check (type in ('echeance', 'personne')),
   categorie      text references public.communication_conservation (categorie),
-  client_id      uuid,                                   -- type « personne »
+  client_id      uuid,                                   -- type « personne » ; vidé après exécution (1.3.1)
+  -- 1.3.1 (IR-07) : empreintes des contacts de la personne, prises au moment de la suppression
+  -- du compte (old.* du déclencheur), avant qu'ils ne soient vidés ; effacées après exécution
+  empreintes     text[],
   motif          text not null check (length(motif) between 5 and 300),
   demandee_par   uuid not null,
   demandee_le    timestamptz not null default now(),
@@ -984,11 +1006,12 @@ create table if not exists public.communication_demandes_purge (
   approuvee_par  uuid,
   approuvee_le   timestamptz,
   executee_le    timestamptz,
-  check ((type = 'echeance' and categorie is not null) or (type = 'personne' and client_id is not null)),
+  check ((type = 'echeance' and categorie is not null)
+         or (type = 'personne' and (client_id is not null or statut = 'executee'))),
   check (approuvee_par is null or approuvee_par <> demandee_par)
 );
 alter table public.communication_demandes_purge enable row level security;
-revoke all on public.communication_demandes_purge from anon, authenticated;
+revoke all on public.communication_demandes_purge from anon, authenticated, service_role;
 
 create table if not exists public.communication_journal_purges (
   id          bigint generated always as identity primary key,
@@ -1001,7 +1024,7 @@ create table if not exists public.communication_journal_purges (
   execute_le  timestamptz not null default now()
 );
 alter table public.communication_journal_purges enable row level security;
-revoke all on public.communication_journal_purges from anon, authenticated;
+revoke all on public.communication_journal_purges from anon, authenticated, service_role;
 
 -- 12.3 L'immuabilité, avec UNE exception : une purge approuvée en cours dans CETTE transaction.
 -- La fonction de purge pose goship.purge_demande ; le déclencheur vérifie que la demande existe
@@ -1099,12 +1122,17 @@ begin
     end if;
   else
     perform public.communication_verrou('client:' || d.client_id);                 -- N2
-    -- Les empreintes de la personne, recueillies AVANT d'effacer les liens (C5)
+    -- Les empreintes de la personne, recueillies AVANT d'effacer les liens (C5). 1.3.1 (IR-07) :
+    -- aussi celles prises par le déclencheur à la suppression du compte (d.empreintes), des
+    -- audiences et des suppressions — le profil est déjà vidé à ce moment-là.
     select coalesce(array_agg(distinct x.e) filter (where x.e is not null), '{}') into v_empreintes
       from (select public.communication_empreinte('email', public.communication_cible(d.client_id, 'email')) e
             union all select public.communication_empreinte('whatsapp', public.communication_cible(d.client_id, 'whatsapp'))
+            union all select unnest(coalesce(d.empreintes, '{}'))
             union all select k.cible_empreinte from public.communication_consentements k where k.client_id = d.client_id
             union all select f.cible_empreinte from public.communication_confirmations f where f.client_id = d.client_id
+            union all select dd.cible_empreinte from public.communication_destinataires dd where dd.client_id = d.client_id
+            union all select s.cible_empreinte from public.communication_suppressions s where s.client_id = d.client_id
             union all select e2.cible_empreinte from public.communication_envois e2 where e2.client_id = d.client_id) x;
     perform public.communication_purger_personne_suite(d.id, d.client_id, v_empreintes);   -- 43 §12
     update public.communication_consentements
@@ -1123,7 +1151,13 @@ begin
     values (d.id, 'communication_fuseaux_clients', 'effacer', v_n, auth.uid());
   end if;
 
-  update public.communication_demandes_purge set statut = 'executee', executee_le = now() where id = d.id;
+  -- 1.3.1 (IR-07) : la demande exécutée ne garde plus ni la personne ni ses empreintes ; une
+  -- demande ouverte d'office (demandeur = la personne) perd aussi ce lien
+  update public.communication_demandes_purge
+     set statut = 'executee', executee_le = now(), client_id = null, empreintes = null,
+         demandee_par = case when type = 'personne' and demandee_par = d.client_id
+                             then '00000000-0000-0000-0000-000000000000'::uuid else demandee_par end
+   where id = d.id;
   perform set_config('goship.purge_demande', '', true);
   perform public.auditer('communication.purge', 'communication_demande_purge', d.id::text, null,
                          jsonb_build_object('type', d.type, 'categorie', d.categorie));
@@ -1135,31 +1169,106 @@ $$;
 -- 13. Droits -----------------------------------------------------------------------------------------
 -- Rien de ce fichier n'est ouvert à un visiteur. executer_purge_communication est ouverte aux
 -- comptes connectés et refuse elle-même sans communications.manage ni demande approuvée.
-revoke execute on function public.communication_jour(timestamptz) from public, anon, authenticated;
-revoke execute on function public.communication_normaliser(text, text) from public, anon, authenticated;
-revoke execute on function public.communication_empreinte(text, text) from public, anon, authenticated;
-revoke execute on function public.communication_cible(uuid, text) from public, anon, authenticated;
-revoke execute on function public.communication_masque(text, text) from public, anon, authenticated;
-revoke execute on function public.communication_verrou(text) from public, anon, authenticated;
-revoke execute on function public.communication_verrou_interrupteurs(boolean) from public, anon, authenticated;
-revoke execute on function public.communication_interrupteur_ferme(public.communication_reglages, text, text) from public, anon, authenticated;
-revoke execute on function public.communication_fuseau_valide(text) from public, anon, authenticated;
-revoke execute on function public.communication_fuseau(uuid, text) from public, anon, authenticated;
-revoke execute on function public.communication_territoire(text) from public, anon, authenticated;
-revoke execute on function public.communication_etat_consentement(uuid, text) from public, anon, authenticated;
-revoke execute on function public.communication_consentement_actuel(uuid, text) from public, anon, authenticated;
-revoke execute on function public.communication_supprimee(text, text) from public, anon, authenticated;
-revoke execute on function public.communication_est_essai(uuid, text) from public, anon, authenticated;
-revoke execute on function public.communication_brevo_disponible() from public, anon, authenticated;
-revoke execute on function public.communication_immuable() from public, anon, authenticated;
+revoke execute on function public.communication_jour(timestamptz) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_normaliser(text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_empreinte(text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_cible(uuid, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_masque(text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_verrou(text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_verrou_interrupteurs(boolean) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_interrupteur_ferme(public.communication_reglages, text, text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_autoriser_sortie(text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_sortie_autorisee() from public, anon, authenticated, service_role;
+revoke execute on function public.communication_fuseau_valide(text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_fuseau(uuid, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_territoire(text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_etat_consentement(uuid, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_consentement_actuel(uuid, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_supprimee(text, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_est_essai(uuid, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_brevo_disponible() from public, anon, authenticated, service_role;
+revoke execute on function public.communication_immuable() from public, anon, authenticated, service_role;
 revoke execute on function public.executer_purge_communication(bigint) from public, anon;
 grant execute on function public.executer_purge_communication(bigint) to authenticated;
 
+-- 13 bis. Les permissions (déplacées ici en 1.3.1) -----------------------------------------------------------------
+-- supabase.sql fait foi. Cette fonction existe en TROIS copies identiques aujourd'hui
+-- (supabase.sql, supabase-naissance.sql, supabase-suivi-externe.sql) et en une copie démo
+-- (PERMISSIONS_DES_ROLES, assets/js/api.js). En Phase 2, les QUATRE copies SQL et la copie
+-- démo reçoivent ensemble les sept permissions ci-dessous, mot pour mot (revue 1.1, H10) :
+-- sinon relancer supabase-naissance.sql ou supabase-suivi-externe.sql après ce fichier
+-- retirerait les permissions du Centre, et essai-programmes.py, essai-suivi-externe.py,
+-- essai-permissions.py/.js échoueraient. Un essai de Phase 2 compare les cinq copies.
+--
+--   communications.view      voir le Centre, l'historique, les statistiques, les dépenses
+--   communications.create    brouillons (campagnes, modèles, segments), soumettre, retirer,
+--                            programmer, remettre en brouillon avant lancement, annuler un
+--                            brouillon ou une soumission
+--   communications.test      envoyer un essai, aux seuls destinataires d'essai
+--   communications.pause     mettre en pause une campagne programmée ou en cours
+--   communications.approve   approuver ou refuser campagnes et modèles ; reprendre ; annuler
+--                            une campagne approuvée ; approuver une demande de purge ;
+--                            relancer un message incertain ou mort
+--   communications.manage    réglages, interrupteurs, plafonds, quotas, tarifs, indicatifs,
+--                            liste d'essai, textes de consentement, identité légale et
+--                            adresse postale (après décision du CEO), demandes de purge,
+--                            levée d'une suppression
+--   communications.consents  lire l'historique de consentement d'un client ; noter un
+--                            RETRAIT qu'il demande ; ajouter une suppression manuelle
+--                            (jamais un accord à sa place)
+-- Gérant : view, create, test, pause, consents. Employé et client : aucune.
+-- La double authentification (aal2) s'applique d'elle-même : permissions de l'équipe.
+create or replace function public.permissions_du_role(p_role text)
+returns text[]
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_role
+    when 'admin' then array[
+      'clients.view', 'clients.create', 'clients.edit',
+      'shipments.view', 'shipments.create', 'shipments.edit', 'shipments.delete',
+      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+      'payments.view', 'payments.create', 'payments.cancel',
+      'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
+      'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
+      'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
+      'tracking.view', 'tracking.manage',
+      'communications.view', 'communications.create', 'communications.test', 'communications.pause',
+      'communications.approve', 'communications.manage', 'communications.consents']
+    when 'gerant' then array[
+      'clients.view', 'clients.create', 'clients.edit',
+      'shipments.view', 'shipments.create', 'shipments.edit',
+      'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
+      'invoices.view', 'invoices.create', 'invoices.edit', 'invoices.cancel',
+      'payments.view', 'payments.create', 'payments.cancel',
+      'reports.view', 'reports.create',
+      'users.view',
+      'birthdays.view', 'programs.view',
+      'tracking.view',
+      'communications.view', 'communications.create', 'communications.test', 'communications.pause',
+      'communications.consents']
+    when 'employe' then array[
+      'clients.view', 'clients.create',
+      'shipments.view', 'shipments.create', 'shipments.edit',
+      'shipments.scan', 'shipments.change_status', 'shipments.view_history',
+      'invoices.view', 'payments.view',
+      'tracking.view']
+    when 'client' then array[
+      'clients.view:own', 'clients.edit:own',
+      'shipments.view:own', 'shipments.view_history:own',
+      'invoices.view:own', 'payments.view:own']
+    else array[]::text[]
+  end
+$$;
+
+
 -- 14. Contrôle (Phase 2) -------------------------------------------------------------------------------
--- Résultat attendu, en une ligne (après CE fichier seul) : tables 18 | permissions_admin 7 | permissions_gerant 5 |
+-- Résultat attendu, en une ligne (après CE fichier seul) : tables 19 | permissions_admin 7 | permissions_gerant 5 |
 -- employe 0 | tarifs 0 | indicatifs_autorises 0 | campagnes_actives false
 -- (18 = les 14 de la Phase 1.2 + communication_issues_http, communication_debit_minute,
---  communication_fuseaux_regions, communication_fuseaux_clients)
+--  communication_fuseaux_regions, communication_fuseaux_clients ; 19 avec communication_arret, 1.3.1)
 select (select count(*) from pg_tables where schemaname = 'public' and tablename like 'communication\_%') as tables,
        (select count(*) from unnest(public.permissions_du_role('admin')) p where p like 'communications.%') as permissions_admin,
        (select count(*) from unnest(public.permissions_du_role('gerant')) p where p like 'communications.%') as permissions_gerant,
