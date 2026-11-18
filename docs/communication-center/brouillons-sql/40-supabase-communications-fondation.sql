@@ -178,6 +178,7 @@ create table if not exists public.communication_arret (
   etat                     text not null default 'actif' check (etat in ('actif', 'arret_demande', 'arret_confirme')),
   demande_le               timestamptz,
   demande_par              uuid,
+  derniere_demande_le      timestamptz,      -- dernier appui sur « Arrêt », même déjà arrêté (IR2-03)
   motif                    text check (motif is null or length(motif) between 5 and 300),
   autorisations_closes_le  timestamptz,      -- N0 exclusif obtenu avec ou après la demande
   confirme_le              timestamptz,
@@ -195,6 +196,20 @@ create table if not exists public.communication_arret (
                                        and autorisations_closes_le >= demande_le))
 );
 insert into public.communication_arret (id) values (true) on conflict (id) do nothing;
+-- La ligne ne s'efface jamais (IR2-11) : sans elle, la porte refuserait tout (état illisible),
+-- et les fonctions d'arrêt lèvent une erreur au lieu de répondre.
+create or replace function public.communication_arret_permanent()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception 'ARRET_LIGNE_PERMANENTE';
+end;
+$$;
+drop trigger if exists communication_arret_permanent on public.communication_arret;
+create trigger communication_arret_permanent before delete or truncate on public.communication_arret
+  for each statement execute function public.communication_arret_permanent();
 alter table public.communication_arret enable row level security;
 revoke all on public.communication_arret from anon, authenticated, service_role;
 
@@ -370,25 +385,37 @@ declare
   v_arret text;
   v_raison text;
 begin
+  -- Revue n° 2 (IR2-10) : la démonstration suppose READ COMMITTED (chaque requête voit ce qui a été
+  -- validé avant elle) ; vérifié ICI, à la porte, pour toutes les sorties
+  if current_setting('transaction_isolation') <> 'read committed' then
+    raise exception 'ISOLATION_NON_SUPPORTEE';
+  end if;
   perform public.communication_verrou_interrupteurs(false);                      -- N0 partagé
   select a.etat into v_arret from public.communication_arret a;                 -- APRÈS le verrou
   select * into r from public.communication_reglages;
   v_raison := public.communication_interrupteur_ferme(r, v_arret, p_nature, p_canal);
+  -- IR2-12 : compte Brevo partagé avec le transactionnel = aucun e-mail commercial ni de
+  -- confirmation, à CHAQUE sortie (pas seulement à l'allumage du canal)
+  if v_raison is null and p_canal = 'email' and r.brevo_compte_partage
+     and coalesce(nullif(public.lire_reglage('communication_email_fournisseur'), ''), 'brevo') = 'brevo' then
+    v_raison := 'COMPTE_BREVO_PARTAGE';
+  end if;
   if v_raison is null then
-    perform set_config('goship.sortie_autorisee', txid_current()::text, true);
+    -- La marque porte la transaction, la nature et le canal autorisés (IR2-10)
+    perform set_config('goship.sortie_autorisee', txid_current()::text || ':' || p_nature || ':' || p_canal, true);
   end if;
   return v_raison;
 end;
 $$;
 
 -- Vraie seulement dans une transaction qui est passée par la porte, avec succès.
-create or replace function public.communication_sortie_autorisee()
+create or replace function public.communication_sortie_autorisee(p_nature text, p_canal text)
 returns boolean
 language sql
 volatile
 set search_path = ''
 as $$
-  select coalesce(current_setting('goship.sortie_autorisee', true), '') = txid_current()::text
+  select coalesce(current_setting('goship.sortie_autorisee', true), '') = txid_current()::text || ':' || p_nature || ':' || p_canal
 $$;
 
 
@@ -1112,6 +1139,15 @@ begin
       insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, avant, execute_par)
       values (d.id, 'communication_consentements', 'anonymiser', v_n, v_avant, auth.uid());
     elsif d.categorie = 'confirmations' then
+      -- 1.3.1 (revue n° 2, IR2-05) : les e-mails de confirmation jamais partis (interrupteur éteint)
+      -- sont d'abord écartés ; un e-mail EN COURS de remise fait refuser la purge (à refaire)
+      if exists (select 1 from public.communication_envois e join public.communication_confirmations f on f.id = e.confirmation_id
+                  where f.cree_le < v_avant and e.statut = 'traitement') then
+        perform public.erreur_metier('PURGE_RETRY', 'Un e-mail de confirmation est en cours de remise : réessayez dans quelques minutes.');
+      end if;
+      update public.communication_envois e set statut = 'supprime', code_erreur = 'CONFIRMATION_PURGEE', maj_le = now()
+        from public.communication_confirmations f
+       where f.id = e.confirmation_id and f.cree_le < v_avant and e.statut in ('attente', 'nouvel_essai');
       delete from public.communication_confirmations where cree_le < v_avant;
       get diagnostics v_n = row_count;
       insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, avant, execute_par)
@@ -1122,6 +1158,13 @@ begin
     end if;
   else
     perform public.communication_verrou('client:' || d.client_id);                 -- N2
+    -- 1.3.1 (revue n° 2, IR2-07) : N3 aussi (e-mail puis WhatsApp) — aucune désinscription ni
+    -- confirmation de cette personne ne peut écrire pendant la purge
+    perform public.communication_verrou('consentement:' || d.client_id || ':email');
+    perform public.communication_verrou('consentement:' || d.client_id || ':whatsapp');
+    if exists (select 1 from public.communication_envois e where e.client_id = d.client_id and e.statut = 'traitement') then
+      perform public.erreur_metier('PURGE_RETRY', 'Un message à cette personne est en cours de remise : réessayez dans quelques minutes.');
+    end if;
     -- Les empreintes de la personne, recueillies AVANT d'effacer les liens (C5). 1.3.1 (IR-07) :
     -- aussi celles prises par le déclencheur à la suppression du compte (d.empreintes), des
     -- audiences et des suppressions — le profil est déjà vidé à ce moment-là.
@@ -1178,9 +1221,10 @@ revoke execute on function public.communication_verrou(text) from public, anon, 
 revoke execute on function public.communication_verrou_interrupteurs(boolean) from public, anon, authenticated, service_role;
 revoke execute on function public.communication_interrupteur_ferme(public.communication_reglages, text, text, text) from public, anon, authenticated, service_role;
 revoke execute on function public.communication_autoriser_sortie(text, text) from public, anon, authenticated, service_role;
-revoke execute on function public.communication_sortie_autorisee() from public, anon, authenticated, service_role;
+revoke execute on function public.communication_sortie_autorisee(text, text) from public, anon, authenticated, service_role;
 revoke execute on function public.communication_fuseau_valide(text) from public, anon, authenticated, service_role;
 revoke execute on function public.communication_fuseau(uuid, text) from public, anon, authenticated, service_role;
+revoke execute on function public.communication_arret_permanent() from public, anon, authenticated, service_role;
 revoke execute on function public.communication_territoire(text) from public, anon, authenticated, service_role;
 revoke execute on function public.communication_etat_consentement(uuid, text) from public, anon, authenticated, service_role;
 revoke execute on function public.communication_consentement_actuel(uuid, text) from public, anon, authenticated, service_role;

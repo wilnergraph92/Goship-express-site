@@ -727,7 +727,8 @@ begin
   end if;
   -- 1.3.1 (IR-23) : dans le plan nord-américain (+1), un territoire se lit sur 4 chiffres au moins
   -- (1 + indicatif régional) : « 1 » ou « 18 » classeraient d'un coup Canada et Caraïbes en « US »
-  if p_prefixe like '1%' and length(p_prefixe) < 4 and p_territoire <> 'NANP_AUTRE' then
+  -- Revue n° 2 (IR2-09) : y compris « NANP_AUTRE » autorisé (cela ouvrirait tout le +1 non classé)
+  if p_prefixe like '1%' and length(p_prefixe) < 4 and (p_territoire <> 'NANP_AUTRE' or p_autorise) then
     perform public.erreur_metier('PREFIX_TOO_SHORT', 'Un indicatif +1 se classe sur 4 chiffres au moins (exemple : 1305).');
   end if;
   insert into public.communication_indicatifs (prefixe, territoire, autorise_marketing, verifie, preuve, verifie_par, verifie_le)
@@ -870,7 +871,8 @@ begin
     perform public.erreur_metier('REASON_REQUIRED', 'Un motif d''au moins 5 caractères.');
   end if;
   update public.communication_demandes_purge
-     set statut = case when p_accepter then 'approuvee' else 'refusee' end, approuvee_par = auth.uid(), approuvee_le = now()
+     set statut = case when p_accepter then 'approuvee' else 'refusee' end, approuvee_par = auth.uid(), approuvee_le = now(),
+         empreintes = case when p_accepter then empreintes end    -- refusée : les empreintes ne servent plus (IR2-15)
    where id = d.id;
   perform set_config('goship.motif', trim(p_motif), true);
   perform public.auditer('communication.purge_' || case when p_accepter then 'approuvee' else 'refusee' end,
@@ -910,6 +912,9 @@ declare
   v_partages integer;
 begin
   select * into a from public.communication_arret;               -- verrouillée par l'appelant
+  if not found then
+    raise exception 'ARRET_LIGNE_ABSENTE';                       -- jamais « confirmé » sur une table vide (IR2-11)
+  end if;
   if a.etat = 'actif' then
     return jsonb_build_object('etat', 'STOP_NOT_REQUESTED');
   end if;
@@ -932,7 +937,9 @@ begin
     update public.communication_arret
        set autorisations_closes_le = clock_timestamp(), maj_le = clock_timestamp();
   end if;
-  -- (2) Les requêtes déjà validées encore chez pg_net (43 §13, lecture seule de pg_net)
+  -- (2) Les requêtes déjà validées qui peuvent encore partir (43 §13, lecture seule de pg_net) —
+  -- comptées par requête, à partir du moment où on les a VUES quitter la file (IR2-01)
+  perform public.communication_observer_sorties();
   v_transmissions := public.communication_transmissions_en_cours();
   if v_transmissions > 0 then
     update public.communication_arret
@@ -985,14 +992,23 @@ begin
     return jsonb_build_object('etat', 'STOP_NOT_CONFIRMED', 'raison', 'ARRET_CONCURRENT_EN_COURS',
                               'conseil', 'Réessayez : un autre arrêt ou une levée est en cours.');
   end;
+  if not found then
+    raise exception 'ARRET_LIGNE_ABSENTE';
+  end if;
   perform set_config('lock_timeout', '0', true);
+  -- 1.3.1 (revue n° 2, IR2-03) : CHAQUE appui est daté et journalisé, même si l'arrêt est déjà
+  -- demandé ou confirmé — une levée commencée avant cet appui le verra et refusera
+  update public.communication_arret set derniere_demande_le = clock_timestamp(), maj_le = clock_timestamp();
+  perform set_config('goship.motif', left(trim(p_motif), 300), true);
+  perform public.auditer('communication.arret_appui', 'communication_arret', 'arret', null,
+                         jsonb_build_object('etat', a.etat, 'n0_exclusif', v_n0));
   -- 3. La DEMANDE, écrite si elle ne l'est pas déjà (jamais « confirmée » ici)
   if a.etat = 'actif' then
     update public.communication_arret
-       set etat = 'arret_demande', demande_le = clock_timestamp(), demande_par = auth.uid(), motif = trim(p_motif),
+       set etat = 'arret_demande', demande_le = clock_timestamp(), demande_par = auth.uid(),
+           motif = left(trim(p_motif), 300),                          -- jamais d'échec à cause du texte (IR2-04)
            autorisations_closes_le = null, confirme_le = null, tentatives = 0, derniere_tentative_le = null,
            derniere_raison = null, leve_le = null, leve_par = null, motif_levee = null, maj_le = clock_timestamp();
-    perform set_config('goship.motif', trim(p_motif), true);
     perform public.auditer('communication.arret_demande', 'communication_arret', 'arret', null,
                            jsonb_build_object('n0_exclusif', v_n0));
   end if;
@@ -1029,6 +1045,9 @@ begin
   exception when lock_not_available then
     return jsonb_build_object('etat', 'STOP_NOT_CONFIRMED', 'raison', 'ARRET_CONCURRENT_EN_COURS');
   end;
+  if not found then
+    raise exception 'ARRET_LIGNE_ABSENTE';
+  end if;
   perform set_config('lock_timeout', '0', true);
   return public.communication_conclure_arret(v_n0) || jsonb_build_object('n0_exclusif_obtenu', v_n0);
 end;
@@ -1084,15 +1103,25 @@ set search_path = ''
 as $$
 declare
   a public.communication_arret;
+  v_debut timestamptz := clock_timestamp();
 begin
   perform public.exiger_permission('communications.manage');
   if length(trim(coalesce(p_motif, ''))) < 10 then
     perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi l''envoi peut reprendre (10 caractères au moins).');
   end if;
+  perform set_config('lock_timeout', '5s', true);                -- IR2-03 : jamais d'attente sans fin
   perform public.communication_verrou_interrupteurs(true);
   select * into a from public.communication_arret for update;
+  if not found then
+    raise exception 'ARRET_LIGNE_ABSENTE';
+  end if;
   if a.etat = 'actif' then
     perform public.erreur_metier('INVALID_TRANSITION', 'Aucun arrêt d''urgence en cours.');
+  end if;
+  -- IR2-03 : quelqu'un a appuyé sur « Arrêt » pendant que cette levée attendait : on ne lève PAS
+  if a.derniere_demande_le > v_debut then
+    perform public.erreur_metier('STOP_REQUESTED_DURING_LIFT',
+      'Un arrêt a été demandé pendant la levée : vérifiez la situation avant de relever.');
   end if;
   update public.communication_arret
      set etat = 'actif', autorisations_closes_le = null, confirme_le = null, leve_le = clock_timestamp(),

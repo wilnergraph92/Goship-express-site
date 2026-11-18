@@ -127,7 +127,7 @@ begin
 end;
 $$;
 drop trigger if exists communication_modele_fige on public.communication_modeles;
-create trigger communication_modele_fige before update on public.communication_modeles
+create trigger communication_modele_fige before insert or update on public.communication_modeles
   for each row execute function public.communication_modele_fige();
 
 -- Les variables permises aujourd'hui, par canal.
@@ -308,7 +308,7 @@ declare
 begin
   -- Phase 1.3.1 : une requête vers Meta est une SORTIE ; elle exige d'être passée par la porte
   -- (communication_autoriser_sortie('lecture_meta', 'whatsapp')) dans CETTE transaction.
-  if not public.communication_sortie_autorisee() then
+  if not public.communication_sortie_autorisee('lecture_meta', 'whatsapp') then
     raise exception 'SORTIE_NON_AUTORISEE';
   end if;
   select * into m from public.communication_modeles where id = p_modele;
@@ -546,9 +546,12 @@ begin
   end if;
   if p_canal = 'whatsapp' then
     v_territoire := public.communication_territoire(v_cible);
-    if v_territoire is null or not exists (select 1 from public.communication_indicatifs i
-                                            where i.territoire = v_territoire and i.autorise_marketing and i.verifie
-                                              and v_cible like i.prefixe || '%') then
+    -- Revue n° 2 (IR2-09) : l'autorisation est celle du préfixe LE PLUS LONG qui correspond au
+    -- numéro, pas « un préfixe quelconque du même territoire »
+    if v_territoire is null or not coalesce((select i.autorise_marketing and i.verifie
+                                               from public.communication_indicatifs i
+                                              where v_cible like i.prefixe || '%'
+                                              order by length(i.prefixe) desc limit 1), false) then
       return 'TERRITOIRE_NON_AUTORISE';
     end if;
     if not exists (select 1 from public.communication_tarifs t where t.fournisseur = 'meta' and t.canal = 'whatsapp'
@@ -662,6 +665,8 @@ begin
     'nom_expediteur', coalesce(public.lire_reglage('communication_nom'), ''),
     'numero_whatsapp', encode(extensions.digest(coalesce(public.lire_reglage('communication_whatsapp_numero_id'), ''), 'sha256'), 'hex'),
     'fournisseur_email', coalesce(public.lire_reglage('communication_email_fournisseur'), ''),
+    'compte_email', encode(extensions.digest(coalesce(public.lire_reglage('communication_email_cle_api'), ''), 'sha256'), 'hex'),
+    'version_whatsapp', coalesce(public.lire_reglage('whatsapp_version'), ''),
     'url_un_clic', coalesce(public.lire_reglage('communication_url_un_clic'), ''),
     'site_url', coalesce(public.lire_reglage('site_url'), ''),
     'habillage', 'habillage-commercial-v1',
@@ -670,7 +675,9 @@ begin
               where n.nspname = 'public'
                 and p.proname in ('communication_courriel_commercial', 'communication_rendre', 'communication_valeurs_client',
                                   'communication_textes_pied', 'communication_appel_email', 'communication_appel_whatsapp',
-                                  'communication_jeton_desinscription')),
+                                  'communication_jeton_desinscription', 'communication_traiter_un',
+                                  'communication_textes_confirmation', 'communication_raison_exclusion',
+                                  'communication_parametre_whatsapp_invalide')),
     'textes_pied', encode(extensions.digest(public.communication_textes_pied_tous()::text, 'sha256'), 'hex'),
     'adresse_miami', case when r.adresse_miami_validee then public.adresse_miami() end);
 end;

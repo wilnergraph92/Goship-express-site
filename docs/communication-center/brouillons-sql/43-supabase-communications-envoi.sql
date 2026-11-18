@@ -104,6 +104,12 @@ create table if not exists public.communication_envois (
   -- numéro WhatsApp comptaient coalesce(envoye_le, verrouille_le), or verrouille_le est remis à
   -- vide à la lecture de la réponse — un message « incertain » cessait d'être compté.
   remis_le          timestamptz,
+  -- 1.3.1 (revue n° 2, IR2-01) : premier instant où NOUS avons vu la requête absente de la file de
+  -- pg_net. Le délai HTTP de pg_net court à partir de sa prise en charge, que nous ne connaissons
+  -- pas : on part de cette observation (toujours POSTÉRIEURE ou égale à la prise en charge, donc
+  -- prudente). Tant qu'elle manque, la requête compte comme « en transmission ».
+  sortie_file_vue_le timestamptz,
+  -- La requête pg_net n'est JAMAIS effacée tant qu'elle n'est pas résolue (IR2-02)
   requete           bigint,
   message_id        text,
   empreinte_contenu text,                                     -- SHA-256 du contenu réellement envoyé
@@ -130,6 +136,8 @@ create index if not exists communication_envois_client_idx on public.communicati
 create index if not exists communication_envois_campagne_idx on public.communication_envois (campagne_id, statut);
 create index if not exists communication_envois_destinataire_idx on public.communication_envois (destinataire_id);
 create index if not exists communication_envois_confirmation_idx on public.communication_envois (confirmation_id) where confirmation_id is not null;
+create index if not exists communication_envois_auth_idx
+  on public.communication_envois (fournisseur, maj_le) where code_erreur like 'AUTH_FOURNISSEUR%';
 create index if not exists communication_envois_incertains_idx on public.communication_envois (maj_le) where statut = 'incertain' and incertain_clos_le is null;
 alter table public.communication_envois enable row level security;
 revoke all on public.communication_envois from anon, authenticated, service_role;
@@ -436,8 +444,9 @@ declare
   v_delai integer := (select delai_http_ms from public.communication_reglages);
   v_requete bigint;
 begin
-  -- Phase 1.3.1 : aucune requête sans être passé par la porte, dans CETTE transaction
-  if not public.communication_sortie_autorisee() then
+  -- Phase 1.3.1 : aucune requête sans être passé par la porte, dans CETTE transaction, pour CETTE
+  -- nature et CE canal
+  if not public.communication_sortie_autorisee(p_envoi.nature, 'email') then
     raise exception 'SORTIE_NON_AUTORISEE';
   end if;
   select * into cl from public.clients where id = p_envoi.client_id;
@@ -494,7 +503,7 @@ declare
   v_delai integer := (select delai_http_ms from public.communication_reglages);
   v_requete bigint;
 begin
-  if not public.communication_sortie_autorisee() then              -- Phase 1.3.1 : la porte
+  if not public.communication_sortie_autorisee(p_envoi.nature, 'whatsapp') then   -- Phase 1.3.1 : la porte
     raise exception 'SORTIE_NON_AUTORISEE';
   end if;
   if coalesce(v_jeton, '') = '' or coalesce(v_numero_id, '') = '' then
@@ -675,6 +684,7 @@ declare
   x record;
   v_lus integer := 0;
 begin
+  perform public.communication_observer_sorties();
   -- Seulement des lignes « traitement » (N4), sans autre verrou : aucun cycle possible
   for e in select * from public.communication_envois where statut = 'traitement'
             order by verrouille_le limit 200 for update skip locked loop
@@ -682,10 +692,9 @@ begin
     if found then
       perform public.communication_lire_reponse(e, x.status_code, x.content, x.error_msg);
       v_lus := v_lus + 1;
-    elsif e.verrouille_le < now() - interval '10 minutes'
-          -- 1.3.1 (IR-15) : jamais « incertain » tant que la requête est ENCORE dans la file de pg_net
-          -- (elle peut partir plus tard) : on attend qu'elle l'ait quittée
-          and not exists (select 1 from net.http_request_queue q where q.id = e.requete) then
+    elsif not public.communication_en_transmission(e.requete, e.sortie_file_vue_le) then
+      -- 1.3.1 (IR-15, IR2-01) : « incertain » seulement quand l'appel est FORCÉMENT terminé :
+      -- sorti de la file (vu par nous) depuis plus que le délai HTTP + 60 s, sans réponse
       perform public.communication_lire_reponse(e, null, null, 'SANS_REPONSE');
       v_lus := v_lus + 1;
     end if;
@@ -927,7 +936,8 @@ begin
     -- 1.3.1 (IR-20) : le fournisseur a refusé la clé ou le compte dans l'heure : pause (N1 tenu)
     if exists (select 1 from public.communication_envois x
                 where x.fournisseur = e.fournisseur and x.code_erreur like 'AUTH_FOURNISSEUR%'
-                  and x.maj_le > now() - interval '1 hour') then
+                  -- IR2-14 : seulement depuis la dernière reprise de la campagne (pas de boucle de pauses)
+                  and x.maj_le > greatest(now() - interval '1 hour', c.maj_le)) then
       update public.communication_campagnes set statut = 'en_pause', arret_motif = 'AUTH_FOURNISSEUR', maj_le = now() where id = c.id;
       return 'AUTH_FOURNISSEUR';
     end if;
@@ -1412,6 +1422,16 @@ begin
        where fournisseur = p_fournisseur and message_id = p ->> 'message_id';
     end if;
   end if;
+  -- 1.3.1 (revue n° 2, IR2-06) : un message entrant dont on ne peut pas calculer l'empreinte
+  -- (poivre absent, numéro manquant) lève une ERREUR : rien n'est enregistré, pas même le rejeu,
+  -- la fonction Edge répond 5xx et le fournisseur réessaie. Avant, la ligne de rejeu était
+  -- validée et le STOP réessayé était pris pour un doublon : perdu pour toujours.
+  if v_type = 'inbound' then
+    v_empreinte := public.communication_empreinte('whatsapp', p ->> 'telephone');
+    if v_empreinte is null then
+      raise exception 'EMPREINTE_INDISPONIBLE';
+    end if;
+  end if;
   -- Rejeu : l'identifiant de l'événement est unique ; un événement déjà reçu ne refait rien.
   -- 1.3.1 (IR-07) : pour un message ENTRANT, ni son identifiant chez Meta ni rien qui le relie au
   -- numéro n'est gardé — seulement l'empreinte SHA-256 de son identifiant, pour le rejeu.
@@ -1430,10 +1450,6 @@ begin
 
   -- Message entrant (WhatsApp) : fenêtre de 24 h, STOP, confirmation. Le contenu n'est jamais gardé.
   if v_type = 'inbound' then
-    v_empreinte := public.communication_empreinte('whatsapp', p ->> 'telephone');
-    if v_empreinte is null then
-      return jsonb_build_object('ok', false);
-    end if;
     if v_survenu is not null then
       insert into public.communication_fenetres_whatsapp (cible_empreinte, dernier_entrant)
       values (v_empreinte, least(v_survenu, now()))
@@ -1619,6 +1635,14 @@ begin
   -- fournisseurs, qui prennent N3 puis insèrent) — sinon un clic et une plainte simultanés
   -- s'attendaient l'un l'autre sur l'index unique des suppressions.
   perform public.communication_verrou('consentement:' || e.client_id || ':' || e.canal);
+  -- IR2-07 : RELU sous N3 — une purge a pu passer entre la première lecture et le verrou
+  select * into e from public.communication_envois where id = v_id;
+  if e.cle like 'efface:%' then
+    return jsonb_build_object('ok', true, 'canal', e.canal, 'efface', true);
+  end if;
+  if e.cible_empreinte is null then
+    return jsonb_build_object('ok', false, 'lien_expire', true, 'canal', e.canal);
+  end if;
   insert into public.communication_suppressions (canal, cible_empreinte, client_id, raison, source)
   values (e.canal, e.cible_empreinte, e.client_id, 'desinscription', 'lien')
   on conflict do nothing;
@@ -1709,7 +1733,8 @@ begin
      where cree_le < p_avant and statut not in ('attente', 'traitement', 'nouvel_essai') and client_id is not null
      order by id for update;
     update public.communication_envois
-       set client_id = null, message_id = null, requete = null, empreinte_contenu = null
+       set client_id = null, message_id = null, empreinte_contenu = null,
+           requete = case when public.communication_en_transmission(requete, sortie_file_vue_le) then requete end
      where cree_le < p_avant and statut not in ('attente', 'traitement', 'nouvel_essai')
        and (client_id is not null or cible_empreinte is not null or message_id is not null);
   elsif p_categorie = 'destinataires' then
@@ -1784,8 +1809,8 @@ begin
   -- verrouillées d'abord par identifiant croissant, comme l'annulation de campagne.
   perform 1 from public.communication_envois where client_id = p_client order by id for update;
   update public.communication_envois
-     set client_id = null, message_id = null, requete = null, cible_empreinte = null, empreinte_contenu = null,
-         cle = 'efface:' || id,
+     set client_id = null, message_id = null, cible_empreinte = null, empreinte_contenu = null,
+         cle = 'efface:' || id,                    -- « requete » GARDÉE : pas une donnée personnelle (IR2-02)
          statut = case when statut in ('attente', 'nouvel_essai') then 'supprime' else statut end,
          code_erreur = case when statut in ('attente', 'nouvel_essai') then 'EFFACEMENT' else code_erreur end
    where client_id = p_client;
@@ -1818,13 +1843,52 @@ $$;
 
 
 -- 13. Santé et planificateur -------------------------------------------------------------------------------
--- Les requêtes DÉJÀ VALIDÉES qui n'ont peut-être pas encore quitté la base (Phase 1.3.1). Lecture
--- SEULE des tables de pg_net (rien n'y est écrit, ni effacé : pg_net est partagé avec le
--- transactionnel). Une requête est encore « en transmission » tant que : elle est dans la file de
--- pg_net ; OU elle n'a pas de réponse ET son délai HTTP (delai_http_ms) + 60 s n'est pas écoulé
--- depuis sa remise (pg_net l'a peut-être prise et l'appel est en cours). Au-delà, pg_net a
--- terminé ou abandonné l'appel. Hypothèses à éprouver sur la version de pg_net installée
--- (0.20.4 en production, rapporté) : nom et clé de net.http_request_queue, application du délai.
+-- Les requêtes DÉJÀ VALIDÉES qui peuvent encore partir (Phase 1.3.1, corrigé après la revue
+-- indépendante n° 2, IR2-01 : la version précédente faisait partir le délai du DÉPÔT de la
+-- requête ; une file pg_net en retard pouvait alors laisser croire « plus rien en route » pendant
+-- qu'un appel commençait). Lecture SEULE des tables de pg_net (rien n'y est écrit ni effacé).
+-- Une requête est « en transmission » tant qu'elle n'a pas de réponse ET :
+--   · elle est encore dans la file de pg_net, OU
+--   · nous ne l'avons pas encore VUE hors de la file, OU
+--   · nous l'avons vue hors de la file depuis moins que le délai HTTP + 60 s.
+-- Au-delà, pg_net a forcément terminé ou abandonné l'appel (délai appliqué par pg_net : rapporté,
+-- à éprouver). Compté PAR REQUÊTE, quel que soit le statut de l'envoi (un retour tardif d'une
+-- tentative précédente ne la fait plus disparaître).
+create or replace function public.communication_en_transmission(p_requete bigint, p_sortie_vue timestamptz)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p_requete is not null
+     and not exists (select 1 from net._http_response x where x.id = p_requete)
+     and (exists (select 1 from net.http_request_queue q where q.id = p_requete)
+          or p_sortie_vue is null
+          or p_sortie_vue > now() - make_interval(secs => (select r.delai_http_ms from public.communication_reglages r) / 1000.0 + 60))
+$$;
+
+-- Noter le premier instant où une requête est vue hors de la file (appelée par la lecture des
+-- réponses et par le constat d'arrêt, avant de compter). Lignes en « skip locked ».
+create or replace function public.communication_observer_sorties()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_n integer;
+begin
+  update public.communication_envois set sortie_file_vue_le = clock_timestamp()
+   where id in (select e.id from public.communication_envois e
+                 where e.requete is not null and e.sortie_file_vue_le is null
+                   and not exists (select 1 from net.http_request_queue q where q.id = e.requete)
+                 for update skip locked);
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
 create or replace function public.communication_transmissions_en_cours()
 returns integer
 language sql
@@ -1832,12 +1896,9 @@ stable
 security definer
 set search_path = ''
 as $$
-  select count(*)::integer
-    from public.communication_envois e
-   where e.statut = 'traitement' and e.requete is not null
-     and not exists (select 1 from net._http_response x where x.id = e.requete)
-     and (exists (select 1 from net.http_request_queue q where q.id = e.requete)
-          or e.remis_le > now() - make_interval(secs => (select r.delai_http_ms from public.communication_reglages r) / 1000.0 + 60))
+  select count(*)::integer from public.communication_envois e
+   where e.requete is not null and e.remis_le is not null
+     and public.communication_en_transmission(e.requete, e.sortie_file_vue_le)
 $$;
 
 create or replace function public.sante_communications()
@@ -1931,6 +1992,7 @@ begin
     'public.communication_demander_envoi_confirmation(bigint)',
     'public.communication_lire_reponses()', 'public.communication_preparer()', 'public.communication_candidats()',
     'public.communication_rafraichir_modeles_meta()', 'public.communication_transmissions_en_cours()',
+    'public.communication_en_transmission(bigint, timestamptz)', 'public.communication_observer_sorties()',
     'public.communication_traiter_un(bigint)', 'public.communication_clore_campagnes()',
     'public.communication_nettoyer_compteurs()',
     'public.communication_mot_simple(text)', 'public.communication_est_stop(text)',
