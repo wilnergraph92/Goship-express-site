@@ -1,21 +1,41 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.2 (18/11/2026) : corrections de la revue Phase 1.1.
+-- Version Phase 1.3 (18/11/2026) : corrections techniques et durcissement
+-- (docs/communication-center/PHASE_1_3_TECHNICAL_CORRECTIONS.md), après la revue 1.1 et 1.2.
 -- =============================================================================
 -- Ce fichier est un BROUILLON de conception, rangé dans docs/ (jamais publié, jamais
 -- dans outils/migrations.txt). Il n'a été exécuté sur AUCUNE base, même jetable : les
--- Phases 1, 1.1 et 1.2 n'autorisent aucune exécution. La garde ci-dessous arrête tout de
--- suite une exécution par erreur (le SQL Editor envoie le fichier en une seule
--- transaction : rien de ce qui suit ne serait appliqué).
+-- Phases 1 à 1.3 n'autorisent aucune exécution.
+--
+-- La garde a TROIS couches (Phase 1.3, correction 8) — aucune ne suffit seule :
+--   1. le bloc DO ci-dessous lève une exception : dans un client qui envoie le fichier en
+--      une transaction (SQL Editor, psql --single-transaction, psql -v ON_ERROR_STOP=1),
+--      rien de ce qui suit n'est appliqué ;
+--   2. TOUT le contenu du brouillon est ensuite enfermé dans UNE chaîne de caractères
+--      ($brouillon_goship_non_executable$ … $brouillon_goship_non_executable$) : même un
+--      client qui continue après une erreur (psql sans ON_ERROR_STOP, en autocommit) ne
+--      reçoit qu'un SELECT d'un texte. Rien n'est créé ;
+--   3. la garde « BROUILLON » d'origine est gardée en tête du contenu, pour qui le
+--      recopierait hors de la chaîne.
+-- Limite connue : un outil qui découpe le texte sur « ; » sans comprendre les dollar-quotes
+-- et continue après erreur pourrait exécuter des morceaux du contenu. Les brouillons ne
+-- se passent à aucun outil de ce genre ; protocole d'épreuve : PHASE_1_3_TEST_PLAN.md (T-14).
 --
 -- En Phase 2, et seulement après accord écrit du CEO, il deviendra
--- outils/supabase-communications-fondation.sql, avec la garde habituelle « base
--- incomplète » à la place de celle-ci, et sera éprouvé d'abord sur une base jetable
--- (plan : docs/communication-center/COMMUNICATION_CENTER_TESTING.md).
+-- outils/supabase-communications-fondation.sql, SANS la chaîne englobante, avec la garde
+-- habituelle « base incomplète », et sera éprouvé d'abord sur une base jetable.
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.2) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+end;
+$brouillon$;
+
+select $brouillon_goship_non_executable$
+-- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
+do $brouillon$
+begin
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -150,8 +170,31 @@ create table if not exists public.communication_reglages (
   -- (« écrivez OUI 1234 au … »). BLOQUÉ (null) tant que le CEO n'a pas choisi entre un numéro
   -- dédié et la Coexistence (décision C4) : le recueil WhatsApp reste fermé.
   whatsapp_numero_affiche     text check (whatsapp_numero_affiche is null or whatsapp_numero_affiche ~ '^\+[0-9]{8,15}$'),
+  -- Le quota vérifié ne vaut que pour un temps : au-delà, il redevient NON VÉRIFIÉ (1.3, C3).
+  -- Choix de conception de GoShip, pas une règle de Brevo : à confirmer par le CEO.
+  brevo_quota_validite_jours  integer not null default 30 check (brevo_quota_validite_jours between 1 and 90),
+  -- ARRÊT D'URGENCE (Phase 1.3, correction 1) : coupe TOUT ce que le Centre envoie (campagnes,
+  -- e-mails de confirmation, lectures de modèles chez Meta), pour tous les travailleurs, dès
+  -- qu'il est écrit. Posé par arreter_communications (communications.pause : administrateur
+  -- et gérant), levé seulement par lever_arret_communications (communications.manage).
+  arret_urgence               boolean not null default false,
+  arret_motif                 text,
+  arret_le                    timestamptz,
+  arret_par                   uuid,
   -- Débit, délais, fenêtres d'envoi (heure locale du destinataire), fréquence
+  -- lot_par_minute : taille d'UN passage du travailleur. debit_max_minute : plafond GLOBAL
+  -- (tous travailleurs, tous canaux) d'envois remis au fournisseur par minute, compté sous le
+  -- verrou des compteurs (1.3, C3). Valeur de conception, PAS une limite du fournisseur : elle
+  -- devra rester sous les limites documentées de Brevo et de Meta, non vérifiées à ce jour.
   lot_par_minute              integer not null default 20 check (lot_par_minute between 1 and 200),
+  debit_max_minute            integer not null default 20 check (debit_max_minute between 1 and 600),
+  -- Marge avant la fin de la fenêtre horaire : pg_net envoie APRÈS la validation, quelques
+  -- secondes plus tard ; on n'entame donc pas un envoi dans les dernières minutes (1.3, C6).
+  marge_fenetre_min           integer not null default 15 check (marge_fenetre_min between 0 and 120),
+  -- Retours des fournisseurs : au-delà de ce nombre d'appels par minute et par fournisseur, la
+  -- base répond « saturé » sans rien traiter (1.3, C7) ; la fonction Edge répond alors une
+  -- erreur temporaire pour que le fournisseur réessaie (comportement de réessai À VÉRIFIER).
+  webhook_max_minute          integer not null default 600 check (webhook_max_minute between 10 and 10000),
   delai_http_ms               integer not null default 20000 check (delai_http_ms between 5000 and 60000),
   heure_debut                 integer not null default 9  check (heure_debut between 0 and 23),
   heure_fin                   integer not null default 19 check (heure_fin between 1 and 24),
@@ -263,14 +306,71 @@ as $$
   end
 $$;
 
--- Les verrous (revue 1.1, H1, H4, H6) : un verrou de transaction par sujet, toujours pris
--- dans le même ordre (jour, puis client) pour éviter les interblocages.
+-- Les verrous (revue 1.1, H1, H4, H6 ; Phase 1.3, correction 2). Verrous de TRANSACTION
+-- (relâchés au COMMIT ou à l'annulation). ORDRE UNIQUE, pour TOUTES les fonctions du Centre ;
+-- une transaction peut sauter un niveau, jamais revenir en arrière :
+--   N0  interrupteurs   verrou consultatif « interrupteurs » : PARTAGÉ par toute transaction
+--                       qui envoie ou prépare un envoi ; EXCLUSIF pour qui écrit un interrupteur
+--                       ou un réglage d'envoi (arrêt d'urgence compris)
+--   N1  campagne        la ligne de communication_campagnes (FOR UPDATE)
+--   N2  client          verrou consultatif « client:<id> »
+--   N3  consentement    verrou consultatif « consentement:<client>:<canal> » ; plusieurs
+--                       clients dans une même transaction : par identifiant CROISSANT
+--   N4  envoi           la ligne de communication_envois (FOR UPDATE)
+--   N5  compteurs       verrou consultatif « compteurs » (global) : dépenses du jour, débit par
+--                       minute, quota Brevo, plafonds de campagne, limite du numéro WhatsApp
+-- Le travailleur traite UN envoi par transaction (43 §8) : il ne garde jamais les verrous
+-- d'un envoi en prenant ceux du suivant. Avant la Phase 1.3, il prenait « client » puis
+-- « jour » à chaque envoi, mais gardait « jour » jusqu'à la fin du lot : deux travailleurs
+-- pouvaient s'attendre l'un l'autre (interblocage) ; et il verrouillait l'envoi AVANT la
+-- campagne, quand l'annulation verrouille la campagne AVANT les envois.
 create or replace function public.communication_verrou(p_sujet text)
 returns void
 language sql
 set search_path = ''
 as $$
   select pg_advisory_xact_lock(hashtextextended('goship-communication:' || p_sujet, 0))
+$$;
+
+-- N0 : partagé (envois) ou exclusif (écriture d'un interrupteur). Un écrivain exclusif attend
+-- la fin des transactions d'envoi EN COURS (une seule ligne de file chacune, quelques
+-- millisecondes) ; toute transaction d'envoi qui commence ENSUITE attend qu'il ait fini, puis
+-- relit les réglages : l'arrêt a un instant précis, après lequel aucun envoi n'est validé.
+-- (Les demandes de verrou sont servies dans l'ordre d'arrivée par PostgreSQL : un écrivain en
+-- attente n'est pas doublé par de nouveaux lecteurs — à éprouver, PHASE_1_3_TEST_PLAN T-01/T-02.)
+create or replace function public.communication_verrou_interrupteurs(p_exclusif boolean)
+returns void
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if p_exclusif then
+    perform pg_advisory_xact_lock(hashtextextended('goship-communication:interrupteurs', 0));
+  else
+    perform pg_advisory_xact_lock_shared(hashtextextended('goship-communication:interrupteurs', 0));
+  end if;
+end;
+$$;
+
+-- Ce qui interdit un envoi, d'après les réglages LUS SOUS N0 : null = permis, sinon le code.
+-- Appelée deux fois par envoi : après N0 (décision) et sous N5 (dernier contrôle, qui voit aussi
+-- un arrêt écrit sans attendre le verrou, cf. arreter_communications, 41).
+create or replace function public.communication_interrupteur_ferme(r public.communication_reglages,
+                                                                   p_nature text, p_canal text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when r is null or r.arret_urgence is not false then 'ARRET_URGENCE'      -- réglages illisibles : fermé
+    when coalesce(p_canal, '') not in ('email', 'whatsapp')
+      or coalesce(p_nature, '') not in ('campagne', 'confirmation') then 'INCONNU'
+    when p_nature = 'campagne' and not r.campagnes_actives then 'CAMPAGNES_COUPEES'
+    when p_nature = 'confirmation' and not r.confirmations_actives then 'CONFIRMATIONS_COUPEES'
+    when p_canal = 'email' and not r.email_actif then 'EMAIL_COUPE'
+    when p_canal = 'whatsapp' and not r.whatsapp_actif then 'WHATSAPP_COUPE'
+  end
 $$;
 
 
@@ -393,8 +493,11 @@ create table if not exists public.communication_consentements (
   motif            text check (motif is null or length(motif) <= 300),
   anonymise_le     timestamptz,
   cree_le          timestamptz not null default clock_timestamp(),
+  -- Une ligne anonymisée peut perdre son empreinte de contact au second temps de la purge
+  -- (catégorie « empreintes », durée BLOQUÉE tant que le juriste ne l'a pas fixée ; 1.3, C5)
   check (action not in ('demande', 'confirme') or (texte_version is not null and texte_empreinte is not null
-                                                    and langue is not null and cible_empreinte is not null)),
+                                                    and langue is not null
+                                                    and (cible_empreinte is not null or anonymise_le is not null))),
   check (action <> 'demande' or source in ('compte_web', 'application')),
   check (action <> 'confirme' or source in ('lien_confirmation', 'whatsapp_confirmation')),
   check (action <> 'retire' or source in ('compte_web', 'application', 'lien_desinscription', 'whatsapp_stop',
@@ -591,11 +694,33 @@ on conflict (fournisseur, code) do nothing;
 alter table public.communication_codes_fournisseur enable row level security;
 revoke all on public.communication_codes_fournisseur from anon, authenticated;
 
+-- 9.3 Ce que prouve une réponse HTTP d'erreur d'un fournisseur (Phase 1.3, correction 4).
+-- Une réponse 5xx NE PROUVE PAS que le message a été refusé : le fournisseur a pu l'accepter
+-- puis échouer avant de répondre. Une 429 n'est un refus SÛR que si la documentation officielle
+-- du fournisseur le garantit. Sans ligne VÉRIFIÉE ici, la règle par défaut s'applique
+-- (communication_lire_reponse, 43 §6) :
+--   429 et 5xx → « incertain » (JAMAIS de nouvel essai automatique) ;
+--   autres 4xx → « echec » (requête refusée telle quelle : rien n'est parti).
+-- Une ligne n'entre qu'avec sa preuve (page officielle, date), par verifier_issue_http (41) ;
+-- aucune n'est créée par ce fichier.
+create table if not exists public.communication_issues_http (
+  fournisseur  text not null check (fournisseur in ('meta', 'brevo', 'resend')),
+  code_http    integer not null check (code_http between 400 and 599),
+  issue        text not null check (issue in ('rejet_temporaire', 'echec', 'incertain')),
+  preuve       text not null check (length(preuve) >= 10),
+  verifie_par  uuid not null,
+  verifie_le   timestamptz not null default now(),
+  primary key (fournisseur, code_http)
+);
+alter table public.communication_issues_http enable row level security;
+revoke all on public.communication_issues_http from anon, authenticated;
 
--- 10. Les dépenses du jour (revue 1.1, H1) ---------------------------------------------------------
--- Une ligne par jour, fournisseur et canal. Toute réservation prend D'ABORD le verrou du jour
--- (communication_verrou('depenses:<jour>')), PUIS fait la somme de toutes les lignes du jour,
--- PUIS augmente : deux travailleurs, même sur deux canaux, passent l'un après l'autre.
+
+-- 10. Les dépenses du jour et le débit (revue 1.1, H1 ; Phase 1.3, correction 3) ---------------
+-- Une ligne par jour, fournisseur et canal. Toute réservation prend D'ABORD le verrou GLOBAL
+-- des compteurs (N5, communication_verrou('compteurs')), PUIS relit les sommes, PUIS augmente,
+-- dans la même transaction d'UN envoi : deux travailleurs passent l'un après l'autre, et le
+-- second voit ce que le premier a validé (il ne prend le verrou qu'après son COMMIT).
 create table if not exists public.communication_depenses_jour (
   jour        date not null,
   fournisseur text not null,
@@ -606,6 +731,15 @@ create table if not exists public.communication_depenses_jour (
 );
 alter table public.communication_depenses_jour enable row level security;
 revoke all on public.communication_depenses_jour from anon, authenticated;
+
+-- Le débit GLOBAL : envois remis au fournisseur par minute (tous travailleurs, tous canaux),
+-- compté sous N5. Remplace la limite « par passage », qui ne valait que pour un travailleur.
+create table if not exists public.communication_debit_minute (
+  minute   timestamptz primary key,
+  envois   integer not null default 0 check (envois >= 0)
+);
+alter table public.communication_debit_minute enable row level security;
+revoke all on public.communication_debit_minute from anon, authenticated;
 
 
 -- 11. Le quota Brevo (revue 1.1, H2, H3, M12) -------------------------------------------------------
@@ -619,8 +753,14 @@ revoke all on public.communication_depenses_jour from anon, authenticated;
 --   le commercial déjà réservé.
 -- Fenêtres GLISSANTES de 24 heures et de 30 jours : l'heure de renouvellement des quotas de
 -- Brevo n'est pas connue, on ne suppose pas minuit de Santo Domingo.
--- Quota non vérifié (null, ou sans date et preuve) : 0, l'e-mail commercial reste fermé.
--- Calculé UNE fois par passage du travailleur (le résultat est décompté ensuite en mémoire).
+-- Quota non vérifié (null, sans date et preuve, ou vérifié il y a plus de
+-- brevo_quota_validite_jours) : 0, l'e-mail commercial reste fermé.
+-- PHASE 1.3 (correction 3) : n'est PLUS calculé une fois par passage et décompté en mémoire
+-- (deux travailleurs partaient alors de la même estimation). Il est RECALCULÉ à chaque
+-- réservation, SOUS le verrou N5, par communication_reserver (43 §3) : la somme des réservations
+-- ne peut pas dépasser ce qu'il renvoie. Brevo n'a pas été prouvé séparer le quota commercial du
+-- transactionnel : tant que brevo_compte_partage est vrai, tout le transactionnel connu est
+-- retiré d'abord, plus la réserve.
 create or replace function public.communication_brevo_disponible()
 returns jsonb
 language plpgsql
@@ -644,6 +784,9 @@ begin
   if (r.brevo_quota_24h is null and r.brevo_quota_30j is null)
      or r.brevo_quota_verifie_le is null or coalesce(r.brevo_quota_preuve, '') = '' then
     return jsonb_build_object('disponible', 0, 'raison', 'QUOTA_NON_VERIFIE');
+  end if;
+  if r.brevo_quota_verifie_le < now() - make_interval(days => r.brevo_quota_validite_jours) then
+    return jsonb_build_object('disponible', 0, 'raison', 'QUOTA_A_REVERIFIER');
   end if;
 
   if r.brevo_compte_partage then
@@ -696,15 +839,117 @@ end;
 $$;
 
 
+-- 11 bis. Le fuseau horaire du destinataire (Phase 1.3, correction 6) ------------------------------
+-- Avant 1.3 : « HT → Port-au-Prince, DO → Santo Domingo, TOUT LE RESTE → New York ». Faux pour
+-- un client de Chicago, Denver, Los Angeles, Anchorage ou Honolulu (et pour tout autre pays) :
+-- un message « à 9 h » partait à 6 h à Los Angeles. Désormais :
+--   1. un fuseau DÉCLARÉ pour ce client (par lui, ou par l'équipe qui l'a vérifié), valable
+--      tant que son pays et sa région n'ont pas changé ;
+--   2. sinon HT → America/Port-au-Prince, DO → America/Santo_Domingo (un seul fuseau IANA par
+--      pays) ;
+--   3. sinon US → le fuseau de son État, SEULEMENT si cet État figure dans
+--      communication_fuseaux_regions, saisi avec sa preuve (base IANA, date). Aucune ligne
+--      n'est créée ici : la table est vide, et un État à plusieurs fuseaux (Floride, Texas,
+--      Tennessee, Kentucky, Indiana, Michigan, Kansas, Nebraska, Dakota du Nord et du Sud,
+--      Oregon, Idaho, Alaska…) n'y entre pas : il faut un fuseau déclaré ;
+--   4. sinon : INCONNU → null, et l'envoi est écarté (FUSEAU_INCONNU). Jamais deviné. Le pays
+--      n'est jamais la preuve du fuseau, et l'indicatif de téléphone non plus.
+--   WhatsApp : si le territoire du numéro (indicatif) ne correspond pas au pays du profil
+--   (client « HT » avec un numéro +1), seul un fuseau déclaré vaut.
+-- Les heures d'été et d'hiver sont celles de la base IANA du serveur (« at time zone » avec un
+-- NOM de fuseau, jamais un décalage fixe) ; sa mise à jour suit celle de PostgreSQL (à surveiller).
+create table if not exists public.communication_fuseaux_regions (
+  pays         text not null check (pays in ('US')),
+  region       text not null check (length(region) between 2 and 60),   -- comme clients.region (lieux.js)
+  fuseau       text not null,                                           -- nom IANA, vérifié à la saisie
+  preuve       text not null check (length(preuve) >= 10),
+  verifie_par  uuid not null,
+  verifie_le   timestamptz not null default now(),
+  primary key (pays, region)
+);
+alter table public.communication_fuseaux_regions enable row level security;
+revoke all on public.communication_fuseaux_regions from anon, authenticated;
+
+create table if not exists public.communication_fuseaux_clients (
+  client_id    uuid primary key references public.clients (id) on delete cascade,
+  fuseau       text not null,                                           -- nom IANA, vérifié à la saisie
+  source       text not null check (source in ('client', 'equipe')),
+  pays         text not null,                                           -- pays et région au moment de la
+  region       text not null,                                           -- déclaration : changés = caduc
+  auteur_id    uuid,
+  cree_le      timestamptz not null default now()
+);
+alter table public.communication_fuseaux_clients enable row level security;
+revoke all on public.communication_fuseaux_clients from anon, authenticated;
+
+-- Un nom de fuseau que le serveur connaît vraiment (pas d'abréviation, pas de décalage fixe).
+create or replace function public.communication_fuseau_valide(p_fuseau text)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select p_fuseau ~ '^[A-Z][A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2}$'
+     and exists (select 1 from pg_catalog.pg_timezone_names z where z.name = p_fuseau)
+$$;
+
+create or replace function public.communication_fuseau(p_client uuid, p_canal text)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  cl record;
+  v_declare text;
+  v_territoire text;
+begin
+  select c.pays, c.region into cl from public.clients c where c.id = p_client and c.supprime_le is null;
+  if not found then
+    return null;
+  end if;
+  select f.fuseau into v_declare from public.communication_fuseaux_clients f
+   where f.client_id = p_client and f.pays = cl.pays and f.region = cl.region;
+  -- Les noms sont vérifiés à l'ÉCRITURE (communication_fuseau_valide lit pg_timezone_names,
+  -- trop coûteux pour chaque destinataire) ; un nom devenu inconnu du serveur fait renvoyer
+  -- null par communication_prochaine_fenetre (43 §2) : l'envoi est écarté, jamais deviné.
+  if v_declare is not null then
+    return v_declare;
+  end if;
+  if p_canal = 'whatsapp' then
+    v_territoire := public.communication_territoire(public.communication_cible(p_client, 'whatsapp'));
+    if v_territoire is distinct from cl.pays then
+      return null;                                       -- numéro d'un autre territoire : fuseau à déclarer
+    end if;
+  end if;
+  return case cl.pays
+           when 'HT' then 'America/Port-au-Prince'
+           when 'DO' then 'America/Santo_Domingo'
+           when 'US' then (select r.fuseau from public.communication_fuseaux_regions r
+                            where r.pays = 'US' and r.region = cl.region)
+         end;
+end;
+$$;
+
+
 -- 12. Conservation, anonymisation et effacement (revue 1.1, C5) -------------------------------------
 -- 12.1 La politique : une durée par catégorie, NULL tant que le juriste ne l'a pas fixée
 -- (BLOQUÉ). Sans durée, AUCUNE purge automatique ne tourne : la conservation n'est pas
 -- « indéfinie par décision », elle est « en attente de décision ». Les durées proposées au
 -- juriste sont dans COMMUNICATION_CENTER_SECURITY.md (jamais appliquées d'office).
+-- Phase 1.3 (correction 5) : une catégorie de plus, « empreintes » — le SECOND temps de la
+-- conservation. L'anonymisation retire le lien au compte, mais l'empreinte HMAC du contact
+-- reste une donnée pseudonyme (le propriétaire du poivre peut la recalculer). Elle n'est gardée
+-- que pour ce qu'elle prouve (consentement donné, désinscription à respecter), et effacée à
+-- l'échéance de « empreintes » — BLOQUÉE, comme les autres, tant que le juriste ne l'a pas
+-- fixée. Une suppression ACTIVE (désinscription à respecter) n'est jamais effacée par
+-- l'échéance : seules les suppressions LEVÉES le sont.
 create table if not exists public.communication_conservation (
   categorie           text primary key check (categorie in (
                         'consentements', 'confirmations', 'campagnes', 'destinataires', 'envois',
-                        'evenements_fournisseur', 'fenetres_whatsapp', 'suppressions', 'erreurs')),
+                        'evenements_fournisseur', 'fenetres_whatsapp', 'suppressions', 'erreurs',
+                        'empreintes')),
   duree_jours         integer check (duree_jours is null or duree_jours between 1 and 7300),
   apres               text not null default 'anonymiser' check (apres in ('anonymiser', 'effacer')),
   base_juridique      text,
@@ -716,7 +961,8 @@ create table if not exists public.communication_conservation (
 insert into public.communication_conservation (categorie, apres) values
   ('consentements', 'anonymiser'), ('confirmations', 'effacer'), ('campagnes', 'anonymiser'),
   ('destinataires', 'effacer'), ('envois', 'anonymiser'), ('evenements_fournisseur', 'effacer'),
-  ('fenetres_whatsapp', 'effacer'), ('suppressions', 'anonymiser'), ('erreurs', 'effacer')
+  ('fenetres_whatsapp', 'effacer'), ('suppressions', 'anonymiser'), ('erreurs', 'effacer'),
+  ('empreintes', 'effacer')
 on conflict (categorie) do nothing;
 alter table public.communication_conservation enable row level security;
 revoke all on public.communication_conservation from anon, authenticated;
@@ -791,11 +1037,21 @@ create trigger communication_journal_purges_immuable
   for each row execute function public.communication_immuable();
 
 -- 12.4 La purge. Échéance : refusée tant que la durée de la catégorie est BLOQUÉE (null).
--- Personne : anonymise ses lignes de consentement (client_id, contexte, motif effacés ;
--- action, dates, version du texte et empreinte gardées comme preuve minimale, sous réserve de
--- l'avis du juriste), efface ses jetons, ses lignes d'audience et le lien client de ses envois.
--- Les empreintes de suppression sont GARDÉES : elles empêchent de lui écrire de nouveau.
--- Ici : « consentements » et « confirmations » ; les sept autres catégories et la suite de
+-- Personne (Phase 1.3, correction 5 — inventaire complet : PHASE_1_3_TECHNICAL_CORRECTIONS §5) :
+--   · verrou N2 du client d'abord : aucun envoi vers lui ne peut se valider pendant la purge ;
+--   · ses empreintes de contact sont RECUEILLIES AVANT toute anonymisation (contact actuel,
+--     consentements, confirmations, envois, audiences) pour retrouver ce qui n'a pas de
+--     client_id (fenêtres WhatsApp) ;
+--   · consentements : client_id, contexte, motif, auteur effacés ; action, dates, version du
+--     texte et empreinte gardées comme PREUVE MINIMALE jusqu'à l'échéance « empreintes »
+--     (BLOQUÉE, juriste) ;
+--   · confirmations, fuseau déclaré, liste d'essai, fenêtres WhatsApp : effacés ;
+--   · envois, audiences, retours des fournisseurs : liens et identifiants indirects effacés
+--     (client, contact, identifiant du fournisseur, requête, empreinte du contenu) — avant 1.3,
+--     l'empreinte du contact, la requête et l'empreinte du contenu restaient ;
+--   · suppressions : lien au compte effacé, empreinte GARDÉE (elle empêche de lui écrire de
+--     nouveau), jusqu'à l'échéance « empreintes » si elle a été levée.
+-- Ici : « consentements » et « confirmations » ; les autres catégories et la suite de
 -- l'effacement d'une personne sont dans 43 §12 (communication_purger_autres,
 -- communication_purger_personne_suite), appelées d'ici, avec le même journal.
 create or replace function public.executer_purge_communication(p_demande bigint)
@@ -809,6 +1065,7 @@ declare
   c public.communication_conservation;
   v_avant timestamptz;
   v_n integer;
+  v_empreintes text[];
 begin
   perform public.exiger_permission('communications.manage');
   select * into d from public.communication_demandes_purge where id = p_demande for update;
@@ -841,6 +1098,15 @@ begin
       perform public.communication_purger_autres(d.id, d.categorie, v_avant);
     end if;
   else
+    perform public.communication_verrou('client:' || d.client_id);                 -- N2
+    -- Les empreintes de la personne, recueillies AVANT d'effacer les liens (C5)
+    select coalesce(array_agg(distinct x.e) filter (where x.e is not null), '{}') into v_empreintes
+      from (select public.communication_empreinte('email', public.communication_cible(d.client_id, 'email')) e
+            union all select public.communication_empreinte('whatsapp', public.communication_cible(d.client_id, 'whatsapp'))
+            union all select k.cible_empreinte from public.communication_consentements k where k.client_id = d.client_id
+            union all select f.cible_empreinte from public.communication_confirmations f where f.client_id = d.client_id
+            union all select e2.cible_empreinte from public.communication_envois e2 where e2.client_id = d.client_id) x;
+    perform public.communication_purger_personne_suite(d.id, d.client_id, v_empreintes);   -- 43 §12
     update public.communication_consentements
        set client_id = null, contexte = '{}'::jsonb, motif = null, auteur_id = null, anonymise_le = now()
      where client_id = d.client_id;
@@ -851,7 +1117,10 @@ begin
     get diagnostics v_n = row_count;
     insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, execute_par)
     values (d.id, 'communication_confirmations', 'effacer', v_n, auth.uid());
-    perform public.communication_purger_personne_suite(d.id, d.client_id);   -- 43 §12
+    delete from public.communication_fuseaux_clients where client_id = d.client_id;
+    get diagnostics v_n = row_count;
+    insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, execute_par)
+    values (d.id, 'communication_fuseaux_clients', 'effacer', v_n, auth.uid());
   end if;
 
   update public.communication_demandes_purge set statut = 'executee', executee_le = now() where id = d.id;
@@ -872,6 +1141,10 @@ revoke execute on function public.communication_empreinte(text, text) from publi
 revoke execute on function public.communication_cible(uuid, text) from public, anon, authenticated;
 revoke execute on function public.communication_masque(text, text) from public, anon, authenticated;
 revoke execute on function public.communication_verrou(text) from public, anon, authenticated;
+revoke execute on function public.communication_verrou_interrupteurs(boolean) from public, anon, authenticated;
+revoke execute on function public.communication_interrupteur_ferme(public.communication_reglages, text, text) from public, anon, authenticated;
+revoke execute on function public.communication_fuseau_valide(text) from public, anon, authenticated;
+revoke execute on function public.communication_fuseau(uuid, text) from public, anon, authenticated;
 revoke execute on function public.communication_territoire(text) from public, anon, authenticated;
 revoke execute on function public.communication_etat_consentement(uuid, text) from public, anon, authenticated;
 revoke execute on function public.communication_consentement_actuel(uuid, text) from public, anon, authenticated;
@@ -883,8 +1156,10 @@ revoke execute on function public.executer_purge_communication(bigint) from publ
 grant execute on function public.executer_purge_communication(bigint) to authenticated;
 
 -- 14. Contrôle (Phase 2) -------------------------------------------------------------------------------
--- Résultat attendu, en une ligne (après CE fichier seul) : tables 14 | permissions_admin 7 | permissions_gerant 5 |
+-- Résultat attendu, en une ligne (après CE fichier seul) : tables 18 | permissions_admin 7 | permissions_gerant 5 |
 -- employe 0 | tarifs 0 | indicatifs_autorises 0 | campagnes_actives false
+-- (18 = les 14 de la Phase 1.2 + communication_issues_http, communication_debit_minute,
+--  communication_fuseaux_regions, communication_fuseaux_clients)
 select (select count(*) from pg_tables where schemaname = 'public' and tablename like 'communication\_%') as tables,
        (select count(*) from unnest(public.permissions_du_role('admin')) p where p like 'communications.%') as permissions_admin,
        (select count(*) from unnest(public.permissions_du_role('gerant')) p where p like 'communications.%') as permissions_gerant,
@@ -892,3 +1167,5 @@ select (select count(*) from pg_tables where schemaname = 'public' and tablename
        (select count(*) from public.communication_tarifs) as tarifs,
        (select count(*) from public.communication_indicatifs where autorise_marketing) as indicatifs_autorises,
        (select campagnes_actives from public.communication_reglages) as campagnes_actives;
+-- ===== FIN DU CONTENU INERTE =====
+$brouillon_goship_non_executable$ as brouillon_non_executable;

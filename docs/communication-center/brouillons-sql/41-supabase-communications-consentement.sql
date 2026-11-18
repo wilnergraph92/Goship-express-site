@@ -1,10 +1,19 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.2 (18/11/2026) — voir l'en-tête de 40-supabase-communications-fondation.sql
+-- Version Phase 1.3 (18/11/2026) — garde à trois couches : voir l'en-tête de
+-- 40-supabase-communications-fondation.sql (bloc DO, puis TOUT le contenu dans une chaîne inerte).
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.2) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+end;
+$brouillon$;
+
+select $brouillon_goship_non_executable$
+-- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
+do $brouillon$
+begin
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -189,12 +198,21 @@ begin
   if coalesce(p_jeton, '') !~ '^[A-Za-z0-9_-]{43}$' then
     return jsonb_build_object('ok', false);                      -- contrôle bon marché avant toute lecture
   end if;
+  -- Ordre des verrous (Phase 1.3, C2) : la ligne est d'abord LUE sans verrou, puis N3 (le
+  -- consentement), puis la ligne est verrouillée et RELUE. Avant 1.3, la ligne était verrouillée
+  -- AVANT N3, quand demander_consentement_communication prend N3 AVANT d'annuler les lignes :
+  -- deux onglets du même client (demander d'un côté, confirmer de l'autre) pouvaient s'attendre.
   select * into f from public.communication_confirmations
-   where jeton_empreinte = encode(extensions.digest(p_jeton, 'sha256'), 'hex') for update;
+   where jeton_empreinte = encode(extensions.digest(p_jeton, 'sha256'), 'hex');
   if not found or f.utilise_le is not null or f.annule_le is not null or f.expire_le < now() then
     return jsonb_build_object('ok', false);
   end if;
   perform public.communication_verrou('consentement:' || f.client_id || ':' || f.canal);
+  select * into f from public.communication_confirmations
+   where id = f.id and utilise_le is null and annule_le is null and expire_le > now() for update;
+  if not found then
+    return jsonb_build_object('ok', false);
+  end if;
   -- Le contact n'a pas changé, et la demande est toujours la dernière étape (pas de retrait depuis)
   if public.communication_empreinte(f.canal, public.communication_cible(f.client_id, f.canal)) is distinct from f.cible_empreinte
      or (public.communication_etat_consentement(f.client_id, f.canal) ->> 'etat') <> 'en_attente' then
@@ -285,6 +303,24 @@ begin
          where client_id = new.id and canal = v_canal and utilise_le is null and annule_le is null;
       end if;
     end loop;
+    -- Phase 1.3 (C6) : un fuseau déclaré devient caduc si le pays ou la région change (il est
+    -- aussi ignoré par communication_fuseau ; on l'efface pour ne rien garder d'inutile).
+    if new.pays is distinct from old.pays or new.region is distinct from old.region then
+      delete from public.communication_fuseaux_clients where client_id = new.id;
+    end if;
+    -- Phase 1.3 (C5) : la suppression du compte, demandée par la personne elle-même, ouvre
+    -- d'office une demande d'effacement de ses données commerciales. Demandeur = la personne ;
+    -- un administrateur (forcément un autre compte) l'approuve ; la purge s'exécute ensuite.
+    -- Entre-temps, ses consentements sont invalidés (ci-dessus) : plus rien ne lui est envoyé.
+    if new.supprime_le is not null and old.supprime_le is null
+       and (exists (select 1 from public.communication_consentements k where k.client_id = new.id)
+            or exists (select 1 from public.communication_fuseaux_clients z where z.client_id = new.id)
+            or exists (select 1 from public.communication_envois e where e.client_id = new.id))
+       and not exists (select 1 from public.communication_demandes_purge d
+                        where d.type = 'personne' and d.client_id = new.id and d.statut in ('demandee', 'approuvee')) then
+      insert into public.communication_demandes_purge (type, client_id, motif, demandee_par)
+      values ('personne', new.id, 'Suppression du compte demandée par la personne', new.id);
+    end if;
   exception when others then
     begin
       insert into public.communication_erreurs (source, code, detail)
@@ -299,7 +335,7 @@ end;
 $$;
 drop trigger if exists communication_suivre_client on public.clients;
 create trigger communication_suivre_client
-  after update of email, telephone, pays, supprime_le on public.clients
+  after update of email, telephone, pays, region, supprime_le on public.clients
   for each row execute function public.communication_suivre_client();
 
 
@@ -448,7 +484,10 @@ declare
                            'heure_debut', 'heure_fin', 'frequence_max_jour', 'frequence_max_semaine',
                            'attente_transactionnel_max', 'seuil_croissance_pct', 'modele_meta_fraicheur_min',
                            'confirmation_validite_h', 'changements_consentement_jour', 'demandes_confirmation_jour',
-                           'quatre_yeux', 'adresse_miami_validee'];
+                           'quatre_yeux', 'adresse_miami_validee',
+                           'debit_max_minute', 'marge_fenetre_min', 'webhook_max_minute', 'brevo_quota_validite_jours'];
+  -- arret_urgence n'est PAS ici : il ne se pose que par arreter_communications, ne se lève que
+  -- par lever_arret_communications (motif, journal).
 begin
   perform public.exiger_permission('communications.manage');
   if length(trim(coalesce(p_motif, ''))) < 5 then
@@ -459,6 +498,16 @@ begin
       perform public.erreur_metier('INVALID_FIELD', 'Réglage inconnu ou protégé : ' || v_cle);
     end if;
   end loop;
+  -- N0 EXCLUSIF (Phase 1.3, C1) : attend la fin des envois en cours, puis empêche tout nouvel
+  -- envoi de lire les réglages avant ce COMMIT. 10 secondes au plus ; au-delà, refus : pour
+  -- COUPER sans attendre, il y a l'arrêt d'urgence (arreter_communications).
+  perform set_config('lock_timeout', '10s', true);
+  begin
+    perform public.communication_verrou_interrupteurs(true);
+  exception when lock_not_available then
+    perform public.erreur_metier('BUSY', 'Des envois sont en cours : réessayez, ou utilisez l''arrêt d''urgence pour tout couper.');
+  end;
+  perform set_config('lock_timeout', '0', true);
   select * into v_avant from public.communication_reglages for update;
   begin
     update public.communication_reglages set
@@ -483,6 +532,10 @@ begin
       demandes_confirmation_jour = coalesce((p_champs ->> 'demandes_confirmation_jour')::integer, demandes_confirmation_jour),
       quatre_yeux = coalesce((p_champs ->> 'quatre_yeux')::boolean, quatre_yeux),
       adresse_miami_validee = coalesce((p_champs ->> 'adresse_miami_validee')::boolean, adresse_miami_validee),
+      debit_max_minute = coalesce((p_champs ->> 'debit_max_minute')::integer, debit_max_minute),
+      marge_fenetre_min = coalesce((p_champs ->> 'marge_fenetre_min')::integer, marge_fenetre_min),
+      webhook_max_minute = coalesce((p_champs ->> 'webhook_max_minute')::integer, webhook_max_minute),
+      brevo_quota_validite_jours = coalesce((p_champs ->> 'brevo_quota_validite_jours')::integer, brevo_quota_validite_jours),
       maj_le = now(), maj_par = auth.uid()
     returning * into v_apres;
   exception when invalid_text_representation or check_violation or numeric_value_out_of_range then
@@ -533,6 +586,7 @@ begin
   if length(trim(coalesce(p_preuve, ''))) < 10 then
     perform public.erreur_metier('PROOF_REQUIRED', 'Dites où le quota a été lu (page Brevo, date, capture).');
   end if;
+  perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
   update public.communication_reglages
      set brevo_quota_24h = p_quota_24h, brevo_quota_30j = p_quota_30j, brevo_reserve_24h = p_reserve,
          brevo_compte_partage = p_compte_partage, brevo_quota_preuve = trim(p_preuve),
@@ -555,6 +609,7 @@ begin
   if length(trim(coalesce(p_preuve, ''))) < 10 then
     perform public.erreur_metier('PROOF_REQUIRED', 'Dites d''où viennent le numéro et la limite (décision du CEO, gestionnaire WhatsApp de Meta, date).');
   end if;
+  perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
   update public.communication_reglages
      set whatsapp_numero_affiche = p_numero_affiche, whatsapp_destinataires_jour = p_destinataires_jour,
          whatsapp_limite_preuve = trim(p_preuve), maj_le = now(), maj_par = auth.uid();
@@ -772,6 +827,178 @@ end;
 $$;
 
 
+-- 4.8 L'ARRÊT D'URGENCE (Phase 1.3, correction 1) ---------------------------------------------------
+-- Couper : administrateur ET gérant (communications.pause — couper ne peut que protéger).
+-- 1. Prend N0 en EXCLUSIF, 5 secondes au plus : attend la fin des transactions d'envoi déjà
+--    commencées (une ligne chacune), et bloque celles qui voudraient commencer.
+-- 2. Écrit l'arrêt, avec ou sans le verrou : si le verrou n'a pas été obtenu à temps, l'arrêt
+--    est écrit QUAND MÊME (une coupure ne doit jamais échouer) ; le dernier contrôle de chaque
+--    envoi, sous N5, relit les réglages et le verra (au pire, un envoi déjà validé à l'instant
+--    même part encore — dit dans la réponse).
+-- 3. Les messages déjà REMIS au fournisseur (validés avant l'arrêt, dans la file de pg_net ou
+--    déjà partis) ne sont PAS rappelés : pg_net est partagé avec le transactionnel et sa file
+--    n'est pas touchée (exigence du CEO). Leur nombre est rendu et journalisé.
+-- Ce qui attend dans la file reste « attente » : rien n'est perdu, rien ne part avant la levée.
+create or replace function public.arreter_communications(p_motif text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_attendu boolean := true;
+  v_remis integer;
+begin
+  perform public.exiger_permission('communications.pause');
+  if length(trim(coalesce(p_motif, ''))) < 5 then
+    perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi vous coupez tout (5 caractères au moins).');
+  end if;
+  perform set_config('lock_timeout', '5s', true);
+  begin
+    perform public.communication_verrou_interrupteurs(true);
+  exception when lock_not_available then
+    v_attendu := false;                                     -- on coupe quand même, sans attendre
+  end;
+  perform set_config('lock_timeout', '0', true);
+  update public.communication_reglages
+     set arret_urgence = true, arret_motif = trim(p_motif), arret_le = clock_timestamp(), arret_par = auth.uid(),
+         maj_le = now(), maj_par = auth.uid();
+  select count(*) into v_remis from public.communication_envois where statut = 'traitement';
+  perform set_config('goship.motif', trim(p_motif), true);
+  perform public.auditer('communication.arret_urgence', 'communication_reglages', 'reglages', null,
+                         jsonb_build_object('envois_en_cours_attendus', v_attendu, 'deja_remis_au_fournisseur', v_remis));
+  return jsonb_build_object('ok', true, 'arret_le', clock_timestamp(), 'envois_en_cours_attendus', v_attendu,
+                            'deja_remis_au_fournisseur', v_remis);
+end;
+$$;
+
+-- Lever l'arrêt : administrateur seulement, motif de 10 caractères au moins, journalisé. Les
+-- envois en attente repartent SOUS TOUTES LES RÈGLES (consentement, heures, empreinte de la
+-- campagne…) ; une campagne qui ne doit pas reprendre s'annule ou se met en pause avant.
+create or replace function public.lever_arret_communications(p_motif text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.exiger_permission('communications.manage');
+  if length(trim(coalesce(p_motif, ''))) < 10 then
+    perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi l''envoi peut reprendre (10 caractères au moins).');
+  end if;
+  perform public.communication_verrou_interrupteurs(true);
+  update public.communication_reglages
+     set arret_urgence = false, maj_le = now(), maj_par = auth.uid()
+   where arret_urgence;
+  if not found then
+    perform public.erreur_metier('INVALID_TRANSITION', 'Aucun arrêt d''urgence en cours.');
+  end if;
+  perform set_config('goship.motif', trim(p_motif), true);
+  perform public.auditer('communication.arret_leve', 'communication_reglages', 'reglages', null, null);
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- 4.9 Ce que prouve une réponse HTTP d'erreur (Phase 1.3, correction 4) : seulement avec la
+-- page officielle du fournisseur. Une 5xx ne prouve JAMAIS un refus : elle ne peut être
+-- notée qu'« incertain ». « rejet_temporaire » (nouvel essai automatique) : 4xx seulement.
+create or replace function public.verifier_issue_http(p_fournisseur text, p_code integer, p_issue text, p_preuve text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.exiger_permission('communications.manage');
+  if length(trim(coalesce(p_preuve, ''))) < 10 then
+    perform public.erreur_metier('PROOF_REQUIRED', 'Citez la page officielle du fournisseur et sa date.');
+  end if;
+  if p_code >= 500 and p_issue <> 'incertain' then
+    perform public.erreur_metier('UNSAFE_RULE', 'Une réponse 5xx ne prouve pas que le message a été refusé : « incertain » seulement.');
+  end if;
+  perform public.communication_verrou_interrupteurs(true);
+  insert into public.communication_issues_http (fournisseur, code_http, issue, preuve, verifie_par)
+  values (p_fournisseur, p_code, p_issue, trim(p_preuve), auth.uid())
+  on conflict (fournisseur, code_http) do update
+    set issue = excluded.issue, preuve = excluded.preuve, verifie_par = excluded.verifie_par, verifie_le = now();
+  perform set_config('goship.motif', trim(p_preuve), true);
+  perform public.auditer('communication.issue_http', 'communication_issue_http', p_fournisseur || ':' || p_code, null,
+                         jsonb_build_object('issue', p_issue));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- 4.10 Les fuseaux horaires (Phase 1.3, correction 6) -------------------------------------------------
+-- Un État des USA à UN SEUL fuseau : administrateur, avec la preuve (base IANA, date). Un État
+-- à plusieurs fuseaux ne s'enregistre pas : ses clients déclarent le leur.
+create or replace function public.regler_fuseau_region(p_region text, p_fuseau text, p_preuve text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.exiger_permission('communications.manage');
+  if length(trim(coalesce(p_preuve, ''))) < 10 then
+    perform public.erreur_metier('PROOF_REQUIRED', 'Citez la source (base IANA, date) et confirmez que l''État n''a qu''un fuseau.');
+  end if;
+  if not public.communication_fuseau_valide(p_fuseau) then
+    perform public.erreur_metier('INVALID_TIMEZONE', 'Nom de fuseau inconnu (exemple : America/Chicago).');
+  end if;
+  insert into public.communication_fuseaux_regions (pays, region, fuseau, preuve, verifie_par)
+  values ('US', trim(p_region), p_fuseau, trim(p_preuve), auth.uid())
+  on conflict (pays, region) do update
+    set fuseau = excluded.fuseau, preuve = excluded.preuve, verifie_par = excluded.verifie_par, verifie_le = now();
+  perform set_config('goship.motif', trim(p_preuve), true);
+  perform public.auditer('communication.fuseau_region', 'communication_fuseau', 'US:' || trim(p_region), null,
+                         jsonb_build_object('fuseau', p_fuseau));
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- Le client déclare SON fuseau (Mon compte, Phase 2c) ; l'équipe peut le noter pour lui, s'il
+-- le lui a dit (communications.consents, motif). Valable tant que pays et région ne changent pas.
+create or replace function public.declarer_fuseau_communication(p_fuseau text, p_client uuid default null, p_motif text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_client uuid := coalesce(p_client, auth.uid());
+  cl record;
+begin
+  if p_client is null then
+    if auth.uid() is null or not exists (select 1 from public.clients where id = auth.uid() and role = 'client' and supprime_le is null) then
+      perform public.erreur_metier('PERMISSION_DENIED', 'Réservé à l''espace client.');
+    end if;
+  else
+    perform public.exiger_permission('communications.consents');
+    if length(trim(coalesce(p_motif, ''))) < 5 then
+      perform public.erreur_metier('REASON_REQUIRED', 'Dites comment le client vous a donné son fuseau.');
+    end if;
+  end if;
+  if not public.communication_fuseau_valide(p_fuseau) then
+    perform public.erreur_metier('INVALID_TIMEZONE', 'Fuseau inconnu.');
+  end if;
+  select pays, region into cl from public.clients where id = v_client and supprime_le is null;
+  if not found then
+    perform public.erreur_metier('NOT_FOUND', 'Compte introuvable.');
+  end if;
+  insert into public.communication_fuseaux_clients (client_id, fuseau, source, pays, region, auteur_id)
+  values (v_client, p_fuseau, case when p_client is null then 'client' else 'equipe' end, cl.pays, cl.region, auth.uid())
+  on conflict (client_id) do update
+    set fuseau = excluded.fuseau, source = excluded.source, pays = excluded.pays, region = excluded.region,
+        auteur_id = excluded.auteur_id, cree_le = now();
+  if p_client is not null then
+    perform set_config('goship.motif', trim(p_motif), true);
+    perform public.auditer('communication.fuseau_client', 'client', v_client::text, null, jsonb_build_object('fuseau', p_fuseau));
+  end if;
+  return jsonb_build_object('ok', true, 'fuseau', p_fuseau);
+end;
+$$;
+
+
 -- 5. Droits ----------------------------------------------------------------------------------------
 revoke execute on function public.communication_mots_confirmation() from public, anon, authenticated;
 revoke execute on function public.communication_suivre_client() from public, anon, authenticated;
@@ -805,9 +1032,16 @@ begin
     'public.lever_suppression_communication(bigint, text)',
     'public.regler_conservation_communication(text, integer, text, text, text)',
     'public.demander_purge_communication(text, text, uuid, text)',
-    'public.approuver_purge_communication(bigint, boolean, text)'] loop
+    'public.approuver_purge_communication(bigint, boolean, text)',
+    'public.arreter_communications(text)',
+    'public.lever_arret_communications(text)',
+    'public.verifier_issue_http(text, integer, text, text)',
+    'public.regler_fuseau_region(text, text, text)',
+    'public.declarer_fuseau_communication(text, uuid, text)'] loop
     execute 'revoke execute on function ' || f || ' from public, anon';
     execute 'grant execute on function ' || f || ' to authenticated';
   end loop;
 end
 $droits$;
+-- ===== FIN DU CONTENU INERTE =====
+$brouillon_goship_non_executable$ as brouillon_non_executable;

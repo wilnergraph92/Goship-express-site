@@ -1,10 +1,19 @@
 -- =============================================================================
 -- BROUILLON — CENTRE DE COMMUNICATION — NE PAS EXÉCUTER
--- Version Phase 1.2 (18/11/2026) — voir l'en-tête de 40-supabase-communications-fondation.sql
+-- Version Phase 1.3 (18/11/2026) — garde à trois couches : voir l'en-tête de
+-- 40-supabase-communications-fondation.sql (bloc DO, puis TOUT le contenu dans une chaîne inerte).
 -- =============================================================================
 do $brouillon$
 begin
-  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.2) : ne pas exécuter.';
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
+end;
+$brouillon$;
+
+select $brouillon_goship_non_executable$
+-- ===== DÉBUT DU CONTENU INERTE : tout ce qui suit est du TEXTE jusqu'à la balise de fin =====
+do $brouillon$
+begin
+  raise exception 'BROUILLON NON APPROUVÉ (Centre de communication, Phase 1.3) : ne pas exécuter.';
 end;
 $brouillon$;
 
@@ -515,6 +524,10 @@ begin
   if not v_equipe and not public.communication_consentement_actuel(p_client, p_canal) then
     return 'SANS_CONSENTEMENT_CONFIRME';
   end if;
+  -- Phase 1.3 (C6) : sans heure locale SÛRE, pas d'envoi (le pays ne prouve pas le fuseau)
+  if public.communication_fuseau(p_client, p_canal) is null then
+    return 'FUSEAU_INCONNU';
+  end if;
   if p_canal = 'whatsapp' then
     v_territoire := public.communication_territoire(v_cible);
     if v_territoire is null or not exists (select 1 from public.communication_indicatifs i
@@ -766,6 +779,12 @@ $$;
 
 -- 4.6 Les transitions. Une seule porte ; chaque passage est journalisé ; le verrou de la ligne
 -- de campagne est pris AVANT toute lecture, et le travailleur le prend aussi (revue 1.1, M7).
+-- Ordre des verrous (Phase 1.3, C2 ; 40 §3) : campagne (N1) PUIS envois (N4). Le travailleur
+-- prend lui aussi la campagne AVANT l'envoi (43 §8) : une annulation et un envoi de la même
+-- campagne ne peuvent plus s'attendre l'un l'autre. Si le travailleur tient la campagne,
+-- l'annulation attend la fin de SON envoi (quelques millisecondes) : ce message-là est parti
+-- (« traitement »), les autres sont annulés. Si l'annulation passe d'abord, le travailleur
+-- relit « annulee » et n'envoie rien.
 create or replace function public.changer_statut_campagne(p_campagne uuid, p_action text, p_motif text default null)
 returns jsonb
 language plpgsql
@@ -966,3 +985,5 @@ $droits$;
 --     Meta, exige une image fraîche APPROVED + MARKETING, pose empreinte_meta_approuvee),
 --   archiver_modele_communication (approve), ecrire_segment_communication (create),
 --   campagnes_communication / fiche_campagne_communication (view).
+-- ===== FIN DU CONTENU INERTE =====
+$brouillon_goship_non_executable$ as brouillon_non_executable;

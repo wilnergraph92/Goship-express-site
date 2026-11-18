@@ -197,10 +197,11 @@ trois marchés s'applique aussi aux clients haïtiens.**
      que bloquer un contact ou marquer un message, jamais accorder un consentement (§6.4).
 3. **Fonction Edge → PostgreSQL.**
    - Elle met chaque événement sous une forme texte stable, la signe par HMAC (`communication_cle_webhook`)
-     et appelle `communication_recevoir_evenement(fournisseur, texte_brut, signature)` avec la **clé
-     publique**.
-   - **La clé publique de Supabase n'authentifie rien** : elle désigne le projet, et n'importe qui la
-     trouve dans `config.js`. La **seule porte est la signature**, vérifiée dans la base sur le texte brut.
+     et appelle `communication_recevoir_evenement(fournisseur, texte_brut, signature)`.
+   - **[Corrigé 1.3]** Plus avec la clé publique : la fonction n'est exécutable que par le rôle
+     `communication_webhook` (créé sans connexion). Comment la fonction Edge s'authentifiera (rôle de
+     connexion dédié, recommandé, ou clé `service_role`) est une **décision du CEO** avant la Phase 3.
+     **Deux portes** : le rôle, puis la signature vérifiée dans la base sur le texte brut.
 4. **Dans la base.**
    - Contrôles bon marché d'abord (fournisseur connu, taille ≤ 20 000, forme de la signature), puis
      lecture du coffre.
@@ -214,6 +215,8 @@ trois marchés s'applique aussi aux clients haïtiens.**
   - Brevo : `brevo:<message-id>:<événement>:<horodatage>` (forme réelle à confirmer).
 - Paire (fournisseur, identifiant) unique : un rejeu ne change rien.
 - **Aucune limite d'âge** : un STOP reçu cinq jours plus tard s'applique.
+- **[Corrigé 1.3]** La fenêtre de 24 h part de l'heure **réelle** du message (`survenu_le`), jamais de
+  l'heure de réception, et ne recule jamais (`greatest`). Un horodatage illisible est refusé proprement.
 - Seuls les événements datés de **plus de 5 minutes dans le futur** sont refusés.
 - Les statuts ne reculent jamais.
 
@@ -232,22 +235,26 @@ des tables fermées : c'est voulu, la règle est **dans** la fonction.
 
 | Fonction | Opérations permises | Justification |
 |---|---|---|
-| `communication_recevoir_evenement` (visiteur, signature) | statuts d'envoi (sans recul), suppressions, **retraits**, confirmation d'une demande en attente venue du bon numéro, fenêtre 24 h | Seul chemin des retours des fournisseurs |
+| `communication_recevoir_evenement` (rôle `communication_webhook`, signature — [Corrigé 1.3]) | statuts d'envoi (sans recul), suppressions, **retraits**, confirmation d'une demande en attente venue du bon numéro, fenêtre 24 h | Seul chemin des retours des fournisseurs |
 | `desinscrire_communication` (visiteur, jeton HMAC) | une suppression du contact visé, un retrait si le consentement actif porte sur ce contact | Lien de désinscription |
 | `confirmer_consentement_communication` (visiteur, jeton aléatoire) | confirmation d'UNE demande en attente | Lien de confirmation |
 | Fonctions du client (`mes_…`, `demander_…`, `retirer_mon_…`) | ses propres lignes seulement (`auth.uid()`) | Espace client |
 | Fonctions de l'équipe | chacune sous sa permission, avec motif et journal | Tableau de bord |
-| `traiter_communications`, travailleur | file, réservations, appels | Tâche planifiée, ouverte à personne |
+| `traiter_communications` (procédure, [1.3]) et `communication_traiter_un`, travailleur | file, réservations, appels ; un envoi par transaction, ordre des verrous unique | Tâche planifiée, ouverte à personne |
+| `arreter_communications` ([1.3]) | pose l'arrêt d'urgence (jamais de levée) | Administrateur et gérant (`communications.pause`) |
 | `executer_purge_communication` et suite | effacements et anonymisations **d'une purge approuvée par un autre administrateur** | Seule exception à l'immuabilité |
 
 ### 6.5 Fonctions publiques (ouvertes sans compte)
-Trois : `communication_recevoir_evenement`, `desinscrire_communication`,
-`confirmer_consentement_communication`. Elles seront ajoutées à la liste blanche de
+**[Corrigé 1.3]** Deux : `desinscrire_communication` et `confirmer_consentement_communication`
+(`communication_recevoir_evenement` n'est plus ouverte aux visiteurs). Elles seront ajoutées à la liste blanche de
 `controle-securite.sql` (section 6). Chacune vérifie d'abord la forme de son entrée, puis sa signature
 ou son jeton ; aucune ne renvoie de donnée personnelle.
 
 ### 6.6 Limitation de débit et saturation [M6]
-- La base n'offre pas de limite de débit par fonction. Une limite dans la fonction Edge **ne protège pas**
+- **[Corrigé 1.3]** Ce paragraphe décrivait la Phase 1.2. Désormais : la fonction n'est plus publique, et
+  la base compte les appels par minute et par fournisseur (`communication_webhook_debit`,
+  `webhook_max_minute`) avant même de lire la signature ; au-delà : « saturé », sans traitement.
+- (1.2) La base n'offre pas de limite de débit par fonction. Une limite dans la fonction Edge **ne protège pas**
   un appel direct à la fonction publique.
 - **Risque résiduel accepté** : la falsification est impossible à calculer, le risque est la charge.
 - Parades : contrôles bon marché avant le coffre, refus journalisés (détection dans les journaux de
@@ -261,22 +268,29 @@ ou son jeton ; aucune ne renvoie de donnée personnelle.
 
 ### 7.1 Politique proposée au juriste (aucune durée appliquée d'office)
 
+**[1.3]** Les durées ci-dessous sont des **pistes de travail pour le juriste**, pas des durées légales : dans la base,
+toutes restent **BLOQUÉES** (null) et aucune purge à l'échéance ne tourne. Inventaire complet après effacement
+d'une personne : `PHASE_1_3_TECHNICAL_CORRECTIONS.md` §6.
+
+
 | Catégorie | Contenu identifiant | Proposition à examiner | Après l'échéance |
 |---|---|---|---|
 | Consentements | client, contexte, auteur | vie du compte + délai de prescription applicable ⚖️ (4 ans souvent cités pour la TCPA, **à confirmer** pour la TCPA, la FTSA et la Loi 172-13) | anonymiser (garder action, date, version du texte, empreinte) |
 | Confirmations | jeton (empreinte), code | 30 jours après usage ou expiration | effacer |
 | Campagnes | description | durée comptable et commerciale ⚖️ | anonymiser |
-| Audiences figées | client, empreinte | 24 mois ⚖️ | effacer |
-| Envois | client, identifiant chez le fournisseur | 24 mois ⚖️ | anonymiser (garder statistiques) |
+| Audiences figées | client, empreinte | 24 mois ⚖️ | [Corrigé 1.3] anonymiser (client et empreinte) — l'effacement ne se faisait jamais quand un envoi existait |
+| Envois | client, identifiant chez le fournisseur, [1.3] empreinte du contact, requête, empreinte du contenu | 24 mois ⚖️ | anonymiser (garder statistiques) |
 | Retours des fournisseurs | identifiants | 90 jours ⚖️ | effacer |
 | Fenêtres WhatsApp | empreinte | 7 jours | effacer |
 | Suppressions | client | **l'empreinte est gardée tant qu'elle sert à ne plus écrire** ⚖️ ; le lien au client s'efface | anonymiser |
 | Erreurs du Centre | aucun | 90 jours | effacer |
+| [1.3] Empreintes | empreinte du contact des consentements **déjà anonymisés** ; suppressions **levées** | à fixer ⚖️ | effacer (une suppression ACTIVE n'est jamais effacée) |
 
 ### 7.2 Qui demande, approuve, exécute
 - **Demande à l'échéance** : un administrateur (`communications.manage`).
 - **Demande d'effacement d'une personne** : notée par un administrateur ou un gérant
-  (`communications.consents`) à la demande du client.
+  (`communications.consents`) à la demande du client. **[1.3]** Ouverte **d'office** à la suppression du
+  compte (demandeur = la personne), par le déclencheur `communication_suivre_client`.
 - **Approbation** : un **autre** administrateur (`communications.approve`) — quatre yeux toujours.
 - **Exécution** : `executer_purge_communication`, refusée sans approbation et sans durée fixée par le
   juriste.

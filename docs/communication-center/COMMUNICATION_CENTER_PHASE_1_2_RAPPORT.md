@@ -10,6 +10,20 @@
 | Verdict | **PASS WITH CONDITIONS** (§14) |
 | Statut | **En attente de la décision du CEO. La Phase 2 reste interdite sans autorisation écrite.** |
 
+> **Errata Phase 1.3 (18/11/2026)** — la vérification du code réel a montré que plusieurs statuts
+> « CORRIGÉ DANS LA CONCEPTION » ci-dessous étaient **trop optimistes** :
+> - **H1** et **M7** : l'ordre des verrous annoncé (« jour → campagne → client ») n'était pas tenu par
+>   le code, et l'annulation prenait les verrous dans l'ordre inverse (interblocage possible) ;
+> - **H4** : un message « incertain » cessait d'être compté dans la fréquence ;
+> - **H8** : les réponses 5xx étaient renvoyées automatiquement ;
+> - **M12** : le quota Brevo était estimé une fois par passage ;
+> - **C5** : la purge laissait des identifiants indirects ;
+> - **M6** : la fonction des retours des fournisseurs restait ouverte aux visiteurs, sans limite de débit dans la base.
+>
+> La garde des brouillons ne protégeait pas un client qui continue après une erreur. Tous ces
+> points sont corrigés dans la conception : voir `PHASE_1_3_FINAL_REPORT.md`. Ce rapport n'est
+> pas réécrit, pour garder la trace de ce qui avait été affirmé.
+
 ---
 
 ## 1. Résumé exécutif

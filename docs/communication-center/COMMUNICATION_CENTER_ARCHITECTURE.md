@@ -63,11 +63,13 @@ Les identifiants entre crochets (**[C1]**, **[H4]**, **[M7]**…) renvoient aux 
  │   (créée INACTIVE, cède la place au transactionnel)                       │   commercial (décision C4)
  │ dépenses du jour (verrou) · conservation et purge à quatre yeux           │
  └───────────────────────────────────────────────────────────────────────────┘
-          ▲ communication_recevoir_evenement(fournisseur, texte brut, HMAC)  [anon, signature seule porte]
+          ▲ communication_recevoir_evenement(fournisseur, texte brut, HMAC)  [rôle communication_webhook + signature — Corrigé 1.3 : plus « anon »]
  Fonction Edge « communication-webhooks » (Phase 3) : Meta (X-Hub-Signature-256 sur le corps brut),
  Brevo (jeton secret + adresses IP, protections plus faibles, à confirmer), désinscription en un clic.
  Elle ne détient AUCUNE clé capable de contourner la sécurité de la base ; c'est la fonction SQL qu'elle
- appelle qui s'exécute avec tous les droits, et sa seule protection est la signature (SECURITY §6).
+ appelle qui s'exécute avec tous les droits. [Corrigé 1.3] Deux protections : le rôle dédié (sans connexion
+ tant que le CEO n'a pas choisi comment la fonction Edge s'authentifie) puis la signature ; débit borné
+ dans la base (PHASE_1_3_TECHNICAL_CORRECTIONS.md §8).
 ```
 
 ### 2.2 Vie d'un consentement [C2, H6, H7]
@@ -108,7 +110,8 @@ Les identifiants entre crochets (**[C1]**, **[H4]**, **[M7]**…) renvoient aux 
     │ heures / fréquence (sous verrou client) → décalé ; plafond du jour → demain 9 h ; plafond campagne → pause
     ▼
  traitement ──2xx──► envoye ──retour──► livre ──retour──► lu (WhatsApp)
-    │ 429 / 5xx (essai < 3) → nouvel_essai (2 min, 10 min, 1 h) → au 3e : abandon (messages morts)
+    │ [Corrigé 1.3] 5xx → INCERTAIN (jamais de nouvel essai) ; 429 → INCERTAIN, sauf règle PROUVÉE
+    │   (communication_issues_http) → nouvel_essai (2 min, 10 min, 1 h) → au 3e : abandon (messages morts)
     │ autre 4xx → echec
     │ délai dépassé, réseau, pas de réponse → INCERTAIN ── rapprochement par la référence « communication:<id> »
     │                                                    └─ 72 h sans preuve : reste incertain (clos), jamais renvoyé seul
@@ -140,18 +143,19 @@ Les identifiants entre crochets (**[C1]**, **[H4]**, **[M7]**…) renvoient aux 
 | | Transactionnel (existant) | Commercial (nouveau) |
 |---|---|---|
 | File | `notification_envois` | `communication_envois` (natures `campagne` et `confirmation`) |
-| Travailleur | `traiter_notifications()` | `traiter_communications()` |
+| Travailleur | `traiter_notifications()` | `traiter_communications()` — [Corrigé 1.3] **procédure**, un COMMIT par envoi |
 | Tâche | `goship-notifications` (chaque minute) | `goship-communications` (chaque minute, **créée inactive**) |
-| Lot | 50 par passage | `lot_par_minute` = 20 |
+| Lot | 50 par passage | `lot_par_minute` = 20 par passage ; [1.3] **débit global** `debit_max_minute` = 20 (tous travailleurs) |
 | Priorité | Toujours d'abord | **Cède** : plus de `attente_transactionnel_max` (50) envois transactionnels dus → aucun envoi commercial ce passage |
 | Délai HTTP | défaut de pg_net (inchangé) | explicite : `delai_http_ms` = 20 000 [H8] |
-| Nouvel essai | 30 s, 2 min, 10 min, y compris réseau | 2 min, 10 min, 1 h ; **seulement** 429 et 5xx ; issue inconnue = `incertain` |
+| Nouvel essai | 30 s, 2 min, 10 min, y compris réseau | 2 min, 10 min, 1 h ; [Corrigé 1.3] **seulement** sur un refus PROUVÉ sûr (vide par défaut) ; 5xx, 429 et issue inconnue = `incertain` |
 | Messages morts | `echec` `ABANDON_…` | `abandon`, relance manuelle par l'administrateur [M4] |
 | Doublons | clé unique existante | clé `campagne:<id>:<client>:<canal>` ; audience unique (campagne, client, canal) |
-| Concurrence | `skip locked` | `skip locked` + verrou du jour [H1] + verrou du client [H4] + verrou de la campagne [M7] |
+| Concurrence | `skip locked` | [Corrigé 1.3] un envoi par transaction ; ordre unique N0 interrupteurs → N1 campagne → N2 client → N3 consentement → N4 envoi → N5 compteurs (40 §3) ; arrêt d'urgence `arret_urgence` |
 
 **Planification.** `planifiee_le` ; une campagne lancée par passage. **Heures permises** 9 h–19 h à
-l'heure du destinataire (Haïti, Santo Domingo, heure de l'Est par défaut) ; **fréquence** 1 par jour et
+l'heure du destinataire ([Corrigé 1.3] fuseau déclaré, Haïti, Santo Domingo, ou État américain à un seul fuseau
+enregistré avec preuve ; **sinon inconnu : rien ne part** — plus d'heure de l'Est par défaut) ; **fréquence** 1 par jour et
 2 par semaine, tous canaux, messages en cours compris [H4]. À confirmer par le juriste.
 
 **pg_cron** accepte des intervalles en secondes ; la minute suffit et reste alignée sur le

@@ -4,7 +4,7 @@
 | | |
 |---|---|
 | Date | 18 novembre 2026 |
-| Statut | **Plan préparé. AUCUN de ces essais n'a été exécuté.** Ils le seront en Phase 2, sur autorisation écrite du CEO |
+| Statut | **Plan préparé. AUCUN de ces essais n'a été exécuté.** Ils le seront en Phase 2, sur autorisation écrite du CEO. **[1.3]** Complété par `PHASE_1_3_TEST_PLAN.md` (T-01 à T-20), qui fait foi là où les deux diffèrent |
 | Où | Base PostgreSQL **jetable** du harnais existant (`outils/essais-services/`), avec les doublures habituelles d'`auth`, `vault`, `net`, `cron` ; fournisseurs **simulés** (réponses écrites dans `net._http_response`) ; jamais la production, jamais un vrai fournisseur |
 | Nouveaux bancs prévus | `essai-communications.py` (base), `essai-communications.js` (copie démo), `essai-communications-navigateur.mjs` (navigateur, mode démo, `config.js` vide, appels à `*.supabase.co` coupés) |
 | Preuve commune | sortie du banc (nombre de vérifications réussies / échouées), journal de la CI `essais.yml`, et pour chaque groupe la preuve citée |
@@ -25,13 +25,13 @@ Données fictives communes (jamais de vraies personnes) :
 - **Scénario** : appliquer `outils/migrations.txt` + 40 à 43, puis tout rejouer.
 - **Attendu** :
   - aucune erreur ; la requête de contrôle de 40 donne
-    `tables 14 | permissions_admin 7 | permissions_gerant 5 | employe 0 | tarifs 0 | indicatifs_autorises 0 | campagnes_actives false` ;
+    `tables 18 | permissions_admin 7 | permissions_gerant 5 | employe 0 | tarifs 0 | indicatifs_autorises 0 | campagnes_actives false` ([Corrigé 1.3] : 18 tables) ;
   - au second passage, aucune ligne de réglage remise à zéro, aucune tâche dupliquée ;
   - `goship-communications` reste inactive.
 - **Échec si** : erreur, doublon de tâche, réglage réécrit, tâche active.
 - **Preuve** : sortie complète, comparaison des comptes avant et après le second passage.
 - **En plus** : une exécution d'un brouillon AVEC sa garde doit échouer sur `BROUILLON NON APPROUVÉ`
-  sans créer aucun objet.
+  sans créer aucun objet — [1.3] avec CHAQUE client, y compris `psql` sans `ON_ERROR_STOP` : T-14.
 
 ## Groupe 2 — Permissions, rôle par rôle
 - **Préconditions** : comptes A1, A2, G1, E1, C1, et un visiteur.
@@ -178,6 +178,7 @@ Données fictives communes (jamais de vraies personnes) :
 | Scénario | Attendu | Échec si |
 |---|---|---|
 | Pas de réponse en 10 min ; délai dépassé ; erreur réseau | `incertain` | `echec` ou nouvel essai |
+| [1.3] Réponse 5xx ; réponse 429 sans règle prouvée | `incertain` (T-06, T-07) | nouvel essai automatique |
 | 72 h sans retour | reste `incertain`, `incertain_clos_le` posé | renvoyé |
 | Retour tardif avec la référence | rapproché | — |
 | Relance par G1 | refusée | acceptée |

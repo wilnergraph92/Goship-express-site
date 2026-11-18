@@ -6,8 +6,8 @@
 | Date | 18 novembre 2026 |
 | Version | **Phase 1.2** — corrige la version Phase 1 après la revue Phase 1.1 |
 | Statut | **Conception + brouillons gardés. Rien n'a été exécuté sur aucune base** (production, préproduction ou jetable) |
-| Brouillons | `brouillons-sql/40-…-fondation.sql` (14 tables), `41-…-consentement.sql` (0 table), `42-…-campagnes.sql` (5 tables), `43-…-envoi.sql` (3 tables) — 22 tables, 80 fonctions |
-| Garde | Chaque fichier commence par `raise exception 'BROUILLON NON APPROUVÉ…'`, première instruction exécutée. Le SQL Editor envoie le fichier en une transaction : une exécution accidentelle s'arrête là, rien n'est appliqué. **La garde reste en place pendant la Phase 1.2** ; elle ne sera remplacée par la garde habituelle « base incomplète » qu'en Phase 2, sur autorisation écrite |
+| Brouillons | `brouillons-sql/40-…-fondation.sql` (14 tables), `41-…-consentement.sql` (0 table), `42-…-campagnes.sql` (5 tables), `43-…-envoi.sql` (3 tables) — 22 tables, 80 fonctions. **[Corrigé 1.3]** 40 : 18 tables ; 43 : 4 tables — **27 tables, 93 fonctions et 1 procédure** |
+| Garde | Chaque fichier commence par `raise exception 'BROUILLON NON APPROUVÉ…'`, première instruction exécutée. Le SQL Editor envoie le fichier en une transaction : une exécution accidentelle s'arrête là, rien n'est appliqué. **La garde reste en place pendant la Phase 1.2** ; elle ne sera remplacée par la garde habituelle « base incomplète » qu'en Phase 2, sur autorisation écrite. **[Corrigé 1.3]** Le bloc seul ne protégeait pas un client qui continue après une erreur (`psql` sans `ON_ERROR_STOP`) : tout le contenu est désormais enfermé dans une chaîne inerte (trois couches, PHASE_1_3_TECHNICAL_CORRECTIONS.md §9) |
 
 ---
 
@@ -50,10 +50,10 @@ Lectures seules d'objets existants :
 | Effets sur l'existant | `permissions_du_role` (§1) |
 | Tables | `communication_reglages`, `_indicatifs`, `_erreurs`, `_textes_consentement`, `_consentements`, `_confirmations`, `_suppressions`, `_destinataires_essai`, `_tarifs`, `_codes_fournisseur`, `_depenses_jour`, `_conservation`, `_demandes_purge`, `_journal_purges` |
 | Déclencheurs | immuabilité de `communication_consentements` et `communication_journal_purges` (exception : purge approuvée) |
-| Sécurité par ligne | activée sur les 14 tables, **aucune règle**, `revoke all` pour `anon` et `authenticated` |
+| Sécurité par ligne | activée sur les 14 tables ([1.3] 18 : + `_issues_http`, `_debit_minute`, `_fuseaux_regions`, `_fuseaux_clients`), **aucune règle**, `revoke all` pour `anon` et `authenticated` |
 | Permissions | aides fermées à tous ; `executer_purge_communication` ouverte aux comptes connectés, vérifie `communications.manage` et la demande approuvée |
 | Index | consentements (client, canal, date) ; confirmations : jeton unique, demandes en attente par contact, par consentement ; suppressions : active unique (canal, empreinte), par client |
-| Concurrence | verrous de transaction `communication_verrou(sujet)` : jour (dépenses), client (fréquence), consentement client+canal ; toujours dans l'ordre jour → campagne → client |
+| Concurrence | [Corrigé 1.3] ordre unique N0 interrupteurs (partagé/exclusif) → N1 campagne → N2 client → N3 consentement → N4 envoi → N5 compteurs (40 §3) ; l'ancien ordre « jour → campagne → client » n'était pas tenu par le code |
 | Idempotence | lignes de départ ; contraintes d'unicité |
 | Retour arrière | voir §6 |
 | Suppression ou anonymisation | **seulement** par `executer_purge_communication`, demande approuvée par un autre administrateur, durée fixée par le juriste |
@@ -98,12 +98,12 @@ Lectures seules d'objets existants :
 | Dépend de | 42 ; pg_net (`net.http_post`, `net._http_response`), pg_cron ; `html_echappe` |
 | Ordre | 43ᵉ |
 | Rejouable | oui ; la tâche planifiée n'est créée que si elle n'existe pas, et **inactive** |
-| Tables | `communication_envois`, `_evenements_fournisseur`, `_fenetres_whatsapp` |
+| Tables | `communication_envois`, `_evenements_fournisseur`, `_fenetres_whatsapp`, [1.3] `_webhook_debit` ; rôle `communication_webhook` (NOLOGIN) |
 | Déclencheurs | retours des fournisseurs immuables (exception : purge approuvée) |
 | Sécurité par ligne | activée, aucune règle, `revoke all` |
-| Permissions | 18 fonctions fermées ; `relancer_envoi_communication`, `sante_communications` (comptes connectés, avec permission) ; `communication_recevoir_evenement` (visiteur, signature) ; `desinscrire_communication` (visiteur et comptes, jeton) |
+| Permissions | [Corrigé 1.3] 22 fonctions et la procédure fermées (aussi à `service_role`) ; `relancer_envoi_communication`, `sante_communications` (comptes connectés, avec permission) ; `communication_recevoir_evenement` (**rôle `communication_webhook` seulement**, signature) ; `desinscrire_communication` (visiteur et comptes, jeton) |
 | Index | envois dus, en cours, par identifiant du fournisseur, par client et date, **par campagne et statut**, par destinataire, par confirmation, incertains ouverts ; retours par envoi |
-| Concurrence | `skip locked` ; verrous du jour, de la campagne et du client ; sous-transaction par envoi (une erreur annule aussi la réservation) |
+| Concurrence | [Corrigé 1.3] procédure `traiter_communications` : un COMMIT par envoi ; `communication_traiter_un` prend les verrous dans l'ordre unique ; réservation, débit global et quota Brevo sous N5 ; arrêt d'urgence relu à chaque envoi |
 | Retour arrière | `cron.alter_job(…, active := false)` ; `campagnes_actives = false` |
 | Purge | `communication_purger_autres`, `communication_purger_personne_suite`, appelées seulement par 40 |
 | PR #48 | première fonction Edge des deux projets : une seule convention (dossier, déploiement, secrets, exclusion par `deploy.yml`) |
@@ -166,6 +166,7 @@ demandé par une personne reste possible, avec approbation à quatre yeux.
   en Phase 2, jamais exécuté sans autorisation). Il :
   - remet `permissions_du_role` dans sa définition **d'avant 40, recopiée littéralement dans le script** ;
   - retire `communication_suivre_client` ;
+  - [1.3] retire l'exécution de `communication_recevoir_evenement` au rôle `communication_webhook` ;
   - garde les tables.
 - **Ne jamais** « relancer `supabase.sql` » pour revenir en arrière : il contiendra les nouvelles
   permissions.
@@ -177,7 +178,7 @@ demandé par une personne reste possible, avec approbation à quatre yeux.
 ## 7. Validation des brouillons (première tâche de la Phase 2)
 Les brouillons **n'ont jamais été exécutés** (règle des Phases 1, 1.1, 1.2). Points de relecture connus
 pour leur première exécution sur base jetable :
-1. Garde « BROUILLON » → garde « base incomplète ».
+1. Garde « BROUILLON » → garde « base incomplète » ; [1.3] retirer la chaîne englobante `$brouillon_goship_non_executable$`, et éprouver d'abord la garde actuelle (PHASE_1_3_TEST_PLAN T-14).
 2. Copies des permissions : quatre fichiers SQL + `api.js` ; essai de comparaison.
 3. `net.http_get` avec `params` et `timeout_milliseconds` : signature exacte à vérifier sur la version
    de pg_net installée (0.20.4 en production).
@@ -187,4 +188,5 @@ pour leur première exécution sur base jetable :
 7. Mesure du lancement et de l'aperçu sur 10 000 clients fictifs (coût du HMAC par client).
 8. Le déclencheur de `clients` face à Google, au profil, à la suppression de compte.
 9. Requête de contrôle de chaque fichier et témoin pour `sonder.sh`.
-10. Liste blanche de `controle-securite.sql` : les trois fonctions publiques.
+10. Liste blanche de `controle-securite.sql` : [Corrigé 1.3] les **deux** fonctions publiques (`confirmer_consentement_communication`, `desinscrire_communication`).
+11. [1.3] Procédure appelée par pg_cron (`call`, COMMIT internes) : PHASE_1_3_TEST_PLAN T-01-bis ; repli documenté si refusé.
