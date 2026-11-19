@@ -44,20 +44,24 @@ PHONE2_TXT = '+1 809 317-6686'
 # --------------------------------------------------------------------------
 MAIN_PAGES = [
     # source, sortie, titre, description
+    # Les titres disent ce que nous faisons et pour où (« colis », « Haïti »,
+    # « Santo Domingo ») : c'est ce que tapent nos clients, et un titre réduit au
+    # nom de la page (« Nos services ») ne répondait à aucune recherche. 65 signes
+    # au plus : au-delà, Google les coupe (rapport SEO du 19/11/2026).
     ('Goship Express.dc.html', 'index.html',
      'Goship Express — Envoi de colis USA, Haïti et Santo Domingo',
      "Réception, consolidation, transport et livraison de colis entre les États-Unis, Santo Domingo et Haïti. Délais annoncés, prix clairs, colis suivis de bout en bout."),
     ('A-propos.dc.html', 'a-propos.html',
-     'À propos — Goship Express',
+     'À propos de Goship Express, transporteur Miami → Haïti',
      "Goship Express est spécialisée dans le transport, la réception et la livraison de colis entre les États-Unis et Haïti : des solutions simples, rapides, adaptées."),
     ('Nos-Services.dc.html', 'nos-services.html',
-     'Nos services — Goship Express',
+     'Services : colis Miami → Haïti et Santo Domingo — Goship Express',
      "Adresse de réception aux USA, consolidation, fret maritime et aérien, dédouanement et livraison finale vers Haïti et Santo Domingo."),
     ('Blog.dc.html', 'blog.html',
-     'Blog — Goship Express',
+     'Blog : conseils pour envoyer vos colis en Haïti — Goship Express',
      "Conseils, douane et bonnes pratiques d'expédition : tout ce qu'il faut savoir pour acheter aux États-Unis et recevoir sans mauvaise surprise."),
     ('Contacts.dc.html', 'contacts.html',
-     'Contacts et devis — Goship Express',
+     'Devis gratuit, colis vers Haïti et Santo Domingo — Goship Express',
      "Parlons de votre envoi : un responsable corridor vous répond sous 2 heures ouvrées avec un tarif et un délai fermes."),
     ('Support.dc.html', 'support.html',
      'Support client — Goship Express',
@@ -142,6 +146,33 @@ COMPTE_PAGES = [
      "Votre espace client Goship Express : code client, adresse en Floride et suivi de vos colis.", True),
     ('nouveau-mot-de-passe.html', 'nouveau-mot-de-passe.main.html', 'Nouveau mot de passe — Goship Express',
      "Choisissez un nouveau mot de passe pour votre compte Goship Express.", True),
+]
+
+# Pages guides : chacune répond à une recherche précise de nos clients (« envoi
+# colis Miami Haïti », « casillero en Miami », « combien coûte un envoi »…), à
+# laquelle aucune page du site ne répondait (rapport SEO du 19/11/2026). Écrites à
+# la main dans pages/*.guide.html, avec l'en-tête et le pied de la page Support,
+# puis traduites comme les autres par outils/traduire.py. Rien n'y est inventé :
+# délais, garde de 30 jours et dédouanement viennent de Nos services et de la FAQ
+# de Contacts ; 5 $ la livre et 10 $ par facture, de API.tarifs (api.js). Les 5 $ la livre
+# sont le prix de l'avion ; le maritime est sur devis (décision du propriétaire, 19/11/2026).
+GUIDE_PAGES = [
+    # sortie, titre, description
+    ('envoi-colis-haiti.html', 'Envoi de colis de Miami vers Haïti — Goship Express',
+     "Envoyez vos colis de Miami vers Haïti : adresse gratuite en Floride, fret aérien en 3 à 5 jours "
+     "ou maritime, dédouanement inclus, 5 $ la livre par avion."),
+    ('envoi-colis-republique-dominicaine.html', 'Envoi de colis Miami → République dominicaine — Goship Express',
+     "Envoyez vos colis de Miami vers la République dominicaine : adresse gratuite en Floride, aérien en "
+     "2 à 4 jours, maritime en 7 à 12 jours, dédouanement inclus."),
+    ('adresse-miami.html', 'Adresse gratuite à Miami pour vos achats aux USA — Goship Express',
+     "Ouvrez gratuitement votre adresse à Miami : achetez sur Amazon, SHEIN ou Walmart, nous livrons "
+     "vos colis en Haïti et en République dominicaine."),
+    ('tarifs.html', 'Tarifs : 5 $ la livre par avion vers Haïti et Santo Domingo',
+     "5 $ la livre par avion, maritime sur devis, 10 $ de frais de service par facture, adresse à Miami "
+     "gratuite : nos tarifs d'envoi de colis vers Haïti et la République dominicaine."),
+    ('faq.html', 'FAQ : envoi de colis vers Haïti et Santo Domingo — Goship Express',
+     "Adresse à Miami, prix à la livre, délais, douane, livraison en province : les réponses aux questions "
+     "fréquentes sur l'envoi de colis vers Haïti et Santo Domingo."),
 ]
 
 # Pictogrammes (traits, 24 × 24)
@@ -1325,6 +1356,23 @@ def page_specific(body, src, page):
     # Formulaire de devis
     if src == 'Contacts.dc.html':
         body = ajouter_second_numero(body, page)
+        # La FAQ de la maquette décrivait une ancienne façon de faire : l'adresse en Floride
+        # s'affiche désormais à l'ouverture du compte, et le prix ne connaît que le poids
+        # (pas de poids volumétrique), 5 $ la livre par avion, maritime sur devis
+        # (décisions du propriétaire, 19/11/2026). Mêmes phrases que les pages guides.
+        body = replace_once(
+            body,
+            'Remplissez le formulaire de contact : nous vous envoyons votre adresse personnelle en Floride '
+            'et votre numéro de client GSE le jour même.',
+            '<a href="inscription.html">Créez votre compte</a> : votre adresse en Floride et votre code client '
+            'GSE s\'affichent aussitôt dans « Mon compte ». C\'est gratuit.', page)
+        body = replace_once(
+            body,
+            'Au poids réel ou au poids volumétrique, selon le plus élevé, plus les frais de douane applicables. '
+            'Le devis est validé avant tout départ.',
+            'Par avion : 5 $ la livre. Par bateau : sur devis, selon le volume. S\'y ajoutent 10 $ de frais de '
+            'service une fois par facture, et les frais de douane s\'il y en a. Voir nos '
+            '<a href="tarifs.html">tarifs</a>.', page)
         body = replace_once(body, 'onSubmit="{{ onSubmit }}"', 'data-form="quote"', page)
         body = replace_once(body, 'onClick="{{ onReset }}"', 'data-action="form-reset"', page)
         body = replace_once(body, '<h3 style="font-size:26px;font-weight:800">Demande envoyée.</h3>',
@@ -1550,6 +1598,7 @@ def convert(src, out, title=None, desc=None):
         body = replace_once(body, ancre, section_application() + ancre, page)
 
     body = poser_traces(body, page)
+    body = liens_du_pied(body, page)
 
     # Le numéro de la maquette (GSE-4821-HT : champ de suivi, étiquette de l'accueil,
     # flotte d'À propos) ressemblait à un vrai colis, mais n'existe pas : un visiteur
@@ -1654,6 +1703,62 @@ def build_compte():
                           mesure=out == 'inscription.html')
         with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
             f.write(head + body[:s] + main + body[e:])
+
+
+def build_guides():
+    """Pages guides (GUIDE_PAGES), construites avec l'en-tête et le pied de la page Support.
+
+    Publiques, à la différence de l'espace client : mesure.js et aucun noindex. Elles
+    n'appellent aucun script de plus, il n'y a rien à y calculer."""
+    raw = open(os.path.join(OUT, 'support.html'), encoding='utf-8').read()
+    body = raw[raw.find('<body>') + len('<body>\n'):]
+    s = body.find('<main id="contenu-principal" tabindex="-1">')
+    e = body.find('</main>') + len('</main>')
+    rapport = []
+    for out, title, desc in GUIDE_PAGES:
+        if len(title) > 65:
+            fail(f'{out} : titre de {len(title)} signes, Google le couperait (65 au plus)')
+        gabarit = out.replace('.html', '.guide.html')
+        main = open(os.path.join(PAGES, gabarit), encoding='utf-8').read().strip('\n')
+        if '[[' in main:
+            fail(f'{out}: repère non remplacé')
+        head = build_head(title, desc, OG_IMAGE_DEFAUT, False, False, mesure=True)
+        doc = head + body[:s] + main + body[e:]
+        with open(os.path.join(OUT, out), 'w', encoding='utf-8') as f:
+            f.write(doc)
+        rapport.append({'out': out, 'title': title, 'desc': desc, 'size': len(doc.encode('utf-8'))})
+    return rapport
+
+
+# Le pied de page mène aux pages guides : sans lien, Google les juge sans importance
+# (et un visiteur ne les trouve pas). « Adresse de réception USA » ouvre désormais
+# la page qui l'explique, plutôt qu'un bloc de l'accueil.
+# « #adresse » sur l'accueil lui-même, « index.html#adresse » ailleurs
+PIED_SERVICES = r'<a href="(?:index\.html)?#adresse" class="hv-accent" style="color:#a4b3d6">Adresse de réception USA</a>'
+PIED_NAVIGATION = '<a href="contacts.html" class="hv-accent" style="color:#a4b3d6">Contacts</a>'
+
+
+def lien_pied(cible, texte):
+    return f'<a href="{cible}" class="hv-accent" style="color:#a4b3d6">{texte}</a>'
+
+
+def liens_du_pied(body, page):
+    pied = body.rfind('<footer')
+    tete, fin = body[:pied], body[pied:]
+    fin = sub_count(PIED_SERVICES, lambda m: '\n        '.join([
+        lien_pied('adresse-miami.html', 'Adresse de réception USA'),
+        lien_pied('envoi-colis-haiti.html', 'Envoi vers Haïti'),
+        lien_pied('envoi-colis-republique-dominicaine.html', 'Envoi vers la République dominicaine'),
+    ]), fin, page)
+    fin = replace_once(fin, PIED_NAVIGATION, '\n        '.join([
+        lien_pied('tarifs.html', 'Tarifs'),
+        lien_pied('faq.html', 'Questions fréquentes'),
+        PIED_NAVIGATION,
+    ]), page)
+    # « Lire la FAQ » (accueil, Nos services) ouvrait les cinq questions de Contacts :
+    # la page Questions fréquentes les reprend toutes, et bien d'autres.
+    tete = tete.replace('href="contacts.html#faq"', 'href="faq.html"')
+    return tete + fin
 
 
 def build_admin():
@@ -1891,6 +1996,7 @@ def main():
         report.append(convert(src, LINK_MAP[src]))
     build_404()
     build_compte()
+    report += build_guides()
     build_admin()
     write_hover_css()
     write_entetes()

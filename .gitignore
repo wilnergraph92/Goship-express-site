@@ -59,3 +59,9 @@ rclone.conf
 
 # --- Application mobile : elle a son propre dépôt GitHub -----------------
 application-mobile/
+
+# --- Audit SEO (skills .claude/skills/seo, keyword-finder, page-writer) ---
+#  Le dossier de travail de /seo : pages lues sur notre site et chez les
+#  concurrents, export Search Console, rapport. Il naît à la racine, qui est
+#  la racine du site publié : il ne doit jamais partir sur GitHub.
+seo-work/
