@@ -684,7 +684,7 @@ listées dans `GUIDE_PAGES` (`build.py`, titre de 65 signes au plus, sinon arrê
 par les classes `gs-guide-*` de `site.css`, liées depuis le pied de page (`liens_du_pied`).
 Rien n'y est inventé : un délai, un prix ou un service qui change sur le site ou dans
 `API.tarifs` se change aussi là. Un texte ajouté : ses trois traductions dans
-`outils/traductions/*.json`. **Polices servies par le site** (`assets/fonts`,
+`outils/traductions/*.json`. Les skills d'audit SEO (`/seo`, `/keyword-finder`, `/page-writer`) vivent dans `.claude/skills/` (exclu de la publication), copiés tels quels du pack du 05/11/2026 : leur dossier de travail `seo-work/` est ignoré par git, et `/page-writer` modifie les sources (`outils/generateur/`), jamais une page générée. **Polices servies par le site** (`assets/fonts`,
 `@font-face` en tête de `site.css`, préchargées par `build_head` : `POLICES_PRECHARGEES`) : plus de Google
 Fonts, la CSP n'autorise que `'self'` pour les polices et les styles ; une icône Material de plus = retélécharger
 le sous-ensemble (`assets/fonts/LICENCES.txt`). Photos Unsplash : `srcset` et `sizes`
