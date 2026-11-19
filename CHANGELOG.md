@@ -16,6 +16,8 @@ migration.
   dominicaine, adresse à Miami (« casillero » en espagnol), tarifs (5 $ la livre par
   avion, maritime sur devis, 10 $ par facture, exemples), questions fréquentes. Liées depuis le pied de page de tout le site ;
   « Lire la FAQ » ouvre la nouvelle page.
+- FAQ de Contacts corrigée : l'adresse en Floride s'affiche à l'ouverture du compte (plus « envoyez le
+  formulaire »), et le prix suit le poids seul, sans poids volumétrique (décision du 19/11/2026).
 - Titres de À propos, Nos services, Blog et Contacts : ils disent « colis », « Haïti »,
   « Santo Domingo » au lieu du seul nom de la page.
 - Dans le site publié, les liens entre pages mènent à l'adresse propre (`nos-services`), la même

@@ -1356,6 +1356,23 @@ def page_specific(body, src, page):
     # Formulaire de devis
     if src == 'Contacts.dc.html':
         body = ajouter_second_numero(body, page)
+        # La FAQ de la maquette décrivait une ancienne façon de faire : l'adresse en Floride
+        # s'affiche désormais à l'ouverture du compte, et le prix ne connaît que le poids
+        # (pas de poids volumétrique), 5 $ la livre par avion, maritime sur devis
+        # (décisions du propriétaire, 19/11/2026). Mêmes phrases que les pages guides.
+        body = replace_once(
+            body,
+            'Remplissez le formulaire de contact : nous vous envoyons votre adresse personnelle en Floride '
+            'et votre numéro de client GSE le jour même.',
+            '<a href="inscription.html">Créez votre compte</a> : votre adresse en Floride et votre code client '
+            'GSE s\'affichent aussitôt dans « Mon compte ». C\'est gratuit.', page)
+        body = replace_once(
+            body,
+            'Au poids réel ou au poids volumétrique, selon le plus élevé, plus les frais de douane applicables. '
+            'Le devis est validé avant tout départ.',
+            'Par avion : 5 $ la livre. Par bateau : sur devis, selon le volume. S\'y ajoutent 10 $ de frais de '
+            'service une fois par facture, et les frais de douane s\'il y en a. Voir nos '
+            '<a href="tarifs.html">tarifs</a>.', page)
         body = replace_once(body, 'onSubmit="{{ onSubmit }}"', 'data-form="quote"', page)
         body = replace_once(body, 'onClick="{{ onReset }}"', 'data-action="form-reset"', page)
         body = replace_once(body, '<h3 style="font-size:26px;font-weight:800">Demande envoyée.</h3>',
