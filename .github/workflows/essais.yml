@@ -88,6 +88,8 @@ jobs:
         run: for f in outils/production/*.sh outils/sauvegarde-locale/*.sh; do bash -n "$f" && echo "ok $f"; done
       - name: Empreintes des scripts publiés et cache du .htaccess (versionner.py)
         run: python3 outils/production/essai-versionner.py
+      - name: Liens entre pages en adresse propre dans le site publié (liens_propres.py)
+        run: python3 outils/production/essai-liens-propres.py
 
   # Le script de sauvegarde du code tourne sur le Mac du propriétaire (launchd) : il est
   # éprouvé sur macOS, avec le bash 3.2 de /bin/bash et les outils BSD, comme là-bas

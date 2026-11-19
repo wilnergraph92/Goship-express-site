@@ -7,6 +7,20 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — cinq pages pour Google, et des titres qui disent ce que nous faisons (19/11/2026)
+
+Rapport SEO du 19/11/2026 (sans les chiffres de Search Console, pas encore installé). Aucune
+migration.
+
+- Cinq pages nouvelles, en quatre langues : envoi vers Haïti, envoi vers la République
+  dominicaine, adresse à Miami (« casillero » en espagnol), tarifs (5 $ la livre, 10 $ par
+  facture, exemples), questions fréquentes. Liées depuis le pied de page de tout le site ;
+  « Lire la FAQ » ouvre la nouvelle page.
+- Titres de À propos, Nos services, Blog et Contacts : ils disent « colis », « Haïti »,
+  « Santo Domingo » au lieu du seul nom de la page.
+- Dans le site publié, les liens entre pages mènent à l'adresse propre (`nos-services`), la même
+  que la balise canonical et le sitemap (`liens_propres.py`, `deploy.yml`). Le dépôt ne change pas.
+
 ## Non publié — la photo de l'accueil servie par le site (17/11/2026)
 
 Décision du CEO du 17/11/2026. Aucune migration.

@@ -671,7 +671,20 @@ du fichier (`?v=` + 10 signes du SHA-256, `outils/production/versionner.py`, pui
 liens-là, tout le reste est `no-cache`. **Le dépôt n'a jamais d'empreinte** (liens nus,
 vérifié par `essai-versionner.py`) : rien à faire quand on modifie un script. Une adresse
 en `.html` n'est plus renvoyée vers l'adresse propre (un aller-retour de moins par lien) ;
-la balise `canonical` désigne l'adresse propre. **Polices servies par le site** (`assets/fonts`,
+la balise `canonical` désigne l'adresse propre. **Les liens entre pages prennent l'adresse
+propre dans la copie publiée seulement** (`outils/production/liens_propres.py`, appelé par
+`deploy.yml` puis `--verifier`, banc `essai-liens-propres.py`) : `nos-services.html` →
+`nos-services`, `index.html` → `./`. Le dépôt garde ses liens en `.html` (le site doit
+s'ouvrir depuis le disque) ; `admin.html` n'est jamais réécrit.
+
+**Les pages guides** (rapport SEO du 19/11/2026) : `envoi-colis-haiti`,
+`envoi-colis-republique-dominicaine`, `adresse-miami`, `tarifs`, `faq`. Chacune répond à
+une recherche de nos clients. Écrites dans `outils/generateur/pages/*.guide.html`,
+listées dans `GUIDE_PAGES` (`build.py`, titre de 65 signes au plus, sinon arrêt), habillées
+par les classes `gs-guide-*` de `site.css`, liées depuis le pied de page (`liens_du_pied`).
+Rien n'y est inventé : un délai, un prix ou un service qui change sur le site ou dans
+`API.tarifs` se change aussi là. Un texte ajouté : ses trois traductions dans
+`outils/traductions/*.json`. **Polices servies par le site** (`assets/fonts`,
 `@font-face` en tête de `site.css`, préchargées par `build_head` : `POLICES_PRECHARGEES`) : plus de Google
 Fonts, la CSP n'autorise que `'self'` pour les polices et les styles ; une icône Material de plus = retélécharger
 le sous-ensemble (`assets/fonts/LICENCES.txt`). Photos Unsplash : `srcset` et `sizes`
