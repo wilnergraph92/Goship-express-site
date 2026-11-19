@@ -154,21 +154,22 @@ COMPTE_PAGES = [
 # la main dans pages/*.guide.html, avec l'en-tête et le pied de la page Support,
 # puis traduites comme les autres par outils/traduire.py. Rien n'y est inventé :
 # délais, garde de 30 jours et dédouanement viennent de Nos services et de la FAQ
-# de Contacts ; 5 $ la livre et 10 $ par facture, de API.tarifs (api.js).
+# de Contacts ; 5 $ la livre et 10 $ par facture, de API.tarifs (api.js). Les 5 $ la livre
+# sont le prix de l'avion ; le maritime est sur devis (décision du propriétaire, 19/11/2026).
 GUIDE_PAGES = [
     # sortie, titre, description
     ('envoi-colis-haiti.html', 'Envoi de colis de Miami vers Haïti — Goship Express',
      "Envoyez vos colis de Miami vers Haïti : adresse gratuite en Floride, fret aérien en 3 à 5 jours "
-     "ou maritime, dédouanement inclus, 5 $ la livre."),
+     "ou maritime, dédouanement inclus, 5 $ la livre par avion."),
     ('envoi-colis-republique-dominicaine.html', 'Envoi de colis Miami → République dominicaine — Goship Express',
      "Envoyez vos colis de Miami vers la République dominicaine : adresse gratuite en Floride, aérien en "
      "2 à 4 jours, maritime en 7 à 12 jours, dédouanement inclus."),
     ('adresse-miami.html', 'Adresse gratuite à Miami pour vos achats aux USA — Goship Express',
      "Ouvrez gratuitement votre adresse à Miami : achetez sur Amazon, SHEIN ou Walmart, nous livrons "
      "vos colis en Haïti et en République dominicaine."),
-    ('tarifs.html', 'Tarifs : 5 $ la livre vers Haïti et Santo Domingo — Goship',
-     "5 $ la livre et 10 $ de frais de service par facture, adresse à Miami gratuite : nos tarifs d'envoi "
-     "de colis vers Haïti et la République dominicaine, avec exemples."),
+    ('tarifs.html', 'Tarifs : 5 $ la livre par avion vers Haïti et Santo Domingo',
+     "5 $ la livre par avion, maritime sur devis, 10 $ de frais de service par facture, adresse à Miami "
+     "gratuite : nos tarifs d'envoi de colis vers Haïti et la République dominicaine."),
     ('faq.html', 'FAQ : envoi de colis vers Haïti et Santo Domingo — Goship Express',
      "Adresse à Miami, prix à la livre, délais, douane, livraison en province : les réponses aux questions "
      "fréquentes sur l'envoi de colis vers Haïti et Santo Domingo."),

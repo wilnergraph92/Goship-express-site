@@ -13,8 +13,8 @@ Rapport SEO du 19/11/2026 (sans les chiffres de Search Console, pas encore insta
 migration.
 
 - Cinq pages nouvelles, en quatre langues : envoi vers Haïti, envoi vers la République
-  dominicaine, adresse à Miami (« casillero » en espagnol), tarifs (5 $ la livre, 10 $ par
-  facture, exemples), questions fréquentes. Liées depuis le pied de page de tout le site ;
+  dominicaine, adresse à Miami (« casillero » en espagnol), tarifs (5 $ la livre par
+  avion, maritime sur devis, 10 $ par facture, exemples), questions fréquentes. Liées depuis le pied de page de tout le site ;
   « Lire la FAQ » ouvre la nouvelle page.
 - Titres de À propos, Nos services, Blog et Contacts : ils disent « colis », « Haïti »,
   « Santo Domingo » au lieu du seul nom de la page.
