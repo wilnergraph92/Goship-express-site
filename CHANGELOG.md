@@ -7,6 +7,13 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — l'article espagnol « servicio de mensajería » mène au casillero (19/11/2026)
+
+Search Console (25/10 au 17/11/2026) : cette page sort en position 4,8 sur « servicio de mensajería
+empresarial », environ 186 affichages par mois, aucun clic. Nouveau titre et description en espagnol
+(`outils/traductions/es.json`) ; la conclusion de l'article, dans les quatre langues, renvoie vers
+l'adresse à Miami (`build.py`). Aucune migration.
+
 ## Non publié — cinq pages pour Google, et des titres qui disent ce que nous faisons (19/11/2026)
 
 Rapport SEO du 19/11/2026 (sans les chiffres de Search Console, pas encore installé). Aucune

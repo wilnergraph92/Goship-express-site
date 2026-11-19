@@ -1616,6 +1616,17 @@ def convert(src, out, title=None, desc=None):
     if out == 'index.html':
         body = re.sub(r'<h3( style="margin-top:14px;font-size:clamp\(24px,2\.6vw,34px\)[^"]*")>(Où est mon colis \?)</h3>',
                       r'<h2\1>\2</h2>', body)
+    # « Qu'est-ce qu'un service de messagerie ? » : sa version espagnole sort en 5e position
+    # sur « servicio de mensajería empresarial » (Search Console, 25/10 au 17/11/2026), mais
+    # rien n'y menait à nos services. La conclusion envoie maintenant le lecteur vers
+    # l'adresse à Miami (le « casillero » en espagnol), dans les quatre langues.
+    if out == 'article-service-de-messagerie.html':
+        body = sub_count(r'(expérience logistique\.</p>)',
+                         r'\1\n      <p style="margin-top:16px;font-size:16.5px;line-height:1.8;color:#4a5878">'
+                         r'Vous achetez aux États-Unis et vous habitez en Haïti ou en République dominicaine ? '
+                         r'Goship Express vous donne une <a href="adresse-miami.html" style="font-weight:700;'
+                         r'text-decoration:underline">adresse gratuite à Miami</a> : nous recevons vos colis et '
+                         r'vous les livrons, par avion ou par bateau.</p>', body, page)
     if out == 'article-conseils-livraison.html':
         body = re.sub(r'<h3( style="font-size:clamp\(17px,1\.9vw,21px\)[^"]*")>(.*?)</h3>', r'<h2\1>\2</h2>', body, flags=re.S)
 
