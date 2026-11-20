@@ -9,7 +9,7 @@ base **avant** de publier le site.
 
 ## Non publié — déconnexion après un moment sans activité (20/11/2026)
 
-Le tableau de bord et « Mon compte » se déconnectent seuls après 10 minutes sans souris, clavier,
+Le tableau de bord et « Mon compte » se déconnectent seuls après 5 minutes sans souris, clavier,
 toucher ni défilement (`config.js` : `deconnexionTableauMinutes`, `deconnexionCompteMinutes`, 1 à
 240). Une minute avant, « Toujours là ? » et un bouton « Rester connecté » ; n'importe quel geste
 suffit aussi. Tous les onglets partagent le même compteur ; un ordinateur rouvert après une longue
