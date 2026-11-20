@@ -70,3 +70,7 @@ seo-work/
 #  Pubs des concurrents, audits, textes et images : le dossier naît à la
 #  racine, donc dans le site publié. Il reste sur la machine qui l'a fait.
 ads-out/
+
+# --- Réponses de l'IA de Google (skills .claude/skills/search, search-fixer,
+#     search-tracker) : questions, réponses lues, avant/après. Même raison.
+search-work/
