@@ -70,6 +70,6 @@ window.GOSHIP_CONFIG = {
   googlePlayLien: 'https://play.google.com/store/apps/details?id=com.goshipexpress.app',
   siteUrl: 'https://goshipexpress.net',
   googleAnalytics: 'G-KLV2HSF91C',
-  deconnexionTableauMinutes: 10,
-  deconnexionCompteMinutes: 10
+  deconnexionTableauMinutes: 5,
+  deconnexionCompteMinutes: 5
 };
