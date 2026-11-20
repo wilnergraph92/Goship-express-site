@@ -65,3 +65,20 @@ application-mobile/
 #  concurrents, export Search Console, rapport. Il naît à la racine, qui est
 #  la racine du site publié : il ne doit jamais partir sur GitHub.
 seo-work/
+
+# --- Publicités (skills .claude/skills/ads, ad-writer, ad-images) --------
+#  Pubs des concurrents, audits, textes et images : le dossier naît à la
+#  racine, donc dans le site publié. Il reste sur la machine qui l'a fait.
+ads-out/
+
+# --- Réponses de l'IA de Google (skills .claude/skills/search, search-fixer,
+#     search-tracker) : questions, réponses lues, avant/après. Même raison.
+search-work/
+
+# --- Prospection (skills lead-finder, profile-builder, email-finder, lead-sender,
+#     leads, lead-emails, humanizer) : publications, profils, adresses e-mail et
+#     lots d'envoi. Ce sont des données personnelles : jamais dans le dépôt, et
+#     encore moins sur le site publié.
+finder-out/
+leads-out/
+/queue/
