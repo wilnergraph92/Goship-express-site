@@ -1706,7 +1706,9 @@ def build_compte():
         # codes.js et impression.js ne servent qu'à « Mon compte » (factures
         # imprimables) : les autres pages de l'espace client s'en passent.
         # lieux.js (régions et villes) avant compte.js, qui s'en sert.
-        scripts = (('api', 'codes', 'impression', 'lieux', 'compte') if out == 'mon-compte.html'
+        # inactivite.js (déconnexion après un moment sans activité) seulement sur Mon compte :
+        # c'est la seule page de l'espace client où une session ouverte montre quelque chose.
+        scripts = (('api', 'codes', 'impression', 'lieux', 'inactivite', 'compte') if out == 'mon-compte.html'
                    else ('api', 'lieux', 'compte'))
         # L'inscription porte mesure.js, qui n'y charge Google qu'une fois le compte
         # créé, pour compter l'inscription (voir mesure.js) ; les autres pages du compte, jamais.

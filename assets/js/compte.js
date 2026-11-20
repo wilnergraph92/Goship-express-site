@@ -489,6 +489,9 @@
       history.replaceState(null, '', location.pathname + location.search);
     });
     if (location.hash === '#oubli') voirOubli(true);
+    // Renvoyé ici par la déconnexion après inactivité (Mon compte)
+    var raisonInactivite = $('[data-raison-inactivite]');
+    if (raisonInactivite && /[?&]raison=inactivite(&|$)/.test(location.search)) raisonInactivite.hidden = false;
 
     API.session().then(function (s) { if (s && location.hash !== '#oubli') location.replace(destination('mon-compte.html')); }, function () {});
 
@@ -1461,8 +1464,41 @@
       API.reglerAnniversaire(casePref.checked).then(function () { avtMessage('[data-avt-ok]', t('pref-ok')); }, function (err) { avtErreur(err); casePref.checked = !casePref.checked; });
     });
 
+    /* Déconnexion après un moment sans activité (inactivite.js) : un ordinateur partagé
+       ou oublié ne doit pas laisser l'espace client ouvert. Après deconnexionCompteMinutes
+       sans un geste (config.js, 10 par défaut), on se déconnecte et la page de connexion
+       dit pourquoi. Un bandeau prévient une minute avant ; un geste le fait disparaître. */
+    var veille = { arreter: function () {}, prolonger: function () {} };
+    var bandeauInactivite = $('[data-inactivite]');
+    var veillerInactivite = function () {
+      if (!window.GoshipInactivite) return;
+      API.session().then(function (s) {
+        if (!s) return;
+        var cfg = window.GOSHIP_CONFIG || {};
+        veille = window.GoshipInactivite.surveiller({
+          minutes: window.GoshipInactivite.minutes(cfg.deconnexionCompteMinutes, 10),
+          connecteLe: s.connecte_le,
+          avertir: function () { if (bandeauInactivite) bandeauInactivite.hidden = false; },
+          reprendre: function () { if (bandeauInactivite) bandeauInactivite.hidden = true; },
+          expirer: function () {
+            var fin = function () {
+              annoncerSession();
+              location.replace('connexion.html?raison=inactivite');
+            };
+            API.deconnecter().then(fin, fin);
+          }
+        });
+      }, function () { /* sans session lisible, rien à surveiller */ });
+    };
+    var boutonRester = $('[data-action="rester-connecte"]');
+    if (boutonRester) boutonRester.addEventListener('click', function () {
+      veille.prolonger();
+      bandeauInactivite.hidden = true;
+    });
+
     // Déconnexion
     $('[data-action="deconnexion"]').addEventListener('click', function () {
+      veille.arreter();
       API.deconnecter().then(function () {
         annoncerSession();
         location.href = 'connexion.html';
@@ -1492,6 +1528,7 @@
       chargerAchats();
       chargerFactures();
       chargerResume();
+      veillerInactivite();
       var direct = $('[data-direct]');
       var prevu = null;
       API.surveiller(function (quoi) {

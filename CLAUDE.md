@@ -40,6 +40,7 @@ bureau/                             app de bureau Windows/macOS (Electron) — j
 | `compte.js` | Espace client |
 | `impression.js` | Étiquettes 4×6 et factures A4, en 4 langues |
 | `site.js` | Pages publiques, suivi de colis |
+| `inactivite.js` | Déconnexion après un moment sans activité (`GoshipInactivite.surveiller`) : tableau de bord (fenêtre `data-dialogue="inactivite"`, `admin.js`) et « Mon compte » (bandeau `[data-inactivite]`, `compte.js`, puis `connexion.html?raison=inactivite`). Délais `deconnexionTableauMinutes` / `deconnexionCompteMinutes` de `config.js` (1 à 240, 10 par défaut), avertissement une minute avant. Heure du dernier geste partagée entre onglets (`gse-derniere-activite`), comparée à l'horloge et non à une minuterie : un ordinateur sorti de veille se déconnecte aussitôt. Protection côté page seulement (le jeton Supabase garde sa durée). Banc : `essai-inactivite-navigateur.mjs` |
 | `fond.js` | Grille de points en arrière-plan des pages publiques (canvas fixe, réagit au curseur) — pas le tableau de bord |
 | `mesure.js` | Google Analytics 4, pages publiques seulement, si `googleAnalytics` est réglé ; page envoyée sans ses paramètres (sauf ceux d'une campagne : `utm_*`, `gclid`), jamais de numéro de colis. Sur `inscription.html`, rien n'est chargé avant que le compte soit créé et le formulaire vidé : `GoshipMesure.inscription` (appelée par `compte.js`) envoie alors `sign_up`. La CSP qui l'autorise est posée par `build.py` (`csp(mesure=True)`) |
 | `codes.js` | QR codes et codes-barres |

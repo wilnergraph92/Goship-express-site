@@ -188,6 +188,10 @@
   };
 
   /* ---- Démarrage ---------------------------------------------------------- */
+  // La session lue au démarrage (son heure de connexion sert à la veille d'inactivité),
+  // et si elle vient d'être ouverte par le formulaire de cette page
+  var sessionLue = null, connexionDuFormulaire = false;
+
   function demarrer() {
     if (API.mode === 'demo') {
       $('[data-demo]').hidden = false;
@@ -197,6 +201,7 @@
     if (API.mode === 'off') { ecran('off'); return; }
     API.session().then(function (s) {
       if (!s) { ecran('connexion'); return null; }
+      sessionLue = s;
       $$('[data-email]').forEach(function (n) { n.textContent = s.email; });
       $('[data-avatar]').textContent = String(s.email || '?').replace(/@.*/, '').split(/[._-]+/)
         .filter(Boolean).slice(0, 2).map(function (m) { return m.charAt(0).toUpperCase(); }).join('') || '?';
@@ -235,6 +240,7 @@
     API.connecter(f.email.value.trim().toLowerCase(), f.mot_de_passe.value).then(function () {
       attente(bouton);
       f.mot_de_passe.value = '';
+      connexionDuFormulaire = true;
       demarrer();
     }).catch(function (err) {
       attente(bouton);
@@ -366,9 +372,63 @@
   $$('[data-action="deconnexion"]').forEach(function (b) {
     b.addEventListener('click', function () {
       deconnexionVoulue = true;
+      veille.arreter();
       API.deconnecter().then(function () { location.reload(); });
     });
   });
+
+  /* ---- Déconnexion après un moment sans activité (inactivite.js) -----------------
+     Un poste laissé ouvert au comptoir ne doit pas rester dans le tableau de bord :
+     après deconnexionTableauMinutes sans un geste (config.js, 10 par défaut), la page
+     se déconnecte, avec une fenêtre d'avertissement une minute avant. Tous les onglets
+     du site partagent la même heure de dernier geste. */
+  var veille = { arreter: function () {}, prolonger: function () {} };
+  var dlgInactivite = $('[data-dialogue="inactivite"]');
+  var deconnexionInactivite = false;
+
+  function veillerInactivite() {
+    if (!window.GoshipInactivite || API.mode === 'off') return;
+    veille.arreter();
+    deconnexionInactivite = false;
+    var cfg = window.GOSHIP_CONFIG || {};
+    // Juste connecté par le formulaire : l'heure de ce poste fait foi (celle de
+    // Supabase peut différer de quelques minutes de son horloge)
+    var connecteLe = connexionDuFormulaire ? Date.now() : (sessionLue && sessionLue.connecte_le);
+    connexionDuFormulaire = false;
+    veille = window.GoshipInactivite.surveiller({
+      minutes: window.GoshipInactivite.minutes(cfg.deconnexionTableauMinutes, 10),
+      connecteLe: connecteLe,
+      avertir: function () {
+        if (dlgInactivite && !dlgInactivite.open) dlgInactivite.showModal();
+        notificationSysteme('Toujours là ?', 'Sans activité, vous serez déconnecté dans une minute.', 'inactivite');
+      },
+      reprendre: function () {
+        if (dlgInactivite && dlgInactivite.open) dlgInactivite.close();
+      },
+      expirer: deconnecterParInactivite
+    });
+  }
+
+  function deconnecterParInactivite() {
+    deconnexionInactivite = true;
+    arreterSurveillance();
+    arreterSurveillance = function () {};
+    // Les fenêtres se ferment sans question : une saisie en cours est perdue, c'est le
+    // prix d'un poste resté ouvert (l'avertissement a laissé une minute pour revenir)
+    $$('dialog[open]').forEach(function (d) { d.close(); });
+    $('[data-barre-connecte]').hidden = true;
+    ecran('connexion');
+    erreurFormulaire(formConnexion, 'Vous avez été déconnecté après un moment sans activité, pour protéger les données. Reconnectez-vous pour continuer.');
+    notificationSysteme('Déconnecté', 'Vous avez été déconnecté après un moment sans activité.', 'session');
+    API.deconnecter().catch(function () { /* la session locale se ferme de toute façon */ });
+  }
+
+  if (dlgInactivite) {
+    $('[data-inactivite-rester]', dlgInactivite).addEventListener('click', function () {
+      veille.prolonger();
+      dlgInactivite.close();
+    });
+  }
 
   /* ---- Tableau de bord ---------------------------------------------------------- */
   // Logo des e-mails : copié une fois dans le dossier public de Supabase, pour que
@@ -387,6 +447,7 @@
 
   function ouvrirTableau() {
     ecran('tableau');
+    veillerInactivite();
     afficherDoubleAuth();
     $('[data-demo-actions]').hidden = API.mode !== 'demo';
     appliquerReglages();
@@ -5420,7 +5481,8 @@
   // Session terminée sans « Déconnexion » (jeton expiré ou révoqué) : retour à la
   // connexion, avec la raison. Rien n'est effacé côté serveur.
   API.surSessionPerdue(function () {
-    if (deconnexionVoulue || !tableauOuvert()) return;
+    if (deconnexionVoulue || deconnexionInactivite || !tableauOuvert()) return;
+    veille.arreter();
     arreterSurveillance();
     arreterSurveillance = function () {};
     $$('dialog[open]').forEach(function (d) { d.close(); });

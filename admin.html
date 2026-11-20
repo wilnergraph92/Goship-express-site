@@ -25,6 +25,7 @@
 <script src="assets/js/tableau-textes.js" defer></script>
 <script src="assets/js/tableau-langue.js" defer></script>
 <script src="assets/js/lieux.js" defer></script>
+<script src="assets/js/inactivite.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
 <script src="assets/js/scan-parser.js" defer></script>
 <script src="assets/js/transporteur.js" defer></script>
@@ -1726,6 +1727,24 @@
       <button type="submit" class="gs-bouton gs-bouton--danger" data-supprimer-rapport-valider>Supprimer</button>
     </div>
   </form>
+</dialog>
+
+<!-- Une minute avant la déconnexion après inactivité (inactivite.js) : un geste, ou ce
+     bouton, garde la session ouverte -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="inactivite" aria-labelledby="dlg-inactivite-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-inactivite-titre">Toujours là ?</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Sans activité, vous serez déconnecté dans une minute.</p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--plein" data-inactivite-rester autofocus>Rester connecté</button>
+    </div>
+  </div>
 </dialog>
 
 <!-- Fermer une fenêtre où l'on a déjà saisi quelque chose : on le confirme d'abord -->
