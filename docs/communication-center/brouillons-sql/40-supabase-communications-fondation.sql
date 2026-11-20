@@ -297,9 +297,11 @@ $$;
 -- Les verrous (revue 1.1, H1, H4, H6 ; Phase 1.3, correction 2). Verrous de TRANSACTION
 -- (relâchés au COMMIT ou à l'annulation). ORDRE UNIQUE, pour TOUTES les fonctions du Centre ;
 -- une transaction peut sauter un niveau, jamais revenir en arrière :
---   N0  interrupteurs   verrou consultatif « interrupteurs » : PARTAGÉ par toute transaction
---                       qui envoie ou prépare un envoi ; EXCLUSIF pour qui écrit un interrupteur
---                       ou un réglage d'envoi (arrêt d'urgence compris)
+--   N0  interrupteurs   verrou consultatif « interrupteurs » : PARTAGÉ par la seule porte des
+--                       sorties (communication_autoriser_sortie) ; EXCLUSIF pour l'arrêt, sa
+--                       confirmation, sa levée et les réglages d'envoi (1.3.1)
+--   N0a ligne d'arrêt   la ligne de communication_arret (FOR UPDATE) : fonctions d'arrêt seulement,
+--                       toujours APRÈS N0 ; la porte la lit sans verrou (1.3.1, revue n° 3 IR3-09)
 --   N1  campagne        la ligne de communication_campagnes (FOR UPDATE)
 --   N2  client          verrou consultatif « client:<id> »
 --   N3  consentement    verrou consultatif « consentement:<client>:<canal> » ; plusieurs
@@ -1141,6 +1143,11 @@ begin
     elsif d.categorie = 'confirmations' then
       -- 1.3.1 (revue n° 2, IR2-05) : les e-mails de confirmation jamais partis (interrupteur éteint)
       -- sont d'abord écartés ; un e-mail EN COURS de remise fait refuser la purge (à refaire)
+      -- Revue n° 3 (IR3-05) : les envois concernés sont verrouillés d'abord (par identifiant
+      -- croissant) ; aucun ne peut passer en « traitement » entre le contrôle et l'effacement
+      perform 1 from public.communication_envois e
+       where e.confirmation_id in (select f.id from public.communication_confirmations f where f.cree_le < v_avant)
+       order by e.id for update;
       if exists (select 1 from public.communication_envois e join public.communication_confirmations f on f.id = e.confirmation_id
                   where f.cree_le < v_avant and e.statut = 'traitement') then
         perform public.erreur_metier('PURGE_RETRY', 'Un e-mail de confirmation est en cours de remise : réessayez dans quelques minutes.');

@@ -926,6 +926,11 @@ begin
     return v_raison;
   end if;
   select * into r from public.communication_reglages;              -- même état que la porte (N0 tenu)
+  -- Revue n° 3 (IR3-04) : la règle du compte Brevo partagé porte sur le fournisseur FIGÉ de l'envoi
+  -- (la porte, elle, lit le réglage du moment) ; l'envoi reste en attente
+  if e.canal = 'email' and e.fournisseur = 'brevo' and r.brevo_compte_partage then
+    return 'COMPTE_BREVO_PARTAGE';
+  end if;
 
   -- N1 : la campagne AVANT l'envoi (même ordre que l'annulation, 42 §4.6)
   if e.nature = 'campagne' then
@@ -1099,6 +1104,7 @@ begin
     end if;
     update public.communication_envois
        set statut = 'traitement', requete = v_requete, tentative = tentative + 1, verrouille_le = now(), remis_le = now(),
+           sortie_file_vue_le = null,           -- revue n° 3 (IR3-01) : nouvelle requête, nouvelle observation
            code_erreur = null,
            cout_estime_usd = v_cout, maj_le = now(),
            empreinte_contenu = encode(extensions.digest(coalesce(v_html, array_to_string(v_params, '|'), ''), 'sha256'), 'hex')
@@ -1865,7 +1871,9 @@ as $$
      and not exists (select 1 from net._http_response x where x.id = p_requete)
      and (exists (select 1 from net.http_request_queue q where q.id = p_requete)
           or p_sortie_vue is null
-          or p_sortie_vue > now() - make_interval(secs => (select r.delai_http_ms from public.communication_reglages r) / 1000.0 + 60))
+          -- Revue n° 3 (IR3-06) : le délai MAXIMAL permis (60 s, contrainte de delai_http_ms) + 60 s,
+          -- et non le réglage du moment, qui a pu être réduit après le dépôt de la requête
+          or p_sortie_vue > now() - interval '120 seconds')
 $$;
 
 -- Noter le premier instant où une requête est vue hors de la file (appelée par la lecture des
@@ -1878,6 +1886,7 @@ set search_path = ''
 as $$
 declare
   v_n integer;
+  v_m integer;
 begin
   update public.communication_envois set sortie_file_vue_le = clock_timestamp()
    where id in (select e.id from public.communication_envois e
@@ -1885,9 +1894,25 @@ begin
                    and not exists (select 1 from net.http_request_queue q where q.id = e.requete)
                  for update skip locked);
   get diagnostics v_n = row_count;
-  return v_n;
+  -- Revue n° 3 (IR3-03) : les lectures de modèles chez Meta aussi
+  update public.communication_modeles_meta set sortie_file_vue_le = clock_timestamp()
+   where id in (select m.id from public.communication_modeles_meta m
+                 where m.requete is not null and m.sortie_file_vue_le is null
+                   and not exists (select 1 from net.http_request_queue q where q.id = m.requete)
+                 for update skip locked);
+  get diagnostics v_m = row_count;
+  return v_n + v_m;
 end;
 $$;
+
+-- Revue n° 3 (IR3-02) : le décompte ne parcourt que les requêtes RÉCENTES ou pas encore vues hors
+-- de la file (index partiels ci-dessous), pas tout l'historique, dans la transaction de l'arrêt
+create index if not exists communication_envois_non_vues_idx
+  on public.communication_envois (id) where requete is not null and sortie_file_vue_le is null;
+create index if not exists communication_envois_sorties_idx
+  on public.communication_envois (sortie_file_vue_le) where requete is not null;
+create index if not exists communication_modeles_meta_non_vues_idx
+  on public.communication_modeles_meta (id) where requete is not null and sortie_file_vue_le is null;
 
 create or replace function public.communication_transmissions_en_cours()
 returns integer
@@ -1896,9 +1921,14 @@ stable
 security definer
 set search_path = ''
 as $$
-  select count(*)::integer from public.communication_envois e
-   where e.requete is not null and e.remis_le is not null
-     and public.communication_en_transmission(e.requete, e.sortie_file_vue_le)
+  select (select count(*)::integer from public.communication_envois e
+           where e.requete is not null and e.remis_le is not null
+             and (e.sortie_file_vue_le is null or e.sortie_file_vue_le > now() - interval '120 seconds')
+             and public.communication_en_transmission(e.requete, e.sortie_file_vue_le))
+       + (select count(*)::integer from public.communication_modeles_meta m      -- IR3-03 : lectures Meta
+           where m.requete is not null
+             and (m.sortie_file_vue_le is null or m.sortie_file_vue_le > now() - interval '120 seconds')
+             and public.communication_en_transmission(m.requete, m.sortie_file_vue_le))
 $$;
 
 create or replace function public.sante_communications()

@@ -260,6 +260,9 @@ create table if not exists public.communication_modeles_meta (
   modele_id     uuid not null references public.communication_modeles (id),
   demande_le    timestamptz not null default now(),
   requete       bigint,                       -- n° pg_net
+  -- Revue n° 3 (IR3-03) : comme pour les envois, premier instant où la requête est VUE hors de la
+  -- file de pg_net ; ces lectures sont comptées dans les transmissions de l'arrêt d'urgence
+  sortie_file_vue_le timestamptz,
   recu_le       timestamptz,
   statut_meta   text,                         -- APPROVED, PAUSED, DISABLED, REJECTED… (valeurs de Meta)
   categorie     text,
@@ -352,7 +355,9 @@ begin
             order by demande_le limit 50 for update skip locked loop
     select status_code, content, error_msg into r from net._http_response where id = x.requete;
     if not found then
-      if x.demande_le < now() - interval '10 minutes' then
+      -- Revue n° 3 (IR3-08) : « sans réponse » seulement quand l'appel est forcément fini (vue hors
+      -- de la file depuis plus que le délai maximal + 60 s), jamais pendant qu'elle attend dans la file
+      if not public.communication_en_transmission(x.requete, x.sortie_file_vue_le) then
         update public.communication_modeles_meta set recu_le = now(), erreur = 'SANS_REPONSE' where id = x.id;
       end if;
       continue;
@@ -677,7 +682,10 @@ begin
                                   'communication_textes_pied', 'communication_appel_email', 'communication_appel_whatsapp',
                                   'communication_jeton_desinscription', 'communication_traiter_un',
                                   'communication_textes_confirmation', 'communication_raison_exclusion',
-                                  'communication_parametre_whatsapp_invalide')),
+                                  'communication_parametre_whatsapp_invalide', 'communication_autoriser_sortie',
+                                  'communication_reserver', 'communication_cible', 'communication_empreinte',
+                                  'html_echappe', 'telephone_international')),
+    'compte_whatsapp', encode(extensions.digest(coalesce(public.lire_reglage('communication_whatsapp_waba_id'), ''), 'sha256'), 'hex'),
     'textes_pied', encode(extensions.digest(public.communication_textes_pied_tous()::text, 'sha256'), 'hex'),
     'adresse_miami', case when r.adresse_miami_validee then public.adresse_miami() end);
 end;
