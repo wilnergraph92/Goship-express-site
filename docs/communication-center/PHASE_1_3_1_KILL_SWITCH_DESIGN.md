@@ -245,3 +245,35 @@ Notation :
 | H3 | pg_net n'envoie qu'après le COMMIT de la transaction qui a déposé la requête | Documentation de pg_net (rapporté) | T-01-bis, T-01C |
 | H4 | pg_net retire la requête de sa file avant l'appel, puis applique `timeout_milliseconds` ; `net.http_request_queue` et `net._http_response` ont la forme supposée | À vérifier sur pg_net 0.20.4 (ordre interne : retrait, appel, réponse) | T-01F |
 | H5 | Une nouvelle demande de verrou partagé attend derrière une demande exclusive déjà en attente | Gestionnaire de verrous de PostgreSQL (rapporté) | T-02 |
+
+---
+
+## D5 — Corrections du 20/11/2026 (revue finale RF-01, course demande / levée)
+
+**Ce qui change** (`brouillons-sql/41-…`, section 4.8 ; `40-…`, table `communication_arret`) :
+
+1. **La demande et le constat sont deux appels.** `arreter_communications(motif)` n'écrit que la demande (appui daté, `arret_demande`, `version + 1`, journal), puis sa transaction se termine. Réponse : `STOP_REQUESTED` (ou `STOP_CONFIRMED` si l'arrêt l'était déjà).
+   - **Elle ne prend plus N0** : seulement la ligne d'arrêt, 5 s au plus.
+   - Rien de ce qui arrive ensuite ne peut l'annuler :
+     - un constat en erreur ;
+     - un délai d'exécution dépassé ;
+     - le schéma de pg_net absent ;
+     - un recul d'horloge ;
+     - un client coupé.
+2. **Le constat**, `confirmer_arret_communications()`, appelé par l'écran à intervalles et par le travailleur à chaque passage, garde ses règles : N0 exclusif (3 s), puis la ligne (2 s).
+   - `communication_conclure_arret` est appelée dans un bloc qui rattrape **toute** erreur, annulation comprise. En cas d'erreur, la réponse est `STOP_PENDING / CONSTAT_IMPOSSIBLE`.
+   - Plus de `lock_timeout = 0`.
+3. **Horodatages** : `greatest(clock_timestamp(), demande_le)`. Un recul de l'horloge ne viole plus la contrainte de la table.
+4. **Version attendue** :
+   - `communication_arret.version` augmente à chaque appui et à chaque changement d'état (fermeture des autorisations, confirmation, levée) ;
+   - elle ne bouge **pas** pour une simple tentative de confirmation ;
+   - `lever_arret_communications(motif, p_version_attendue)` refuse (`STOP_STATE_CHANGED`) si la version a changé depuis l'affichage ;
+   - attentes : 3 s + 3 s, puis `BUSY`.
+
+**Pourquoi la demande sans N0 est sûre** : la porte prend N0 partagé **puis** relit l'état (40, `communication_autoriser_sortie`). Toute porte qui lit après le COMMIT de la demande refuse. N0 exclusif ne sert qu'à **prouver** que les portes ouvertes avant la demande ont fini : c'est le rôle du constat. **Ce raisonnement repose sur des hypothèses de PostgreSQL, non éprouvées** (H2, H3) : essais F-K01, F-K02, F-K12.
+
+| Situation | Avant D5 | Après D5 |
+|---|---|---|
+| Le constat échoue (délai, erreur, pg_net absent) | **Demande annulée**, envois toujours autorisés | Demande **gardée** ; `STOP_PENDING / CONSTAT_IMPOSSIBLE` ; nouvel essai par l'écran et le travailleur |
+| Appui juste avant une levée, validé pendant son attente | Levée possible (contrôle par l'heure seulement) | Levée **refusée** (version) |
+| Envois en cours au moment de l'appui | La demande attendait N0 (3 s), et les nouvelles portes attendaient derrière | La demande n'attend pas ; les portes suivantes refusent |

@@ -111,6 +111,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 declare
   v_moi uuid := auth.uid();
@@ -120,6 +121,9 @@ declare
   v_empreinte text;
   v_id bigint;
   v_code text;
+  v_essai integer;
+  v_tirage integer;
+  v_place boolean;
 begin
   if v_moi is null or not exists (select 1 from public.clients where id = v_moi and role = 'client' and supprime_le is null) then
     perform public.erreur_metier('PERMISSION_DENIED', 'Réservé à l''espace client.');
@@ -136,6 +140,11 @@ begin
      or (select count(*) from public.communication_confirmations
           where client_id = v_moi and canal = p_canal and cree_le > now() - interval '24 hours') >= r.demandes_confirmation_jour then
     perform public.erreur_metier('TOO_MANY_CHANGES', 'Trop de changements aujourd''hui : réessayez demain.');
+  end if;
+  -- D5 (D1) : pas deux demandes du même compte en moins d'une minute (double clic, robot)
+  if exists (select 1 from public.communication_confirmations
+              where client_id = v_moi and canal = p_canal and cree_le > clock_timestamp() - interval '1 minute') then
+    perform public.erreur_metier('TOO_MANY_CHANGES', 'Une demande vient d''être envoyée : attendez une minute.');
   end if;
 
   select * into t from public.communication_textes_consentement
@@ -154,6 +163,13 @@ begin
   if p_canal = 'whatsapp' and r.whatsapp_numero_affiche is null then
     perform public.erreur_metier('NOT_AVAILABLE', 'L''inscription WhatsApp n''est pas encore ouverte.');
   end if;
+  -- D5 (D1, N-02) : demandes répétées vers un même NUMÉRO ou une même adresse, tous comptes
+  -- confondus (plusieurs comptes peuvent partager un contact) : même plafond que par compte
+  if (select count(*) from public.communication_confirmations
+       where canal = p_canal and cible_empreinte = v_empreinte
+         and cree_le > now() - interval '24 hours') >= r.demandes_confirmation_jour then
+    perform public.erreur_metier('TOO_MANY_CHANGES', 'Trop de demandes pour ce contact aujourd''hui : réessayez demain.');
+  end if;
   if (public.communication_etat_consentement(v_moi, p_canal) ->> 'actif')::boolean then
     return public.mes_consentements_communication(p_langue);       -- déjà confirmé pour ce contact
   end if;
@@ -168,13 +184,34 @@ begin
           jsonb_build_object('source', p_source), v_moi)
   returning id into v_id;
 
-  if p_canal = 'whatsapp' then
-    -- Code court tiré par un générateur cryptographique ; il ne suffit jamais seul : le
-    -- message doit AUSSI venir du numéro dont l'empreinte est celle de la demande (43 §7).
-    v_code := lpad(((('x' || encode(extensions.gen_random_bytes(2), 'hex'))::bit(16)::integer) % 10000)::text, 4, '0');
+  if p_canal = 'email' then
+    insert into public.communication_confirmations (consentement_id, client_id, canal, cible_empreinte, code, expire_le)
+    values (v_id, v_moi, p_canal, v_empreinte, null, clock_timestamp() + make_interval(hours => r.confirmation_validite_h));
+  else
+    -- D5 (D1, N-02) : code de 6 CHIFFRES tiré par un générateur cryptographique, sans biais
+    -- (tirage rejeté au-delà de 16 000 000), DIFFÉRENT de tout code encore ouvert pour ce même
+    -- numéro : l'index unique communication_confirmations_code_numero_idx le garantit en base,
+    -- même si deux comptes du numéro demandent en même temps (ils ne partagent pas N3) — un
+    -- conflit fait simplement tirer un autre code. Il ne suffit jamais seul : le message doit
+    -- AUSSI venir du numéro dont l'empreinte est celle de la demande (43 §7). Expire vite.
+    for v_essai in 1..20 loop
+      v_tirage := ('x' || encode(extensions.gen_random_bytes(3), 'hex'))::bit(24)::integer;
+      continue when v_tirage >= 16000000;
+      v_code := lpad((v_tirage % 1000000)::text, 6, '0');
+      begin
+        insert into public.communication_confirmations (consentement_id, client_id, canal, cible_empreinte, code, expire_le)
+        values (v_id, v_moi, p_canal, v_empreinte, v_code,
+                clock_timestamp() + make_interval(mins => r.confirmation_code_validite_min));
+        v_place := true;
+        exit;
+      exception when unique_violation then
+        v_code := null;                                          -- code déjà ouvert pour ce numéro : on retire
+      end;
+    end loop;
+    if not coalesce(v_place, false) then
+      perform public.erreur_metier('NOT_AVAILABLE', 'Service momentanément indisponible : réessayez.');
+    end if;
   end if;
-  insert into public.communication_confirmations (consentement_id, client_id, canal, cible_empreinte, code, expire_le)
-  values (v_id, v_moi, p_canal, v_empreinte, v_code, clock_timestamp() + make_interval(hours => r.confirmation_validite_h));
   -- E-mail : l'envoi du lien est mis en file par 43 (communication_demander_envoi_confirmation),
   -- jamais par une page, et seulement si confirmations_actives et email_actif sont allumés.
   if p_canal = 'email' then
@@ -195,6 +232,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 declare
   f public.communication_confirmations;
@@ -245,6 +283,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 declare
   v_moi uuid := auth.uid();
@@ -303,7 +342,14 @@ begin
                                             is distinct from public.telephone_international(old.telephone, old.pays));
       if v_change and exists (select 1 from public.communication_consentements k
                                where k.client_id = new.id and k.canal = v_canal) then
-        perform public.communication_verrou('consentement:' || new.id || ':' || v_canal);
+        -- D5 (RF-10, P-03) : sur le chemin EXISTANT des clients (profil, Google, suppression du
+        -- compte), on n'attend jamais N3. S'il est pris, l'invalidation s'écrit quand même, sans
+        -- lui : un consentement ne vaut de toute façon que pour le contact ACTUEL (40,
+        -- communication_etat_consentement), donc rien ne peut partir vers le nouveau contact.
+        if not pg_try_advisory_xact_lock(hashtextextended('goship-communication:consentement:' || new.id || ':' || v_canal, 0)) then
+          insert into public.communication_erreurs (source, code, detail)
+          values ('communication_suivre_client:sans_verrou', 'N3_OCCUPE', v_canal);
+        end if;
         v_ancienne := public.communication_empreinte(v_canal,
                         case v_canal when 'email' then old.email
                                      else public.telephone_international(old.telephone, old.pays) end);
@@ -409,6 +455,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 begin
   perform public.exiger_permission('communications.consents');
@@ -540,13 +587,15 @@ begin
   -- N0 EXCLUSIF (Phase 1.3, C1) : attend la fin des envois en cours, puis empêche tout nouvel
   -- envoi de lire les réglages avant ce COMMIT. 10 secondes au plus ; au-delà, refus : pour
   -- COUPER sans attendre, il y a l'arrêt d'urgence (arreter_communications).
-  perform set_config('lock_timeout', '10s', true);
+  -- D5 (P-03) : 3 s, puis 2 s pour la ligne des réglages (jamais « 0 » = sans limite) ; total
+  -- sous les 8 s du rôle authenticated (mesurés le 20/11/2026)
+  perform set_config('lock_timeout', '3s', true);
   begin
     perform public.communication_verrou_interrupteurs(true);
   exception when lock_not_available then
     perform public.erreur_metier('BUSY', 'Des envois sont en cours : réessayez, ou utilisez l''arrêt d''urgence pour tout couper.');
   end;
-  perform set_config('lock_timeout', '0', true);
+  perform set_config('lock_timeout', '2s', true);
   select * into v_avant from public.communication_reglages for update;
   begin
     update public.communication_reglages set
@@ -634,7 +683,13 @@ begin
   if length(trim(coalesce(p_preuve, ''))) < 10 then
     perform public.erreur_metier('PROOF_REQUIRED', 'Dites où le quota a été lu (page Brevo, date, capture).');
   end if;
-  perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
+  perform set_config('lock_timeout', '3s', true);             -- D5 (P-03, RF-07) : jamais d'attente sans fin
+  begin
+    perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
+  exception when lock_not_available then
+    perform public.erreur_metier('BUSY', 'Des envois sont en cours : réessayez dans quelques secondes.');
+  end;
+  perform set_config('lock_timeout', '2s', true);
   update public.communication_reglages
      set brevo_quota_24h = p_quota_24h, brevo_quota_30j = p_quota_30j, brevo_reserve_24h = p_reserve,
          brevo_compte_partage = p_compte_partage, brevo_quota_preuve = trim(p_preuve),
@@ -657,7 +712,13 @@ begin
   if length(trim(coalesce(p_preuve, ''))) < 10 then
     perform public.erreur_metier('PROOF_REQUIRED', 'Dites d''où viennent le numéro et la limite (décision du CEO, gestionnaire WhatsApp de Meta, date).');
   end if;
-  perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
+  perform set_config('lock_timeout', '3s', true);             -- D5 (P-03, RF-07) : jamais d'attente sans fin
+  begin
+    perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
+  exception when lock_not_available then
+    perform public.erreur_metier('BUSY', 'Des envois sont en cours : réessayez dans quelques secondes.');
+  end;
+  perform set_config('lock_timeout', '2s', true);
   update public.communication_reglages
      set whatsapp_numero_affiche = p_numero_affiche, whatsapp_destinataires_jour = p_destinataires_jour,
          whatsapp_limite_preuve = trim(p_preuve), maj_le = now(), maj_par = auth.uid();
@@ -855,6 +916,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 declare
   d public.communication_demandes_purge;
@@ -882,23 +944,34 @@ end;
 $$;
 
 
--- 4.8 L'ARRÊT D'URGENCE (Phase 1.3.1 — remplace la version 1.3, qui écrivait l'arrêt SANS le verrou
--- exclusif après 5 s et le présentait comme fait). Conception complète et preuves :
--- docs/communication-center/PHASE_1_3_1_KILL_SWITCH_DESIGN.md.
+-- 4.8 L'ARRÊT D'URGENCE (Phase 1.3.1, corrigé en D5 le 20/11/2026). Conception complète et preuves :
+-- docs/communication-center/PHASE_1_3_1_KILL_SWITCH_DESIGN.md (section « D5 »).
 --
 -- RÈGLE : un arrêt n'est déclaré RÉUSSI (STOP_CONFIRMED, état arret_confirme) que si
---   (1) N0 a été obtenu en EXCLUSIF dans la transaction de la demande ou après elle : aucune
+--   (1) N0 a été obtenu en EXCLUSIF après la demande (ou dans sa transaction) : aucune
 --       transaction autorisée n'était alors en cours, et toute transaction qui demande N0 ensuite
 --       lit l'état d'arrêt et refuse ;
 --   (2) plus aucune requête déjà validée n'attend d'être transmise par pg_net ;
 --   (3) l'état est écrit avec synchronous_commit = on (durable avant la réponse).
--- Sinon : STOP_PENDING (la demande est écrite, plus rien de NOUVEAU n'est autorisé par une
--- transaction qui la lit, mais l'arrêt n'est pas prouvé) ou STOP_NOT_CONFIRMED (rien n'a pu
--- être écrit par cet appel). Un délai dépassé ne contourne JAMAIS le verrou.
--- Ordre des verrous de toutes les fonctions d'arrêt : N0 (exclusif, tenté) PUIS la ligne de
--- communication_arret. Aucune autre table n'est verrouillée.
+-- D5 (P-07, revue finale RF-01) : la DEMANDE et le CONSTAT sont deux appels, donc deux
+-- transactions. arreter_communications n'écrit QUE la demande et la valide : rien de ce qui
+-- arrive ensuite (constat en erreur, délai d'exécution dépassé, schéma de pg_net absent, recul
+-- d'horloge, client coupé) ne peut plus l'annuler. confirmer_arret_communications (l'écran,
+-- toutes les quelques secondes) et le travailleur (au début de chaque passage) font le constat.
+-- Écrire la demande n'exige pas N0 : la porte prend N0 partagé PUIS lit l'état ; toute porte
+-- qui lit après le COMMIT de la demande refuse. N0 exclusif ne sert qu'à PROUVER que les portes
+-- ouvertes avant la demande ont fini — c'est le rôle du constat.
+-- Réponses : STOP_REQUESTED (demande écrite), STOP_CONFIRMED, STOP_PENDING (demande écrite,
+-- arrêt pas encore prouvé), STOP_NOT_CONFIRMED (cet appel n'a rien pu écrire : réessayer).
+-- Ordre des verrous : la demande prend la ligne d'arrêt seule ; le constat et la levée prennent
+-- N0 (exclusif, tenté) PUIS la ligne. Le constat verrouille en plus, par
+-- communication_observer_sorties, des lignes de communication_envois et de
+-- communication_modeles_meta, UNIQUEMENT en SKIP LOCKED : il n'attend jamais une de ces lignes
+-- (P-01, P-02 ; preuve : PHASE_1_3_1_KILL_SWITCH_LOCK_PROOF.md).
+-- version : +1 à chaque appui, à chaque changement d'état (fermeture des autorisations,
+-- confirmation, levée) ; jamais pour une simple tentative de confirmation.
 
--- Le constat commun, appelé par les trois fonctions ci-dessous, la ligne d'arrêt DÉJÀ verrouillée.
+-- Le constat commun, appelé par les fonctions ci-dessous, la ligne d'arrêt DÉJÀ verrouillée.
 -- p_n0_exclusif : la transaction appelante tient-elle N0 en exclusif ?
 create or replace function public.communication_conclure_arret(p_n0_exclusif boolean)
 returns jsonb
@@ -910,19 +983,21 @@ declare
   a public.communication_arret;
   v_transmissions integer;
   v_partages integer;
+  v_closes timestamptz;
 begin
   select * into a from public.communication_arret;               -- verrouillée par l'appelant
   if not found then
     raise exception 'ARRET_LIGNE_ABSENTE';                       -- jamais « confirmé » sur une table vide (IR2-11)
   end if;
   if a.etat = 'actif' then
-    return jsonb_build_object('etat', 'STOP_NOT_REQUESTED');
+    return jsonb_build_object('etat', 'STOP_NOT_REQUESTED', 'version', a.version);
   end if;
   if a.etat = 'arret_confirme' then
-    return jsonb_build_object('etat', 'STOP_CONFIRMED', 'confirme_le', a.confirme_le);
+    return jsonb_build_object('etat', 'STOP_CONFIRMED', 'confirme_le', a.confirme_le, 'version', a.version);
   end if;
   -- (1) Les autorisations : seulement sous N0 exclusif
-  if a.autorisations_closes_le is null then
+  v_closes := a.autorisations_closes_le;
+  if v_closes is null then
     if not p_n0_exclusif then
       -- Indication (non une preuve) : verrous consultatifs PARTAGÉS détenus en ce moment
       select count(*) into v_partages from pg_catalog.pg_locks l
@@ -932,10 +1007,12 @@ begin
              derniere_raison = 'VERROU_NON_OBTENU', maj_le = clock_timestamp();
       return jsonb_build_object('etat', 'STOP_PENDING', 'raison', 'VERROU_NON_OBTENU',
                                 'transactions_autorisees_actives_indicatif', v_partages,
-                                'demande_le', a.demande_le);
+                                'demande_le', a.demande_le, 'version', a.version);
     end if;
+    -- D5 : jamais avant la demande, même si l'horloge du serveur a reculé (contrainte de la table)
+    v_closes := greatest(clock_timestamp(), a.demande_le);
     update public.communication_arret
-       set autorisations_closes_le = clock_timestamp(), maj_le = clock_timestamp();
+       set autorisations_closes_le = v_closes, version = version + 1, maj_le = clock_timestamp();
   end if;
   -- (2) Les requêtes déjà validées qui peuvent encore partir (43 §13, lecture seule de pg_net) —
   -- comptées par requête, à partir du moment où on les a VUES quitter la file (IR2-01)
@@ -949,14 +1026,19 @@ begin
                               'transmissions_en_cours', v_transmissions, 'demande_le', a.demande_le);
   end if;
   update public.communication_arret
-     set etat = 'arret_confirme', confirme_le = clock_timestamp(), tentatives = tentatives + 1,
-         derniere_tentative_le = clock_timestamp(), derniere_raison = null, maj_le = clock_timestamp();
+     set etat = 'arret_confirme', confirme_le = greatest(clock_timestamp(), v_closes), tentatives = tentatives + 1,
+         derniere_tentative_le = clock_timestamp(), derniere_raison = null, version = version + 1,
+         maj_le = clock_timestamp();
   perform public.auditer('communication.arret_confirme', 'communication_arret', 'arret', null, null);
-  return jsonb_build_object('etat', 'STOP_CONFIRMED', 'confirme_le', clock_timestamp());
+  return jsonb_build_object('etat', 'STOP_CONFIRMED', 'confirme_le', clock_timestamp(),
+                            'version', (select version from public.communication_arret));
 end;
 $$;
 
 -- Couper : administrateur ET gérant (communications.pause — couper ne peut que protéger).
+-- D5 (P-07) : écrit la DEMANDE, et rien d'autre. Ne prend PAS N0 (aucune attente derrière les
+-- envois en cours) ; seulement la ligne d'arrêt, 5 s au plus (un autre arrêt ou une levée).
+-- L'écran appelle ensuite confirmer_arret_communications jusqu'à STOP_CONFIRMED.
 create or replace function public.arreter_communications(p_motif text)
 returns jsonb
 language plpgsql
@@ -965,62 +1047,54 @@ set search_path = ''
 as $$
 declare
   a public.communication_arret;
-  v_n0 boolean;
-  v_resultat jsonb;
+  v_trouve boolean;
 begin
   perform public.exiger_permission('communications.pause');
   if length(trim(coalesce(p_motif, ''))) < 5 then
     perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi vous coupez tout (5 caractères au moins).');
   end if;
-  perform set_config('synchronous_commit', 'on', true);          -- l'état écrit est durable au COMMIT
-  -- Délais courts et explicites (IR-04) : 3 s pour N0, 2 s pour la ligne, sous le délai
-  -- d'exécution des comptes connectés (8 s rapporté chez Supabase, à vérifier)
-  perform set_config('lock_timeout', '3s', true);
-  -- 1. N0 EXCLUSIF, 5 s au plus. Pendant l'attente, les nouvelles demandes de N0 partagé
-  --    attendent derrière celle-ci (à éprouver) : rien de nouveau n'est autorisé.
-  begin
-    perform public.communication_verrou_interrupteurs(true);
-    v_n0 := true;
-  exception when lock_not_available then
-    v_n0 := false;                                               -- PAS de contournement : on le dira
-  end;
-  perform set_config('lock_timeout', '2s', true);
-  -- 2. La ligne d'arrêt (5 s au plus : un autre arrêt ou une levée en cours)
+  perform set_config('synchronous_commit', 'on', true);          -- la demande est durable au COMMIT
+  -- 5 s au plus pour la ligne (sous les 8 s du rôle authenticated, mesurés le 20/11/2026)
+  perform set_config('lock_timeout', '5s', true);
   begin
     select * into a from public.communication_arret for update;
+    v_trouve := found;
   exception when lock_not_available then
     return jsonb_build_object('etat', 'STOP_NOT_CONFIRMED', 'raison', 'ARRET_CONCURRENT_EN_COURS',
-                              'conseil', 'Réessayez : un autre arrêt ou une levée est en cours.');
+                              'conseil', 'Réessayez : un autre arrêt ou une levée est en cours. Rien n''a été écrit.');
   end;
-  if not found then
+  if not v_trouve then
     raise exception 'ARRET_LIGNE_ABSENTE';
   end if;
-  perform set_config('lock_timeout', '0', true);
-  -- 1.3.1 (revue n° 2, IR2-03) : CHAQUE appui est daté et journalisé, même si l'arrêt est déjà
-  -- demandé ou confirmé — une levée commencée avant cet appui le verra et refusera
-  update public.communication_arret set derniere_demande_le = clock_timestamp(), maj_le = clock_timestamp();
+  -- CHAQUE appui est daté, compté (version) et journalisé, même si l'arrêt est déjà demandé ou
+  -- confirmé (IR2-03) : une levée commencée avant cet appui le verra et refusera
+  update public.communication_arret
+     set derniere_demande_le = clock_timestamp(), version = version + 1, maj_le = clock_timestamp();
   perform set_config('goship.motif', left(trim(p_motif), 300), true);
   perform public.auditer('communication.arret_appui', 'communication_arret', 'arret', null,
-                         jsonb_build_object('etat', a.etat, 'n0_exclusif', v_n0));
-  -- 3. La DEMANDE, écrite si elle ne l'est pas déjà (jamais « confirmée » ici)
+                         jsonb_build_object('etat', a.etat));
+  -- La DEMANDE, écrite si elle ne l'est pas déjà (jamais « confirmée » ici)
   if a.etat = 'actif' then
     update public.communication_arret
        set etat = 'arret_demande', demande_le = clock_timestamp(), demande_par = auth.uid(),
            motif = left(trim(p_motif), 300),                          -- jamais d'échec à cause du texte (IR2-04)
            autorisations_closes_le = null, confirme_le = null, tentatives = 0, derniere_tentative_le = null,
            derniere_raison = null, leve_le = null, leve_par = null, motif_levee = null, maj_le = clock_timestamp();
-    perform public.auditer('communication.arret_demande', 'communication_arret', 'arret', null,
-                           jsonb_build_object('n0_exclusif', v_n0));
+    perform public.auditer('communication.arret_demande', 'communication_arret', 'arret', null, null);
   end if;
-  -- 4. Le constat : CONFIRMED seulement si N0 exclusif est tenu ET plus rien n'est chez pg_net
-  v_resultat := public.communication_conclure_arret(v_n0);
-  return v_resultat || jsonb_build_object('n0_exclusif_obtenu', v_n0);
+  return jsonb_build_object(
+    'etat', case when a.etat = 'arret_confirme' then 'STOP_CONFIRMED' else 'STOP_REQUESTED' end,
+    'version', (select version from public.communication_arret),
+    'suite', 'confirmer_arret_communications');
 end;
 $$;
 
--- Terminer un arrêt EN ATTENTE : nouvelle tentative sûre (même règle, même ordre des verrous).
--- Appelée par l'écran (bouton « Vérifier l'arrêt », ou à intervalles pendant l'attente) et,
--- sans attente, par le travailleur au début de chaque passage (communication_confirmer_arret_auto).
+-- Terminer un arrêt DEMANDÉ : le constat (même règle, même ordre des verrous). Appelée par
+-- l'écran (après la demande, puis à intervalles) et, sans attente, par le travailleur au début
+-- de chaque passage (communication_confirmer_arret_auto).
+-- D5 (P-07) : le constat est dans un bloc qui rattrape toute erreur, annulation comprise : un
+-- constat impossible répond STOP_PENDING / CONSTAT_IMPOSSIBLE, jamais un faux succès. La
+-- demande, validée par l'appel précédent, n'est jamais touchée.
 create or replace function public.confirmer_arret_communications()
 returns jsonb
 language plpgsql
@@ -1029,27 +1103,48 @@ set search_path = ''
 as $$
 declare
   v_n0 boolean;
+  v_trouve boolean;
+  v_resultat jsonb;
+  v_etat text;
 begin
   perform public.exiger_permission('communications.pause');
   perform set_config('synchronous_commit', 'on', true);
+  -- 3 s pour N0, puis 2 s pour la ligne (sous les 8 s du rôle)
   perform set_config('lock_timeout', '3s', true);
   begin
     perform public.communication_verrou_interrupteurs(true);
     v_n0 := true;
   exception when lock_not_available then
-    v_n0 := false;
+    v_n0 := false;                                               -- PAS de contournement : on le dira
   end;
   perform set_config('lock_timeout', '2s', true);
   begin
     perform 1 from public.communication_arret for update;
+    v_trouve := found;
   exception when lock_not_available then
     return jsonb_build_object('etat', 'STOP_NOT_CONFIRMED', 'raison', 'ARRET_CONCURRENT_EN_COURS');
   end;
-  if not found then
+  if not v_trouve then
     raise exception 'ARRET_LIGNE_ABSENTE';
   end if;
-  perform set_config('lock_timeout', '0', true);
-  return public.communication_conclure_arret(v_n0) || jsonb_build_object('n0_exclusif_obtenu', v_n0);
+  -- D5 (P-03) : plus de « lock_timeout = 0 » : le constat ne doit attendre aucune ligne (SKIP
+  -- LOCKED) ; si une attente imprévue survenait, elle s'arrêterait à 2 s (erreur rattrapée)
+  v_etat := null;
+  begin
+    v_resultat := public.communication_conclure_arret(v_n0);
+  exception
+    when query_canceled then                                     -- délai d'exécution, annulation
+      v_etat := '57014';
+    when others then
+      get stacked diagnostics v_etat = returned_sqlstate;
+  end;
+  if v_etat is not null then                                     -- le bloc a été annulé, rien d'autre
+    update public.communication_arret
+       set tentatives = tentatives + 1, derniere_tentative_le = clock_timestamp(),
+           derniere_raison = 'CONSTAT_IMPOSSIBLE:' || v_etat, maj_le = clock_timestamp();
+    v_resultat := jsonb_build_object('etat', 'STOP_PENDING', 'raison', 'CONSTAT_IMPOSSIBLE', 'code', v_etat);
+  end if;
+  return v_resultat || jsonb_build_object('n0_exclusif_obtenu', v_n0);
 end;
 $$;
 
@@ -1091,11 +1186,16 @@ begin
 end;
 $$;
 
--- Lever l'arrêt : administrateur seulement, motif de 10 caractères au moins, journalisé. N0
--- exclusif SANS délai (lever peut attendre ; couper, non). Les envois en attente repartent SOUS
--- TOUTES LES RÈGLES (consentement, heures, empreinte de la campagne…) ; une campagne qui ne doit
--- pas reprendre s'annule ou se met en pause avant.
-create or replace function public.lever_arret_communications(p_motif text)
+-- Lever l'arrêt : administrateur seulement, motif de 10 caractères au moins, journalisé.
+-- D5 : (1) la levée exige la VERSION de l'état que son écran a affichée (p_version_attendue) :
+-- si un appui sur « Arrêt » ou un changement d'état a eu lieu depuis, elle refuse
+-- (STOP_STATE_CHANGED) — même un appui écrit juste avant son début mais validé pendant son
+-- attente (cas que le seul contrôle par l'heure laissait passer) ; (2) attentes bornées à
+-- 3 s + 3 s (sous les 8 s du rôle authenticated, mesurés le 20/11/2026), puis BUSY.
+-- Les envois en attente repartent SOUS TOUTES LES RÈGLES (consentement, heures, empreinte de la
+-- campagne…) ; une campagne qui ne doit pas reprendre s'annule ou se met en pause avant.
+drop function if exists public.lever_arret_communications(text);
+create or replace function public.lever_arret_communications(p_motif text, p_version_attendue bigint)
 returns jsonb
 language plpgsql
 security definer
@@ -1109,27 +1209,39 @@ begin
   if length(trim(coalesce(p_motif, ''))) < 10 then
     perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi l''envoi peut reprendre (10 caractères au moins).');
   end if;
-  perform set_config('lock_timeout', '5s', true);                -- IR2-03 : jamais d'attente sans fin
-  perform public.communication_verrou_interrupteurs(true);
-  select * into a from public.communication_arret for update;
-  if not found then
+  if p_version_attendue is null then
+    perform public.erreur_metier('VERSION_REQUIRED', 'Rechargez l''état de l''arrêt avant de le lever.');
+  end if;
+  perform set_config('lock_timeout', '3s', true);                -- jamais d'attente sans fin (IR2-03, P-03)
+  begin
+    perform public.communication_verrou_interrupteurs(true);
+    select * into a from public.communication_arret for update;
+  exception when lock_not_available then
+    perform public.erreur_metier('BUSY', 'Des envois ou un autre arrêt sont en cours : réessayez dans quelques secondes.');
+  end;
+  if a.etat is null then
     raise exception 'ARRET_LIGNE_ABSENTE';
   end if;
   if a.etat = 'actif' then
     perform public.erreur_metier('INVALID_TRANSITION', 'Aucun arrêt d''urgence en cours.');
   end if;
-  -- IR2-03 : quelqu'un a appuyé sur « Arrêt » pendant que cette levée attendait : on ne lève PAS
+  -- D5 : l'état n'est plus celui que l'écran a montré
+  if a.version <> p_version_attendue then
+    perform public.erreur_metier('STOP_STATE_CHANGED',
+      'L''état de l''arrêt a changé depuis l''affichage : vérifiez la situation avant de relever.');
+  end if;
+  -- IR2-03 (gardé en plus) : quelqu'un a appuyé sur « Arrêt » pendant que cette levée attendait
   if a.derniere_demande_le > v_debut then
     perform public.erreur_metier('STOP_REQUESTED_DURING_LIFT',
       'Un arrêt a été demandé pendant la levée : vérifiez la situation avant de relever.');
   end if;
   update public.communication_arret
      set etat = 'actif', autorisations_closes_le = null, confirme_le = null, leve_le = clock_timestamp(),
-         leve_par = auth.uid(), motif_levee = trim(p_motif), maj_le = clock_timestamp();
+         leve_par = auth.uid(), motif_levee = trim(p_motif), version = version + 1, maj_le = clock_timestamp();
   perform set_config('goship.motif', trim(p_motif), true);
   perform public.auditer('communication.arret_leve', 'communication_arret', 'arret',
                          jsonb_build_object('etat', a.etat), jsonb_build_object('etat', 'actif'));
-  return jsonb_build_object('ok', true, 'etat', 'actif');
+  return jsonb_build_object('ok', true, 'etat', 'actif', 'version', a.version + 1);
 end;
 $$;
 
@@ -1150,7 +1262,13 @@ begin
   if p_code >= 500 and p_issue <> 'incertain' then
     perform public.erreur_metier('UNSAFE_RULE', 'Une réponse 5xx ne prouve pas que le message a été refusé : « incertain » seulement.');
   end if;
-  perform public.communication_verrou_interrupteurs(true);
+  perform set_config('lock_timeout', '3s', true);             -- D5 (P-03, RF-07) : jamais d'attente sans fin
+  begin
+    perform public.communication_verrou_interrupteurs(true);   -- N0 exclusif : réglage d'envoi (1.3, C1)
+  exception when lock_not_available then
+    perform public.erreur_metier('BUSY', 'Des envois sont en cours : réessayez dans quelques secondes.');
+  end;
+  perform set_config('lock_timeout', '2s', true);
   insert into public.communication_issues_http (fournisseur, code_http, issue, preuve, verifie_par)
   values (p_fournisseur, p_code, p_issue, trim(p_preuve), auth.uid())
   on conflict (fournisseur, code_http) do update
@@ -1272,7 +1390,7 @@ begin
     'public.arreter_communications(text)',
     'public.confirmer_arret_communications()',
     'public.etat_arret_communications()',
-    'public.lever_arret_communications(text)',
+    'public.lever_arret_communications(text, bigint)',
     'public.verifier_issue_http(text, integer, text, text)',
     'public.regler_fuseau_region(text, text, text)',
     'public.declarer_fuseau_communication(text, uuid, text)'] loop

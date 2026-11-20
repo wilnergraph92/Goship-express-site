@@ -165,3 +165,29 @@ Aucune extension nouvelle n'est demandée. Aucune fonction ni table existante du
 - Aucune modification hors de `docs/communication-center/`.
 - Aucune modification du transactionnel, de pg_net ou de pg_cron.
 - Les copies de `permissions_du_role` hors du dossier ne sont pas modifiées : cinq copies sont à aligner en Phase 2, avec autorisation.
+
+---
+
+## 6. Corrections D5 (20/11/2026, autorisées par écrit par la CEO, « D5 approuvé sous conditions »)
+
+Détail, différences avant / après et risques : `PHASE_1_3_1_D5_RAPPORT_CORRECTIONS.md`.
+
+| Correction | Fichier, fonction | Résumé |
+|---|---|---|
+| P-07 | 41 `arreter_communications`, `confirmer_arret_communications`, `communication_conclure_arret` | Demande seule, sans N0 ; constat dans un bloc qui rattrape tout ; `greatest()` sur les horodatages |
+| Version | 40 `communication_arret.version` ; 41 `lever_arret_communications(text, bigint)` | Levée refusée si l'état a changé depuis l'affichage ; ancienne signature supprimée ; liste des droits à jour |
+| P-03 | 40 `executer_purge_communication` ; 41 consentement, réglages, levée, déclencheur ; 42 campagnes ; 43 relance, désinscription, retours | Toutes les attentes bornées (2 à 5 s) ; plus de `'0'` ; N0 exclusif borné partout (RF-07) ; déclencheur sur `clients` non bloquant (RF-10) |
+| P-08 | 43 table `communication_evenements_traitement`, `communication_recevoir_evenement` (temps A), `communication_traiter_evenement` (temps B), `communication_evenement_a_reprendre`, `reprendre_evenement_communication`, procédure ; purges | Retour enregistré puis traité ; reprise ; clé étrangère retirée ; N3 avant la suppression (RF-05) ; relance : campagne avant l'envoi |
+| P-09 | 43 `communication_classer_entrant`, `communication_est_stop` | Bouton, liste fermée, premier mot et 5 mots au plus, « ambigu » |
+| P-05 | 42 aperçu, volume, index unique partiel ; 43 `communication_preparer`, `communication_traiter_un` (N3b, contrôle du doublon) | Un message par contact et par campagne |
+| N-01 (D1) | 43 `communication_frequence_atteinte(uuid, text, text)` + index | Plafond par compte **et** par contact |
+| N-02 (D1) | 40 `communication_confirmations` (6 chiffres, `tentatives`, index unique par numéro), réglage `confirmation_code_validite_min` ; 41 `demander_consentement_communication` ; 43 temps B | Code unique par numéro, expiration courte, 5 essais, demandes répétées limitées par compte et par numéro |
+| D2 | 42 `communication_raison_exclusion` | `CONTACT_PARTAGE_NON_CONSENTI` (mesure conservatrice, en attente du juriste) |
+| Surveillance | 43 `sante_communications` (section `evenements`) | `a_traiter`, `en_retard`, `echec`, `echec_prioritaires`, `ambigus_7j`, `alerte` |
+
+**Contrôle statique (sans exécution)** :
+- les 4 fichiers se lisent toujours, en entier, comme la seule garde (`DoStmt` + `SelectStmt`) ;
+- les 90 corps PL/pgSQL se relisent avec leur vraie signature ;
+- 109 fonctions, toutes avec `search_path` vide et leur `REVOKE` (`permissions_du_role` garde ses droits d'origine, voulu) ;
+- 29 tables, toutes avec RLS et `revoke all` ;
+- couche 4 de la garde : inchangée (simulation du découpeur naïf).

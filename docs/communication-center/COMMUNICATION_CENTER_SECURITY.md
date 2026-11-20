@@ -325,3 +325,43 @@ d'une personne : `PHASE_1_3_TECHNICAL_CORRECTIONS.md` §6.
 ## 9. Vérification
 Le plan complet (16 groupes, préconditions, données, scénarios, résultats attendus, conditions d'échec,
 preuves) est dans `COMMUNICATION_CENTER_TESTING.md`. **Aucun de ces essais n'a été exécuté.**
+
+---
+
+## 10. Corrections D5 (20/11/2026)
+
+### 10.1 Numéro partagé (décision CEO D2 — mesure conservatrice)
+
+Un contact (numéro ou adresse) partagé avec au moins **un** autre compte actif **sans** consentement confirmé est exclu de toute campagne (`CONTACT_PARTAGE_NON_CONSENTI`, 42 `communication_raison_exclusion`), même si ce compte-ci a consenti. **Aucun consentement n'est transféré entre comptes** :
+- l'état d'un consentement est lu par compte ;
+- il ne vaut que pour le contact actuel ;
+- un code de confirmation ne désigne qu'une demande (index unique par numéro).
+
+Cette règle est en attente de l'avis du juriste.
+
+### 10.2 Code de confirmation WhatsApp (décision CEO D1)
+
+| Mesure | Valeur |
+|---|---|
+| Longueur | 6 chiffres, tirage cryptographique sans biais |
+| Unicité | Unique parmi les demandes ouvertes du même numéro (garantie en base) |
+| Expiration | 60 min (`confirmation_code_validite_min`, réglable de 10 à 1 440) |
+| Essais | 5 codes faux depuis un numéro : toutes ses demandes ouvertes sont annulées |
+| Demandes répétées | Au plus 1 par minute et par compte ; plafond par 24 h par compte **et** par numéro (`demandes_confirmation_jour`) |
+
+### 10.3 Procédure de reprise d'un retour de fournisseur en échec (runbook)
+
+1. `sante_communications` → `evenements.alerte = true`.
+2. **Un STOP, une plainte ou une désinscription en échec (priorité 1)** : appliquer **tout de suite** la suppression à la main (`ajouter_suppression_communication`), sans attendre la cause.
+3. Chercher la cause : `dernier_code`, un SQLSTATE ; `communication_erreurs`, source `evenement_fournisseur:echec`.
+4. Corriger, puis `reprendre_evenement_communication(evenement, motif)` (administrateur seul, motif d'au moins 10 caractères, journalisé).
+5. Vérifier que l'état passe à `traite`.
+
+### 10.4 Délais mesurés (décision CEO D3)
+
+Lecture seule de `pg_roles.rolconfig` en production, le 20/11/2026 :
+- `anon` : `statement_timeout = 3s` ;
+- `authenticated` : `statement_timeout = 8s` ;
+- `service_role` : aucun réglage propre.
+
+Les attentes des brouillons sont choisies sous ces valeurs. Leur **durée réelle** n'est pas mesurée (essai F-K07).

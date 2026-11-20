@@ -41,11 +41,14 @@ select pg_catalog.pg_terminate_backend(pg_catalog.pg_backend_pid());
 -- PAS modifiés (exigence 7 du CEO).
 --
 -- Garanties :
---   · clé unique par campagne, client et canal : jamais deux messages ;
+--   · clé unique par campagne, client et canal : jamais deux messages ; D5 (P-05) : et un
+--     seul message par CONTACT et par campagne (comptes qui partagent un contact : audience
+--     dédoublonnée, index unique, contrôle sous N3b à l'envoi) ; plafond de fréquence par
+--     compte ET par contact (N-01) ;
 --   · UN envoi par transaction (Phase 1.3, C1, C2) : la procédure traiter_communications valide
 --     (COMMIT) après chaque envoi ; les verrous sont pris dans l'ordre unique de 40 §3
---     (interrupteurs N0 partagé → campagne N1 → client N2 → consentement N3 → envoi N4 →
---     compteurs N5) et relâchés à chaque COMMIT ;
+--     (interrupteurs N0 partagé → campagne N1 → client N2 → consentement N3 → contact N3b →
+--     envoi N4 → compteurs N5) et relâchés à chaque COMMIT ;
 --   · arrêt d'urgence, interrupteur général et interrupteurs des canaux RELUS sous N0 pour
 --     chaque envoi, et une dernière fois sous N5 (C1) ;
 --   · dépense, débit par minute et quota Brevo RÉSERVÉS avant l'appel, sous N5, recalculés à
@@ -189,8 +192,14 @@ $$;
 
 -- Fréquence atteinte ? Compte AUSSI les messages en cours, incertains et refusés après remise
 -- (on ne sait pas toujours s'ils sont arrivés) : heure de remise à pg_net (remis_le, jamais
--- effacée). Appelée SOUS le verrou du client (N2), dans la transaction de l'envoi.
-create or replace function public.communication_frequence_atteinte(p_client uuid)
+-- effacée). Appelée SOUS N2 (client) et N3b (contact), dans la transaction de l'envoi.
+-- D5 (N-01, décision CEO D1) : le plafond vaut pour le COMPTE et pour le CONTACT (même numéro
+-- ou même adresse, tous comptes confondus) : un numéro partagé ne reçoit jamais le quota de
+-- chacun de ses comptes.
+create index if not exists communication_envois_contact_idx
+  on public.communication_envois (canal, cible_empreinte) where cible_empreinte is not null and nature = 'campagne';
+drop function if exists public.communication_frequence_atteinte(uuid);
+create or replace function public.communication_frequence_atteinte(p_client uuid, p_canal text, p_empreinte text)
 returns boolean
 language sql
 stable
@@ -205,6 +214,15 @@ as $$
            where e.client_id = p_client and e.nature = 'campagne' and e.remis_le is not null
              and e.statut in ('traitement', 'envoye', 'livre', 'lu', 'incertain')
              and coalesce(e.envoye_le, e.remis_le) > now() - interval '7 days') >= r.frequence_max_semaine
+      or (p_empreinte is not null and (
+           (select count(*) from public.communication_envois e
+             where e.canal = p_canal and e.cible_empreinte = p_empreinte and e.nature = 'campagne' and e.remis_le is not null
+               and e.statut in ('traitement', 'envoye', 'livre', 'lu', 'incertain')
+               and coalesce(e.envoye_le, e.remis_le) > now() - interval '24 hours') >= r.frequence_max_jour
+        or (select count(*) from public.communication_envois e
+             where e.canal = p_canal and e.cible_empreinte = p_empreinte and e.nature = 'campagne' and e.remis_le is not null
+               and e.statut in ('traitement', 'envoye', 'livre', 'lu', 'incertain')
+               and coalesce(e.envoye_le, e.remis_le) > now() - interval '7 days') >= r.frequence_max_semaine))
   from public.communication_reglages r
 $$;
 
@@ -779,13 +797,20 @@ begin
     -- 1.3.1 (IR-07) : l'audience figée ne garde QUE les personnes retenues. Les exclus (sans
     -- consentement, supprimés, hors fuseau…) ne laissent qu'un COMPTE par canal et par raison,
     -- dans la campagne : ni leur identifiant ni l'empreinte de leur contact ne sont gardés.
+    -- D5 (P-05) : un contact partagé par plusieurs comptes (tous consentants : sinon la règle D2
+    -- de communication_raison_exclusion les a déjà exclus) n'est retenu qu'UNE fois, pour le
+    -- compte au plus petit identifiant ; les autres sont comptés « CONTACT_EN_DOUBLE ».
     with audience as materialized (
-      select k.id client_id, ca.canal, lg.langue, ex.raison
-        from public.communication_segment_clients(c.criteres) k
-        cross join unnest(c.canaux) as ca(canal)
-        cross join lateral (select case when (c.modeles -> ca.canal) ? cl.langue then cl.langue else c.langue_repli end langue
-                              from public.clients cl where cl.id = k.id) lg
-        cross join lateral (select public.communication_raison_exclusion(k.id, ca.canal, c.essai) raison) ex
+      select a0.client_id, a0.canal, a0.langue,
+             case when a0.raison is null
+                   and row_number() over (partition by a0.canal, a0.cible, (a0.raison is null) order by a0.client_id) > 1
+                  then 'CONTACT_EN_DOUBLE' else a0.raison end raison
+        from (select k.id client_id, ca.canal, lg.langue, ex.raison, public.communication_cible(k.id, ca.canal) cible
+                from public.communication_segment_clients(c.criteres) k
+                cross join unnest(c.canaux) as ca(canal)
+                cross join lateral (select case when (c.modeles -> ca.canal) ? cl.langue then cl.langue else c.langue_repli end langue
+                                      from public.clients cl where cl.id = k.id) lg
+                cross join lateral (select public.communication_raison_exclusion(k.id, ca.canal, c.essai) raison) ex) a0
     ), retenus as (
       insert into public.communication_destinataires (campagne_id, client_id, canal, langue, modele_id, cible_empreinte,
                                                       territoire, retenu, raison)
@@ -951,6 +976,10 @@ begin
   -- la fin de cet envoi, ou cet envoi attend la fin du retrait et le voit)
   perform public.communication_verrou('client:' || e.client_id);
   perform public.communication_verrou('consentement:' || e.client_id || ':' || e.canal);
+  -- N3b (D5, P-05) : un seul envoi à la fois vers ce CONTACT, quel que soit le compte
+  if e.nature = 'campagne' and e.cible_empreinte is not null then
+    perform public.communication_verrou('contact:' || e.canal || ':' || e.cible_empreinte);
+  end if;
   -- N4 : l'envoi, RELU sous verrou (un autre travailleur l'a peut-être pris)
   select * into e from public.communication_envois
    where id = p_envoi and statut in ('attente', 'nouvel_essai') for update skip locked;
@@ -969,6 +998,15 @@ begin
   if public.communication_empreinte(e.canal, public.communication_cible(e.client_id, e.canal)) is distinct from e.cible_empreinte then
     update public.communication_envois set statut = 'supprime', code_erreur = 'CONTACT_CHANGE', maj_le = now() where id = e.id;
     return 'CONTACT_CHANGE';
+  end if;
+  -- D5 (P-05) : ce contact a déjà reçu (ou reçoit) cette campagne par un autre compte (contact
+  -- devenu commun après le gel de l'audience) : pas de second message. Vérifié sous N3b.
+  if e.nature = 'campagne' and e.cible_empreinte is not null
+     and exists (select 1 from public.communication_envois x
+                  where x.campagne_id = e.campagne_id and x.canal = e.canal and x.cible_empreinte = e.cible_empreinte
+                    and x.id <> e.id and x.statut in ('traitement', 'envoye', 'livre', 'lu', 'incertain')) then
+    update public.communication_envois set statut = 'supprime', code_erreur = 'CONTACT_EN_DOUBLE', maj_le = now() where id = e.id;
+    return 'CONTACT_EN_DOUBLE';
   end if;
 
   if e.nature = 'confirmation' then
@@ -1002,7 +1040,7 @@ begin
       update public.communication_envois set prochain_essai_le = v_fenetre, maj_le = now() where id = e.id;
       return 'HORS_FENETRE';
     end if;
-    if public.communication_frequence_atteinte(e.client_id) then
+    if public.communication_frequence_atteinte(e.client_id, e.canal, e.cible_empreinte) then
       update public.communication_envois set prochain_essai_le = now() + interval '6 hours', maj_le = now() where id = e.id;
       return 'FREQUENCE';
     end if;
@@ -1157,6 +1195,8 @@ declare
   v_res text;
   v_etat text;
   v_code text;
+  v_evts bigint[];
+  v_evt bigint;
 begin
   perform pg_catalog.set_config('search_path', '', false);
   -- Phase 1.3.1 : un arrêt EN ATTENTE est terminé ici s'il peut l'être (aucun verrou tenu à ce
@@ -1168,6 +1208,36 @@ begin
     insert into public.communication_erreurs (source, code) values ('traiter_communications:arret', v_etat);
   end;
   commit;
+  -- D5 (P-08) : les retours des fournisseurs ENREGISTRÉS et pas encore traités (échec du
+  -- traitement immédiat, ou simple statut), dus maintenant ; STOP, plaintes et désinscriptions
+  -- d'abord ; UN par transaction ; un échec n'annule que son sous-bloc et le retour repasse plus
+  -- tard (communication_evenement_a_reprendre). Ces retours ne demandent pas la porte : ils
+  -- n'envoient rien (une pause ou une suppression ne fait que protéger).
+  select coalesce(array_agg(z.evenement_id order by z.priorite, z.evenement_id), '{}') into v_evts
+    from (select t.evenement_id, t.priorite from public.communication_evenements_traitement t
+           where t.etat = 'a_traiter' and t.prochain_essai_le <= now()
+           order by t.priorite, t.evenement_id limit 200) z;
+  commit;
+  foreach v_evt in array v_evts loop
+    v_etat := null;
+    begin
+      perform public.communication_traiter_evenement(v_evt);
+    exception
+      when query_canceled then
+        v_etat := '57014';
+      when others then
+        get stacked diagnostics v_etat = returned_sqlstate;
+    end;
+    if v_etat is not null then
+      begin
+        perform public.communication_evenement_a_reprendre(v_evt, v_etat);
+      exception when others then
+        get stacked diagnostics v_etat = returned_sqlstate;
+        insert into public.communication_erreurs (source, code) values ('traiter_communications:reprise', v_etat);
+      end;
+    end if;
+    commit;
+  end loop;
   begin
     perform public.communication_lire_reponses();
   exception when others then
@@ -1254,13 +1324,55 @@ create table if not exists public.communication_evenements_fournisseur (
                                          -- unsubscribe, blocked, inbound
   message_id     text,
   reference      text,                   -- biz_opaque_callback_data / X-Mailin-custom : « communication:<id> »
-  envoi_id       bigint references public.communication_envois (id),
+  envoi_id       bigint,                 -- D5 (RF-02) : PAS de clé étrangère (voir ci-dessous)
   code           text,                   -- code du fournisseur, jamais son texte libre
   survenu_le     timestamptz,
   recu_le        timestamptz not null default now(),
   unique (fournisseur, evenement_id)
 );
 create index if not exists communication_evenements_envoi_idx on public.communication_evenements_fournisseur (envoi_id) where envoi_id is not null;
+-- D5 (P-08, revue finale RF-02) : la clé étrangère vers communication_envois faisait poser à
+-- PostgreSQL un verrou FOR KEY SHARE sur l'envoi dès l'insertion du retour, AVANT N1 et N3 :
+-- deux retours du même envoi pouvaient s'interbloquer. Elle n'apportait rien : aucun envoi n'est
+-- jamais effacé (40 à 43 n'en suppriment aucun ; ils sont anonymisés et gardent leur identifiant).
+-- Rejouable : retirée si une base l'a déjà, quel que soit son nom.
+do $sans_cle$
+declare
+  v_nom text;
+begin
+  for v_nom in select c.conname from pg_catalog.pg_constraint c
+                where c.conrelid = 'public.communication_evenements_fournisseur'::regclass and c.contype = 'f'
+                  and c.confrelid = 'public.communication_envois'::regclass loop
+    execute format('alter table public.communication_evenements_fournisseur drop constraint %I', v_nom);
+  end loop;
+end
+$sans_cle$;
+
+-- D5 (P-08) : le TRAITEMENT de chaque retour, à part (la table des retours reste immuable).
+-- Écrite dans la MÊME transaction que le retour : l'un ne va jamais sans l'autre. Aucune donnée
+-- en clair : l'empreinte du numéro et le code de confirmation d'un message entrant (nécessaires
+-- pour le traiter) sont effacés dès qu'il est traité (contrainte).
+create table if not exists public.communication_evenements_traitement (
+  evenement_id      bigint primary key references public.communication_evenements_fournisseur (id) on delete cascade,
+  etat              text not null default 'a_traiter' check (etat in ('a_traiter', 'traite', 'echec')),
+  priorite          smallint not null default 2 check (priorite in (1, 2)),   -- 1 : STOP, plainte, désinscription
+  classe            text check (classe is null or classe in ('stop', 'confirmation', 'ambigu', 'autre')),
+  cible_empreinte   text,
+  code_confirmation text check (code_confirmation is null or code_confirmation ~ '^[0-9]{6}$'),
+  tentatives        integer not null default 0 check (tentatives >= 0),
+  prochain_essai_le timestamptz not null default now(),
+  dernier_code      text,                                 -- SQLSTATE du dernier échec, jamais un texte
+  resultat          text,
+  cree_le           timestamptz not null default now(),
+  traite_le         timestamptz,
+  check (etat <> 'traite' or (cible_empreinte is null and code_confirmation is null))
+);
+create index if not exists communication_evenements_a_traiter_idx
+  on public.communication_evenements_traitement (priorite, evenement_id) where etat = 'a_traiter';
+create index if not exists communication_evenements_echec_idx
+  on public.communication_evenements_traitement (priorite) where etat = 'echec';
+alter table public.communication_evenements_traitement enable row level security;
+revoke all on public.communication_evenements_traitement from anon, authenticated, service_role;
 alter table public.communication_evenements_fournisseur enable row level security;
 revoke all on public.communication_evenements_fournisseur from anon, authenticated, service_role;
 drop trigger if exists communication_evenements_immuable on public.communication_evenements_fournisseur;
@@ -1288,15 +1400,50 @@ as $$
                                              'AAEEEEIIOUUUCIOUNaaeeeeiiouuuciouun'), '[^A-Za-z0-9 ]', '', 'g')))
 $$;
 
+-- D5 (P-09) : la CLASSE d'un message entrant, sans jamais garder son texte : stop,
+-- confirmation, ambigu (un mot d'arrêt ailleurs dans un message long : rien n'est retiré, il
+-- est compté pour une revue humaine), autre. Règles (listes À FAIRE VALIDER par le juriste) :
+--   1. le bouton de désinscription d'un modèle de Meta (charge structurée, forme exacte À
+--      VÉRIFIER sur des exemples réels) : toujours stop ;
+--   2. le message ENTIER est un mot ou une phrase d'arrêt de la liste fermée ;
+--   3. le PREMIER mot est un verbe d'arrêt sans ambiguïté et le message a 5 mots au plus
+--      (« Stop please », « Stop les pubs », « Arrêter les promotions ») ;
+--   jamais sur une simple mention au milieu d'une phrase (« mon colis s'est arrêté »). Des mots
+--   comme ARRET, END, FIN, CANCEL ou QUIT ne comptent que SEULS (« Arrêt de bus » n'est pas un STOP).
+create or replace function public.communication_classer_entrant(p_texte text, p_bouton text default null)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  with m as (select regexp_replace(public.communication_mot_simple(p_texte), ' +', ' ', 'g') t,
+                    upper(coalesce(p_bouton, '')) b),
+       n as (select m.t, m.b, string_to_array(m.t, ' ') mots from m)
+  select case
+    when n.b in ('STOP', 'UNSUBSCRIBE', 'OPT_OUT', 'OPTOUT', 'MARKETING_OPT_OUT') then 'stop'
+    when n.t in ('STOP', 'STOP STOP', 'STOP ALL', 'STOP PLEASE', 'PLEASE STOP', 'ARRET', 'ARRETER', 'ARRETEZ',
+                 'DESABONNER', 'DESINSCRIRE', 'UNSUBSCRIBE', 'CANCEL', 'QUIT', 'END', 'FIN', 'REVOKE', 'OPT OUT', 'OPTOUT',
+                 'BAJA', 'PARAR', 'DETENER', 'CANCELAR', 'NO MAS', 'NO MAS MENSAJES',
+                 'KANPE', 'SISPANN', 'DEZABONE') then 'stop'
+    when n.mots[1] in ('STOP', 'ARRETER', 'ARRETEZ', 'DESABONNER', 'DESABONNEZ', 'DESINSCRIRE', 'DESINSCRIVEZ',
+                       'UNSUBSCRIBE', 'OPTOUT', 'REVOKE', 'BAJA', 'DETENER', 'DESUSCRIBIR', 'KANPE', 'SISPANN', 'DEZABONE')
+         and coalesce(array_length(n.mots, 1), 0) <= 5 then 'stop'
+    when n.mots[1] in ('OUI', 'YES', 'SI', 'WI') and coalesce(array_length(n.mots, 1), 0) = 2
+         and n.mots[2] ~ '^[0-9]{6}$' then 'confirmation'
+    when n.mots && array['STOP', 'ARRETER', 'ARRETEZ', 'DESABONNER', 'DESINSCRIRE', 'UNSUBSCRIBE', 'OPTOUT',
+                         'REVOKE', 'BAJA', 'KANPE', 'SISPANN', 'DEZABONE'] then 'ambigu'
+    else 'autre'
+  end
+  from n
+$$;
+
 create or replace function public.communication_est_stop(p_texte text)
 returns boolean
 language sql
 immutable
 set search_path = ''
 as $$
-  select public.communication_mot_simple(p_texte)
-         in ('STOP', 'ARRET', 'ARRETER', 'DESABONNER', 'DESINSCRIRE', 'UNSUBSCRIBE', 'CANCEL',
-             'BAJA', 'PARAR', 'DETENER', 'KANPE', 'SISPANN', 'DEZABONE')
+  select public.communication_classer_entrant(p_texte, null) = 'stop'
 $$;
 
 -- Le compteur des retours par minute et par fournisseur (Phase 1.3, C7) : une limite de débit
@@ -1330,9 +1477,20 @@ revoke all on public.communication_webhook_debit from anon, authenticated, servi
 --     18 h ouvre une fenêtre jusqu'à 10 h le lendemain. Elle ne recule jamais (greatest) : un
 --     événement ancien ou reçu dans le désordre ne l'allonge pas. Sans horodatage, la fenêtre
 --     n'est pas touchée (le STOP, lui, s'applique toujours).
---   · VERROUS : ordre unique (40 §3). L'envoi est d'abord LU sans verrou ; puis, si besoin,
---     N0 exclusif (pause d'un canal, décidée avant tout autre verrou), N1 (campagne), N3
---     (consentements, par client croissant), N4 (l'envoi, relu).
+--   · D5 (P-08, revue finale RF-02, RF-05) — RÉCEPTION DURABLE, PUIS TRAITEMENT :
+--     TEMPS A (cette fonction) : contrôles, lecture SANS verrou de l'envoi visé, classe et
+--     empreinte d'un message entrant calculées ICI (le texte n'est jamais gardé), puis, dans UNE
+--     transaction, le retour (anti-rejeu : identifiant unique) ET sa ligne de traitement
+--     « a_traiter ». Un STOP, une plainte, une désinscription, une confirmation (priorité, et
+--     messages entrants) sont traités TOUT DE SUITE, dans un sous-bloc : un échec (interblocage,
+--     délai, toute erreur) n'annule que ce sous-bloc — le retour reste enregistré et le
+--     travailleur le reprend. Les autres statuts attendent le travailleur (une minute au plus).
+--     Réponse « ok » seulement si le retour est ENREGISTRÉ. Si la transaction elle-même échoue,
+--     une erreur remonte : la fonction Edge doit répondre 5xx pour que le fournisseur réessaie
+--     (réessai À VÉRIFIER chez Meta et Brevo : risque résiduel R-01).
+--     TEMPS B : communication_traiter_evenement (une fois, sous le verrou de sa ligne).
+--   · VERROUS (40 §3) : temps A ne prend AUCUN verrou métier (plus de clé étrangère vers l'envoi,
+--     donc plus de FOR KEY SHARE caché) ; temps B : N1 si besoin, N3, N4, puis les écritures.
 --   · SECRETS : rien du coffre n'apparaît dans une réponse ou un journal ; les refus ne
 --     disent pas pourquoi (seul le fournisseur est noté dans les journaux).
 create or replace function public.communication_recevoir_evenement(p_fournisseur text, p_charge text, p_signature text)
@@ -1340,7 +1498,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
-set lock_timeout = '5s'
+set lock_timeout = '2s'                  -- D5 : temps A court (anti-rejeu, débit)
 as $$
 declare
   r public.communication_reglages;
@@ -1364,6 +1522,12 @@ declare
   a public.communication_codes_fournisseur;
   v_rang_actuel integer;
   v_rang_nouveau integer;
+  v_classe text;
+  v_code_conf text;
+  v_priorite smallint := 2;
+  v_action text;
+  v_resultat text;
+  v_etat text;
 begin
   -- Contrôles bon marché AVANT toute lecture du coffre (revue 1.1, M6)
   if p_fournisseur is null or p_fournisseur not in ('meta', 'brevo', 'resend') or p_charge is null or length(p_charge) > 20000
@@ -1428,19 +1592,37 @@ begin
        where fournisseur = p_fournisseur and message_id = p ->> 'message_id';
     end if;
   end if;
-  -- 1.3.1 (revue n° 2, IR2-06) : un message entrant dont on ne peut pas calculer l'empreinte
-  -- (poivre absent, numéro manquant) lève une ERREUR : rien n'est enregistré, pas même le rejeu,
-  -- la fonction Edge répond 5xx et le fournisseur réessaie. Avant, la ligne de rejeu était
-  -- validée et le STOP réessayé était pris pour un doublon : perdu pour toujours.
   if v_type = 'inbound' then
+    -- 1.3.1 (IR2-06) : un message entrant dont on ne peut pas calculer l'empreinte (poivre absent,
+    -- numéro manquant) lève une ERREUR : rien n'est enregistré, pas même le rejeu ; la fonction
+    -- Edge répond 5xx et le fournisseur réessaie.
     v_empreinte := public.communication_empreinte('whatsapp', p ->> 'telephone');
     if v_empreinte is null then
       raise exception 'EMPREINTE_INDISPONIBLE';
     end if;
+    v_classe := public.communication_classer_entrant(p ->> 'texte', p ->> 'bouton');
+    if v_classe = 'confirmation' then
+      v_code_conf := split_part(regexp_replace(public.communication_mot_simple(p ->> 'texte'), ' +', ' ', 'g'), ' ', 2);
+    end if;
+    if v_classe = 'stop' then
+      v_priorite := 1;
+    end if;
+  else
+    if v_type in ('complaint', 'unsubscribe') then
+      v_priorite := 1;
+    end if;
+    if p ->> 'code' is not null then                             -- lu sans verrou
+      select action into v_action from public.communication_codes_fournisseur
+       where fournisseur = p_fournisseur and code = p ->> 'code';
+      if v_action = 'suppression_contact' then
+        v_priorite := 1;
+      end if;
+    end if;
   end if;
-  -- Rejeu : l'identifiant de l'événement est unique ; un événement déjà reçu ne refait rien.
-  -- 1.3.1 (IR-07) : pour un message ENTRANT, ni son identifiant chez Meta ni rien qui le relie au
-  -- numéro n'est gardé — seulement l'empreinte SHA-256 de son identifiant, pour le rejeu.
+  -- Le retour ET sa ligne de traitement, dans la même transaction. Rejeu : l'identifiant de
+  -- l'événement est unique ; un retour déjà reçu ne refait rien. 1.3.1 (IR-07) : pour un message
+  -- ENTRANT, ni son identifiant chez Meta ni rien qui le relie au numéro n'est gardé dans la
+  -- table des retours — seulement l'empreinte SHA-256 de son identifiant, pour le rejeu.
   insert into public.communication_evenements_fournisseur (fournisseur, evenement_id, type, message_id, reference, envoi_id, code, survenu_le)
   values (p_fournisseur,
           case when v_type = 'inbound' then 'in:' || encode(extensions.digest(p ->> 'id', 'sha256'), 'hex')
@@ -1451,44 +1633,106 @@ begin
   on conflict (fournisseur, evenement_id) do nothing
   returning id into v_id;
   if v_id is null then
-    return jsonb_build_object('ok', true, 'rejeu', true);      -- déjà traité : rien de plus, rien de moins
+    return jsonb_build_object('ok', true, 'rejeu', true);      -- déjà reçu : rien de plus, rien de moins
   end if;
+  insert into public.communication_evenements_traitement (evenement_id, priorite, classe, cible_empreinte, code_confirmation)
+  values (v_id, v_priorite, v_classe, v_empreinte, v_code_conf);
 
-  -- Message entrant (WhatsApp) : fenêtre de 24 h, STOP, confirmation. Le contenu n'est jamais gardé.
-  if v_type = 'inbound' then
-    if v_survenu is not null then
+  -- Traitement immédiat des retours qui protègent ou que le client attend ; un échec n'annule
+  -- que ce sous-bloc (OTHERS n'attrape pas query_canceled : deux clauses)
+  if v_priorite = 1 or v_type = 'inbound' then
+    begin
+      v_resultat := public.communication_traiter_evenement(v_id);
+    exception
+      when query_canceled then
+        v_etat := '57014';
+      when others then
+        get stacked diagnostics v_etat = returned_sqlstate;
+    end;
+    if v_etat is not null then
+      perform public.communication_evenement_a_reprendre(v_id, v_etat);
+      return jsonb_build_object('ok', true, 'enregistre', true, 'traite', false);
+    end if;
+    return jsonb_build_object('ok', true, 'enregistre', true, 'traite', true, 'resultat', v_resultat);
+  end if;
+  return jsonb_build_object('ok', true, 'enregistre', true, 'traite', false);
+end;
+$$;
+
+-- D5 (P-08) — TEMPS B : traiter UN retour enregistré, UNE seule fois. Appelée par le temps A
+-- (tentative immédiate, dans un sous-bloc) et par le travailleur (reprise). Le verrou de SA ligne
+-- de traitement est pris en SKIP LOCKED, son état RELU : un retour déjà traité ou déjà pris par
+-- une autre transaction n'est jamais appliqué deux fois. Les effets ET le passage à « traite »
+-- se font dans la même transaction (ou le même sous-bloc) : tout ou rien.
+-- Ordre des verrous (40 §3) : N1 (campagne) seulement si le retour la modifie ou crée un envoi ;
+-- N3 (consentements, clients croissants) si le retour peut retirer ; N4 (l'envoi, relu) ;
+-- ENSUITE seulement les écritures dans communication_suppressions et communication_consentements
+-- (revue finale RF-02, RF-05). Aucune attente de plus de 3 s : au-delà, erreur, et le retour
+-- reste « a_traiter » (communication_evenement_a_reprendre).
+create or replace function public.communication_traiter_evenement(p_evenement bigint)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '3s'
+as $$
+declare
+  t public.communication_evenements_traitement;
+  ev public.communication_evenements_fournisseur;
+  e public.communication_envois;
+  f public.communication_confirmations;
+  k public.communication_consentements;
+  a public.communication_codes_fournisseur;
+  v_clients uuid[];
+  v_client uuid;
+  v_rang_actuel integer;
+  v_rang_nouveau integer;
+  v_resultat text := 'TRAITE';
+begin
+  select * into t from public.communication_evenements_traitement
+   where evenement_id = p_evenement for update skip locked;
+  if not found then
+    return 'DEJA_PRIS';                                          -- une autre transaction s'en occupe
+  end if;
+  if t.etat <> 'a_traiter' then
+    return 'DEJA_TRAITE';
+  end if;
+  select * into ev from public.communication_evenements_fournisseur where id = p_evenement;
+
+  if ev.type = 'inbound' then
+    -- Fenêtre de 24 h : heure RÉELLE du message, jamais reculée (greatest)
+    if ev.survenu_le is not null and t.cible_empreinte is not null then
       insert into public.communication_fenetres_whatsapp (cible_empreinte, dernier_entrant)
-      values (v_empreinte, least(v_survenu, now()))
+      values (t.cible_empreinte, least(ev.survenu_le, now()))
       on conflict (cible_empreinte) do update
         set dernier_entrant = greatest(public.communication_fenetres_whatsapp.dernier_entrant, excluded.dernier_entrant);
     end if;
-    if public.communication_est_stop(p ->> 'texte') then
-      insert into public.communication_suppressions (canal, cible_empreinte, raison, source)
-      values ('whatsapp', v_empreinte, 'stop', 'whatsapp_entrant') on conflict do nothing;
-      -- N3 pour CHAQUE client qui a ce numéro, par identifiant CROISSANT (deux STOP simultanés
-      -- prennent les verrous dans le même ordre)
+    if t.classe = 'stop' and t.cible_empreinte is not null then
+      -- RF-05 : N3 pour CHAQUE compte de ce numéro, par identifiant CROISSANT, AVANT la suppression
       select coalesce(array_agg(c.id order by c.id), '{}') into v_clients from public.clients c
-       where public.communication_empreinte('whatsapp', public.telephone_international(c.telephone, c.pays)) = v_empreinte;
+       where public.communication_empreinte('whatsapp', public.telephone_international(c.telephone, c.pays)) = t.cible_empreinte;
       foreach v_client in array v_clients loop
         perform public.communication_verrou('consentement:' || v_client || ':whatsapp');
-        insert into public.communication_consentements (client_id, canal, action, source, cible_empreinte, contexte)
-        values (v_client, 'whatsapp', 'retire', 'whatsapp_stop', v_empreinte,
-                jsonb_build_object('survenu_le', v_survenu));
+      end loop;
+      insert into public.communication_suppressions (canal, cible_empreinte, raison, source)
+      values ('whatsapp', t.cible_empreinte, 'stop', 'whatsapp_entrant') on conflict do nothing;
+      foreach v_client in array v_clients loop
+        if (public.communication_etat_consentement(v_client, 'whatsapp') ->> 'etat') in ('en_attente', 'confirme') then
+          insert into public.communication_consentements (client_id, canal, action, source, cible_empreinte, contexte)
+          values (v_client, 'whatsapp', 'retire', 'whatsapp_stop', t.cible_empreinte,
+                  jsonb_build_object('survenu_le', ev.survenu_le));
+        end if;
         update public.communication_confirmations set annule_le = clock_timestamp()
          where client_id = v_client and canal = 'whatsapp' and utilise_le is null and annule_le is null;
       end loop;
-      return jsonb_build_object('ok', true, 'stop', true);
-    end if;
-    -- Confirmation : « <mot> <code> » depuis le numéro dont l'empreinte est celle de la demande.
-    -- La demande est d'abord LUE sans verrou, puis N3, puis la ligne est verrouillée et RELUE
-    -- (même ordre que demander_consentement_communication, qui prend N3 avant d'annuler).
-    v_mot := split_part(public.communication_mot_simple(p ->> 'texte'), ' ', 1);
-    v_code := split_part(public.communication_mot_simple(p ->> 'texte'), ' ', 2);
-    if v_mot in ('OUI', 'YES', 'SI', 'WI') and v_code ~ '^[0-9]{4}$' then
+      v_resultat := 'STOP';
+    elsif t.classe = 'confirmation' and t.code_confirmation is not null and t.cible_empreinte is not null then
+      -- D5 (N-02) : le code est UNIQUE parmi les demandes ouvertes de ce numéro (index de 40) :
+      -- il ne peut désigner qu'UNE demande, celle du compte qui l'a reçu. Lu sans verrou, puis
+      -- N3, puis la ligne verrouillée et RELUE (même ordre que demander_consentement_communication).
       select * into f from public.communication_confirmations
-       where canal = 'whatsapp' and cible_empreinte = v_empreinte and code = v_code
-         and utilise_le is null and annule_le is null and expire_le > now()
-       order by id desc limit 1;
+       where canal = 'whatsapp' and cible_empreinte = t.cible_empreinte and code = t.code_confirmation
+         and utilise_le is null and annule_le is null and expire_le > now();
       if found then
         perform public.communication_verrou('consentement:' || f.client_id || ':whatsapp');
         select * into f from public.communication_confirmations
@@ -1501,97 +1745,172 @@ begin
           insert into public.communication_consentements (client_id, canal, action, source, texte_version, texte_empreinte,
                                                           langue, cible_empreinte, contexte)
           values (f.client_id, 'whatsapp', 'confirme', 'whatsapp_confirmation', k.texte_version, k.texte_empreinte, k.langue,
-                  v_empreinte, jsonb_build_object('survenu_le', v_survenu));
+                  t.cible_empreinte, jsonb_build_object('survenu_le', ev.survenu_le));
           update public.communication_suppressions
              set leve_le = clock_timestamp(), motif_levee = 'Nouvelle inscription confirmée par le contact'
-           where canal = 'whatsapp' and cible_empreinte = v_empreinte and leve_le is null and raison in ('desinscription', 'stop');
-          return jsonb_build_object('ok', true, 'confirme', true);
+           where canal = 'whatsapp' and cible_empreinte = t.cible_empreinte and leve_le is null and raison in ('desinscription', 'stop');
+          v_resultat := 'CONFIRME';
+        else
+          v_resultat := 'CONFIRMATION_REFUSEE';
         end if;
+      else
+        -- D5 (D1) : code faux ou expiré. Chaque essai est compté sur les demandes ouvertes de CE
+        -- numéro ; au cinquième, elles sont toutes annulées (une nouvelle demande est nécessaire).
+        update public.communication_confirmations
+           set tentatives = tentatives + 1,
+               annule_le = case when tentatives + 1 >= 5 then clock_timestamp() else annule_le end
+         where canal = 'whatsapp' and cible_empreinte = t.cible_empreinte and utilise_le is null and annule_le is null;
+        v_resultat := 'CODE_INCONNU';
+      end if;
+    elsif t.classe = 'ambigu' then
+      v_resultat := 'AMBIGU';                                    -- rien n'est retiré ; compté pour la revue humaine
+    else
+      v_resultat := 'ENTRANT';
+    end if;
+
+  elsif ev.envoi_id is null then
+    v_resultat := 'ENVOI_INCONNU';
+
+  else
+    select * into e from public.communication_envois where id = ev.envoi_id;     -- lecture sans verrou
+    if ev.code is not null then
+      select * into a from public.communication_codes_fournisseur where fournisseur = ev.fournisseur and code = ev.code;
+    end if;
+    -- N1 : la campagne SEULEMENT si ce retour la modifie (pause) ou crée un envoi (report)
+    if e.campagne_id is not null and (a.action = 'pause_campagne' or (a.action = 'reporter_destinataire' and a.verifie)) then
+      perform 1 from public.communication_campagnes where id = e.campagne_id for update;
+    end if;
+    -- N3 : si ce retour peut retirer un consentement
+    if (ev.type in ('complaint', 'unsubscribe') or a.action = 'suppression_contact') and e.client_id is not null then
+      perform public.communication_verrou('consentement:' || e.client_id || ':' || e.canal);
+    end if;
+    -- N4 : l'envoi, RELU sous verrou
+    select * into e from public.communication_envois where id = ev.envoi_id for update;
+
+    -- Statut d'un message : jamais en arrière ; un incertain retrouvé est rapproché (H8)
+    v_rang_actuel := case e.statut when 'livre' then 2 when 'lu' then 3 when 'envoye' then 1 else 0 end;
+    v_rang_nouveau := case ev.type when 'sent' then 1 when 'delivered' then 2 when 'read' then 3 else 0 end;
+    if v_rang_nouveau > 0 and v_rang_nouveau > v_rang_actuel and e.statut in ('traitement', 'envoye', 'livre', 'incertain') then
+      update public.communication_envois
+         set statut = case v_rang_nouveau when 1 then 'envoye' when 2 then 'livre' else 'lu' end,
+             message_id = coalesce(message_id, ev.message_id),
+             envoye_le = coalesce(envoye_le, ev.survenu_le, now()),
+             livre_le = case when v_rang_nouveau >= 2 then coalesce(livre_le, ev.survenu_le, now()) else livre_le end,
+             lu_le = case when v_rang_nouveau = 3 then coalesce(lu_le, ev.survenu_le, now()) else lu_le end,
+             incertain_clos_le = null, maj_le = now()
+       where id = e.id;
+    elsif ev.type in ('failed', 'hard_bounce', 'blocked') and e.statut in ('traitement', 'envoye', 'incertain') then
+      update public.communication_envois set statut = 'echec', code_erreur = left(coalesce(ev.code, upper(ev.type)), 60),
+             incertain_clos_le = null, maj_le = now() where id = e.id;
+    end if;
+
+    if a.action = 'suppression_contact' and e.cible_empreinte is not null then
+      insert into public.communication_suppressions (canal, cible_empreinte, client_id, raison, source)
+      values (e.canal, e.cible_empreinte, e.client_id, 'opposition_meta', ev.fournisseur) on conflict do nothing;
+      if e.client_id is not null
+         and (public.communication_etat_consentement(e.client_id, e.canal) ->> 'etat') in ('en_attente', 'confirme') then
+        insert into public.communication_consentements (client_id, canal, action, source, cible_empreinte)
+        values (e.client_id, e.canal, 'retire', 'opposition_meta', e.cible_empreinte);
+      end if;
+    elsif a.action = 'pause_campagne' and e.campagne_id is not null then
+      update public.communication_campagnes set statut = 'en_pause', arret_motif = 'CODE_' || ev.code, maj_le = now()
+       where id = e.campagne_id and statut = 'en_cours';
+    -- Un report CRÉE un nouvel envoi : il exige un code dont le sens est VÉRIFIÉ
+    elsif a.action = 'reporter_destinataire' and a.verifie and e.relance_de is null and e.campagne_id is not null then
+      insert into public.communication_envois (nature, campagne_id, destinataire_id, client_id, canal, cle, cible_empreinte,
+                                               territoire, fournisseur, prochain_essai_le, relance_de)
+      values ('campagne', e.campagne_id, e.destinataire_id, e.client_id, e.canal, e.cle || ':report', e.cible_empreinte,
+              e.territoire, e.fournisseur, now() + make_interval(hours => coalesce(a.delai_heures, 24)), e.id)
+      on conflict (cle) do nothing;                             -- une seule fois
+    end if;
+
+    -- Rebond définitif, plainte, désinscription chez le fournisseur : suppression du contact EXACT
+    -- visé par l'envoi ; retrait seulement pour une plainte ou une désinscription (pas un rebond)
+    if ev.type in ('hard_bounce', 'complaint', 'unsubscribe') and e.cible_empreinte is not null then
+      insert into public.communication_suppressions (canal, cible_empreinte, client_id, raison, source)
+      values (e.canal, e.cible_empreinte, e.client_id,
+              case ev.type when 'complaint' then 'plainte' when 'unsubscribe' then 'desinscription' else 'rebond_definitif' end,
+              ev.fournisseur)
+      on conflict do nothing;
+      if ev.type in ('complaint', 'unsubscribe') and e.client_id is not null
+         and (public.communication_etat_consentement(e.client_id, e.canal) ->> 'etat') in ('en_attente', 'confirme') then
+        insert into public.communication_consentements (client_id, canal, action, source, cible_empreinte)
+        values (e.client_id, e.canal, 'retire', case ev.type when 'complaint' then 'plainte' else 'lien_desinscription' end,
+                e.cible_empreinte);
       end if;
     end if;
-    return jsonb_build_object('ok', true);
-  end if;
-
-  if v_envoi is null then
-    return jsonb_build_object('ok', true, 'inconnu', true);
-  end if;
-
-  -- Ce que dit un code d'erreur (table des codes, H11) — lu AVANT les verrous
-  if p ->> 'code' is not null then
-    select * into a from public.communication_codes_fournisseur where fournisseur = p_fournisseur and code = p ->> 'code';
-  end if;
-  -- N1 la campagne, N3 le consentement (si l'événement peut retirer), puis N4 l'envoi, RELU
-  if v_campagne is not null then
-    perform 1 from public.communication_campagnes where id = v_campagne for update;
-  end if;
-  select * into e from public.communication_envois where id = v_envoi;
-  if v_type in ('complaint', 'unsubscribe') or a.action = 'suppression_contact' then
-    perform public.communication_verrou('consentement:' || e.client_id || ':' || e.canal);
-  end if;
-  select * into e from public.communication_envois where id = v_envoi for update;
-
-  -- Statut d'un message : jamais en arrière ; un incertain retrouvé est rapproché (H8)
-  v_rang_actuel := case e.statut when 'livre' then 2 when 'lu' then 3 when 'envoye' then 1 else 0 end;
-  v_rang_nouveau := case v_type when 'sent' then 1 when 'delivered' then 2 when 'read' then 3 else 0 end;
-  if v_rang_nouveau > 0 and v_rang_nouveau > v_rang_actuel and e.statut in ('traitement', 'envoye', 'livre', 'incertain') then
-    update public.communication_envois
-       set statut = case v_rang_nouveau when 1 then 'envoye' when 2 then 'livre' else 'lu' end,
-           message_id = coalesce(message_id, left(p ->> 'message_id', 200)),
-           envoye_le = coalesce(envoye_le, v_survenu, now()),
-           livre_le = case when v_rang_nouveau >= 2 then coalesce(livre_le, v_survenu, now()) else livre_le end,
-           lu_le = case when v_rang_nouveau = 3 then coalesce(lu_le, v_survenu, now()) else lu_le end,
-           incertain_clos_le = null, maj_le = now()
-     where id = e.id;
-  elsif v_type in ('failed', 'hard_bounce', 'blocked') and e.statut in ('traitement', 'envoye', 'incertain') then
-    update public.communication_envois set statut = 'echec', code_erreur = left(coalesce(p ->> 'code', upper(v_type)), 60),
-           incertain_clos_le = null, maj_le = now() where id = e.id;
-  end if;
-
-  if a.action = 'suppression_contact' and e.cible_empreinte is not null then
-    insert into public.communication_suppressions (canal, cible_empreinte, client_id, raison, source)
-    values (e.canal, e.cible_empreinte, e.client_id, 'opposition_meta', p_fournisseur) on conflict do nothing;
-    if e.client_id is not null then                          -- envoi anonymisé : la suppression suffit
-      insert into public.communication_consentements (client_id, canal, action, source, cible_empreinte)
-      values (e.client_id, e.canal, 'retire', 'opposition_meta', e.cible_empreinte);
-    end if;
-  elsif a.action = 'pause_campagne' and e.campagne_id is not null then
-    update public.communication_campagnes set statut = 'en_pause', arret_motif = 'CODE_' || (p ->> 'code'), maj_le = now()
-     where id = e.campagne_id and statut = 'en_cours';
-  -- Phase 1.3.1 : un report CRÉE un nouvel envoi ; il exige donc un code dont le sens est VÉRIFIÉ
-  -- (communication_codes_fournisseur.verifie). Les actions qui ne font que protéger (suppression,
-  -- pauses) restent appliquées même non vérifiées : elles ne peuvent qu'empêcher un envoi.
-  elsif a.action = 'reporter_destinataire' and a.verifie and e.relance_de is null and e.campagne_id is not null then
-    insert into public.communication_envois (nature, campagne_id, destinataire_id, client_id, canal, cle, cible_empreinte,
-                                             territoire, fournisseur, prochain_essai_le, relance_de)
-    values ('campagne', e.campagne_id, e.destinataire_id, e.client_id, e.canal, e.cle || ':report', e.cible_empreinte,
-            e.territoire, e.fournisseur, now() + make_interval(hours => coalesce(a.delai_heures, 24)), e.id)
-    on conflict (cle) do nothing;                             -- une seule fois
-  end if;
-
-  -- Rebond définitif, plainte, désinscription chez le fournisseur : suppression du contact EXACT
-  -- visé par l'envoi ; retrait seulement pour une plainte ou une désinscription (pas un rebond)
-  if v_type in ('hard_bounce', 'complaint', 'unsubscribe') and e.cible_empreinte is not null then
-    insert into public.communication_suppressions (canal, cible_empreinte, client_id, raison, source)
-    values (e.canal, e.cible_empreinte, e.client_id,
-            case v_type when 'complaint' then 'plainte' when 'unsubscribe' then 'desinscription' else 'rebond_definitif' end,
-            p_fournisseur)
-    on conflict do nothing;
-    if v_type in ('complaint', 'unsubscribe') and e.client_id is not null then
-      insert into public.communication_consentements (client_id, canal, action, source, cible_empreinte)
-      values (e.client_id, e.canal, 'retire', case v_type when 'complaint' then 'plainte' else 'lien_desinscription' end,
-              e.cible_empreinte);
+    -- Coupure du canal demandée par un code de Meta : écrite SANS N0, donc AU MIEUX (ce n'est PAS
+    -- un arrêt confirmé) ; EN DERNIER (IR-04). Pour une garantie : l'arrêt d'urgence (41 §4.8).
+    if a.action = 'pause_canal' then
+      update public.communication_reglages set whatsapp_actif = false, maj_le = now() where ev.fournisseur = 'meta';
+      insert into public.communication_erreurs (source, code, detail)
+      values ('fournisseur', 'PAUSE_CANAL_NON_CONFIRMEE', ev.fournisseur || ':' || ev.code);
     end if;
   end if;
-  -- Coupure du canal demandée par un code de Meta (Phase 1.3.1) : écrite SANS prendre N0 (un
-  -- retour de fournisseur ne doit pas attendre les envois), donc AU MIEUX — ce n'est PAS un arrêt
-  -- confirmé et rien ne le présente comme tel : un envoi déjà autorisé peut encore valider. Écrite EN DERNIER (IR-04) :
-  -- la ligne des réglages n'est tenue qu'un instant. Elle est journalisée ; pour une garantie, l'administrateur utilise l'arrêt d'urgence (41 §4.8).
-  -- Avant 1.3.1, elle tentait N0 exclusif puis écrivait « quand même » : même défaut que l'arrêt.
-  if a.action = 'pause_canal' then
-    update public.communication_reglages set whatsapp_actif = false, maj_le = now() where p_fournisseur = 'meta';
+
+  update public.communication_evenements_traitement
+     set etat = 'traite', traite_le = clock_timestamp(), resultat = v_resultat,
+         cible_empreinte = null, code_confirmation = null           -- plus rien de personnel une fois traité
+   where evenement_id = p_evenement;
+  return v_resultat;
+end;
+$$;
+
+-- D5 (P-08) : un traitement a échoué (le sous-bloc a été annulé). Le retour reste ENREGISTRÉ et
+-- repasse plus tard : 1, 2, 5 puis 15 min ; au cinquième échec, « echec » — visible dans
+-- sante_communications, alerte si c'est un STOP, une plainte ou une désinscription — et repris
+-- seulement par l'administrateur (reprendre_evenement_communication). Jamais effacé avant
+-- d'être traité (communication_purger_autres).
+create or replace function public.communication_evenement_a_reprendre(p_evenement bigint, p_code text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '3s'
+as $$
+declare
+  v_tentatives integer;
+  v_priorite smallint;
+begin
+  update public.communication_evenements_traitement
+     set tentatives = tentatives + 1, dernier_code = left(coalesce(p_code, '?'), 20),
+         etat = case when tentatives + 1 >= 5 then 'echec' else 'a_traiter' end,
+         prochain_essai_le = clock_timestamp()
+           + make_interval(mins => case tentatives + 1 when 1 then 1 when 2 then 2 when 3 then 5 else 15 end)
+   where evenement_id = p_evenement and etat = 'a_traiter'
+  returning tentatives, priorite into v_tentatives, v_priorite;
+  if v_tentatives >= 5 then
     insert into public.communication_erreurs (source, code, detail)
-    values ('fournisseur', 'PAUSE_CANAL_NON_CONFIRMEE', p_fournisseur || ':' || (p ->> 'code'));
+    values ('evenement_fournisseur:echec', left(coalesce(p_code, '?'), 20), 'priorite:' || v_priorite);
   end if;
+end;
+$$;
+
+-- D5 (P-08) : remettre « a_traiter » un retour en échec (après en avoir trouvé la cause).
+-- Administrateur seulement (communications.manage), motif d'au moins 10 caractères, journalisé.
+-- Runbook (COMMUNICATION_CENTER_SECURITY.md) : pour un STOP, une plainte ou une désinscription
+-- en échec, appliquer D'ABORD la suppression à la main (ajouter_suppression_communication), puis
+-- chercher la cause, puis reprendre.
+create or replace function public.reprendre_evenement_communication(p_evenement bigint, p_motif text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '3s'
+as $$
+begin
+  perform public.exiger_permission('communications.manage');
+  if length(trim(coalesce(p_motif, ''))) < 10 then
+    perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi ce retour peut être repris (10 caractères au moins).');
+  end if;
+  update public.communication_evenements_traitement
+     set etat = 'a_traiter', tentatives = 0, prochain_essai_le = clock_timestamp()
+   where evenement_id = p_evenement and etat = 'echec';
+  if not found then
+    perform public.erreur_metier('INVALID_TRANSITION', 'Seul un retour en échec se reprend.');
+  end if;
+  perform set_config('goship.motif', trim(p_motif), true);
+  perform public.auditer('communication.evenement_repris', 'communication_evenement', p_evenement::text, null, null);
   return jsonb_build_object('ok', true);
 end;
 $$;
@@ -1606,6 +1925,8 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '2s'                    -- D5 (P-03) : sous les 3 s du rôle anon (mesurés le 20/11/2026) ;
+                                           -- au-delà, une ERREUR (jamais « ok » sans écriture) : la page propose de réessayer
 as $$
 declare
   v_id bigint;
@@ -1673,8 +1994,10 @@ returns bigint
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                    -- D5 (P-03)
 as $$
 declare
+  v_campagne uuid;
   e public.communication_envois;
   v_n integer;
   v_id bigint;
@@ -1682,6 +2005,12 @@ begin
   perform public.exiger_permission('communications.approve');
   if length(trim(coalesce(p_motif, ''))) < 10 then
     perform public.erreur_metier('REASON_REQUIRED', 'Dites pourquoi ce message doit repartir (10 caractères au moins).');
+  end if;
+  -- D5 (RF-02) : N1 (la campagne) AVANT N4 (l'envoi), comme partout : l'insertion de la relance
+  -- pose un FOR KEY SHARE sur la campagne, qu'un retour du fournisseur peut tenir en FOR UPDATE
+  select campagne_id into v_campagne from public.communication_envois where id = p_envoi;   -- sans verrou
+  if v_campagne is not null then
+    perform 1 from public.communication_campagnes where id = v_campagne for update;
   end if;
   select * into e from public.communication_envois where id = p_envoi for update;
   if not found or e.statut not in ('incertain', 'abandon') or e.nature <> 'campagne' then
@@ -1749,7 +2078,11 @@ begin
   elsif p_categorie = 'campagnes' then
     update public.communication_campagnes set description = '' where terminee_le < p_avant and description <> '';
   elsif p_categorie = 'evenements_fournisseur' then
-    delete from public.communication_evenements_fournisseur where recu_le < p_avant;
+    -- D5 (P-08) : jamais un retour encore « a_traiter » ou en « echec » (un STOP en attente)
+    delete from public.communication_evenements_fournisseur ev
+     where ev.recu_le < p_avant
+       and not exists (select 1 from public.communication_evenements_traitement t
+                        where t.evenement_id = ev.id and t.etat in ('a_traiter', 'echec'));
     v_operation := 'effacer';
   elsif p_categorie = 'fenetres_whatsapp' then
     delete from public.communication_fenetres_whatsapp where dernier_entrant < p_avant;
@@ -1810,6 +2143,13 @@ begin
   get diagnostics v_n = row_count;
   insert into public.communication_journal_purges (demande_id, table_nom, operation, lignes, execute_par)
   values (p_demande, 'communication_evenements_fournisseur', 'anonymiser', v_n, auth.uid());
+  -- D5 (P-08) : une confirmation WhatsApp reçue de ses numéros et pas encore traitée devient
+  -- sans objet : close, sans empreinte ni code. Un STOP en attente est GARDÉ (il protège le
+  -- numéro, comme la liste de suppression) : il ne contient qu'une empreinte.
+  update public.communication_evenements_traitement
+     set etat = 'traite', resultat = 'EFFACEMENT', traite_le = clock_timestamp(),
+         cible_empreinte = null, code_confirmation = null
+   where classe = 'confirmation' and etat in ('a_traiter', 'echec') and cible_empreinte = any (p_empreintes);
   -- Envois : plus rien qui mène à la personne (client, contact, fournisseur, requête, contenu).
   -- 1.3.1 (IR-02) : la clé aussi (elle contenait l'identifiant du client) ; (IR-13) : lignes
   -- verrouillées d'abord par identifiant croissant, comme l'annulation de campagne.
@@ -1954,6 +2294,19 @@ begin
     'en_cours_bloques', (select count(*) from public.communication_envois
                           where statut = 'traitement' and verrouille_le < now() - interval '15 minutes'),
     'erreurs_24h', (select count(*) from public.communication_erreurs where cree_le > now() - interval '24 hours'),
+    -- D5 (P-08) : les retours des fournisseurs pas encore traités ; « alerte » si un STOP, une
+    -- plainte ou une désinscription est en échec, ou si un retour attend depuis plus de 10 min
+    'evenements', (select jsonb_build_object(
+        'a_traiter', count(*) filter (where t.etat = 'a_traiter'),
+        'en_retard', count(*) filter (where t.etat = 'a_traiter' and t.cree_le < now() - interval '10 minutes'),
+        'echec', count(*) filter (where t.etat = 'echec'),
+        'echec_prioritaires', count(*) filter (where t.etat = 'echec' and t.priorite = 1),
+        'ambigus_7j', count(*) filter (where t.classe = 'ambigu' and t.cree_le > now() - interval '7 days'),
+        'plus_ancien_en_attente', min(t.cree_le) filter (where t.etat = 'a_traiter'),
+        'alerte', count(*) filter (where (t.etat = 'echec' and t.priorite = 1)
+                                      or (t.etat = 'a_traiter' and t.cree_le < now() - interval '10 minutes')) > 0)
+      from public.communication_evenements_traitement t
+     where t.etat <> 'traite' or t.cree_le > now() - interval '7 days'),
     -- Signal C4 : e-mails TRANSACTIONNELS refusés pour adresse bloquée chez le fournisseur
     'transactionnel_bloque_7j', (select count(*) from public.notification_envois
                                   where canal = 'email' and code_erreur = 'ADRESSE_BLOQUEE' and maj_le > now() - interval '7 days'),
@@ -2011,7 +2364,7 @@ begin
   -- Ouvertes à personne (appelées par d'autres fonctions, le travailleur ou un déclencheur)
   foreach f in array array[
     'public.communication_prochaine_fenetre(uuid, text)',
-    'public.communication_frequence_atteinte(uuid)',
+    'public.communication_frequence_atteinte(uuid, text, text)',
     'public.communication_reserver(public.communication_envois, numeric)',
     'public.communication_jeton_desinscription(bigint)', 'public.communication_textes_pied(text)',
     'public.communication_textes_confirmation(text)', 'public.communication_textes_pied_tous()',
@@ -2026,13 +2379,16 @@ begin
     'public.communication_traiter_un(bigint)', 'public.communication_clore_campagnes()',
     'public.communication_nettoyer_compteurs()',
     'public.communication_mot_simple(text)', 'public.communication_est_stop(text)',
+    'public.communication_classer_entrant(text, text)',
+    'public.communication_traiter_evenement(bigint)', 'public.communication_evenement_a_reprendre(bigint, text)',
     'public.communication_purger_autres(bigint, text, timestamptz)',
     'public.communication_purger_personne_suite(bigint, uuid, text[])'] loop
     execute 'revoke execute on function ' || f || ' from public, anon, authenticated, service_role';
   end loop;
   -- La procédure : son propriétaire (celui de la tâche pg_cron) seulement
   execute 'revoke execute on procedure public.traiter_communications() from public, anon, authenticated, service_role';
-  foreach f in array array['public.relancer_envoi_communication(bigint, text, boolean)', 'public.sante_communications()'] loop
+  foreach f in array array['public.relancer_envoi_communication(bigint, text, boolean)', 'public.sante_communications()',
+                           'public.reprendre_evenement_communication(bigint, text)'] loop
     execute 'revoke execute on function ' || f || ' from public, anon';
     execute 'grant execute on function ' || f || ' to authenticated';
   end loop;

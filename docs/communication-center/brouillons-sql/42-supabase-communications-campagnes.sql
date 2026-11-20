@@ -545,6 +545,19 @@ begin
   if not v_equipe and not public.communication_consentement_actuel(p_client, p_canal) then
     return 'SANS_CONSENTEMENT_CONFIRME';
   end if;
+  -- D5 (décision CEO D2, 20/11/2026) — MESURE CONSERVATRICE, en attente de l'avis du juriste :
+  -- un contact (numéro ou adresse) partagé avec au moins UN autre compte actif qui n'a PAS de
+  -- consentement confirmé pour ce canal est EXCLU, même si ce compte-ci a consenti. Le
+  -- consentement d'un compte ne vaut jamais pour un autre (40, communication_etat_consentement
+  -- filtre par compte), et la personne qui tient le téléphone peut être celle qui n'a pas
+  -- consenti. Les comptes de l'équipe comptent aussi (ils ne consentent jamais) : plus prudent.
+  -- Comparaison sur le contact NORMALISÉ (communication_cible), sans calcul d'empreinte par ligne.
+  if not p_essai and exists (select 1 from public.clients o
+                              where o.id <> p_client and o.supprime_le is null
+                                and public.communication_cible(o.id, p_canal) = v_cible
+                                and not public.communication_consentement_actuel(o.id, p_canal)) then
+    return 'CONTACT_PARTAGE_NON_CONSENTI';
+  end if;
   -- Phase 1.3 (C6) : sans heure locale SÛRE, pas d'envoi (le pays ne prouve pas le fuseau)
   if public.communication_fuseau(p_client, p_canal) is null then
     return 'FUSEAU_INCONNU';
@@ -589,8 +602,12 @@ begin
         'eligibles', coalesce(sum(n) filter (where raison is null), 0),
         'exclus', coalesce(jsonb_object_agg(raison, n) filter (where raison is not null), '{}'::jsonb))
       from (select raison, count(*) n
-              from (select public.communication_raison_exclusion(id, v_canal, p_essai) raison
-                      from public.communication_segment_clients(p_criteres) id) x
+              from (select case when ex.raison is null
+                                 and row_number() over (partition by ex.cible, (ex.raison is null) order by ex.id) > 1
+                                then 'CONTACT_EN_DOUBLE' else ex.raison end raison
+                      from (select id, public.communication_raison_exclusion(id, v_canal, p_essai) raison,
+                                   public.communication_cible(id, v_canal) cible
+                              from public.communication_segment_clients(p_criteres) id) ex) x
              group by raison) y));
   end loop;
   return v_resultat;
@@ -727,16 +744,19 @@ declare
   v_cout numeric := 0;
 begin
   foreach v_canal in array p.canaux loop
-    select count(*) into v_n from public.communication_segment_clients(p.criteres) id
+    -- D5 (P-05) : un message par CONTACT (comptes qui partagent un contact : comptés une fois)
+    select count(distinct public.communication_cible(id, v_canal)) into v_n
+      from public.communication_segment_clients(p.criteres) id
      where public.communication_raison_exclusion(id, v_canal, p.essai) is null;
     v_volume := v_volume || jsonb_build_object(v_canal, v_n);
     if v_canal = 'whatsapp' then
       select coalesce(sum(t.prix_usd), 0) into v_somme
-        from public.communication_segment_clients(p.criteres) id
+        from (select distinct public.communication_cible(id, 'whatsapp') cible
+                from public.communication_segment_clients(p.criteres) id
+               where public.communication_raison_exclusion(id, 'whatsapp', p.essai) is null) k
         join public.communication_tarifs t
           on t.fournisseur = 'meta' and t.canal = 'whatsapp' and t.categorie = 'marketing'
-         and t.territoire = public.communication_territoire(public.communication_cible(id, 'whatsapp'))
-       where public.communication_raison_exclusion(id, 'whatsapp', p.essai) is null;
+         and t.territoire = public.communication_territoire(k.cible);
       v_cout := v_cout + v_somme;
     end if;
   end loop;
@@ -788,6 +808,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 declare
   v_id uuid := p_campagne;
@@ -842,6 +863,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                 -- D5 (P-03) : au-delà, erreur (jamais d'attente sans fin)
 as $$
 declare
   p public.communication_campagnes;
@@ -998,11 +1020,16 @@ create table if not exists public.communication_destinataires (
   raison           text,
   cree_le          timestamptz not null default now(),
   unique (campagne_id, client_id, canal)
+  -- D5 (P-05) : et un seul RETENU par contact (index partiel ci-dessous)
 );
 create index if not exists communication_destinataires_modele_idx on public.communication_destinataires (modele_id);
 create index if not exists communication_destinataires_client_idx on public.communication_destinataires (client_id) where client_id is not null;
 alter table public.communication_destinataires enable row level security;
 revoke all on public.communication_destinataires from anon, authenticated, service_role;
+-- D5 (P-05) : la purge met cible_empreinte à null : l'index n'empêche jamais un effacement
+create unique index if not exists communication_destinataires_contact_idx
+  on public.communication_destinataires (campagne_id, canal, cible_empreinte)
+  where retenu and cible_empreinte is not null;
 drop trigger if exists communication_destinataires_immuable on public.communication_destinataires;
 create trigger communication_destinataires_immuable
   before update or delete on public.communication_destinataires

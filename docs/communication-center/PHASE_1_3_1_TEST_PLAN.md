@@ -24,6 +24,8 @@
 
 ---
 
+> **D5 (20/11/2026)** : l'arrêt se fait désormais en **deux appels**. `arreter_communications` écrit la demande et répond `STOP_REQUESTED`, puis `confirmer_arret_communications` fait le constat. Dans T-01 à T-01I, « appeler l'arrêt » veut dire les deux appels ; les résultats attendus sont inchangés. Voir `PHASE_1_3_1_FINAL_TEST_PLAN.md`, §4 bis.
+
 ## 1. Les 20 essais de la Phase 1.3 (rappel, inchangés sauf mention)
 
 | ID | Objet | Criticité | Mise à jour 1.3.1 | État |

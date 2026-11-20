@@ -224,3 +224,15 @@ Si pg_net la retire de la file **avant** de l'appeler, et applique son délai (�
 | P-02 | `brouillons-sql/41-…` l. 899 (commentaire) | Même correction |
 | P-03 | 41 `arreter_communications` l. 998, `confirmer_arret_communications` | Laisser `lock_timeout` à 2 s au lieu de 0 après N0a. Une attente imprévue échouerait vite (erreur, pas de faux succès) au lieu de durer. À peser : l'échec annule aussi la demande. |
 | P-04 | Essai F-K03 | Éprouver H1 et H5 dans la base jetable avant toute activation |
+
+---
+
+## 7. Après les corrections D5 (20/11/2026)
+
+| Point | Effet sur la preuve |
+|---|---|
+| La demande (`arreter_communications`) ne prend plus N0, seulement la ligne d'arrêt | Un verrou de moins dans la demande, et aucune nouvelle attente. Le constat garde l'ordre N0 puis ligne. Pas de cycle : la demande et la levée n'ont que la ligne en commun **[D]**. |
+| Constat dans un bloc qui rattrape tout | Les propriétés (a) et (b) sont inchangées. Un constat en erreur ne peut plus annuler la demande (RF-01 fermé, **si** le rattrapage de `query_canceled` fonctionne comme attendu : F-K10, spécialiste). |
+| `lock_timeout = 0` retiré (2 s) | S-02 et P-03 appliqués |
+| Clé étrangère `envoi_id` retirée ; ordre N1 → N3 → N3b → N4, puis les écritures dans les suppressions | RF-02 et RF-05 fermés **par conception** (F-W01, F-W02, F-W04) ; le constat de l'arrêt n'en dépendait pas |
+| Nouveau niveau N3b (`contact:<canal>:<empreinte>`) | Pris par le travailleur après N3, avant N4 ; jamais par l'arrêt |

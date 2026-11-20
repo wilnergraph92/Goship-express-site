@@ -332,6 +332,40 @@ Ces essais rejouent, **sur des données fictives**, la forme réelle de la base 
 
 ---
 
+## 4 bis. Essais ajoutés ou révisés par les corrections D5 (20/11/2026)
+
+Les corrections D5 (`PHASE_1_3_1_D5_RAPPORT_CORRECTIONS.md`) changent le résultat attendu de plusieurs essais, et en ajoutent 13. **Tous restent NON EXÉCUTÉS.** Leur exécution demande une décision écrite distincte de la CEO.
+
+### Essais révisés
+
+| Essai | Avant D5 | Attendu après D5 |
+|---|---|---|
+| T-01 à T-01I (`PHASE_1_3_1_TEST_PLAN.md`) | Un appel `arreter_communications` | **Deux appels** : `arreter_communications` (répond `STOP_REQUESTED`), puis `confirmer_arret_communications` jusqu'à `STOP_CONFIRMED`. Mêmes garanties. |
+| F-K07 | Durée d'un appel d'arrêt sous 6 s | Chaque appel de l'écran (`arreter_` : 5 s au plus ; `confirmer_` : 3 + 2 s ; `lever_` : 3 + 3 s) sous les 8 s **mesurés** du rôle `authenticated` ; `desinscrire_communication` sous les 3 s du rôle `anon` |
+| F-K10 | « Attendu aujourd'hui : demande annulée (défaut RF-01) » | La demande, validée par son propre appel, **reste écrite** dans les cinq cas ; la confirmation répond `STOP_PENDING / CONSTAT_IMPOSSIBLE` |
+| F-W01 | « Attendu aujourd'hui : 40P01 (défaut RF-02) » | 0 interblocage : plus de clé étrangère vers l'envoi ; statuts sans N1 |
+| F-W02 | Cycle STOP / 131050 (RF-05) | N3 avant la suppression des deux côtés : 0 cycle |
+| F-W03 | Message entier seulement | Règles de `communication_classer_entrant` (bouton, liste fermée, premier mot et 5 mots au plus, « ambigu ») |
+| F-C06 | « Attendu aujourd'hui : 2 messages (défaut S-06) » | 1 message par contact et par campagne ; si un compte du numéro n'a pas consenti : 0 (règle D2) |
+
+### Essais ajoutés
+
+| Essai | Scénario et données | Étapes | Attendu | PASS si / FAIL si |
+|---|---|---|---|---|
+| **F-K11** Course demande / levée | Arrêt confirmé, version 7 affichée à l'écran de la levée | Entrelacement pas à pas : S1 levée (N0, puis attente de la ligne) ; S2 demande (ligne, appui, COMMIT : version 8) ; S1 obtient la ligne. Puis l'ordre inverse, et les permutations. | S1 refuse (`STOP_STATE_CHANGED`) ; dans l'ordre inverse, la demande réarme l'arrêt | PASS : l'arrêt n'est jamais levé avec une version périmée ; aucun 40P01. FAIL sinon. |
+| **F-K12** Demande sans N0 | 3 portes ouvertes (N0 partagé tenu, transactions non validées) | Appeler `arreter_communications` ; puis ouvrir une 4ᵉ porte | Demande validée sans attendre les portes ; la 4ᵉ porte refuse (`ARRET_URGENCE`) ; `confirmer_` répond `STOP_PENDING` tant que les 3 portes sont ouvertes | PASS : demande en moins de 100 ms et 4ᵉ porte refusée |
+| **F-W04** Retour et chemins concurrents | Un envoi de campagne | Un retour `complaint` en même temps qu'une relance, puis qu'une purge de la personne, puis qu'une annulation de campagne, puis que le travailleur ; 1 000 répétitions | 0 cycle ; si une attente dépasse son délai, le retour reste `a_traiter` puis est traité | PASS : 0 « deadlock detected », 0 retour perdu |
+| **F-W05** Reprise et unicité | Déclencheur de banc qui fait échouer `communication_traiter_evenement` 2 fois ; puis `pg_terminate_backend` du travailleur au milieu d'un traitement | Laisser le travailleur passer 6 fois | Effets (suppression, retrait) appliqués **une seule fois** ; après 5 échecs forcés : `echec` | PASS : une seule ligne de retrait par retour ; `tentatives` exact |
+| **F-W06** Surveillance et reprise manuelle | 1 retour `echec` de priorité 1, 1 retour en attente depuis 11 min | Lire `sante_communications` ; appeler `reprendre_evenement_communication` en administrateur, en gérant, en employé | `alerte = true`, compteurs exacts ; reprise permise à l'administrateur seul ; journalisée | PASS : chiffres et droits exacts |
+| **F-W07** Purge par date | Retours anciens : `a_traiter`, `echec`, `traite` | `communication_purger_autres(…, 'evenements_fournisseur', …)` | Seuls les `traite` sont effacés (avec leur ligne de traitement) | PASS : `a_traiter` et `echec` gardés |
+| **F-W08** Échec du temps A | Base qui refuse l'insertion (déclencheur de banc) | Appeler `communication_recevoir_evenement` | Une **erreur** remonte (la fonction Edge répondra 5xx) ; jamais `ok` | PASS : aucune réponse `ok` sans retour enregistré |
+| **F-C08** Contact devenu commun après le gel | 2 comptes consentants ; le numéro de B devient celui de A après le lancement | Deux travailleurs en même temps | 1 envoi ; l'autre `supprime / CONTACT_EN_DOUBLE` (sous N3b) | PASS : 1 seule requête au faux serveur |
+| **F-C09** Règle D2 | A consentant, B non, même numéro | Aperçu, lancement, envoi | A et B exclus (`CONTACT_PARTAGE_NON_CONSENTI` pour A) ; B jamais consentant | PASS : 0 message ; aucun consentement de B |
+| **F-C10** Fréquence par contact | A et B consentants, même numéro, `frequence_max_jour = 1`, deux campagnes le même jour | Lancer les deux | 1 seul message au numéro dans la journée | PASS : le plafond vaut pour le numéro |
+| **F-C11** Code de confirmation | A et B demandent en même temps pour le même numéro ; puis 5 codes faux ; puis un code expiré | Forcer, dans le banc, un tirage identique pour les deux | Le 2ᵉ tire un autre code (index unique) ; la réponse « OUI <code de A> » ne confirme que A ; 5 codes faux annulent les deux demandes ; un code expiré est refusé | PASS : jamais de confirmation pour le mauvais compte |
+| **F-S01** Inventaire des droits | Les 4 brouillons corrigés | Inventaire `pglast` (fonctions, `SECURITY DEFINER`, `search_path`, `REVOKE`, RLS) comparé à la matrice du rapport D5 ; attentes bornées de chaque fonction | Identique à la matrice | PASS : 0 écart |
+| **F-S03** Empreinte des contrats | Base jetable avec la chaîne complète | Empreinte de `pg_get_functiondef` de `expedier_envoi`, `courriel_gabarit`, `traiter_notifications`, `envoyer_email_client`, `envoyer_whatsapp_client`, `lire_reglage`, des tables `notifications`, `notification_envois`, `notification_regles`, `messages_recents` et de leurs règles RLS, avant puis après 40 → 43 | Identiques ; `permissions_du_role` ne diffère que par les lignes du Centre | PASS : 0 différence |
+
 ## 5. Récapitulatif
 
 | Groupe | Essais | Gravité | Exécutés |
@@ -341,17 +375,19 @@ Ces essais rejouent, **sur des données fictives**, la forme réelle de la base 
 | Séparation | F-T01, F-T02 | BLOQUANT | **0** |
 | Retours des fournisseurs | F-W01 à F-W03 | BLOQUANT | **0** |
 | Base clients et audience | F-C01 à F-C07 | BLOQUANT avant toute campagne | **0** |
-| **Total de ce plan** | **25** | | **0** |
+| Ajoutés par D5 | F-K11, F-K12, F-W04 à F-W08, F-C08 à F-C11, F-S01, F-S03 | BLOQUANT | **0** |
+| **Total de ce plan** | **38** | | **0** |
 | Plan précédent (`PHASE_1_3_1_TEST_PLAN.md`) | 40 | | **0** |
+| **Total général** | **78** | | **0** |
 
 **Ordre proposé**, si la direction l'autorise par écrit sur une base jetable :
 1. F-M01 ;
 2. F-M02 ;
 3. F-K05 et F-K09, car si H4 ou H4′ tombe, la conception de l'arrêt est à revoir avant tout le reste ;
-4. F-K01, F-K02, F-K03, F-K08, F-K10 ;
+4. F-K01, F-K02, F-K03, F-K08, F-K10, F-K11, F-K12 ;
 5. F-K06, F-K04, F-K07 ;
-6. F-W01 à F-W03, puis F-T01, F-T02 ;
-7. F-C01 à F-C07 ;
+6. F-W01 à F-W08, puis F-T01, F-T02, F-S01, F-S03 ;
+7. F-C01 à F-C11 ;
 8. le plan précédent.
 
 **Aucun de ces essais n'est déclaré réussi.**

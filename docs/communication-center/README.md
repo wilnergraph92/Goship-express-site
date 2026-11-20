@@ -15,6 +15,7 @@ par le CEO avant la suivante.
 | `PHASE_1_3_1_KILL_SWITCH_LOCK_PROOF.md` | Clôture 1.3.1 — verrous de l'arrêt fonction par fonction, preuve, hypothèses H1 à H6 et H4′ | en attente |
 | `PHASE_1_3_1_SQL_40_43_SECURITY_REVIEW.md` | Clôture 1.3.1 — revue des migrations 40 à 43, séparation, constats S-01 à S-07 | en attente |
 | `PHASE_1_3_1_FINAL_TEST_PLAN.md` | Clôture 1.3.1 — 25 essais (aucun exécuté) | en attente |
+| `PHASE_1_3_1_D5_RAPPORT_CORRECTIONS.md` | Corrections D5 des brouillons 40 à 43 (P-07, P-08, P-09, P-05, N-01, N-02, D2, P-03, surveillance), délais mesurés (D3), spécialiste (D4) ; **non exécutées** | **en attente d'une nouvelle revue indépendante et de la décision du CEO** |
 | `PHASE_1_3_1_ANALYSE_POST_AUDIT_P07_P08.md` | Après la clôture 1.3.1 — analyse en lecture seule des corrections P-07 (arrêt d'urgence), P-08 (retours fournisseurs), STOP et doublons ; aucune correction faite | **en attente de l'autorisation écrite du CEO** |
 | `PHASE_1_3_1_FINAL_INDEPENDENT_REVIEWER_REPORT.md` | Clôture 1.3.1 — rapport du relecteur indépendant (RF-01 à RF-19), tel quel | référence |
 | `PHASE_1_3_1_FINAL_REPORT.md` | 1.3.1 — audit indépendant, arrêt d'urgence ; verdict CONDITIONAL — INDEPENDENT REVIEW PENDING (complété par la clôture) | remplacé par la clôture |
@@ -29,7 +30,7 @@ par le CEO avant la suivante.
 | `COMMUNICATION_CENTER_SECURITY.md` | conception en vigueur (1.2, annotée « [Corrigé 1.3] ») | en attente |
 | `COMMUNICATION_CENTER_DATABASE.md` | conception en vigueur (1.2, annotée « [Corrigé 1.3] ») | en attente |
 | `COMMUNICATION_CENTER_TESTING.md` | plan d'essais (aucun exécuté) | en attente |
-| `brouillons-sql/40…43-*.sql` | **brouillons jamais exécutés** (version 1.3.1) | garde à quatre couches : bloc DO, contenu dans une chaîne inerte, garde interne, fermeture de session pour un outil qui découpe le texte |
+| `brouillons-sql/40…43-*.sql` | **brouillons jamais exécutés** (version 1.3.1, corrigée D5 le 20/11/2026) | garde à quatre couches : bloc DO, contenu dans une chaîne inerte, garde interne, fermeture de session pour un outil qui découpe le texte |
 
 **Les brouillons SQL ne font pas partie de la chaîne** (`outils/migrations.txt`) et ne doivent être
 exécutés nulle part. En Phase 2, après accord écrit du CEO, ils deviendront des fichiers de `outils/`,

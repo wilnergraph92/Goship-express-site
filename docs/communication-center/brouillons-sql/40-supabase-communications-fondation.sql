@@ -138,6 +138,8 @@ create table if not exists public.communication_reglages (
   confirmation_validite_h     integer not null default 168 check (confirmation_validite_h between 1 and 720),
   changements_consentement_jour integer not null default 5 check (changements_consentement_jour between 1 and 20),
   demandes_confirmation_jour  integer not null default 3 check (demandes_confirmation_jour between 1 and 10),
+  -- D5 (D1, N-02) : un CODE WhatsApp vit beaucoup moins longtemps qu'un lien d'e-mail
+  confirmation_code_validite_min integer not null default 60 check (confirmation_code_validite_min between 10 and 1440),
   -- Quatre yeux : un administrateur peut-il approuver une campagne qu'il a créée ? (décision CEO)
   quatre_yeux                 boolean not null default false,
   -- BLOQUÉ en attente du CEO (D-G, D-H) : jamais inventés
@@ -152,6 +154,10 @@ create table if not exists public.communication_reglages (
   check (brevo_quota_24h is null or brevo_reserve_24h < brevo_quota_24h)
 );
 insert into public.communication_reglages (id) values (true) on conflict (id) do nothing;
+-- D5 : rejouable sur une base qui avait déjà la table (create table if not exists n'ajoute rien)
+alter table public.communication_reglages
+  add column if not exists confirmation_code_validite_min integer not null default 60
+  check (confirmation_code_validite_min between 10 and 1440);
 alter table public.communication_reglages enable row level security;
 revoke all on public.communication_reglages from anon, authenticated, service_role;
 
@@ -189,6 +195,9 @@ create table if not exists public.communication_arret (
   leve_par                 uuid,
   motif_levee              text check (motif_levee is null or length(motif_levee) between 10 and 300),
   maj_le                   timestamptz not null default now(),
+  -- D5 : augmentée à chaque changement d'état et à chaque appui sur « Arrêt » (jamais par une
+  -- simple tentative de confirmation) ; la levée exige la version que son écran a affichée
+  version                  bigint not null default 0,
   check (etat = 'actif' or (demande_le is not null and motif is not null)),
   check (etat <> 'actif' or (autorisations_closes_le is null and confirme_le is null)),
   check (etat <> 'arret_confirme' or (autorisations_closes_le is not null and confirme_le is not null
@@ -196,6 +205,7 @@ create table if not exists public.communication_arret (
                                        and autorisations_closes_le >= demande_le))
 );
 insert into public.communication_arret (id) values (true) on conflict (id) do nothing;
+alter table public.communication_arret add column if not exists version bigint not null default 0;
 -- La ligne ne s'efface jamais (IR2-11) : sans elle, la porte refuserait tout (état illisible),
 -- et les fonctions d'arrêt lèvent une erreur au lieu de répondre.
 create or replace function public.communication_arret_permanent()
@@ -301,14 +311,26 @@ $$;
 --                       sorties (communication_autoriser_sortie) ; EXCLUSIF pour l'arrêt, sa
 --                       confirmation, sa levée et les réglages d'envoi (1.3.1)
 --   N0a ligne d'arrêt   la ligne de communication_arret (FOR UPDATE) : fonctions d'arrêt seulement,
---                       toujours APRÈS N0 ; la porte la lit sans verrou (1.3.1, revue n° 3 IR3-09)
+--                       APRÈS N0 quand elles le prennent ; la DEMANDE d'arrêt (41) ne prend que
+--                       N0a, jamais N0 (D5, P-07) ; la porte la lit sans verrou (IR3-09)
 --   N1  campagne        la ligne de communication_campagnes (FOR UPDATE)
 --   N2  client          verrou consultatif « client:<id> »
 --   N3  consentement    verrou consultatif « consentement:<client>:<canal> » ; plusieurs
 --                       clients dans une même transaction : par identifiant CROISSANT
+--   N3b contact         verrou consultatif « contact:<canal>:<empreinte> » (D5, P-05) : un seul
+--                       envoi à la fois vers un même numéro ou une même adresse, quel que soit
+--                       le compte (comptes qui partagent un contact)
 --   N4  envoi           la ligne de communication_envois (FOR UPDATE)
 --   N5  compteurs       verrou consultatif « compteurs » (global) : dépenses du jour, débit par
 --                       minute, quota Brevo, plafonds de campagne, limite du numéro WhatsApp
+-- D5 (P-08) : AUCUNE clé étrangère ne pointe plus vers communication_envois depuis les retours
+-- des fournisseurs : l'insertion d'un retour ne pose plus de verrou caché (FOR KEY SHARE) sur
+-- l'envoi AVANT N1 et N3 (revue finale, RF-02). Les écritures dans communication_suppressions
+-- et communication_consentements viennent APRÈS N3, dans tous les chemins (RF-05).
+-- D5 (P-03) : aucune attente sans limite. Chaque fonction borne ses attentes (lock_timeout) ;
+-- une attente dépassée donne une erreur ou un état honnête, jamais un faux succès. Pour un appel
+-- de l'écran, la somme des attentes reste sous le délai d'exécution du rôle (mesuré le
+-- 20/11/2026 en production, lecture seule autorisée : authenticated 8 s, anon 3 s).
 -- Le travailleur traite UN envoi par transaction (43 §8) : il ne garde jamais les verrous
 -- d'un envoi en prenant ceux du suivant. Avant la Phase 1.3, il prenait « client » puis
 -- « jour » à chaque envoi, mais gardait « jour » jusqu'à la fin du lot : deux travailleurs
@@ -558,8 +580,13 @@ revoke all on public.communication_consentements from anon, authenticated, servi
 
 -- 6.3 Les jetons de confirmation (C2) : un par demande. Le jeton n'est JAMAIS gardé en clair
 -- (seulement son SHA-256) ; usage unique ; durée limitée ; lié à l'empreinte du contact au
--- moment de la demande. WhatsApp : un code court (4 chiffres) que le client renvoie depuis
+-- moment de la demande. WhatsApp : un code de 6 CHIFFRES (D5, D1) que le client renvoie depuis
 -- son numéro, avec le mot de confirmation (OUI, YES, SÍ, WI) — mots à valider (juriste, Meta).
+-- D5 (N-02) : un code ne peut confirmer QUE la demande du compte qui l'a reçu :
+--   · il est UNIQUE parmi les demandes en attente du même numéro (index ci-dessous) ;
+--   · il expire vite (confirmation_code_validite_min, 60 min par défaut) ;
+--   · cinq codes faux depuis un numéro annulent toutes ses demandes en attente (tentatives) ;
+--   · les demandes répétées sont limitées par compte ET par numéro (41).
 create table if not exists public.communication_confirmations (
   id               bigint generated always as identity primary key,
   consentement_id  bigint not null references public.communication_consentements (id),
@@ -567,7 +594,8 @@ create table if not exists public.communication_confirmations (
   canal            text not null check (canal in ('email', 'whatsapp')),
   cible_empreinte  text not null,
   jeton_empreinte  text,                       -- e-mail : SHA-256 du jeton du lien
-  code             text check (code is null or code ~ '^[0-9]{4}$'),  -- WhatsApp
+  code             text,                       -- WhatsApp : 6 chiffres (contrainte ci-dessous)
+  tentatives       integer not null default 0 check (tentatives >= 0),   -- codes faux reçus du numéro
   expire_le        timestamptz not null,
   utilise_le       timestamptz,
   annule_le        timestamptz,
@@ -578,6 +606,30 @@ create table if not exists public.communication_confirmations (
 );
 create unique index if not exists communication_confirmations_jeton_idx
   on public.communication_confirmations (jeton_empreinte) where jeton_empreinte is not null;
+-- D5 (N-02) : rejouable — l'ancienne contrainte « 4 chiffres » est remplacée, quel que soit son
+-- nom ; la colonne des tentatives est ajoutée si la table existait déjà
+alter table public.communication_confirmations add column if not exists tentatives integer not null default 0;
+do $code6$
+declare
+  v_nom text;
+begin
+  for v_nom in select c.conname from pg_catalog.pg_constraint c
+                 where c.conrelid = 'public.communication_confirmations'::regclass and c.contype = 'c'
+                   and pg_catalog.pg_get_constraintdef(c.oid) like '%{4}%' loop
+    execute format('alter table public.communication_confirmations drop constraint %I', v_nom);
+  end loop;
+  if not exists (select 1 from pg_catalog.pg_constraint
+                  where conrelid = 'public.communication_confirmations'::regclass and conname = 'communication_confirmations_code_6') then
+    alter table public.communication_confirmations
+      add constraint communication_confirmations_code_6 check (code is null or code ~ '^[0-9]{6}$');
+  end if;
+end
+$code6$;
+-- Un code ne sert qu'une fois par numéro parmi les demandes encore ouvertes (garantie en base,
+-- même si deux comptes du même numéro demandent en même temps)
+create unique index if not exists communication_confirmations_code_numero_idx
+  on public.communication_confirmations (canal, cible_empreinte, code)
+  where code is not null and utilise_le is null and annule_le is null;
 create index if not exists communication_confirmations_attente_idx
   on public.communication_confirmations (cible_empreinte, canal) where utilise_le is null and annule_le is null;
 create index if not exists communication_confirmations_consentement_idx
@@ -1111,6 +1163,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = ''
+set lock_timeout = '3s'                    -- D5 (P-03) : au-delà, erreur ; la purge se relance
 as $$
 declare
   d public.communication_demandes_purge;

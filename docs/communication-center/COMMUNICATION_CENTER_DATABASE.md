@@ -190,3 +190,19 @@ pour leur première exécution sur base jetable :
 9. Requête de contrôle de chaque fichier et témoin pour `sonder.sh`.
 10. Liste blanche de `controle-securite.sql` : [Corrigé 1.3] les **deux** fonctions publiques (`confirmer_consentement_communication`, `desinscrire_communication`).
 11. [1.3] Procédure appelée par pg_cron (`call`, COMMIT internes) : PHASE_1_3_TEST_PLAN T-01-bis ; repli documenté si refusé.
+
+---
+
+## 8. Corrections D5 (20/11/2026) — objets nouveaux et modifiés
+
+| Objet | Brouillon | Changement |
+|---|---|---|
+| `communication_arret.version` | 40 | Nouvelle colonne (`bigint`, 0) ; `add column if not exists` pour le rejeu |
+| `communication_reglages.confirmation_code_validite_min` | 40 | Nouveau réglage (60 min ; entre 10 et 1 440) |
+| `communication_confirmations` | 40 | Code à **6 chiffres** (contrainte `communication_confirmations_code_6`, l'ancienne est retirée quel que soit son nom) ; colonne `tentatives` ; index unique `communication_confirmations_code_numero_idx (canal, cible_empreinte, code)` sur les demandes ouvertes |
+| `communication_destinataires` | 42 | Index unique partiel `communication_destinataires_contact_idx (campagne_id, canal, cible_empreinte) where retenu and cible_empreinte is not null` |
+| `communication_envois` | 43 | Index `communication_envois_contact_idx (canal, cible_empreinte)` pour la fréquence par contact |
+| `communication_evenements_fournisseur.envoi_id` | 43 | **Clé étrangère retirée** (bloc rejouable qui la cherche dans `pg_constraint`) ; l'index est gardé |
+| `communication_evenements_traitement` | 43 | **Nouvelle table** : `evenement_id` (clé primaire, clé étrangère vers le retour `on delete cascade`), `etat` (`a_traiter`, `traite`, `echec`), `priorite` (1 ou 2), `classe`, `cible_empreinte` et `code_confirmation` (effacés une fois traité, par contrainte), `tentatives`, `prochain_essai_le`, `dernier_code` (SQLSTATE), `resultat`, dates ; deux index partiels ; RLS, `revoke all` |
+
+**Retour arrière** (ajout au §6) : supprimer la table de traitement et les trois index, la colonne `version` et le réglage peuvent rester (valeurs neutres) ; la clé étrangère n'est pas à remettre.
