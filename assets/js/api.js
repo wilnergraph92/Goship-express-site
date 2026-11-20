@@ -610,7 +610,12 @@
       return sb().then(function (c) { return c.auth.getSession(); }).then(function (res) {
         nettoyerAdresse();
         var s = res.data && res.data.session;
-        return s ? { id: s.user.id, email: s.user.email } : null;
+        // connecte_le : l'heure de la dernière vraie connexion (mot de passe, Google,
+        // lien reçu par e-mail), jamais celle d'un simple renouvellement du jeton.
+        // La déconnexion après inactivité (inactivite.js) s'en sert pour savoir
+        // qu'une connexion est plus récente que le dernier geste noté.
+        return s ? { id: s.user.id, email: s.user.email,
+                     connecte_le: Date.parse(s.user.last_sign_in_at || '') || null } : null;
       });
     },
 
@@ -1712,6 +1717,8 @@
      ====================================================================== */
   var CLE_DONNEES = 'gse-demo-donnees';
   var CLE_SESSION = 'gse-demo-session';
+  // L'heure de la connexion, comme last_sign_in_at chez Supabase (connecte_le de session())
+  var CLE_CONNECTE_LE = 'gse-demo-connecte-le';
   var CLE_RECUP = 'gse-demo-recuperation';
   var ADMIN_DEMO = { email: 'admin@goship.demo', motDePasse: 'demo1234' };
   // Un compte de démonstration par rôle de l'équipe, même mot de passe
@@ -4653,7 +4660,8 @@
 
     session: function () {
       var moi = compteConnecte(lireDonnees());
-      return plusTard(moi ? { id: moi.id, email: moi.email } : null);
+      return plusTard(moi ? { id: moi.id, email: moi.email,
+                              connecte_le: Number(stockage('lire', CLE_CONNECTE_LE)) || null } : null);
     },
 
     profil: function () {
@@ -4687,6 +4695,7 @@
       if (numero) { d.documents = d.documents || {}; d.documents[compte.id] = numero; }
       ecrireDonnees(d);
       stockage('ecrire', CLE_SESSION, compte.id);
+      stockage('ecrire', CLE_CONNECTE_LE, String(Date.now()));
       return plusTard({ profil: publicProfil(compte), confirmation: false });
     },
 
@@ -4858,11 +4867,13 @@
       var compte = trouverCompte(lireDonnees(), email);
       if (!compte || compte.mdp !== empreinte(motDePasse)) return echec('identifiants');
       stockage('ecrire', CLE_SESSION, compte.id);
+      stockage('ecrire', CLE_CONNECTE_LE, String(Date.now()));
       return plusTard(publicProfil(compte));
     },
 
     deconnecter: function () {
       stockage('effacer', CLE_SESSION);
+      stockage('effacer', CLE_CONNECTE_LE);
       return plusTard(true);
     },
 

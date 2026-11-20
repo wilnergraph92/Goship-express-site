@@ -14,18 +14,19 @@
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png?v=2026-09-28">
 <link rel="preload" href="assets/fonts/manrope-latin-400-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="assets/fonts/archivo-latin-400-900.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="assets/css/site.css?v=62735ea9a9">
+<link rel="stylesheet" href="assets/css/site.css?v=d0a89a7acc">
 <link rel="stylesheet" href="assets/css/tableau.css?v=8f6c1dc39b">
 <script src="assets/js/apparence.js?v=687ec86cd9"></script>
-<script src="assets/js/config.js?v=026e45cff2" defer></script>
-<script src="assets/js/api.js?v=8882a15602" defer></script>
+<script src="assets/js/config.js?v=7b427f6a51" defer></script>
+<script src="assets/js/api.js?v=942ad3a339" defer></script>
 <script src="assets/js/notifications.js?v=958c15d9cb" defer></script>
 <script src="assets/js/codes.js?v=d0b00eb0d2" defer></script>
 <script src="assets/js/impression.js?v=a28e0ccd7d" defer></script>
-<script src="assets/js/tableau-textes.js?v=992d95bc30" defer></script>
+<script src="assets/js/tableau-textes.js?v=286ea6109a" defer></script>
 <script src="assets/js/tableau-langue.js?v=bd1a1a3d9b" defer></script>
 <script src="assets/js/lieux.js?v=271574e73b" defer></script>
-<script src="assets/js/admin.js?v=8266b42a95" defer></script>
+<script src="assets/js/inactivite.js?v=5add12fa4b" defer></script>
+<script src="assets/js/admin.js?v=212f56ae9a" defer></script>
 <script src="assets/js/scan-parser.js?v=565184704d" defer></script>
 <script src="assets/js/transporteur.js?v=ed84673528" defer></script>
 <script src="assets/js/scanner.js?v=f41473b791" defer></script>
@@ -1726,6 +1727,24 @@
       <button type="submit" class="gs-bouton gs-bouton--danger" data-supprimer-rapport-valider>Supprimer</button>
     </div>
   </form>
+</dialog>
+
+<!-- Une minute avant la déconnexion après inactivité (inactivite.js) : un geste, ou ce
+     bouton, garde la session ouverte -->
+<dialog class="gs-dialogue gs-dialogue--confirmation" data-dialogue="inactivite" aria-labelledby="dlg-inactivite-titre">
+  <div class="gs-form">
+    <div class="gs-dialogue__tete">
+      <div>
+        <h2 id="dlg-inactivite-titre">Toujours là ?</h2>
+      </div>
+    </div>
+    <div class="gs-dialogue__corps">
+      <p class="gs-dialogue__aide">Sans activité, vous serez déconnecté dans une minute.</p>
+    </div>
+    <div class="gs-dialogue__pied">
+      <button type="button" class="gs-bouton gs-bouton--plein" data-inactivite-rester autofocus>Rester connecté</button>
+    </div>
+  </div>
 </dialog>
 
 <!-- Fermer une fenêtre où l'on a déjà saisi quelque chose : on le confirme d'abord -->
