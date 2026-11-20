@@ -336,6 +336,21 @@ Les détails complets (préconditions, données, étapes) sont dans `PHASE_1_3_T
   - 4 et 5 → le STOP est appliqué, et la fenêtre n'est pas touchée en 5.
 - **État** : NON EXÉCUTÉ
 
+### T-01I — Nouvel essai et lectures Meta pendant un arrêt (revue n° 3, IR3-01, IR3-03)
+- **Criticité** : BLOQUANT · **Environnement** : E2
+- **Étapes** :
+  1. dans la base jetable, saisir une issue `rejet_temporaire` pour 429 avec une preuve fictive marquée « ESSAI » ;
+  2. un envoi reçoit 429, puis passe en `nouvel_essai` ;
+  3. 2 minutes plus tard, la nouvelle requête R2 est validée ; la file pg_net est ralentie ;
+  4. arrêter pendant que R2 attend dans la file, puis pendant qu'elle est en vol ;
+  5. même chose avec une lecture de modèle chez Meta en cours.
+- **Résultat attendu** :
+  - `sortie_file_vue_le` est remis à vide au nouvel essai ;
+  - `STOP_PENDING / TRANSMISSIONS_EN_COURS` tant que R2, ou la lecture Meta, peut encore partir ;
+  - aucune requête n'est reçue après `STOP_CONFIRMED` ;
+  - R2 n'est jamais déclarée « incertaine » pendant son vol.
+- **État** : NON EXÉCUTÉ
+
 ### T-14C — Découpeurs naïfs (IR-22, IR2-08)
 - **Criticité** : MOYEN · **Environnement** : E1
 - **Étapes** : passer chaque brouillon dans trois découpeurs simulés, avec continuation après erreur :
@@ -352,8 +367,8 @@ Les détails complets (préconditions, données, étapes) sont dans `PHASE_1_3_T
 |---|---|---|
 | Phase 1.3 | T-01, T-01-bis, T-02 à T-20 (21) | **0** |
 | Phase 1.3.1 | T-01B, T-01C, T-01D, T-01E, T-01F, T-03B, T-04B, T-05B, T-06B, T-07B, T-07C, T-14B, T-20B (13) | **0** |
-| Après les revues indépendantes | T-01G, T-01H, T-05C, T-07D, T-14C (5) | **0** |
-| **Total** | **39** | **0** |
+| Après les revues indépendantes | T-01G, T-01H, T-01I, T-05C, T-07D, T-14C (6) | **0** |
+| **Total** | **40** | **0** |
 
 Ordre recommandé, après autorisation :
 1. T-14 et T-14B (garde, chaîne) ;

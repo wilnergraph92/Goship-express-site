@@ -90,6 +90,40 @@ Les constats sont ceux de la **revue indépendante n° 1**, faite sur le commit 
 
 ---
 
+### 1.5 Constats des revues indépendantes n° 2 (IR2-xx) et n° 3 (IR3-xx)
+
+| Constat | Correction | Où |
+|---|---|---|
+| IR2-01 (HIGH) — confirmé pendant une transmission retardée | Décompte **par requête**, à partir de la sortie de file **observée** (`sortie_file_vue_le`, `communication_observer_sorties`, `communication_en_transmission`) | 43 §13 |
+| IR2-02 — requête effacée par la purge | `requete` gardée tant qu'elle n'est pas résolue | 43 purges |
+| IR2-03 — levée qui défait un arrêt | `derniere_demande_le` à chaque appui ; levée refusée si un appui est postérieur à son début ; délai de 5 s | 40 `communication_arret` ; 41 |
+| IR2-04 — motif trop long | Tronqué à 300 caractères | 41 `arreter_communications` |
+| IR2-05 — purge des confirmations bloquée | Envois en attente écartés d'abord ; `PURGE_RETRY` si l'un est en remise | 40 `executer_purge_communication` |
+| IR2-06 — STOP perdu sans empreinte | Empreinte calculée **avant** l'enregistrement du rejeu ; erreur levée si elle manque, donc rien n'est enregistré et le fournisseur réessaie | 43 webhook |
+| IR2-07 — purge sans N3 | Purge sous N2 puis N3 (e-mail, WhatsApp) ; désinscription relue sous N3 | 40 ; 43 |
+| IR2-09 — autorisation +1 | Lue sur le préfixe le plus long ; « 1 » ou « 18 » jamais autorisé | 42 `communication_raison_exclusion` ; 41 |
+| IR2-10 — isolation, marque | READ COMMITTED vérifié à la porte ; marque `txid:nature:canal` | 40 porte ; 42, 43 fonctions d'appel |
+| IR2-11 — ligne d'arrêt absente | Erreur explicite ; déclencheur qui interdit l'effacement | 40 ; 41 |
+| IR2-12 / IR3-04 — compte Brevo partagé | Vérifié à la porte **et** sur le fournisseur figé de chaque envoi | 40 porte ; 43 `communication_traiter_un` |
+| IR2-13 — empreinte de l'environnement | Code de 13 fonctions, compte e-mail (empreinte de la clé), version et compte WhatsApp | 42 `communication_environnement_envoi` |
+| IR2-14 — pauses en boucle | Seulement les erreurs postérieures à la dernière reprise ; index partiel | 43 |
+| IR2-15 — demandes refusées | Empreintes effacées au refus | 41 `approuver_purge_communication` |
+| IR2-17 — déclencheur des modèles | `before insert or update` (la modification n'avait pas été enregistrée) | 42 |
+| IR3-01 (HIGH) — nouvel essai non compté | `sortie_file_vue_le = null` à chaque nouvelle requête | 43 `communication_traiter_un` |
+| IR3-02 — coût du décompte | Filtrage sur les requêtes récentes ou non vues ; trois index partiels | 43 §13 |
+| IR3-03 — lectures Meta non comptées | Observées et comptées | 42 `communication_modeles_meta` ; 43 §13 |
+| IR3-05 — course de la purge des confirmations | Envois verrouillés par identifiant croissant avant le contrôle | 40 |
+| IR3-06 — délai par requête | Délai **maximal** permis + 60 s (120 s) | 43 `communication_en_transmission` |
+| IR3-08 — lectures Meta « sans réponse » trop tôt | Même règle que les envois | 42 `communication_lire_modeles_meta` |
+| IR3-09 — commentaire d'ordre des verrous | Corrigé (niveau N0a) | 40 §3 |
+
+**Non appliqués (documentés dans l'audit)** :
+- IR2-08 (préfixe `--|` sur chaque ligne) ;
+- IR3-07 (version de la ligne d'arrêt vue par l'écran : Phase 2c) ;
+- IR2-18 (relance d'un envoi effacé : refus d'emblée en Phase 2).
+
+Les corrections des IR3-xx **n'ont pas été revérifiées par une revue indépendante**.
+
 ## 2. Compatibilité PostgreSQL
 
 | Point | Exigence | Statut |

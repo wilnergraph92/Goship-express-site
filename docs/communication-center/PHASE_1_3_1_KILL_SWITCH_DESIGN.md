@@ -227,10 +227,12 @@ Notation :
 3. Si pg_net est arrêté, une requête validée reste dans sa file : l'arrêt reste `STOP_PENDING / TRANSMISSIONS_EN_COURS`. C'est honnête, mais l'arrêt ne peut pas être confirmé tant que pg_net ne l'a pas traitée. **Vider la file de pg_net reste interdit** : elle est partagée avec le transactionnel.
 4. La « pause du canal » déclenchée par un code de Meta n'est **pas** un arrêt confirmé : elle est écrite sans N0, au mieux, et journalisée comme telle. Seul l'arrêt d'urgence donne la garantie.
 5. Un compte propriétaire de la base, dans le SQL Editor, peut tout contourner. C'est vrai pour tout le projet.
-6. **Lectures de modèles chez Meta** (`net.http_get`, revue n° 2, IR2-16) : elles passent par la porte, donc aucune n'est **autorisée** après G. En revanche, celles déposées avant G ne sont **pas comptées** dans les transmissions. Ce sont des lectures de notre propre compte, qui n'envoient rien à un client. La garantie « aucun message ne part » n'en dépend pas. À compter aussi si le CEO veut que l'arrêt couvre toute requête sortante.
-7. **Levée concurrente** (revue n° 2, IR2-03) : chaque appui sur « Arrêt » est daté et journalisé (`derniere_demande_le`), même si l'arrêt est déjà en place. Une levée qui a commencé **avant** un appui refuse de lever (`STOP_REQUESTED_DURING_LIFT`). Elle attend au plus 5 s.
-8. **Motif** : il est tronqué à 300 caractères (IR2-04). L'arrêt ne dépend jamais de la saisie.
-9. **Ligne d'arrêt absente** (IR2-11) : la porte refuse tout (état illisible), les fonctions d'arrêt lèvent une erreur, et un déclencheur interdit d'effacer la ligne.
+6. **Lectures de modèles chez Meta** (`net.http_get`) : elles passent par la porte, et, depuis la revue n° 3 (IR3-03), elles sont **aussi comptées** dans les transmissions, avec la même observation de sortie de file. L'arrêt confirmé couvre donc **toute** requête sortante du Centre.
+7. **Nouvel essai sur le même envoi** (revue n° 3, IR3-01) : la nouvelle requête remet `sortie_file_vue_le` à vide, et elle est comptée jusqu'à sa propre sortie de file plus 120 s. Le délai pris en compte est le **maximum permis** (60 s), plus 60 s, et non le réglage du moment (IR3-06).
+8. **Coût du constat** (IR3-02) : il ne parcourt que les requêtes récentes ou pas encore vues hors de la file (index partiels). Sa durée sous le délai d'exécution des comptes connectés reste **à mesurer** (risque M3 de l'audit).
+9. **Levée concurrente** (revue n° 2, IR2-03) : chaque appui sur « Arrêt » est daté et journalisé (`derniere_demande_le`), même si l'arrêt est déjà en place. Une levée qui a commencé **avant** un appui refuse de lever (`STOP_REQUESTED_DURING_LIFT`). Elle attend au plus 5 s.
+10. **Motif** : il est tronqué à 300 caractères (IR2-04). L'arrêt ne dépend jamais de la saisie.
+11. **Ligne d'arrêt absente** (IR2-11) : la porte refuse tout (état illisible), les fonctions d'arrêt lèvent une erreur, et un déclencheur interdit d'effacer la ligne.
 
 ---
 
