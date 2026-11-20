@@ -82,7 +82,7 @@ C'est **le dernier contrôle qui compte** pour l'arrêt. La relecture sous N5 (`
 **Délais** (révisés après la revue indépendante, IR-04) : N0 exclusif 3 s, ligne d'arrêt 2 s, soit 5 s au plus, sous le délai d'exécution des comptes connectés (8 s chez Supabase, rapporté). Les deux attentes sont explicites et finissent sur une réponse (`STOP_PENDING` ou `STOP_NOT_CONFIRMED`), jamais sur une erreur muette. La pause du canal par un code de Meta est écrite **en dernier** dans le webhook, et ne touche pas `communication_arret`.
 | N1 → N5 | campagne, client, consentement, envoi, compteurs | inchangés (Phase 1.3) |
 
-**Ordre des fonctions d'arrêt** : N0 (exclusif, tenté), **puis** N0a. Aucune ne prend N0a avant N0, ni une autre table.
+**Ordre des fonctions d'arrêt** : N0 (exclusif, tenté), **puis** N0a. Aucune ne prend N0a avant N0. Ensuite, `communication_conclure_arret` verrouille des lignes de `communication_envois` et de `communication_modeles_meta` (par `communication_observer_sorties`), **uniquement en `FOR UPDATE SKIP LOCKED`** : jamais d'attente. *[Corrigé à la clôture, 20/11/2026 : ce texte disait « ni une autre table », ce qui était faux. Voir `PHASE_1_3_1_KILL_SWITCH_LOCK_PROOF.md`.]*
 
 La porte ne verrouille **pas** N0a : elle lit `communication_arret` sans verrou (MVCC). Un arrêt n'attend donc jamais une porte pour la ligne, et une porte n'attend jamais un arrêt pour la ligne. Elle n'attend que N0, dans le sens prévu.
 

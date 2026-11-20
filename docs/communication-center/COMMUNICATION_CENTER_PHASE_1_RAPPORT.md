@@ -61,14 +61,14 @@ Ce rapport résume et rassemble ces documents. En cas de différence, les docume
    chaque envoi, et une **réserve Brevo** qui protège les e-mails de connexion et d'inscription.
 7. **Constat important sur WhatsApp** : Meta ne livre plus de messages marketing aux numéros
    américains depuis avril 2025. Les numéros dominicains commencent aussi par +1 : s'ils sont touchés,
-   le marketing WhatsApp n'atteindrait que les clients haïtiens (37 sur 69 aujourd'hui).
+   le marketing WhatsApp n'atteindrait que les clients haïtiens (37 sur 69 à la Phase 0, le 18/11/2026 ; 38 sur 71 au relevé du 20/11/2026, voir `PHASE_1_3_1_FINAL_INDEPENDENT_AUDIT.md` §8).
 8. **Coexistence WhatsApp** (garder le numéro actuel) : possible, mais seulement par un partenaire
    agréé par Meta. Recommandation : demander 2 à 3 devis ; à défaut, un numéro GoShip dédié au
    marketing. **Le numéro actuel n'est ni migré ni déconnecté.**
    **[Corrigé 1.2]** La revue a montré que la Coexistence ferait peser le marketing sur la note de
    qualité du numéro du service client. La conception 1.2 recommande d'**étudier en priorité un numéro
    dédié** ; aucune acquisition sans votre autorisation écrite.
-9. **Coût réel aujourd'hui : 0 $.** Avec 69 clients et la moitié qui accepte, le marketing WhatsApp
+9. **Coût réel aujourd'hui : 0 $.** Avec 69 clients (Phase 0 ; 71 au 20/11/2026) et la moitié qui accepte, le marketing WhatsApp
    coûterait environ 3 à 4 $ par mois. Aucune activation payante n'est proposée.
 10. **Brouillons SQL non validés, volontairement** : la Phase 1 n'autorise aucune exécution. Les
     éprouver sur une base jetable est la première tâche de la Phase 2.
@@ -437,7 +437,7 @@ reçoit une ligne qu'avec sa preuve. Tous les territoires, Haïti compris, naiss
 | Juriste (USA/Floride, RD, Haïti) | Ponctuel : **devis nécessaire** | — | **Obligatoire** avant l'ouverture du recueil |
 | Apple Developer | 99 $/an | Absent | Seulement pour iOS |
 
-**Exemple** : 69 clients, la moitié accepte → WhatsApp ≈ 19 clients haïtiens (+ ≈ 9 dominicains si la
+**Exemple** (chiffres de la Phase 0 ; 71 clients au 20/11/2026, ordre de grandeur inchangé) : 69 clients, la moitié accepte → WhatsApp ≈ 19 clients haïtiens (+ ≈ 9 dominicains si la
 pause +1 ne les touche pas) × 2 campagnes/mois × 0,074 $ ≈ **3 à 4 $ par mois** ; e-mail ≈ 70 par mois,
 dans l'offre gratuite. À 1 000 clients : WhatsApp ≈ 40 à 60 $ par mois, e-mail ≈ 1 000 par mois (offre
 Starter nécessaire les jours de campagne). Les plafonds bornent tous les scénarios.

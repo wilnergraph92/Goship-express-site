@@ -140,6 +140,8 @@ pattern is the natural staging substitute for database logic.**
 | `langue` | fr 51 · en 9 · ht 7 · es 2 |
 | `pays`, `region`, `ville`, `adresse` | HT 37 · DO 18 · US 9 · empty 5 |
 | `role` | client 69 · admin 2 · **gérant 0 · employé 0** |
+
+> **Chiffres historiques du 18/11/2026, laissés tels quels.** Les chiffres actuels (relevé agrégé en lecture seule du 20/11/2026 : 71 clients actifs) sont dans `PHASE_1_3_1_FINAL_INDEPENDENT_AUDIT.md`, §8. Ni l'un ni l'autre n'est un nombre de contacts autorisés au marketing : ce nombre est **0**.
 | `cree_le`, `supprime_le`, `sexe`, `type_document` | Deleted accounts are anonymised, never removed |
 
 Column-level grant: customers may only update `nom_complet, pays, region, ville, adresse, telephone,
