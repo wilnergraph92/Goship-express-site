@@ -10,7 +10,12 @@ par le CEO avant la suivante.
 | `COMMUNICATION_CENTER_PHASE_1_RAPPORT.md` | 1 — rapport de la phase (corrigé en 1.2 : mentions « [Corrigé 1.2] ») | remplacé par la conception 1.2 |
 | `COMMUNICATION_CENTER_PHASE_1_1_RAPPORT.md` | 1.1 — revue indépendante, verdict ÉCHEC | référence des constats C, H, M, L |
 | `COMMUNICATION_CENTER_PHASE_1_2_RAPPORT.md` | 1.2 — corrections, traçabilité, verdict (errata 1.3 en tête) | remplacé par la Phase 1.3 |
-| `PHASE_1_3_FINAL_REPORT.md` | 1.3 — corrections techniques, verdict VALIDÉ SOUS CONDITIONS | **en attente de la décision du CEO** |
+| `PHASE_1_3_FINAL_REPORT.md` | 1.3 — corrections techniques, verdict VALIDÉ SOUS CONDITIONS | remplacé par la Phase 1.3.1 |
+| `PHASE_1_3_1_FINAL_REPORT.md` | 1.3.1 — audit indépendant, arrêt d'urgence ; verdict CONDITIONAL — INDEPENDENT REVIEW PENDING | **en attente de la décision du CEO** |
+| `PHASE_1_3_1_INDEPENDENT_SECURITY_AUDIT.md` | 1.3.1 — trois revues indépendantes, constats, risques ouverts | en attente |
+| `PHASE_1_3_1_KILL_SWITCH_DESIGN.md` | 1.3.1 — arrêt d'urgence prouvé : verrous, scénarios, démonstration | en attente |
+| `PHASE_1_3_1_SQL_DRAFT_CORRECTIONS.md` | 1.3.1 — corrections des brouillons, constat par constat | en attente |
+| `PHASE_1_3_1_TEST_PLAN.md` | 1.3.1 — 40 essais (aucun exécuté) | en attente |
 | `PHASE_1_3_TECHNICAL_CORRECTIONS.md` | 1.3 — diagnostic des huit problèmes, corrections, avant / après | en attente |
 | `PHASE_1_3_SECURITY_REVIEW.md` | 1.3 — contre-revue, PostgreSQL, dépendances, PR #46 et #48 | en attente |
 | `PHASE_1_3_TEST_PLAN.md` | 1.3 — essais T-01 à T-20 (aucun exécuté) | en attente |
@@ -18,7 +23,7 @@ par le CEO avant la suivante.
 | `COMMUNICATION_CENTER_SECURITY.md` | conception en vigueur (1.2, annotée « [Corrigé 1.3] ») | en attente |
 | `COMMUNICATION_CENTER_DATABASE.md` | conception en vigueur (1.2, annotée « [Corrigé 1.3] ») | en attente |
 | `COMMUNICATION_CENTER_TESTING.md` | plan d'essais (aucun exécuté) | en attente |
-| `brouillons-sql/40…43-*.sql` | **brouillons jamais exécutés** (version 1.3) | garde à trois couches : bloc DO, puis TOUT le contenu dans une chaîne inerte |
+| `brouillons-sql/40…43-*.sql` | **brouillons jamais exécutés** (version 1.3.1) | garde à quatre couches : bloc DO, contenu dans une chaîne inerte, garde interne, fermeture de session pour un outil qui découpe le texte |
 
 **Les brouillons SQL ne font pas partie de la chaîne** (`outils/migrations.txt`) et ne doivent être
 exécutés nulle part. En Phase 2, après accord écrit du CEO, ils deviendront des fichiers de `outils/`,
