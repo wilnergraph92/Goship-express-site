@@ -15,6 +15,7 @@ par le CEO avant la suivante.
 | `PHASE_1_3_1_KILL_SWITCH_LOCK_PROOF.md` | Clôture 1.3.1 — verrous de l'arrêt fonction par fonction, preuve, hypothèses H1 à H6 et H4′ | en attente |
 | `PHASE_1_3_1_SQL_40_43_SECURITY_REVIEW.md` | Clôture 1.3.1 — revue des migrations 40 à 43, séparation, constats S-01 à S-07 | en attente |
 | `PHASE_1_3_1_FINAL_TEST_PLAN.md` | Clôture 1.3.1 — 25 essais (aucun exécuté) | en attente |
+| `PHASE_1_3_1_ANALYSE_POST_AUDIT_P07_P08.md` | Après la clôture 1.3.1 — analyse en lecture seule des corrections P-07 (arrêt d'urgence), P-08 (retours fournisseurs), STOP et doublons ; aucune correction faite | **en attente de l'autorisation écrite du CEO** |
 | `PHASE_1_3_1_FINAL_INDEPENDENT_REVIEWER_REPORT.md` | Clôture 1.3.1 — rapport du relecteur indépendant (RF-01 à RF-19), tel quel | référence |
 | `PHASE_1_3_1_FINAL_REPORT.md` | 1.3.1 — audit indépendant, arrêt d'urgence ; verdict CONDITIONAL — INDEPENDENT REVIEW PENDING (complété par la clôture) | remplacé par la clôture |
 | `PHASE_1_3_1_INDEPENDENT_SECURITY_AUDIT.md` | 1.3.1 — trois revues indépendantes, constats, risques ouverts | en attente |
