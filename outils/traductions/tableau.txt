@@ -1661,3 +1661,9 @@ L’opération n’a pas abouti. Réessayez.
 Rien n’a changé.
 Pré-alerte modifiée.
 Pré-alerte supprimée.
+Toujours là ?
+Rester connecté
+Sans activité, vous serez déconnecté dans une minute.
+Vous avez été déconnecté après un moment sans activité, pour protéger les données. Reconnectez-vous pour continuer.
+Déconnecté
+Vous avez été déconnecté après un moment sans activité.

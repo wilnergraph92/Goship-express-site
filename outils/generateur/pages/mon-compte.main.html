@@ -17,6 +17,14 @@
 
 <section class="gs-espace" data-no-reveal>
   <div class="gs-espace__wrap">
+    <!-- Une minute avant la déconnexion après inactivité (inactivite.js) : fixé en bas de
+         l'écran, visible où que l'on soit dans la page -->
+    <div class="gs-alerte gs-alerte--info gs-inactivite" data-inactivite hidden role="alertdialog" aria-labelledby="inactivite-titre" aria-describedby="inactivite-texte">
+      <strong id="inactivite-titre">Toujours là ?</strong>
+      <p id="inactivite-texte">Sans activité, vous serez déconnecté dans une minute, pour protéger votre compte.</p>
+      <button type="button" class="gs-bouton gs-bouton--plein gs-bouton--petit" data-action="rester-connecte">Rester connecté</button>
+    </div>
+
     <div class="gs-alerte gs-alerte--succes gs-espace__bienvenue" data-bienvenue hidden tabindex="-1">
       <strong>Bienvenue chez Goship Express !</strong>
       <p>Votre compte est prêt. Votre code client <b data-code translate="no"></b> vous identifie : ajoutez-le après votre nom dans l'adresse de livraison de tous vos achats en ligne.</p>

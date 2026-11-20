@@ -7,6 +7,16 @@ Les versions `site-AAAA.MM.JJ` désignent à la fois les pages et l'état de
 `outils/` : la chaîne de migrations (`outils/migrations.txt`) à appliquer à la
 base **avant** de publier le site.
 
+## Non publié — déconnexion après un moment sans activité (20/11/2026)
+
+Le tableau de bord et « Mon compte » se déconnectent seuls après 10 minutes sans souris, clavier,
+toucher ni défilement (`config.js` : `deconnexionTableauMinutes`, `deconnexionCompteMinutes`, 1 à
+240). Une minute avant, « Toujours là ? » et un bouton « Rester connecté » ; n'importe quel geste
+suffit aussi. Tous les onglets partagent le même compteur ; un ordinateur rouvert après une longue
+veille se déconnecte aussitôt. Après coup, l'écran de connexion dit pourquoi. Nouveau script
+`assets/js/inactivite.js`, textes dans les quatre langues. Aucune migration. Banc :
+`outils/essais-services/essai-inactivite-navigateur.mjs` (horloge simulée).
+
 ## Non publié — l'article espagnol « servicio de mensajería » mène au casillero (19/11/2026)
 
 Search Console (25/10 au 17/11/2026) : cette page sort en position 4,8 sur « servicio de mensajería
