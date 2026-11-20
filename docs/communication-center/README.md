@@ -11,7 +11,12 @@ par le CEO avant la suivante.
 | `COMMUNICATION_CENTER_PHASE_1_1_RAPPORT.md` | 1.1 — revue indépendante, verdict ÉCHEC | référence des constats C, H, M, L |
 | `COMMUNICATION_CENTER_PHASE_1_2_RAPPORT.md` | 1.2 — corrections, traçabilité, verdict (errata 1.3 en tête) | remplacé par la Phase 1.3 |
 | `PHASE_1_3_FINAL_REPORT.md` | 1.3 — corrections techniques, verdict VALIDÉ SOUS CONDITIONS | remplacé par la Phase 1.3.1 |
-| `PHASE_1_3_1_FINAL_REPORT.md` | 1.3.1 — audit indépendant, arrêt d'urgence ; verdict CONDITIONAL — INDEPENDENT REVIEW PENDING | **en attente de la décision du CEO** |
+| `PHASE_1_3_1_FINAL_INDEPENDENT_AUDIT.md` | Clôture 1.3.1 — vérification finale, revue indépendante comparée, risques, chiffres clients (71, Phase 0 : 69) ; **verdict NON VALIDÉ** | **en attente de la décision du CEO** |
+| `PHASE_1_3_1_KILL_SWITCH_LOCK_PROOF.md` | Clôture 1.3.1 — verrous de l'arrêt fonction par fonction, preuve, hypothèses H1 à H6 et H4′ | en attente |
+| `PHASE_1_3_1_SQL_40_43_SECURITY_REVIEW.md` | Clôture 1.3.1 — revue des migrations 40 à 43, séparation, constats S-01 à S-07 | en attente |
+| `PHASE_1_3_1_FINAL_TEST_PLAN.md` | Clôture 1.3.1 — 25 essais (aucun exécuté) | en attente |
+| `PHASE_1_3_1_FINAL_INDEPENDENT_REVIEWER_REPORT.md` | Clôture 1.3.1 — rapport du relecteur indépendant (RF-01 à RF-19), tel quel | référence |
+| `PHASE_1_3_1_FINAL_REPORT.md` | 1.3.1 — audit indépendant, arrêt d'urgence ; verdict CONDITIONAL — INDEPENDENT REVIEW PENDING (complété par la clôture) | remplacé par la clôture |
 | `PHASE_1_3_1_INDEPENDENT_SECURITY_AUDIT.md` | 1.3.1 — trois revues indépendantes, constats, risques ouverts | en attente |
 | `PHASE_1_3_1_KILL_SWITCH_DESIGN.md` | 1.3.1 — arrêt d'urgence prouvé : verrous, scénarios, démonstration | en attente |
 | `PHASE_1_3_1_SQL_DRAFT_CORRECTIONS.md` | 1.3.1 — corrections des brouillons, constat par constat | en attente |

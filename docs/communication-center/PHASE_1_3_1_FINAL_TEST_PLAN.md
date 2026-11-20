@@ -3,7 +3,8 @@
 **Code visé** : commit `0693d5e` (brouillons 40 à 43, version 1.3.1).
 
 > **Aucun essai n'a été exécuté.** Ce document est un plan, pas un compte rendu.
-> Chaque essai est **NON EXÉCUTÉ**. Il ne pourra l'être qu'après une autorisation **écrite** de la direction, et **sur une base jetable seulement** :
+> Chaque essai est **NON EXÉCUTÉ**. Plusieurs décrivent un « attendu aujourd'hui » qui est un **défaut connu** (F-K10, F-W01, F-C06) : ils ne passeront qu'après la correction proposée.
+> Il ne pourra l'être qu'après une autorisation **écrite** de la direction, et **sur une base jetable seulement** :
 > - jamais sur la production ;
 > - jamais avec une vraie clé Brevo ou Meta.
 >
@@ -130,6 +131,30 @@ Ce plan **complète** `PHASE_1_3_1_TEST_PLAN.md` (40 essais, tous non exécutés
 | FAIL si | La ligne est écrite |
 | Statut | **NON EXÉCUTÉ** |
 
+### F-K09 — pg_net : délai entre la sortie de file visible et le début du transfert (H4′, revue finale)
+
+| | |
+|---|---|
+| Scénario | La fenêtre de 120 s suppose que le transfert **commence** moins de 60 s après que la sortie de la requête de la file est devenue visible |
+| Données | Lot de 300 requêtes ; faux serveur lent (réponse en 50 s) |
+| Étapes | Déposer le lot. Lancer `communication_observer_sorties` toutes les secondes. Noter `sortie_file_vue_le` de chaque envoi et l'heure d'arrivée au faux serveur. |
+| Attendu | Pour chaque requête : arrivée au serveur − `sortie_file_vue_le` < 60 s |
+| PASS si | Écart maximal < 60 s, avec une marge notée |
+| FAIL si | Un écart ≥ 60 s. La propriété (b) de l'arrêt tombe : la fenêtre est à revoir. |
+| Statut | **NON EXÉCUTÉ** |
+
+### F-K10 — La demande d'arrêt reste écrite si le constat échoue (RF-01)
+
+| | |
+|---|---|
+| Scénario | Une erreur ou une annulation pendant `communication_conclure_arret` |
+| Étapes | Trois cas :<br>(a) `pg_cancel_backend` sur la session d'arrêt pendant le constat (10 000 lignes récentes dans `net._http_response`) ;<br>(b) `statement_timeout = '1s'` ;<br>(c) une migration rejouée qui tient la ligne d'arrêt. |
+| Attendu **aujourd'hui** (brouillon 0693d5e) | La demande est annulée : `communication_arret.etat` reste `actif`. **C'est le défaut RF-01.** |
+| Attendu **après correction** (P-07) | `etat = 'arret_demande'` dans les trois cas ; réponse `STOP_PENDING` (`CONSTAT_IMPOSSIBLE`), ou erreur, mais la demande est **validée** ; la porte refuse ensuite toute sortie |
+| PASS si | Après correction : la demande est écrite dans les trois cas |
+| FAIL si | `etat = 'actif'` après un seul des trois cas |
+| Statut | **NON EXÉCUTÉ** |
+
 ---
 
 ## 2. Migrations (BLOQUANTS)
@@ -186,6 +211,43 @@ Ce plan **complète** `PHASE_1_3_1_TEST_PLAN.md` (40 essais, tous non exécutés
 | Attendu | `NON_CONFIGURE`. Le faux serveur ne reçoit rien. |
 | PASS si | Aucune requête sortante |
 | FAIL si | Une requête part avec une clé du transactionnel |
+| Statut | **NON EXÉCUTÉ** |
+
+---
+
+## 3 bis. Retours des fournisseurs (BLOQUANTS, ajoutés après la revue finale)
+
+### F-W01 — Deux retours pour le même envoi, en même temps (RF-02)
+
+| | |
+|---|---|
+| Données | 1 envoi WhatsApp d'une campagne, statut `traitement` ; deux événements signés `sent` et `delivered`, chacun dans un éclat différent du compteur de débit |
+| Étapes | Deux sessions appellent `communication_recevoir_evenement` en même temps (barrière : chacune s'arrête juste après l'insertion de l'événement, avec `pg_sleep` dans une copie de banc). Variantes : événement et purge de la personne ; événement et relance ; événement et annulation de la campagne. |
+| Attendu **aujourd'hui** | `deadlock detected` (40P01) dans au moins un cas. **C'est le défaut RF-02.** |
+| Attendu **après correction** (P-08) | Aucun 40P01 ; les deux événements enregistrés ; statut final `livre` |
+| PASS si | 0 interblocage sur 1 000 répétitions |
+| FAIL si | Un seul 40P01, ou un événement perdu |
+| Statut | **NON EXÉCUTÉ** |
+
+### F-W02 — STOP entrant et code 131050 pour le même numéro (RF-05)
+
+| | |
+|---|---|
+| Étapes | Session A : message entrant « STOP » du numéro H. Session B : retour d'échec 131050 pour un envoi vers H. Les deux en même temps. |
+| Attendu après correction | Aucun 40P01 ; une seule suppression active pour H ; consentements retirés |
+| PASS si | 0 interblocage sur 1 000 répétitions |
+| FAIL si | Un 40P01 |
+| Statut | **NON EXÉCUTÉ** |
+
+### F-W03 — Reconnaissance du STOP (RF-03)
+
+| | |
+|---|---|
+| Données | Phrases réelles dans les quatre langues : « STOP », « Stop please », « stop les messages », « Arrêter les promotions », « Kanpe voye mesaj », « BAJA por favor », « Non merci », « Stopper » ; charge du bouton de désinscription de Meta (à relever) |
+| Attendu **aujourd'hui** | Seuls les messages réduits à un mot de la liste sont reconnus |
+| Attendu **après correction** (P-09) | Toutes les demandes d'arrêt reconnues ; la liste est validée par le juriste ; aucun faux positif sur des phrases témoins (« je ne veux pas que ça s'arrête ») |
+| PASS si | 100 % des demandes d'arrêt reconnues, et 0 faux positif retenu par le juriste |
+| FAIL si | Une demande d'arrêt ignorée |
 | Statut | **NON EXÉCUTÉ** |
 
 ---
@@ -274,20 +336,21 @@ Ces essais rejouent, **sur des données fictives**, la forme réelle de la base 
 
 | Groupe | Essais | Gravité | Exécutés |
 |---|---|---|---|
-| Arrêt d'urgence (hypothèses) | F-K01 à F-K08 | BLOQUANT | **0** |
+| Arrêt d'urgence (hypothèses et RF-01) | F-K01 à F-K10 | BLOQUANT | **0** |
 | Migrations | F-M01 à F-M03 | BLOQUANT | **0** |
 | Séparation | F-T01, F-T02 | BLOQUANT | **0** |
+| Retours des fournisseurs | F-W01 à F-W03 | BLOQUANT | **0** |
 | Base clients et audience | F-C01 à F-C07 | BLOQUANT avant toute campagne | **0** |
-| **Total de ce plan** | **20** | | **0** |
+| **Total de ce plan** | **25** | | **0** |
 | Plan précédent (`PHASE_1_3_1_TEST_PLAN.md`) | 40 | | **0** |
 
 **Ordre proposé**, si la direction l'autorise par écrit sur une base jetable :
 1. F-M01 ;
 2. F-M02 ;
-3. F-K05, car si H4 tombe, la conception de l'arrêt est à revoir avant tout le reste ;
-4. F-K01, F-K02, F-K03, F-K08 ;
+3. F-K05 et F-K09, car si H4 ou H4′ tombe, la conception de l'arrêt est à revoir avant tout le reste ;
+4. F-K01, F-K02, F-K03, F-K08, F-K10 ;
 5. F-K06, F-K04, F-K07 ;
-6. F-T01, F-T02 ;
+6. F-W01 à F-W03, puis F-T01, F-T02 ;
 7. F-C01 à F-C07 ;
 8. le plan précédent.
 

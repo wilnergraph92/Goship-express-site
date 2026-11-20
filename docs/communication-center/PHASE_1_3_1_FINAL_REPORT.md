@@ -8,6 +8,12 @@
 | Mode | Audit et corrections **documentaires** seulement : aucun SQL exécuté, aucune base touchée, aucun fournisseur contacté, aucun secret, aucun déploiement, aucune fusion |
 | Verdict | **CONDITIONAL — INDEPENDENT REVIEW PENDING** |
 
+> **Clôture de l'audit, 20/11/2026.** La revue indépendante finale de `0693d5e` a été faite. Elle confirme que l'arrêt ne donne jamais de faux `STOP_CONFIRMED` et que le constat ne crée pas d'interblocage. Elle trouve deux défauts de gravité ÉLEVÉE :
+> - **RF-01** : la demande d'arrêt est annulée si le constat échoue ;
+> - **RF-02** : deux retours du fournisseur pour le même envoi s'interbloquent.
+>
+> **Verdict de clôture : NON VALIDÉ.** Voir `PHASE_1_3_1_FINAL_INDEPENDENT_AUDIT.md` (§6 : comparaison ; §11 : conditions avant la Phase 2). Ce rapport-ci est gardé tel qu'il était avant la clôture.
+
 **Documents de la phase** (dans `docs/communication-center/`) :
 - `PHASE_1_3_1_INDEPENDENT_SECURITY_AUDIT.md` : méthode, trois revues indépendantes, constats, désaccords, risques ouverts, verdict ;
 - `PHASE_1_3_1_KILL_SWITCH_DESIGN.md` : arrêt d'urgence, verrous, point de linéarisation, scénarios A à G, démonstration, limites ;

@@ -120,7 +120,7 @@ N0 exclusif, puis ligne N0a, avec 5 s d'attente au plus (`lock_timeout`, l. 1112
 | Fonction | Verrous sur les envois | Attend-elle ? |
 |---|---|---|
 | `communication_lire_reponses` (43 l. 666) | `for update skip locked` (l. 690, 744) | Non |
-| `communication_recevoir_evenement` (43 l. 1322) | N1 campagne (l. 1525), N3, puis **l'envoi `for update`** (l. 1531) | **Oui**, 5 s au plus (clause `SET lock_timeout`) |
+| `communication_recevoir_evenement` (43 l. 1322) | **D'abord un `FOR KEY SHARE` caché sur l'envoi**, posé par la clé étrangère de l'insertion de l'événement (l. 1257, 1444). Ensuite N1 campagne (l. 1525), N3, puis **l'envoi `for update`** (l. 1531). *[Ajouté après la revue finale, RF-02 : deux retours pour le même envoi s'interbloquent entre eux. Cela ne concerne pas l'arrêt, qui ne demande jamais ces verrous.]* | **Oui**, 5 s au plus (clause `SET lock_timeout`) |
 | `changer_statut_campagne('annuler')` (42 l. 825) | N1, puis les envois de la campagne par identifiant croissant | **Oui** (délai de l'appelant) |
 | Purge d'une personne / à l'échéance (40, 43) | N2, N3, puis les envois par identifiant croissant | **Oui** |
 | `relancer_envoi_communication` (43) | l'envoi d'origine `for update` | **Oui** |
@@ -209,6 +209,10 @@ Si pg_net la retire de la file **avant** de l'appeler, et applique son délai (�
 | H3 | Une validation est visible avant que ses verrous soient relâchés ; en READ COMMITTED, chaque requête d'une fonction VOLATILE prend un nouvel instantané | La propriété (a) tombe | F-K02 |
 | H4 | pg_net (version 0.20.4 en production, rapportée) retire la requête de sa file **avant** l'appel, n'envoie qu'après le COMMIT, applique `timeout_milliseconds` dès le début de l'appel, ne réessaie pas seul, et n'envoie rien pour une transaction annulée | La propriété (b) tombe | F-K05, F-K06 |
 | H5 | `FOR UPDATE SKIP LOCKED` dans une sous-requête d'UPDATE n'attend jamais | Le lemme 1 tombe | F-K03 |
+| H4′ | *(revue finale)* Le transfert curl **commence** moins de 60 s après que la sortie de la requête de la file est devenue visible | La fenêtre de 120 s ne couvre plus le transfert : la propriété (b) tombe | F-K09 |
+| H6 | *(revue finale)* Une demande partagée de N0 attend derrière une demande exclusive déjà en file | Seulement des retards (`STOP_PENDING`), jamais un faux succès | F-K01 (variante) |
+
+**Défaut trouvé par la revue finale, hors des hypothèses : RF-01.** `arreter_communications` écrit la demande (41 l. 1006-1013), puis appelle le constat (l. 1016), **sans** bloc `exception` autour. Si le constat lève une erreur ou est annulé (délai d'exécution, recul de l'horloge contre la contrainte, attente face à une migration rejouée), **la demande est annulée avec lui**. Cela ne contredit pas les propriétés (a) et (b) : on n'obtient pas de faux `STOP_CONFIRMED`. Mais l'arrêt peut ne rien écrire. Correction proposée : P-07 (`PHASE_1_3_1_FINAL_INDEPENDENT_AUDIT.md`, §9.2). Essai : F-K10.
 
 ---
 
