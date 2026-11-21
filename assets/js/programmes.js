@@ -70,12 +70,10 @@
     if (valeur == null || valeur === '') return '—';
     return type === 'gopoints' ? O.nombre(valeur) + ' GOPOINTS' : O.argent(valeur);
   }
-  // Un jour civil (AAAA-MM-JJ : un anniversaire, la fin d'une campagne) n'a pas de fuseau : confié tel quel à Date, il
-  // devient minuit UTC, donc la veille au soir à Miami ou à Santo Domingo. On le pose à midi, heure de l'appareil.
+  // Un jour civil (AAAA-MM-JJ : un anniversaire, la fin d'une campagne) : O.date le pose déjà à midi, heure de
+  // l'appareil, pour qu'il ne tombe pas la veille à Miami ou à Santo Domingo.
   function dateTexte(iso) {
-    if (!iso) return '—';
-    var j = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso));
-    return O.date(j ? new Date(Number(j[1]), Number(j[2]) - 1, Number(j[3]), 12) : iso);
+    return iso ? O.date(iso) : '—';
   }
   function jourAvecDecalage(n) {
     var t = new Date(Date.now() + n * 864e5);
