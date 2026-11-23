@@ -25,8 +25,8 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 | C9 — Réglages N-02 et D2 décidés, installés comme réglages par défaut (candidate 011) | ✅ banc |
 | C9 — Alertes D dans `communication_c5_sante` (arrêt non confirmé > 2 min, retour en attente > 10 min, en plus des transmissions incertaines et des échecs prioritaires) ; libellés traduits en 4 langues | ✅ banc |
 | C9 — Supervision corrigée : lecture de l'outbox unique avec ses statuts réels et de la tâche `goship-notifications` (002) | ✅ banc |
-| C10 — Non-régression transactionnelle avec les candidates appliquées : harnais `essai-communication-non-regression.py` (rejoue `essai-notifications.py`) ; 5 régressions corrigées | ✅ 86/87 après la décision K ; l'écart restant est le nom volontaire `LIMITE_DEBIT` (au lieu de `HTTP_429`) |
-| C10 — Étendre le harnais à `essai-accuses.py`, `essai-suivi-courriels.py` et `essai-programmes.py` | ⏳ |
+| C10 — Non-régression transactionnelle avec les candidates appliquées : harnais `essai-communication-non-regression.py` (rejoue `essai-notifications.py`) ; 5 régressions corrigées | ✅ 87/87 après la décision K ; le nom `LIMITE_DEBIT` (au lieu de `HTTP_429`) y est reconnu comme écart volontaire, nommé et limité à sa valeur exacte |
+| C10 — Étendre le harnais à `essai-accuses.py`, `essai-suivi-courriels.py` et `essai-programmes.py` (candidates appliquées après le fichier dont chaque essai éprouve la mise à niveau, puis après chaque fichier rejoué) | ✅ 36/36, 49/49 et 374/374 : aucune régression |
 | C10 — Plan d'essais adapté aux candidates, remplaçant les 78 essais | ⏳ |
 | C11 — Intégration des candidates dans `outils/migrations.txt`, puis rejeu complet de la chaîne sur base jetable | ⏳ |
 

@@ -201,6 +201,13 @@ La vérification locale dédiée est `outils/essais-services/essai-communication
 Elle utilise deux bases PostgreSQL locales indépendantes et neuves, les
 doublures du dépôt et un adaptateur local de transmission.
 
+La non-régression `outils/essais-services/essai-communication-non-regression.py`
+rejoue tels quels `essai-notifications.py`, `essai-accuses.py`,
+`essai-suivi-courriels.py` et `essai-programmes.py` avec ces candidates
+appliquées par-dessus la chaîne officielle (une cible ou plusieurs peuvent être
+nommées en argument). Un écart voulu par les candidates n'y est accepté que s'il
+est inscrit dans `ECARTS_VOLONTAIRES`, avec sa raison et sa valeur exacte.
+
 La candidate 007 n'ajoute pas de droits au Manager : les vues générales restent
 protégées par `communications.view`, tandis que la gestion des modèles, la
 lecture des consentements marketing et la reprise ciblée disposent de

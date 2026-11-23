@@ -1,22 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Non-régression du moteur de notifications transactionnelles avec les candidates
-du Communication Center appliquées (décision A′ du 23/11/2026).
+"""Non-régression des essais officiels avec les candidates du Communication Center
+appliquées (décision A′ du 23/11/2026, étape C10 de la feuille de route).
 
-Les candidates 004 et 005 redéfinissent expedier_envoi, lire_reponse_envoi,
-texte_notification et traiter_notifications. Ce harnais rejoue tel quel
-essai-notifications.py, mais sur une base où la chaîne officielle est suivie des
-candidates. Quand l'essai relance un fichier de la chaîne, les candidates sont
-réappliquées juste après, comme le serait une chaîne qui les intègre.
+Les candidates redéfinissent des fonctions de la chaîne officielle (expedier_envoi,
+lire_reponse_envoi, texte_notification, traiter_notifications, permissions_du_role…).
+Ce harnais rejoue tels quels des essais officiels, mais sur une base où les
+candidates sont appliquées par-dessus la chaîne :
 
+  notifications    essai-notifications.py     après toute la chaîne
+  accuses          essai-accuses.py           après supabase-accuses.sql
+  suivi-courriels  essai-suivi-courriels.py   après supabase-suivi-courriels.sql
+  programmes       essai-programmes.py        après le dernier fichier de sa série
+
+Ces trois derniers essais éprouvent une mise à niveau : ils installent la chaîne
+jusqu'à « leur » fichier, observent l'état d'avant, puis appliquent ce fichier.
+Les candidates sont appliquées juste après ce fichier, jamais avant : l'état
+d'avant reste celui que l'essai veut observer. Ensuite, chaque fois que l'essai
+rejoue un fichier de la chaîne officielle, les candidates sont réappliquées
+aussitôt, dans l'ordre, comme le serait une chaîne qui les intègre à sa fin.
+
+Chaque essai tourne dans son propre processus et son propre dossier de travail.
 Bases PostgreSQL locales jetables (pgserver), aucun réseau, aucun fournisseur.
 Les doublures de pgcrypto et de Vault ne testent aucune propriété cryptographique.
 
-Usage : python3 outils/essais-services/essai-communication-non-regression.py
+Usage :
+  python3 outils/essais-services/essai-communication-non-regression.py
+  python3 outils/essais-services/essai-communication-non-regression.py accuses programmes
 """
 import importlib.util
 import os
 import pathlib
+import subprocess
+import sys
 import tempfile
 import uuid
 
@@ -26,16 +42,29 @@ CANDIDATES = os.path.join(OUTILS, 'migrations-candidates')
 FICHIERS_CANDIDATS = sorted(
     os.path.join(CANDIDATES, f) for f in os.listdir(CANDIDATES)
     if f.endswith('.sql') and f[:3].isdigit())
+CHAINE = [l.strip() for l in open(os.path.join(OUTILS, 'migrations.txt'), encoding='utf-8')
+          if l.strip() and not l.startswith('#')]
 
-_spec = importlib.util.spec_from_file_location(
-    'essai_notifications', os.path.join(ICI, 'essai-notifications.py'))
-N = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(N)
-S = N.S
-# Dossier de travail propre : essai-notifications.py peut tourner en même temps
-# dans le dossier partagé par défaut, et chacun supprime sa base en fin d'essai.
-S.TRAVAIL = os.path.join(tempfile.gettempdir(), 'goship-non-regression-' + uuid.uuid4().hex)
-os.makedirs(S.TRAVAIL, exist_ok=True)
+# Essai officiel → fichier de la chaîne après lequel les candidates entrent en jeu.
+CIBLES = {
+    'notifications': ('essai-notifications.py', lambda m: CHAINE[-1]),
+    'accuses': ('essai-accuses.py', lambda m: m.NOUVEAU),
+    'suivi-courriels': ('essai-suivi-courriels.py', lambda m: m.NOUVEAU),
+    'programmes': ('essai-programmes.py', lambda m: m.NOUVEAUX[-1]),
+}
+
+# Écarts voulus par les candidates, chacun nommé, justifié et limité à la valeur exacte
+# obtenue : toute autre différence reste un échec. Essai → titre → (valeur des
+# candidates, raison).
+ECARTS_VOLONTAIRES = {
+    'notifications': {
+        '2e essai, limite de débit (429) : nouvel essai dans ~2 min': (
+            ['attente|LIMITE_DEBIT|2', True],
+            'les candidates nomment LIMITE_DEBIT toute limite de débit (HTTP 429, Expo, '
+            'WhatsApp) au lieu de HTTP_429 ; le nouvel essai a lieu au même moment '
+            '(décision K, 23/11/2026)'),
+    },
+}
 
 DOUBLURES_CRYPTO = """
   create schema if not exists extensions;
@@ -53,49 +82,90 @@ DOUBLURES_CRYPTO = """
   $$;
 """
 
-_fichier_original = S.Base.fichier
-_etat = {'candidates': False, 'en_cours': False}
+
+def executer_cible(nom):
+    fichier_essai, declencheur = CIBLES[nom]
+    spec = importlib.util.spec_from_file_location('essai_cible', os.path.join(ICI, fichier_essai))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    S = module.S
+    # Dossier de travail propre : l'essai officiel peut tourner en même temps dans le
+    # dossier partagé par défaut, et chacun supprime sa base en fin d'essai.
+    S.TRAVAIL = os.path.join(tempfile.gettempdir(), 'goship-non-regression-' + uuid.uuid4().hex)
+    os.makedirs(S.TRAVAIL, exist_ok=True)
+    fichier_declencheur = declencheur(module)
+    original = S.Base.fichier
+    etat = {'en_cours': False, 'actives': set(), 'doublees': set()}
+
+    def appliquer_candidates(db):
+        etat['en_cours'] = True
+        try:
+            if id(db) not in etat['doublees']:
+                db.sql(DOUBLURES_CRYPTO)
+                etat['doublees'].add(id(db))
+            for chemin in FICHIERS_CANDIDATS:
+                texte = pathlib.Path(chemin).read_text(encoding='utf-8')
+                texte = texte.replace('create extension if not exists pgcrypto with schema extensions;', '')
+                copie = pathlib.Path(S.TRAVAIL, 'candidate-' + os.path.basename(chemin))
+                copie.write_text(texte, encoding='utf-8')
+                original(db, str(copie))
+        finally:
+            etat['en_cours'] = False
+
+    def fichier(self, chemin):
+        sortie = original(self, chemin)
+        officiel = os.path.dirname(os.path.abspath(chemin)) == OUTILS
+        if officiel and not etat['en_cours']:
+            if os.path.basename(chemin) == fichier_declencheur:
+                etat['actives'].add(id(self))
+            if id(self) in etat['actives']:
+                appliquer_candidates(self)
+        return sortie
+
+    S.Base.fichier = fichier
+
+    ecarts = ECARTS_VOLONTAIRES.get(nom, {})
+    verifier_original = S.verifier
+
+    def verifier(titre, obtenu, attendu):
+        if titre in ecarts:
+            valeur, raison = ecarts[titre]
+            obtenu_net = obtenu.strip() if isinstance(obtenu, str) else obtenu
+            if obtenu_net == valeur and obtenu_net != attendu:
+                print('       écart volontaire des candidates : %s' % raison)
+                return verifier_original(titre, obtenu, obtenu)
+        return verifier_original(titre, obtenu, attendu)
+
+    # Les essais gardent une référence à S.verifier sous le nom « verifier ».
+    S.verifier = verifier
+    if getattr(module, 'verifier', None) is verifier_original:
+        module.verifier = verifier
+    print('Non-régression « %s » (%s) avec les candidates %s, appliquées après %s'
+          % (nom, fichier_essai, ', '.join(os.path.basename(f)[:3] for f in FICHIERS_CANDIDATS),
+             fichier_declencheur))
+    sys.stdout.flush()
+    module.main()
 
 
-def _appliquer_candidates(db):
-    _etat['en_cours'] = True
-    try:
-        for chemin in FICHIERS_CANDIDATS:
-            texte = pathlib.Path(chemin).read_text(encoding='utf-8')
-            texte = texte.replace('create extension if not exists pgcrypto with schema extensions;', '')
-            copie = pathlib.Path(S.TRAVAIL, 'candidate-' + os.path.basename(chemin))
-            copie.write_text(texte, encoding='utf-8')
-            _fichier_original(db, str(copie))
-    finally:
-        _etat['en_cours'] = False
+def main(arguments):
+    if len(arguments) == 2 and arguments[0] == '--cible':
+        executer_cible(arguments[1])
+        return 0
+    noms = arguments or list(CIBLES)
+    inconnus = [n for n in noms if n not in CIBLES]
+    if inconnus:
+        print('Cible inconnue : %s (attendu : %s)' % (', '.join(inconnus), ', '.join(CIBLES)))
+        return 2
+    bilan = []
+    for nom in noms:
+        r = subprocess.run([sys.executable, os.path.abspath(__file__), '--cible', nom])
+        bilan.append((nom, r.returncode))
+        print()
+    print('Bilan de la non-régression avec les candidates :')
+    for nom, code in bilan:
+        print('  %-16s %s' % (nom, 'réussi' if code == 0 else 'ÉCARTS (code %d)' % code))
+    return 0 if all(code == 0 for _, code in bilan) else 1
 
-
-def _fichier(self, chemin):
-    _fichier_original(self, chemin)
-    # Un fichier de la chaîne officielle rejoué écrase les redéfinitions des candidates :
-    # on les réapplique aussitôt, dans l'ordre.
-    if _etat['candidates'] and not _etat['en_cours'] and \
-            os.path.dirname(os.path.abspath(chemin)) == OUTILS:
-        _appliquer_candidates(self)
-
-
-S.Base.fichier = _fichier
-_installer_original = N.installer
-
-
-def installer_avec_candidates():
-    # Une nouvelle base installe d'abord toute la chaîne, sans réapplication intercalée.
-    _etat['candidates'] = False
-    db = _installer_original()
-    db.sql(DOUBLURES_CRYPTO)
-    _appliquer_candidates(db)
-    _etat['candidates'] = True
-    return db
-
-
-N.installer = installer_avec_candidates
 
 if __name__ == '__main__':
-    print('Non-régression transactionnelle avec les candidates %s'
-          % ', '.join(os.path.basename(f)[:3] for f in FICHIERS_CANDIDATS))
-    N.main()
+    sys.exit(main(sys.argv[1:]))
