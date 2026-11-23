@@ -11,7 +11,7 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 |---|---|
 | Décisions A–J prises sur délégation | ✅ `COMMUNICATION_CENTER_DECISIONS_DELEGUEES.md` |
 | Hiérarchie des verrous des candidates | ✅ `COMMUNICATION_CENTER_VERROUS_CANDIDATES.md` |
-| Questions Q1–Q7 adaptées aux candidates, version figée par empreinte | ✅ `COMMUNICATION_CENTER_DOSSIER_REVUE_CANDIDATES.md` (11 empreintes SHA-256, points R-1 à R-8 à examiner en priorité) ; commit de la version figée : voir le journal des décisions |
+| Questions Q1–Q7 adaptées aux candidates, version figée par empreinte | ✅ `COMMUNICATION_CENTER_DOSSIER_REVUE_CANDIDATES.md` (11 empreintes SHA-256, points R-1 à R-8 à examiner en priorité) ; commit de la version figée : **`c7702cb5afa4f4fde14500072b5c4762619606ae`** (23/11/2026) |
 | Revue indépendante humaine PostgreSQL | 🔒 la CEO envoie la demande de devis (D5 §6) |
 | Validations juridiques (D2, STOP, conservation) | 🔒 juriste |
 
