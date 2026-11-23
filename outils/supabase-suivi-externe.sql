@@ -63,8 +63,9 @@ $garde$;
 
 
 -- 2. Les permissions ----------------------------------------------------------------
--- tracking.view (administrateur, gérant, employé) et tracking.manage (administrateur)
--- sont écrites dans supabase.sql, qui fait foi. La fonction est répétée ici, mot pour
+-- tracking.view (administrateur, gérant, employé), tracking.manage (administrateur)
+-- et communications.* (Communication Center) sont écrites dans supabase.sql,
+-- qui fait foi. La fonction est répétée ici, mot pour
 -- mot, pour qu'on n'ait à installer QUE ce fichier sur une base déjà à jour :
 -- essai-suivi-externe.py vérifie que les copies sont identiques.
 create or replace function public.permissions_du_role(p_role text)
@@ -83,7 +84,11 @@ as $$
       'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
       'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
       'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
-      'tracking.view', 'tracking.manage']
+      'tracking.view', 'tracking.manage', 'communications.view',
+      'communications.templates.manage', 'communications.consents.view',
+      'communications.queue.retry', 'communications.campaigns.view',
+      'communications.campaigns.manage', 'communications.campaigns.approve',
+      'communications.emergency_stop']
     when 'gerant' then array[
       'clients.view', 'clients.create', 'clients.edit',
       'shipments.view', 'shipments.create', 'shipments.edit',
@@ -93,7 +98,8 @@ as $$
       'reports.view', 'reports.create',
       'users.view',
       'birthdays.view', 'programs.view',
-      'tracking.view']
+      'tracking.view', 'communications.view',
+      'communications.campaigns.view', 'communications.campaigns.manage']
     when 'employe' then array[
       'clients.view', 'clients.create',
       'shipments.view', 'shipments.create', 'shipments.edit',

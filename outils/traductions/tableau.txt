@@ -1661,3 +1661,238 @@ L’opération n’a pas abouti. Réessayez.
 Rien n’a changé.
 Pré-alerte modifiée.
 Pré-alerte supprimée.
+Communications
+Centre de communication
+Supervision opérationnelle
+Chargement de la supervision…
+Données actualisées.
+Mode démo : aucune donnée de communication n’est simulée.
+Le service de supervision n’est pas encore installé dans cette base.
+Impossible de charger la supervision. Réessayez.
+Événements reçus
+En échec
+Échecs prioritaires
+État du Kill Switch
+Planification du travailleur
+Dernière exécution
+Non mesurable
+Arrêt inactif
+Arrêt demandé
+Arrêt confirmé
+État inconnu
+État indisponible
+Non configuré
+Actif (planifié)
+Inactif
+Démarrage
+Aucune exécution enregistrée.
+Voir le Centre de communication
+Actif
+Activité opérationnelle
+Appliquer les filtres
+Aucun changement enregistré.
+Aucun consentement enregistré.
+Aucun modèle transactionnel disponible.
+Aucun événement dans la file.
+Aucune alerte nécessitant une intervention.
+Aucune communication pour ces filtres.
+Aucune donnée mesurable n’est disponible.
+Aucune donnée réelle disponible en mode démo.
+Aucune donnée.
+Aucune reprise sûre disponible.
+Aucune transmission dans la file.
+Bloqué
+Canal
+Canaux
+Canaux autorisés pour ce type
+Choisir une notification récente
+Colis / facture
+Compte Web
+Confirmation WhatsApp
+Confirmé
+Consentements
+Consentements marketing par canal
+Consultation uniquement. Un retrait ne peut pas être réactivé depuis cet écran.
+Créer une nouvelle version
+Demandé
+En attente · expiration
+Enregistrer la nouvelle version
+File de traitement et erreurs
+File et erreurs
+Historique des communications
+Historique des consentements
+Incertain
+Invalidé
+La consultation est disponible ; la création de versions est réservée à l’Admin.
+Langue de l’aperçu
+Le service du Communication Center n’est pas installé dans cette base.
+Les quatre traductions sont requises.
+Les versions existantes sont conservées. Les aperçus utilisent une notification GoShip réelle et les variables disponibles.
+Message entrant
+Message entrant sans action automatique
+Modèle
+Modèles transactionnels
+Nom du modèle WhatsApp fournisseur
+Notification réelle pour l’aperçu
+Nouvel essai
+Nouvel essai planifié
+Nouvelle version enregistrée
+Nouvelle version enregistrée :
+Numéro de facture
+Numéro du colis
+Page de résultats
+Plainte de livraison
+Prévisualiser
+Rapprochement requis
+Refus
+Rejet définitif
+Rejet temporaire
+Retrait
+Référence client, colis ou facture
+Résultat(s).
+Service indisponible. Vérifiez la connexion et réessayez.
+Statuts
+Tentative(s)
+Tentatives
+Tous les canaux
+Tous les types
+Traité
+Traité sans autre effet
+Transmissions
+Transmissions en échec
+Transmissions envoyées
+Transmissions incertaines
+Transmissions incertaines à réconcilier
+Transmissions livrées
+Transmissions préparées
+Type de communication
+Une transmission incertaine peut déjà avoir été remise au fournisseur ; elle n’est jamais relancée depuis cette interface.
+Une variable requise manque dans cette notification réelle.
+Ce canal n’est pas autorisé pour ce type de communication.
+Les mêmes variables doivent être présentes dans les quatre langues.
+La notification réelle sélectionnée est introuvable.
+La notification réelle sélectionnée est d’un autre type.
+Le modèle contient un balisage interdit.
+Le modèle contient une variable inconnue ou incomplète.
+Le nom du modèle WhatsApp n’est pas utilisé par le canal sélectionné.
+Le nom du modèle WhatsApp est obligatoire pour ce canal.
+Les données du modèle sont invalides.
+Reprendre le STOP
+Événement ajouté à la file de reprise. Le worker conserve son propre rythme.
+Dernière activité connue
+Supervision et opérations transactionnelles
+Transitions
+Variables requises
+Recherche
+Retiré
+Ancienneté
+Verífier
+Version
+Éléments de communication
+État du worker
+Événement ajouté à la file de reprise. Le worker conserve son propre rythme.
+Événement en échec
+Événements en attente
+Événements en traitement
+Événements en échec
+Événements fournisseurs
+Événements prioritaires en échec
+Événements réussis
+Planification seulement — aucun message marketing ne sera envoyé pendant C6.
+Les canaux sans consentement marketing vérifiable restent exclus. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.
+Révision
+Planification
+Limites
+Campagnes marketing
+Créer une campagne
+Nouvelle
+Objectif
+Langue du contenu
+Choisir une langue
+Modèle marketing versionné par canal
+Modèle e-mail
+Modèle WhatsApp
+Modèle push
+Choisir une version
+Segment dynamique
+Segment enregistré
+Définir ou choisir un segment
+Nom du segment à enregistrer
+Combiner les critères
+Tous (AND)
+Au moins un (OR)
+Langue du client
+Inscription depuis (jours)
+Opérateur d’ancienneté
+Au moins
+Au plus
+A déjà reçu un colis
+Sans filtre
+A utilisé les pré-alertes
+Activité colis dans les jours
+Enregistrer le segment
+Budget et quotas — aucun défaut n’est appliqué
+Budget prévu (USD)
+Plafond de dépenses (USD)
+Volume cible
+Coût estimé saisi (USD)
+Quota e-mail
+Quota WhatsApp
+Quota push
+Sans plafond et quotas explicites, les limites restent « non configurées ». C6 ne comporte aucun chemin d’envoi.
+Planification à préparer
+Date et heure locales
+Fuseau IANA explicite
+Enregistrer la révision
+Prévisualiser l’audience
+Créer une version de modèle marketing
+Les versions sont immuables et exigent les quatre langues. Le contenu est statique en C6; aucun fournisseur n’est appelé.
+Clé du modèle
+Canal du modèle
+Choisir
+English
+Español
+Kreyòl ayisyen
+Enregistrer une nouvelle version
+Approbation, planification et audit
+Choisissez une campagne dans la liste. Le Manager prépare et soumet; seul l’Admin approuve, planifie ou annule.
+Soumettre pour approbation
+Approuver
+Enregistrer la planification
+Annuler la campagne
+Afficher l’audit
+Aucune campagne enregistrée.
+En attente d’approbation
+Approuvée
+Planifiée — sans envoi
+Configurées
+Non configurées
+Prévisualisation agrégée — aucun contact n’est affiché
+Clients correspondant au segment : 
+Éligibles : 
+ · Exclus : 
+Limites configurées.
+Budget et quotas : non configurés. Aucune transmission ne peut être préparée.
+Coût réel : non disponible. Transmission active : non.
+Journal de la campagne
+Aucune entrée d’audit.
+Motif de refus : 
+Enregistrez la révision avant de prévisualiser, soumettre, approuver ou planifier.
+Enregistrez la révision avant de prévisualiser son audience.
+Révision enregistrée en brouillon. Une nouvelle approbation sera requise.
+Segment enregistré.
+Nouvelle version de modèle enregistrée : v
+Planification enregistrée. Aucun message ne sera envoyé pendant C6.
+Action enregistrée.
+Push
+Prévisualisation agrégée
+Éligibles
+Exclus
+Brouillon · 
+Créer une campagne · 
+Révision 
+ ·
+Alertes de limites
+Quota dépassé
+Coût estimé supérieur au budget prévu.
+Coût estimé supérieur au plafond de dépenses.

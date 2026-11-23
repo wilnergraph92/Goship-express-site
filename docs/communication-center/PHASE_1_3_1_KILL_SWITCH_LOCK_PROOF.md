@@ -236,3 +236,46 @@ Si pg_net la retire de la file **avant** de l'appeler, et applique son délai (�
 | `lock_timeout = 0` retiré (2 s) | S-02 et P-03 appliqués |
 | Clé étrangère `envoi_id` retirée ; ordre N1 → N3 → N3b → N4, puis les écritures dans les suppressions | RF-02 et RF-05 fermés **par conception** (F-W01, F-W02, F-W04) ; le constat de l'arrêt n'en dépendait pas |
 | Nouveau niveau N3b (`contact:<canal>:<empreinte>`) | Pris par le travailleur après N3, avant N4 ; jamais par l'arrêt |
+
+## 8. Addendum — relecture ciblée après le bloc suivant (21/11/2026)
+
+Les sections 1 à 7 décrivent les états et constats des revues antérieures. La lecture statique
+du draft courant confirme que **P-07 est déjà en place** : `arreter_communications` écrit et
+valide la demande sans appeler le constat ; `confirmer_arret_communications` et
+`communication_confirmer_arret_auto` font le constat dans un appel ultérieur. Une erreur du
+constat ne peut donc pas annuler une demande dont l'appel précédent a déjà été validé. Cela reste
+une propriété du chemin d'appel : les deux RPC ne doivent pas être réunis dans une transaction
+appelante. Les brouillons demeurent non exécutés et la Phase 1.3.1 demeure non validée.
+
+La relecture a trouvé un cycle distinct dans le traitement des retours, pertinent pour RF-02 :
+
+1. Avant correction, `communication_traiter_evenement` verrouillait la ligne de
+   `communication_evenements_traitement` (N3c) en premier, puis pouvait attendre le verrou N3
+   d'une confirmation entrante.
+2. En parallèle, la purge d'un compte prenait N3 puis tentait de neutraliser cette même ligne de
+   file pour une confirmation en attente (`communication_purger_personne_suite`, §12.4).
+3. Ces deux attentes formaient le cycle N3c → N3 → N3c.
+
+Le draft courant évite ce cycle : le traitement lit d'abord les données sans verrou, prend les
+verrous métier requis (N1, puis N3 et les clients concernés en ordre croissant, puis N3b pour le
+contact entrant), prend ensuite N3c avec `FOR UPDATE SKIP LOCKED`, relit l'état, puis prend N4 si
+le retour concerne un envoi. Si le code devient valide pour une autre demande entre la lecture
+préparatoire et la lecture verrouillée, le retour est remis en reprise ; il n'est pas appliqué sans
+le N3 correspondant.
+La table d'ordre de 40 et les commentaires de 43 décrivent maintenant cette séquence. Les erreurs
+de traitement restent récupérables par `communication_evenement_a_reprendre`; cette fonction ne
+prend pas de verrou métier avant la ligne N3c.
+
+Pour l'arrêt, l'ordre statiquement observé reste : demande = N0a seul ; constat/levée = tentative
+N0 exclusif, puis N0a ; observation des requêtes déjà déposées avec lignes d'envoi/modèle en
+`SKIP LOCKED` ; comptage ; confirmation durable seulement si le comptage est nul. Les callbacks
+ne prennent pas N0 et ne déposent aucune requête sortante. Une confirmation asynchrone peut mettre
+à jour l'état de livraison d'un envoi ancien ; elle ne crée pas une nouvelle transmission. Si la
+fermeture `autorisations_closes_le` a déjà été validée sous N0 exclusif lors d'une tentative
+précédente, une reprise peut recompter les requêtes sans reprendre N0 : l'état non actif continue
+de fermer la porte ; la levée, elle, prend N0 exclusif puis N0a et vérifie la version attendue.
+
+**Limite de cette relecture :** l'ordre et le rattrapage sont vérifiés dans le texte des drafts,
+pas à l'exécution. Les hypothèses PostgreSQL/pg_net déjà listées en §5 restent à éprouver dans
+une base jetable, sous autorisation distincte. Aucun SQL, test, appel fournisseur ou accès à la
+production n'a été effectué pour cet addendum.

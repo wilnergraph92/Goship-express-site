@@ -92,6 +92,10 @@
 Chaque fonction vérifie la permission **dans la base** ; `data-permission` dans `admin.html` ne fait que
 masquer. Les tables ont la sécurité par ligne activée, **aucune règle et aucun droit direct**.
 
+La sortie de `sante_communications` est limitée à des réglages autorisés et à des agrégats. Elle
+n'inclut ni numéro complet, identité/adresse, motif libre, justificatif, identifiant d'acteur,
+contenu entrant, code de confirmation ni texte de retour d'erreur ou de job.
+
 ---
 
 ## 3. Menaces et parades
@@ -235,7 +239,7 @@ des tables fermées : c'est voulu, la règle est **dans** la fonction.
 
 | Fonction | Opérations permises | Justification |
 |---|---|---|
-| `communication_recevoir_evenement` (rôle `communication_webhook`, signature — [Corrigé 1.3]) | statuts d'envoi (sans recul), suppressions, **retraits**, confirmation d'une demande en attente venue du bon numéro, fenêtre 24 h | Seul chemin des retours des fournisseurs |
+| `communication_recevoir_evenement` (rôle `communication_webhook`, signature — [Corrigé 1.3]) | statuts d'envoi (sans recul), suppressions ; retraits pour un STOP reconnu, une désinscription explicite ou une opposition Meta vérifiée ; confirmation limitée à la demande propre au numéro ; plainte seule sans changement d'état du consentement | Seul chemin des retours des fournisseurs |
 | `desinscrire_communication` (visiteur, jeton HMAC) | une suppression du contact visé, un retrait si le consentement actif porte sur ce contact | Lien de désinscription |
 | `confirmer_consentement_communication` (visiteur, jeton aléatoire) | confirmation d'UNE demande en attente | Lien de confirmation |
 | Fonctions du client (`mes_…`, `demander_…`, `retirer_mon_…`) | ses propres lignes seulement (`auth.uid()`) | Espace client |

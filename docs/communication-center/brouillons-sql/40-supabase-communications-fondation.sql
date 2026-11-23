@@ -317,9 +317,12 @@ $$;
 --   N2  client          verrou consultatif « client:<id> »
 --   N3  consentement    verrou consultatif « consentement:<client>:<canal> » ; plusieurs
 --                       clients dans une même transaction : par identifiant CROISSANT
---   N3b contact         verrou consultatif « contact:<canal>:<empreinte> » (D5, P-05) : un seul
---                       envoi à la fois vers un même numéro ou une même adresse, quel que soit
---                       le compte (comptes qui partagent un contact)
+--   N3b contact         verrou consultatif « contact:<canal>:<empreinte> » (D5, P-05) : sérialise
+--                       les opérations de contact partagées entre comptes ; pris après N3 pour
+--                       les demandes de consentement, les envois de campagne et les retours STOP/code
+--   N3c retour          la ligne de communication_evenements_traitement (FOR UPDATE SKIP LOCKED),
+--                       après les éventuels N1/N3/N3b du retour et avant N4 ; un retour ne garde
+--                       donc jamais sa ligne de file en attendant un verrou métier
 --   N4  envoi           la ligne de communication_envois (FOR UPDATE)
 --   N5  compteurs       verrou consultatif « compteurs » (global) : dépenses du jour, débit par
 --                       minute, quota Brevo, plafonds de campagne, limite du numéro WhatsApp
@@ -530,7 +533,7 @@ revoke all on public.communication_textes_consentement from anon, authenticated,
 --   demande    le client a coché la case (texte, langue, contact masqué affichés) : EN ATTENTE
 --   confirme   le contact a prouvé qu'il est bien à lui (lien e-mail, ou message WhatsApp
 --              reçu depuis ce numéro) : seul état qui permet un envoi commercial
---   retire     retrait VOLONTAIRE (case décochée, lien, STOP, plainte, demande à l'équipe…)
+--   retire     retrait explicite (case décochée, lien, STOP, désinscription, demande à l'équipe…)
 --   invalide   le contact a CHANGÉ (ou le compte est supprimé) : ce n'est PAS un retrait ;
 --              l'empreinte gardée est celle de l'ANCIEN contact (revue 1.1, H7)
 -- Chaque ligne porte l'empreinte du contact exact. L'état d'un client sur un canal est celui
@@ -550,8 +553,9 @@ create table if not exists public.communication_consentements (
   source           text not null check (source in (
                      'compte_web', 'application',                                  -- demande, retrait du client
                      'lien_confirmation', 'whatsapp_confirmation',                 -- confirmation par le contact
-                     'lien_desinscription', 'whatsapp_stop', 'opposition_meta',    -- retraits par le canal
-                     'plainte', 'equipe_sur_demande',                              -- retraits
+                     'lien_desinscription', 'desinscription_fournisseur',
+                     'whatsapp_stop', 'opposition_meta',                         -- retraits par le canal
+                     'plainte', 'equipe_sur_demande',                              -- plainte seulement si retrait explicitement demandé
                      'changement_contact', 'suppression_compte', 'expiration')),   -- invalidations
   texte_version    text,
   texte_empreinte  text,
@@ -569,7 +573,8 @@ create table if not exists public.communication_consentements (
                                                     and (cible_empreinte is not null or anonymise_le is not null))),
   check (action <> 'demande' or source in ('compte_web', 'application')),
   check (action <> 'confirme' or source in ('lien_confirmation', 'whatsapp_confirmation')),
-  check (action <> 'retire' or source in ('compte_web', 'application', 'lien_desinscription', 'whatsapp_stop',
+  check (action <> 'retire' or source in ('compte_web', 'application', 'lien_desinscription',
+                                          'desinscription_fournisseur', 'whatsapp_stop',
                                           'opposition_meta', 'plainte', 'equipe_sur_demande')),
   check (action <> 'invalide' or source in ('changement_contact', 'suppression_compte', 'expiration'))
 );

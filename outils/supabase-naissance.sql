@@ -73,8 +73,9 @@ $garde$;
 
 
 -- 2. Les permissions et l'adresse de cette série ------------------------------------------------
--- Les permissions birthdays.*, programs.* et points.adjust (anniversaires, fidélité, campagnes) et
--- l'adresse de réception « ABX-46780 » sont écrites dans supabase.sql, qui fait foi. Ces deux
+-- Les permissions birthdays.*, programs.*, points.adjust et communications.* (anniversaires,
+-- fidélité, campagnes et Communication Center) et l'adresse de réception sont écrites
+-- dans supabase.sql, qui fait foi. Ces deux
 -- fonctions sont répétées ici, mot pour mot, pour qu'on n'ait à installer QUE les fichiers de
 -- cette série (et non toute la chaîne) sur une base déjà à jour : essai-programmes.py vérifie
 -- que les deux copies sont identiques.
@@ -94,7 +95,11 @@ as $$
       'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
       'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
       'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
-      'tracking.view', 'tracking.manage']
+      'tracking.view', 'tracking.manage', 'communications.view',
+      'communications.templates.manage', 'communications.consents.view',
+      'communications.queue.retry', 'communications.campaigns.view',
+      'communications.campaigns.manage', 'communications.campaigns.approve',
+      'communications.emergency_stop']
     when 'gerant' then array[
       'clients.view', 'clients.create', 'clients.edit',
       'shipments.view', 'shipments.create', 'shipments.edit',
@@ -104,7 +109,8 @@ as $$
       'reports.view', 'reports.create',
       'users.view',
       'birthdays.view', 'programs.view',
-      'tracking.view']
+      'tracking.view', 'communications.view',
+      'communications.campaigns.view', 'communications.campaigns.manage']
     when 'employe' then array[
       'clients.view', 'clients.create',
       'shipments.view', 'shipments.create', 'shipments.edit',

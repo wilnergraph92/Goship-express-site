@@ -222,9 +222,9 @@ Ce plan **complète** `PHASE_1_3_1_TEST_PLAN.md` (40 essais, tous non exécutés
 | | |
 |---|---|
 | Données | 1 envoi WhatsApp d'une campagne, statut `traitement` ; deux événements signés `sent` et `delivered`, chacun dans un éclat différent du compteur de débit |
-| Étapes | Deux sessions appellent `communication_recevoir_evenement` en même temps (barrière : chacune s'arrête juste après l'insertion de l'événement, avec `pg_sleep` dans une copie de banc). Variantes : événement et purge de la personne ; événement et relance ; événement et annulation de la campagne. |
-| Attendu **aujourd'hui** | `deadlock detected` (40P01) dans au moins un cas. **C'est le défaut RF-02.** |
-| Attendu **après correction** (P-08) | Aucun 40P01 ; les deux événements enregistrés ; statut final `livre` |
+| Étapes | Deux sessions reçoivent les événements concurrents ; vérifier d'abord que chaque RPC ne fait que les enregistrer et renvoie `traite = false`, puis lancer deux travailleurs. Variantes : traitement et purge de la personne ; traitement et relance ; traitement et annulation de la campagne. |
+| Attendu dans la version **antérieure à P-08** | `deadlock detected` (40P01) dans au moins un cas. **C'est le défaut RF-02 rapporté à l'époque.** |
+| Attendu **après correction** (P-08) | Aucun 40P01 ; les deux événements enregistrés avant traitement ; le travailleur les traite ensuite sans effet double ; statut final `livre` |
 | PASS si | 0 interblocage sur 1 000 répétitions |
 | FAIL si | Un seul 40P01, ou un événement perdu |
 | Statut | **NON EXÉCUTÉ** |
@@ -233,8 +233,8 @@ Ce plan **complète** `PHASE_1_3_1_TEST_PLAN.md` (40 essais, tous non exécutés
 
 | | |
 |---|---|
-| Étapes | Session A : message entrant « STOP » du numéro H. Session B : retour d'échec 131050 pour un envoi vers H. Les deux en même temps. |
-| Attendu après correction | Aucun 40P01 ; une seule suppression active pour H ; consentements retirés |
+| Étapes | Session A reçoit le message entrant « STOP » du numéro H ; session B reçoit le retour d'échec 131050 pour un envoi vers H. Vérifier les deux réceptions, puis lancer les traitements en concurrence. |
+| Attendu après correction | Les deux RPC accusent seulement la réception ; aucun 40P01 pendant les traitements ; une seule suppression active pour H ; consentements retirés |
 | PASS si | 0 interblocage sur 1 000 répétitions |
 | FAIL si | Un 40P01 |
 | Statut | **NON EXÉCUTÉ** |
@@ -243,12 +243,43 @@ Ce plan **complète** `PHASE_1_3_1_TEST_PLAN.md` (40 essais, tous non exécutés
 
 | | |
 |---|---|
-| Données | Phrases réelles dans les quatre langues : « STOP », « Stop please », « stop les messages », « Arrêter les promotions », « Kanpe voye mesaj », « BAJA por favor », « Non merci », « Stopper » ; charge du bouton de désinscription de Meta (à relever) |
-| Attendu **aujourd'hui** | Seuls les messages réduits à un mot de la liste sont reconnus |
-| Attendu **après correction** (P-09) | Toutes les demandes d'arrêt reconnues ; la liste est validée par le juriste ; aucun faux positif sur des phrases témoins (« je ne veux pas que ça s'arrête ») |
-| PASS si | 100 % des demandes d'arrêt reconnues, et 0 faux positif retenu par le juriste |
-| FAIL si | Une demande d'arrêt ignorée |
+| Données | `STOP` seul avec casse, espaces extérieurs et ponctuation variables ; phrases déjà citées dans les documents (« Stop please », « stop les messages », « Arrêter les promotions », « Kanpe voye mesaj », « BAJA por favor », « Non merci », « Stopper ») ; message ordinaire contenant STOP ; code exact à six chiffres ; champ bouton Meta dont la forme réelle reste à relever |
+| Attendu **après correction** (P-09 préparatoire) | Seul `STOP` entier normalisé déclenche le retrait. Un code valide est `confirmation`. Les variantes non validées, messages contextuels et boutons non vérifiés sont `ambigu`, sans mutation de consentement. La liste linguistique nécessite toujours une validation juridique. |
+| PASS si | `STOP` exact et code sont distincts ; aucun faux retrait sur phrase contextuelle, variante non validée, bouton inconnu ou plainte seule |
+| FAIL si | Un message ambigu ou une plainte seule écrit un retrait, ou un code est classé STOP |
 | Statut | **NON EXÉCUTÉ** |
+
+### Scénarios P-09 complémentaires à intégrer à une prochaine révision
+
+Ces scénarios sont des critères préparatoires, hors du total historique de 78 essais. Ils n'ont pas
+été exécutés et exigeront une autorisation de vérification distincte ainsi qu'une base jetable :
+
+| Scénario | Résultat attendu |
+|---|---|
+| Même événement STOP reçu plusieurs fois avec le même identifiant fournisseur | Rejeu sans deuxième effet métier |
+| Deux travailleurs prennent simultanément le même événement | Un seul traitement ; l'autre ne modifie pas le consentement |
+| Échec après l'écriture de suppression/retrait, avant le statut final | Transaction entière annulée ; événement récupérable et non marqué `traite` |
+| Cinq échecs de traitement | État `echec`, alerte visible, reprise seulement après contrôle administrateur |
+| Callback de plainte puis callback unsubscribe | La plainte conserve seulement la suppression ; le callback unsubscribe ajoute une seule action `retire` explicite |
+| STOP reçu pour un numéro associé à plusieurs comptes | Vérifier la portée avec une décision métier écrite préalable ; ne pas déduire une règle de ce plan |
+
+### Intégration transversale P-07/P-08/P-09 — scénarios futurs hors des 78 essais
+
+Ces scénarios restent **NON EXÉCUTÉS** et exigent une autorisation distincte pour une base jetable.
+Ils ne modifient pas le total historique de 78 essais :
+
+| Scénario | Résultat attendu |
+|---|---|
+| Kill Switch demandé puis confirmé ; réception et traitement d'un STOP | Réception durable et retrait traitable ; aucune transmission sortante n'est autorisée |
+| Kill Switch actif ; callback de désinscription explicite | Suppression/retrait traités par la file, sans appel fournisseur sortant |
+| Worker interrompu avant ou pendant le traitement | Aucun événement n'est déclaré traité sans commit ; le statut d'événement en cours reste explicitement non mesuré par le schéma actuel |
+| Rejeu, deux workers, échec puis reprise manuelle | Un seul effet métier validé ; historique des tentatives conservé même après remise à zéro du compteur de cycle ; tentative bornée ; reprise auditée sans doublon |
+| `sante_communications` face à événements reçus, en attente, échec et traités | Agrégats identiques aux lignes fictives ; dernier run reflète `cron.job_run_details`; champs absents restent `null` |
+| Liste des échecs à reprendre | IDs techniques, priorité, compteurs et dates concordent ; la limite de liste est signalée ; aucun contenu ou empreinte n'est exposé |
+| Revue de confidentialité de la réponse santé | Aucun numéro complet, ID client/acteur, contenu entrant, code de confirmation, motif libre, secret ou `return_message` n'est exposé |
+| Worker non activé | Le statut de planification reste inactif et aucune activité n'est prétendue si aucun run n'est enregistré |
+| Échec d'un STOP ou d'une désinscription prioritaire avant l'envoi | **Décision CEO préalable requise** sur la portée du blocage (contact, canal ou sorties) ; ensuite vérifier qu'aucun envoi ne franchit la politique retenue pendant que le retrait reste non traité |
+| pg_cron absent | La fonction santé reste lisible et marque l'état du worker non mesurable, sans erreur de relation manquante |
 
 ---
 
@@ -345,7 +376,7 @@ Les corrections D5 (`PHASE_1_3_1_D5_RAPPORT_CORRECTIONS.md`) changent le résult
 | F-K10 | « Attendu aujourd'hui : demande annulée (défaut RF-01) » | La demande, validée par son propre appel, **reste écrite** dans les cinq cas ; la confirmation répond `STOP_PENDING / CONSTAT_IMPOSSIBLE` |
 | F-W01 | « Attendu aujourd'hui : 40P01 (défaut RF-02) » | 0 interblocage : plus de clé étrangère vers l'envoi ; statuts sans N1 |
 | F-W02 | Cycle STOP / 131050 (RF-05) | N3 avant la suppression des deux côtés : 0 cycle |
-| F-W03 | Message entier seulement | Règles de `communication_classer_entrant` (bouton, liste fermée, premier mot et 5 mots au plus, « ambigu ») |
+| F-W03 | Reconnaissance STOP | `STOP` entier normalisé ; code à six chiffres distinct ; variantes et boutons non validés classés `ambigu` ; plainte sans retrait implicite |
 | F-C06 | « Attendu aujourd'hui : 2 messages (défaut S-06) » | 1 message par contact et par campagne ; si un compte du numéro n'a pas consenti : 0 (règle D2) |
 
 ### Essais ajoutés
@@ -354,11 +385,11 @@ Les corrections D5 (`PHASE_1_3_1_D5_RAPPORT_CORRECTIONS.md`) changent le résult
 |---|---|---|---|---|
 | **F-K11** Course demande / levée | Arrêt confirmé, version 7 affichée à l'écran de la levée | Entrelacement pas à pas : S1 levée (N0, puis attente de la ligne) ; S2 demande (ligne, appui, COMMIT : version 8) ; S1 obtient la ligne. Puis l'ordre inverse, et les permutations. | S1 refuse (`STOP_STATE_CHANGED`) ; dans l'ordre inverse, la demande réarme l'arrêt | PASS : l'arrêt n'est jamais levé avec une version périmée ; aucun 40P01. FAIL sinon. |
 | **F-K12** Demande sans N0 | 3 portes ouvertes (N0 partagé tenu, transactions non validées) | Appeler `arreter_communications` ; puis ouvrir une 4ᵉ porte | Demande validée sans attendre les portes ; la 4ᵉ porte refuse (`ARRET_URGENCE`) ; `confirmer_` répond `STOP_PENDING` tant que les 3 portes sont ouvertes | PASS : demande en moins de 100 ms et 4ᵉ porte refusée |
-| **F-W04** Retour et chemins concurrents | Un envoi de campagne | Un retour `complaint` en même temps qu'une relance, puis qu'une purge de la personne, puis qu'une annulation de campagne, puis que le travailleur ; 1 000 répétitions | 0 cycle ; si une attente dépasse son délai, le retour reste `a_traiter` puis est traité | PASS : 0 « deadlock detected », 0 retour perdu |
-| **F-W05** Reprise et unicité | Déclencheur de banc qui fait échouer `communication_traiter_evenement` 2 fois ; puis `pg_terminate_backend` du travailleur au milieu d'un traitement | Laisser le travailleur passer 6 fois | Effets (suppression, retrait) appliqués **une seule fois** ; après 5 échecs forcés : `echec` | PASS : une seule ligne de retrait par retour ; `tentatives` exact |
+| **F-W04** Retour et chemins concurrents | Un envoi de campagne | Recevoir un retour `complaint` (RPC commitée, `traite=false`), puis lancer son traitement en même temps qu'une relance, une purge de la personne, une annulation de campagne et un autre travailleur ; 1 000 répétitions | La réception ne prend pas les verrous métier ; 0 cycle pendant le traitement ; si une attente dépasse son délai, le retour reste `a_traiter` puis est repris | PASS : 0 « deadlock detected », 0 retour perdu |
+| **F-W05** Reprise et unicité | Retour et ligne `a_traiter` commités, sans lancer le travailleur ; puis déclencheur de banc qui fait échouer `communication_traiter_evenement` 2 fois ; enfin `pg_terminate_backend` du travailleur au milieu d'un traitement | Laisser le travailleur passer 6 fois | L'événement reste récupérable après l'interruption ; effets (suppression, retrait) appliqués **une seule fois** ; après 5 échecs forcés : `echec` | PASS : un effet par retour ; `tentatives` exactes ; accusé initial sans `traite=true` |
 | **F-W06** Surveillance et reprise manuelle | 1 retour `echec` de priorité 1, 1 retour en attente depuis 11 min | Lire `sante_communications` ; appeler `reprendre_evenement_communication` en administrateur, en gérant, en employé | `alerte = true`, compteurs exacts ; reprise permise à l'administrateur seul ; journalisée | PASS : chiffres et droits exacts |
 | **F-W07** Purge par date | Retours anciens : `a_traiter`, `echec`, `traite` | `communication_purger_autres(…, 'evenements_fournisseur', …)` | Seuls les `traite` sont effacés (avec leur ligne de traitement) | PASS : `a_traiter` et `echec` gardés |
-| **F-W08** Échec du temps A | Base qui refuse l'insertion (déclencheur de banc) | Appeler `communication_recevoir_evenement` | Une **erreur** remonte (la fonction Edge répondra 5xx) ; jamais `ok` | PASS : aucune réponse `ok` sans retour enregistré |
+| **F-W08** Échec du temps A | Base qui refuse l'insertion du retour ou de sa ligne de file (déclencheur de banc) | Appeler `communication_recevoir_evenement` | Une **erreur** remonte ; le retour et sa ligne de file sont atomiques ; jamais `ok` sans les deux | PASS : aucune réponse positive sans paire persistée ; commit avec `synchronous_commit = on` |
 | **F-C08** Contact devenu commun après le gel | 2 comptes consentants ; le numéro de B devient celui de A après le lancement | Deux travailleurs en même temps | 1 envoi ; l'autre `supprime / CONTACT_EN_DOUBLE` (sous N3b) | PASS : 1 seule requête au faux serveur |
 | **F-C09** Règle D2 | A consentant, B non, même numéro | Aperçu, lancement, envoi | A et B exclus (`CONTACT_PARTAGE_NON_CONSENTI` pour A) ; B jamais consentant | PASS : 0 message ; aucun consentement de B |
 | **F-C10** Fréquence par contact | A et B consentants, même numéro, `frequence_max_jour = 1`, deux campagnes le même jour | Lancer les deux | 1 seul message au numéro dans la journée | PASS : le plafond vaut pour le numéro |

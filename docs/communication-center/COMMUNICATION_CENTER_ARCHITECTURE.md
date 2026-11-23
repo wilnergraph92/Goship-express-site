@@ -79,15 +79,18 @@ Les identifiants entre crochets (**[C1]**, **[H4]**, **[M7]**…) renvoient aux 
      │ le client coche, dans SA langue, le texte attesté ; le contact exact lui est montré (masqué)
      ▼
  en_attente ──── e-mail : clic sur le bouton de la page ouverte par le lien signé (usage unique, durée limitée)
-     │      └─── WhatsApp : « OUI 1234 » (ou YES, SÍ, WI) envoyé DEPUIS le numéro concerné
+     │      └─── WhatsApp : « OUI 123456 » (ou YES, SÍ, WI) envoyé DEPUIS le numéro concerné
      ▼
  confirme ──► seul état qui permet un envoi commercial, et seulement pour le contact ACTUEL
      │
-     ├─ retire   ◄── case décochée · lien de désinscription · STOP · plainte · opposition Meta · demande à l'équipe
+     ├─ retire   ◄── case décochée · lien de désinscription · STOP reconnu · opposition Meta · demande à l'équipe
      └─ invalide ◄── e-mail ou numéro changé · compte supprimé · (jamais un « retrait »)
  L'équipe ne peut jamais confirmer ni accorder. Lever une suppression ne rend jamais le consentement.
  Toutes les écritures prennent le verrou client+canal ; à heure égale, le retrait ou l'invalidation gagne.
 ```
+
+Une plainte fournisseur crée une suppression « plainte » sur le canal et le contact visés. Elle ne
+change pas à elle seule l'état du consentement ; un retrait exige un signal explicite distinct.
 
 ### 2.3 Vie d'une campagne [D-D, C3, H9, H13]
 

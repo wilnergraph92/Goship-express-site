@@ -1,0 +1,3 @@
+interface:
+  display_name: "GoShip Security & Privacy Auditor"
+  short_description: "RLS, secrets, données personnelles et audits de sécurité"

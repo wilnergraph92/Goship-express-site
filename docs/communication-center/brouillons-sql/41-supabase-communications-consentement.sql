@@ -125,6 +125,11 @@ declare
   v_tirage integer;
   v_place boolean;
 begin
+  -- N-02 : N3b ne sérialise le quota que si chaque instruction lit un nouvel instantané.
+  -- Refuser une isolation plus forte plutôt que risquer deux admissions sur un ancien compteur.
+  if current_setting('transaction_isolation') <> 'read committed' then
+    raise exception 'ISOLATION_NON_SUPPORTEE';
+  end if;
   if v_moi is null or not exists (select 1 from public.clients where id = v_moi and role = 'client' and supprime_le is null) then
     perform public.erreur_metier('PERMISSION_DENIED', 'Réservé à l''espace client.');
   end if;
@@ -165,6 +170,9 @@ begin
   end if;
   -- D5 (D1, N-02) : demandes répétées vers un même NUMÉRO ou une même adresse, tous comptes
   -- confondus (plusieurs comptes peuvent partager un contact) : même plafond que par compte
+  -- N3b : sérialise ce contrôle par canal et empreinte. Le verrou N3 du compte est déjà tenu ;
+  -- l'ordre N3 → N3b correspond à celui des envois et évite deux admissions simultanées au quota.
+  perform public.communication_verrou('contact:' || p_canal || ':' || v_empreinte);
   if (select count(*) from public.communication_confirmations
        where canal = p_canal and cible_empreinte = v_empreinte
          and cree_le > now() - interval '24 hours') >= r.demandes_confirmation_jour then
@@ -953,10 +961,11 @@ $$;
 --       lit l'état d'arrêt et refuse ;
 --   (2) plus aucune requête déjà validée n'attend d'être transmise par pg_net ;
 --   (3) l'état est écrit avec synchronous_commit = on (durable avant la réponse).
--- D5 (P-07, revue finale RF-01) : la DEMANDE et le CONSTAT sont deux appels, donc deux
--- transactions. arreter_communications n'écrit QUE la demande et la valide : rien de ce qui
--- arrive ensuite (constat en erreur, délai d'exécution dépassé, schéma de pg_net absent, recul
--- d'horloge, client coupé) ne peut plus l'annuler. confirmer_arret_communications (l'écran,
+-- D5 (P-07, revue finale RF-01) : la DEMANDE et le CONSTAT sont deux RPC distinctes. Le client
+-- doit attendre le succès du premier appel (et donc son COMMIT) avant d'appeler le second ; aucun
+-- wrapper ne doit les réunir dans une même transaction. arreter_communications n'écrit QUE la
+-- demande : rien de ce qui arrive ensuite (constat en erreur, délai d'exécution dépassé, schéma
+-- de pg_net absent, recul d'horloge, client coupé) ne peut plus l'annuler. confirmer_arret_communications (l'écran,
 -- toutes les quelques secondes) et le travailleur (au début de chaque passage) font le constat.
 -- Écrire la demande n'exige pas N0 : la porte prend N0 partagé PUIS lit l'état ; toute porte
 -- qui lit après le COMMIT de la demande refuse. N0 exclusif ne sert qu'à PROUVER que les portes
@@ -1013,6 +1022,10 @@ begin
     v_closes := greatest(clock_timestamp(), a.demande_le);
     update public.communication_arret
        set autorisations_closes_le = v_closes, version = version + 1, maj_le = clock_timestamp();
+  else
+    -- Un constat précédent a déjà validé cette fermeture sous N0 exclusif. L'état non actif
+    -- ferme depuis la porte toute nouvelle sortie ; les reprises peuvent donc seulement recompter
+    -- les requêtes déjà déposées, même si cette tentative n'a pas repris N0.
   end if;
   -- (2) Les requêtes déjà validées qui peuvent encore partir (43 §13, lecture seule de pg_net) —
   -- comptées par requête, à partir du moment où on les a VUES quitter la file (IR2-01)

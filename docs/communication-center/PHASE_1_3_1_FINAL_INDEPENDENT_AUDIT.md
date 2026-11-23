@@ -378,6 +378,13 @@ S'y ajoutent :
 
 Enfin, **aucun des 65 essais n'a été exécuté.**
 
+> **Note du 23/11/2026, décompte des essais.** Le nombre 65 (40 + 25) est celui de cet audit, établi sur
+> les brouillons de `0693d5e`, avant les corrections D5. D5 a ajouté 13 essais (F-K11, F-K12,
+> F-W04 à F-W08, F-C08 à F-C11, F-S01, F-S03) : le plan final en compte donc 38, et le total de
+> référence est **78 = 40 + 38** (`PHASE_1_3_1_FINAL_TEST_PLAN.md`, §5). Les deux nombres ne se
+> contredisent pas ; ils décrivent deux états successifs. Au 23/11/2026, **aucun des 78 essais n'a été
+> exécuté.** Le texte de l'audit est conservé tel quel.
+
 **Ce verdict ne remet pas en cause la conception de l'arrêt.** Il dit que les brouillons, tels qu'ils sont, **ne peuvent pas servir de base à la Phase 2**.
 
 ### Conditions exactes avant toute Phase 2

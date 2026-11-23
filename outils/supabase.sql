@@ -318,6 +318,13 @@ $$;
 --                      (supabase-suivi-externe.sql)
 --   tracking.manage    régler un fournisseur de suivi : conformité, activation,
 --                      plafond (supabase-suivi-externe.sql)
+--   communications.*   Communication Center (outils/migrations-candidates/, Phase 2) :
+--                      view (supervision, admin et gérant) ; templates.manage,
+--                      consents.view, queue.retry (admin) ; campaigns.view et
+--                      campaigns.manage (admin et gérant) ; campaigns.approve et
+--                      emergency_stop, l'arrêt d'urgence des sorties (admin seulement).
+--                      Ces permissions n'ouvrent rien tant que les fonctions du
+--                      Centre ne sont pas installées : chaque RPC les revérifie.
 --
 -- assets/js/api.js en garde une copie (PERMISSIONS_DES_ROLES) pour le mode
 -- démonstration ; outils/essais-services/essai-permissions.py vérifie que les
@@ -338,7 +345,11 @@ as $$
       'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
       'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
       'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
-      'tracking.view', 'tracking.manage']
+      'tracking.view', 'tracking.manage', 'communications.view',
+      'communications.templates.manage', 'communications.consents.view',
+      'communications.queue.retry', 'communications.campaigns.view',
+      'communications.campaigns.manage', 'communications.campaigns.approve',
+      'communications.emergency_stop']
     when 'gerant' then array[
       'clients.view', 'clients.create', 'clients.edit',
       'shipments.view', 'shipments.create', 'shipments.edit',
@@ -348,7 +359,8 @@ as $$
       'reports.view', 'reports.create',
       'users.view',
       'birthdays.view', 'programs.view',
-      'tracking.view']
+      'tracking.view', 'communications.view',
+      'communications.campaigns.view', 'communications.campaigns.manage']
     when 'employe' then array[
       'clients.view', 'clients.create',
       'shipments.view', 'shipments.create', 'shipments.edit',

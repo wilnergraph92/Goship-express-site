@@ -43,6 +43,14 @@ yarn-error.log*
 *.key
 *.pem
 
+# --- Supabase CLI : état local d'une stack démarrée -----------------------
+#  « supabase start » y écrit des secrets de démarrage propres à la machine
+#  (dont un docker.env du runtime Edge) : ils ne doivent jamais partir sur
+#  GitHub. Le motif couvre tout projet Supabase local du dépôt, notamment
+#  outils/communication-center-edge/supabase/.
+**/supabase/.temp/
+**/supabase/.branches/
+
 # --- Sauvegardes de la base : jamais dans le dépôt ------------------------
 #  Elles vivent dans le stockage externe (outils/README-backup.md). Les
 #  migrations outils/*.sql, elles, sont versionnées : pas de « *.sql » ici,

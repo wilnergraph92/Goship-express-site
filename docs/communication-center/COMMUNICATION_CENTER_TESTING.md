@@ -92,7 +92,7 @@ Données fictives communes (jamais de vraies personnes) :
 |---|---|---|
 | STOP WhatsApp de C1 | suppression WhatsApp seulement ; e-mail commercial toujours possible | e-mail bloqué |
 | Désinscription e-mail | suppression e-mail seulement | WhatsApp bloqué |
-| Rebond définitif, plainte, suppression manuelle | suppression du bon canal, raison exacte | — |
+| Rebond définitif, plainte, suppression manuelle | suppression du bon canal, raison exacte ; une plainte seule ne crée pas d'action de consentement `retire` | une suppression croisée ou un retrait implicite |
 | Suppressions en place, puis rejouer **tout** `essai-notifications.py` (colis reçu, disponible, factures, bienvenue) | résultats **identiques** à la référence sans suppression | une seule différence |
 | `notification_preferences` après STOP | inchangée | modifiée |
 - **Preuve** : diff des sorties de `essai-notifications.py`, avec et sans suppressions.
@@ -114,15 +114,16 @@ Données fictives communes (jamais de vraies personnes) :
 |---|---|---|
 | Signature fausse, absente, mal formée, charge de plus de 20 000 caractères | `ok:false`, aucune ligne ; `raise log` émis pour une signature fausse | une ligne |
 | Clé absente du coffre | tout refusé | accepté |
-| Même événement deux fois | `rejeu: true`, aucun effet nouveau | double effet |
+| Même événement deux fois | Premier appel : `enregistre:true`, `traite:false`, ligne de file `a_traiter` ; second appel : `rejeu:true` ; après passage du travailleur, un seul effet métier | accusé qui prétend que le premier retour est déjà traité, ou double effet |
 | Événement daté de +10 min | refusé (`futur`) | accepté |
-| **STOP daté d'il y a 5 jours** | **appliqué** (suppression + retrait) | refusé |
-| Plainte et désinscription tardives | appliquées | refusées |
+| **STOP daté d'il y a 5 jours** | réception en file, puis application par le travailleur (suppression + retrait) | événement refusé ou effet jamais repris |
+| Plainte tardive | réception prioritaire et suppression du contact/canal visé ; état du consentement inchangé | refusée, perdue ou transformée en retrait sans demande explicite |
+| Désinscription fournisseur tardive | réception prioritaire, suppression et retrait explicite idempotents | refusée, perdue ou source de retrait imprécise |
 | 131050, 131049, 131048, 131056 (doublures) | action de la table des codes ; 131056 reporté **une seule fois** | autre action, double report |
 | Retour « delivered » pour un message incertain, retrouvé par sa référence | rapproché, `livre`, identifiant du fournisseur posé | reste incertain |
 | « delivered » après « read » | pas de recul | recul |
 | Confirmation WhatsApp forgée sans demande en attente | rien | confirmation |
-- **Preuve** : lignes de `communication_evenements_fournisseur` et états résultants.
+- **Preuve** : accusé de réception après commit RPC, une ligne de `communication_evenements_fournisseur`, sa ligne de file et les états résultants après le travailleur.
 
 ## Groupe 9 — Empreintes de tout le message
 - **Préconditions** : campagne approuvée.

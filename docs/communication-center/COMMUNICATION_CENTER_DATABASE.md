@@ -206,3 +206,88 @@ pour leur première exécution sur base jetable :
 | `communication_evenements_traitement` | 43 | **Nouvelle table** : `evenement_id` (clé primaire, clé étrangère vers le retour `on delete cascade`), `etat` (`a_traiter`, `traite`, `echec`), `priorite` (1 ou 2), `classe`, `cible_empreinte` et `code_confirmation` (effacés une fois traité, par contrainte), `tentatives`, `prochain_essai_le`, `dernier_code` (SQLSTATE), `resultat`, dates ; deux index partiels ; RLS, `revoke all` |
 
 **Retour arrière** (ajout au §6) : supprimer la table de traitement et les trois index, la colonne `version` et le réglage peuvent rester (valeurs neutres) ; la clé étrangère n'est pas à remettre.
+
+## 9. Construction corrective P-08 (22/11/2026) — réception distincte du traitement
+
+Dans le draft 43, `communication_recevoir_evenement` authentifie, déduplique et écrit le retour
+ainsi que sa ligne `communication_evenements_traitement` dans la même transaction. Il demande
+`synchronous_commit = on` avant les écritures. Une réponse positive décrit donc une réception
+enregistrée à valider par le commit RPC ; elle renvoie `traite = false` et n'exécute aucun effet
+métier. Le réglage demande le commit synchrone selon la configuration effective du serveur ; il
+ne prouve pas à lui seul la réplication ni la survie d'un basculement Supabase, qui n'ont pas été
+inspectées. Si l'insertion du retour ou de la ligne de file échoue, l'erreur remonte au lieu de
+fabriquer un accusé positif.
+
+Après le commit, le travailleur `traiter_communications` prend les événements dus par priorité
+(STOP, plaintes et désinscriptions d'abord), puis appelle `communication_traiter_evenement` dans
+une transaction par événement. Le verrou de reprise `FOR UPDATE SKIP LOCKED`, la relecture de
+l'état et l'écriture du résultat restent atomiques. Une interruption avant le traitement laisse
+la ligne `a_traiter`. Les SQLSTATE transitoires connus (55P03, 40P01, 40001, 57014) suivent les
+délais bornés 1, 2, 5 puis 15 minutes, avec revue humaine après cinq échecs. Une autre erreur est
+immédiatement gardée en `echec` pour revue humaine, sans être qualifiée de définitive. Chaque
+tentative est journalisée ; une reprise manuelle remet à zéro le compteur du cycle sans supprimer
+le journal.
+
+**État :** correction préparée dans le brouillon uniquement. Les drafts 40–43 n'ont pas été
+exécutés ; ni le comportement PostgreSQL, ni l'accusé de la future fonction Edge, ni les garanties
+du fournisseur n'ont été vérifiés à l'exécution. L'Edge devra répondre au fournisseur comme accepté
+uniquement après le succès du RPC qui a commité la réception. La Phase 1.3.1 reste NON VALIDÉE.
+
+## 10. Construction corrective P-09 — classification et consentements
+
+Dans le draft 43, le retrait automatique par texte est limité à `STOP` seul après normalisation de
+la casse, des accents, des espaces extérieurs et de la ponctuation. Un code exact de six chiffres
+précédé de `OUI`, `YES`, `SI` ou `WI` est classé comme confirmation avant toute règle STOP. Les
+autres variantes déjà citées, les phrases contenant un terme candidat et les boutons dont le
+contrat Meta reste à vérifier sont classés `ambigu` ; ils ne retirent pas automatiquement un
+consentement. La liste linguistique des commandes reste à valider par le juriste.
+
+Un callback de plainte crée une suppression pour le canal et le contact de l'envoi, mais ne crée
+pas d'événement de consentement `retire`. Un callback de désinscription explicite du fournisseur
+crée la suppression et, si le consentement concerné est actif, un retrait avec la source
+`desinscription_fournisseur`. Le traitement reste dans la transaction de l'événement P-08.
+
+**État :** changements préparatoires dans les drafts ; aucun SQL exécuté. Le comportement des
+numéros partagés reste à décider : le code existant applique la suppression au contact et parcourt
+les comptes associés, et cette construction ne redéfinit pas cette portée. La future forme des
+boutons Meta et l'Edge de réception ne sont pas vérifiés dans les sources disponibles.
+
+## 11. Intégration P-07/P-08/P-09 — supervision et récupération
+
+Le traitement asynchrone des retours est exécuté avant les étapes de préparation et d'envoi du
+worker. La réception et le traitement des STOP/désinscriptions ne prennent pas la porte
+`communication_autoriser_sortie`; les transmissions sortantes passent par cette porte dans le
+chemin d'envoi. Le worker pg_cron est créé inactif dans le draft.
+
+`sante_communications` expose désormais des compteurs de la file conservée : réceptions,
+événements à traiter et exigibles, succès, échecs, événements à reprendre, tentatives, priorités,
+ancienneté, dernier événement reçu et dernier traitement. Les erreurs récurrentes sont regroupées
+par source/code sans inclure leur détail libre. La réponse peut lister jusqu'à 200 événements en
+échec par identifiant technique, priorité, compte d'essais et dates ; elle indique si cette liste
+est tronquée et n'inclut ni empreinte de contact ni charge utile. Chaque échec d'un événement est
+ajouté au journal existant avec SQLSTATE, identifiant technique, numéro de tentative et priorité ;
+une reprise manuelle ne supprime pas cet historique. L'état du Kill Switch et les réglages de santé sont
+produits par liste blanche ; numéros, identité, adresse, justificatifs, motifs libres, identifiants
+d'acteurs, code de confirmation et message de retour pg_cron ne sont pas inclus. L'état du worker
+et sa dernière exécution enregistrée proviennent de `cron.job` et `cron.job_run_details`.
+Si les tables pg_cron ne sont pas installées, la santé indique que cette mesure n'est pas
+disponible au lieu d'échouer ou de prétendre que le travailleur est arrêté.
+
+La table de file n'a pas d'état durable `en_cours`. La supervision rend donc cette mesure
+indisponible (`null`, indicateur de mesure faux) au lieu de prétendre qu'aucun événement n'est en
+cours. Le worker signale sa dernière exécution pg_cron enregistrée ; cela ne constitue pas un
+heartbeat par étape. Ajouter un bail ou un état persistant de traitement nécessiterait une
+conception distincte, notamment pour la reprise après interruption et les exécutions concurrentes.
+
+**État :** modifications préparatoires dans le draft 43 uniquement pour cette intégration ; aucune
+migration, requête SQL, exécution de worker ou vérification en base n'a eu lieu. Les métriques
+restent à comparer aux données d'une base jetable sous autorisation écrite distincte.
+
+**Limite de sécurité à résoudre avant toute prétention opérationnelle :** le worker tente d'abord
+les événements de protection, mais une erreur qui place un STOP ou une désinscription en `echec`
+n'interrompt pas actuellement les étapes sortantes du même passage. Le contrôle de consentement
+au moment d'envoyer ne peut pas compenser un événement de retrait dont le traitement a échoué.
+Les documents ne fixent pas si cette situation doit bloquer le contact, le canal ou toutes les
+sorties ; aucune portée n'est inventée ici. Une décision CEO et une correction distincte doivent
+fixer cette politique, puis un essai dédié sur base jetable doit la vérifier avant toute mise en
+service.

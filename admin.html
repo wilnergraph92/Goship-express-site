@@ -26,6 +26,8 @@
 <script src="assets/js/tableau-langue.js" defer></script>
 <script src="assets/js/lieux.js" defer></script>
 <script src="assets/js/admin.js" defer></script>
+<script src="assets/js/communications.js" defer></script>
+<script src="assets/js/communications-campagnes.js" defer></script>
 <script src="assets/js/scan-parser.js" defer></script>
 <script src="assets/js/transporteur.js" defer></script>
 <script src="assets/js/scanner.js" defer></script>
@@ -77,6 +79,7 @@
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="rapports" data-permission="reports.view" tabindex="-1" title="Rapport"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 18v-3M12 18v-6M16 18v-4"/></svg><span class="gs-td__libelle">Rapport</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="programmes" data-permission="programs.view" tabindex="-1" title="Programmes"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18"/><path d="M12 8c-1.5-3-5-3.5-5-1.2C7 8.2 9 8 12 8Zm0 0c1.5-3 5-3.5 5-1.2C17 8.2 15 8 12 8Z"/></svg><span class="gs-td__libelle">Programmes</span></button>
         <button type="button" role="tab" aria-selected="false" data-onglet-vue="equipe" data-permission="users.view" tabindex="-1" title="Équipe"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span class="gs-td__libelle">Équipe</span></button>
+        <button type="button" role="tab" aria-selected="false" data-onglet-vue="communications" data-permission="communications.view" tabindex="-1" title="Communications"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><path d="M9 10.5c.3 1.6 1.9 3.2 3.5 3.5l1-1.2 2 .8c-.2 1.2-1.1 1.9-2.3 1.7-2.7-.4-4.9-2.6-5.3-5.3-.2-1.2.5-2.1 1.7-2.3l.8 2Z"/></svg><span class="gs-td__libelle">Communications</span></button>
       </div>
       <div class="gs-td__nav">
         <button type="button" class="gs-td__lien" data-action="ouvrir-reglages" title="Réglages"><svg class="gs-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span class="gs-td__libelle">Réglages</span></button>
@@ -1124,6 +1127,223 @@
         <summary>Ce que chaque rôle peut faire</summary>
         <div class="gs-tableau-cadre"><table class="gs-tableau gs-tableau--roles" data-matrice-roles></table></div>
       </details>
+    </div>
+
+    <div class="gs-admin-vue gs-communications" data-vue="communications" data-permission="communications.view" role="tabpanel" hidden>
+      <div class="gs-vg__tete">
+        <div class="gs-vg__intro">
+          <h2 class="gs-vg__titre">Centre de communication</h2>
+          <p class="gs-vg__etat">Supervision et opérations transactionnelles</p>
+        </div>
+        <button type="button" class="gs-bouton gs-bouton--contour" data-cc-refresh>Actualiser</button>
+      </div>
+      <p class="gs-equipe__intro" data-cc-status role="status" aria-live="polite">Chargement…</p>
+      <p class="gs-form__erreur" data-cc-error role="alert" hidden></p>
+      <div class="gs-communications__tabs" role="tablist" aria-label="Sections du Centre de communication">
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" role="tab" aria-selected="true" data-cc-tab="overview">Vue générale</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" role="tab" aria-selected="false" data-cc-tab="history" tabindex="-1">Historique</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" role="tab" aria-selected="false" data-cc-tab="templates" tabindex="-1">Modèles transactionnels</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" role="tab" aria-selected="false" data-cc-tab="consents" data-permission="communications.consents.view" tabindex="-1">Consentements</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" role="tab" aria-selected="false" data-cc-tab="queue" tabindex="-1">File et erreurs</button>
+        <button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" role="tab" aria-selected="false" data-cc-tab="campaigns" data-permission="communications.campaigns.view" tabindex="-1">Campagnes marketing</button>
+      </div>
+
+      <section class="gs-communications__pane" data-cc-pane="overview" role="tabpanel">
+        <h3 class="gs-sous-titre">Activité opérationnelle</h3>
+        <div class="gs-stats gs-communications__stats" data-cc-metrics hidden>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="events_received">—</span><span class="gs-stat__libelle">Événements reçus</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="events_waiting">—</span><span class="gs-stat__libelle">Événements en attente</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="events_processing">—</span><span class="gs-stat__libelle">Événements en traitement</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="events_done">—</span><span class="gs-stat__libelle">Événements réussis</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="events_failed">—</span><span class="gs-stat__libelle">Événements en échec</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="sends_waiting">—</span><span class="gs-stat__libelle">Transmissions préparées</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="sends_sent">—</span><span class="gs-stat__libelle">Transmissions envoyées</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="sends_delivered">—</span><span class="gs-stat__libelle">Transmissions livrées</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="sends_failed">—</span><span class="gs-stat__libelle">Transmissions en échec</span></article>
+          <article class="gs-stat"><span class="gs-stat__nombre" data-cc-metric="sends_uncertain">—</span><span class="gs-stat__libelle">Transmissions incertaines</span></article>
+        </div>
+        <p class="gs-communications__empty" data-cc-overview-empty hidden>Aucune donnée mesurable n’est disponible.</p>
+        <div class="gs-tableau-cadre">
+          <table class="gs-tableau"><tbody>
+            <tr><th scope="row">État du Kill Switch</th><td data-cc-kill-switch>État inconnu</td></tr>
+            <tr><th scope="row">État du worker</th><td data-cc-worker>État indisponible</td></tr>
+            <tr><th scope="row">Dernière activité connue</th><td data-cc-activity>Non mesurable</td></tr>
+          </tbody></table>
+        </div>
+        <div class="gs-communications__alerts" data-cc-alerts aria-live="polite"></div>
+      </section>
+
+      <section class="gs-communications__pane" data-cc-pane="history" role="tabpanel" hidden>
+        <h3 class="gs-sous-titre">Historique des communications</h3>
+        <form class="gs-form gs-communications__filters" data-cc-history-form>
+          <label class="gs-champ"><span>Recherche</span><input type="search" maxlength="100" name="recherche" placeholder="Référence client, colis ou facture"></label>
+          <label class="gs-champ"><span>Canal</span><select name="canal"><option value="">Tous les canaux</option><option value="push">Push</option><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select></label>
+          <label class="gs-champ"><span>Statut</span><select name="statut"><option value="">Tous les statuts</option><option value="attente">En attente</option><option value="envoi">En cours</option><option value="envoye">Envoyé</option><option value="livre">Livré</option><option value="echec">En échec</option><option value="annule">Annulé</option><option value="incertain">Incertain</option></select></label>
+          <label class="gs-champ"><span>Type de communication</span><select name="type" data-cc-type-filter><option value="">Tous les types</option></select></label>
+          <label class="gs-champ"><span>Du</span><input type="datetime-local" name="debut"></label>
+          <label class="gs-champ"><span>Au</span><input type="datetime-local" name="fin"></label>
+          <button type="submit" class="gs-bouton gs-bouton--plein">Appliquer les filtres</button>
+        </form>
+        <p class="gs-communications__message" data-cc-history-status role="status" aria-live="polite"></p>
+        <div class="gs-tableau-cadre"><table class="gs-tableau gs-communications__table">
+          <thead><tr><th>Date</th><th>Canal</th><th>Statut</th><th>Type</th><th>Client</th><th>Colis / facture</th><th>Modèle</th><th>Transitions</th></tr></thead>
+          <tbody data-cc-history-rows></tbody>
+        </table></div>
+        <div class="gs-communications__pagination"><button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-cc-history-prev>Précédent</button><span data-cc-history-page></span><button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-cc-history-next>Suivant</button></div>
+      </section>
+
+      <section class="gs-communications__pane" data-cc-pane="templates" role="tabpanel" hidden>
+        <h3 class="gs-sous-titre">Modèles transactionnels</h3>
+        <p class="gs-communications__message" data-cc-template-status role="status" aria-live="polite"></p>
+        <div class="gs-tableau-cadre"><table class="gs-tableau gs-communications__table">
+          <thead><tr><th>Type</th><th>Version</th><th>Langue</th><th>Canaux</th><th>Titre</th></tr></thead>
+          <tbody data-cc-template-rows></tbody>
+        </table></div>
+        <form class="gs-form gs-communications__editor" data-cc-template-form data-permission="communications.templates.manage" hidden>
+          <h4>Créer une nouvelle version</h4>
+          <p>Les versions existantes sont conservées. Les aperçus utilisent une notification GoShip réelle et les variables disponibles.</p>
+          <label class="gs-champ"><span>Type de communication</span><select name="type" data-cc-template-type required></select></label>
+          <fieldset class="gs-communications__fieldset"><legend>Canaux autorisés pour ce type</legend>
+            <label><input type="checkbox" name="canaux" value="push"> Push</label>
+            <label><input type="checkbox" name="canaux" value="email"> E-mail</label>
+            <label><input type="checkbox" name="canaux" value="whatsapp"> WhatsApp</label>
+            <label><input type="checkbox" name="canaux" value="sms"> SMS</label>
+          </fieldset>
+          <fieldset class="gs-communications__fieldset"><legend>Variables requises</legend>
+            <label><input type="checkbox" name="variables" value="numero"> Numéro du colis</label>
+            <label><input type="checkbox" name="variables" value="facture"> Numéro de facture</label>
+            <label><input type="checkbox" name="variables" value="montant"> Montant</label>
+          </fieldset>
+          <label class="gs-champ" data-cc-whatsapp-field hidden><span>Nom du modèle WhatsApp fournisseur</span><input name="modele_whatsapp" maxlength="100" autocomplete="off"></label>
+          <label class="gs-champ"><span>Langue de l’aperçu</span><select name="langue" data-cc-preview-language><option value="fr">Français</option><option value="en">English</option><option value="es">Español</option><option value="ht">Kreyòl ayisyen</option></select></label>
+          <label class="gs-champ"><span>Notification réelle pour l’aperçu</span><select name="notification" data-cc-preview-source required><option value="">Choisir une notification récente</option></select></label>
+          <div class="gs-communications__locales">
+            <fieldset class="gs-communications__locale" data-langue-modele="fr"><legend>Français</legend><label class="gs-champ"><span>Titre</span><input name="titre_fr" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_fr" maxlength="3000" rows="4" required></textarea></label></fieldset>
+            <fieldset class="gs-communications__locale" data-langue-modele="en"><legend>English</legend><label class="gs-champ"><span>Titre</span><input name="titre_en" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_en" maxlength="3000" rows="4" required></textarea></label></fieldset>
+            <fieldset class="gs-communications__locale" data-langue-modele="es"><legend>Español</legend><label class="gs-champ"><span>Titre</span><input name="titre_es" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_es" maxlength="3000" rows="4" required></textarea></label></fieldset>
+            <fieldset class="gs-communications__locale" data-langue-modele="ht"><legend>Kreyòl ayisyen</legend><label class="gs-champ"><span>Titre</span><input name="titre_ht" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_ht" maxlength="3000" rows="4" required></textarea></label></fieldset>
+          </div>
+          <div class="gs-communications__actions"><button type="button" class="gs-bouton gs-bouton--contour" data-cc-preview>Prévisualiser</button><button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer la nouvelle version</button></div>
+          <div class="gs-communications__preview" data-cc-preview-output hidden aria-live="polite"><strong data-cc-preview-title></strong><p data-cc-preview-message></p></div>
+        </form>
+        <p class="gs-communications__empty" data-cc-template-readonly hidden>La consultation est disponible ; la création de versions est réservée à l’Admin.</p>
+      </section>
+
+      <section class="gs-communications__pane" data-cc-pane="consents" data-permission="communications.consents.view" role="tabpanel" hidden>
+        <h3 class="gs-sous-titre">Consentements marketing par canal</h3>
+        <p>Consultation uniquement. Un retrait ne peut pas être réactivé depuis cet écran.</p>
+        <p class="gs-communications__message" data-cc-consent-status role="status" aria-live="polite"></p>
+        <div class="gs-tableau-cadre"><table class="gs-tableau gs-communications__table">
+          <thead><tr><th>Client</th><th>Canal</th><th>Statut</th><th>Source</th><th>Demandé</th><th>Confirmé</th><th>Expiration</th><th>Retiré</th><th>Historique</th></tr></thead>
+          <tbody data-cc-consent-rows></tbody>
+        </table></div>
+      </section>
+
+      <section class="gs-communications__pane" data-cc-pane="queue" role="tabpanel" hidden>
+        <h3 class="gs-sous-titre">File de traitement et erreurs</h3>
+        <p>Une transmission incertaine peut déjà avoir été remise au fournisseur ; elle n’est jamais relancée depuis cette interface.</p>
+        <p class="gs-communications__message" data-cc-queue-status role="status" aria-live="polite"></p>
+        <h4>Événements fournisseurs</h4>
+        <div class="gs-tableau-cadre"><table class="gs-tableau gs-communications__table"><thead><tr><th>Reçu</th><th>Ancienneté</th><th>Fournisseur</th><th>Type</th><th>État</th><th>Tentatives</th><th>Code</th><th>Résultat</th><th>Action</th></tr></thead><tbody data-cc-event-rows></tbody></table></div>
+        <h4>Transmissions</h4>
+        <div class="gs-tableau-cadre"><table class="gs-tableau gs-communications__table"><thead><tr><th>Préparé</th><th>Ancienneté</th><th>Canal</th><th>Type</th><th>Statut</th><th>Tentatives</th><th>Code</th><th>Modèle</th></tr></thead><tbody data-cc-outbox-rows></tbody></table></div>
+      </section>
+
+      <section class="gs-communications__pane gs-campagnes" data-cc-pane="campaigns" data-permission="communications.campaigns.view" role="tabpanel" hidden>
+        <div class="gs-campagnes__banniere" role="note">
+          <strong>Planification seulement — aucun message marketing ne sera envoyé pendant C6.</strong>
+          <span>Les canaux sans consentement marketing vérifiable restent exclus. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.</span>
+        </div>
+        <p class="gs-communications__message" data-cm-status role="status" aria-live="polite"></p>
+        <p class="gs-form__erreur" data-cm-error role="alert" hidden></p>
+        <div class="gs-campagnes__grille">
+          <section class="gs-campagnes__carte">
+            <div class="gs-campagnes__entete"><h3>Campagnes</h3><button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-cm-refresh>Actualiser</button></div>
+            <div class="gs-tableau-cadre"><table class="gs-tableau gs-communications__table"><thead><tr><th>Nom</th><th>État</th><th>Révision</th><th>Planification</th><th>Limites</th><th>Canaux</th><th>Actions</th></tr></thead><tbody data-cm-campaign-rows></tbody></table></div>
+          </section>
+
+          <form class="gs-campagnes__carte gs-form" data-cm-campaign-form data-permission="communications.campaigns.manage" hidden>
+            <div class="gs-campagnes__entete"><h3 data-cm-form-title>Créer une campagne</h3><button type="button" class="gs-bouton gs-bouton--petit gs-bouton--contour" data-cm-new>Nouvelle</button></div>
+            <input type="hidden" name="id">
+            <label class="gs-champ"><span>Nom de la campagne</span><input name="nom" maxlength="160" required></label>
+            <label class="gs-champ"><span>Description</span><textarea name="description" maxlength="1200" rows="2"></textarea></label>
+            <label class="gs-champ"><span>Objectif</span><input name="objectif" maxlength="240" required></label>
+            <fieldset class="gs-communications__fieldset"><legend>Canaux</legend>
+              <label><input type="checkbox" name="canaux" value="email"> E-mail</label>
+              <label><input type="checkbox" name="canaux" value="whatsapp"> WhatsApp</label>
+              <label><input type="checkbox" name="canaux" value="push"> Push</label>
+            </fieldset>
+            <label class="gs-champ"><span>Langue du contenu</span><select name="langue" required><option value="">Choisir une langue</option><option value="fr">Français</option><option value="en">English</option><option value="es">Español</option><option value="ht">Kreyòl ayisyen</option></select></label>
+            <fieldset class="gs-communications__fieldset"><legend>Modèle marketing versionné par canal</legend>
+              <label class="gs-champ" data-cm-model-wrap="email" hidden><span>Modèle e-mail</span><select name="modele_email" data-cm-model="email"><option value="">Choisir une version</option></select></label>
+              <label class="gs-champ" data-cm-model-wrap="whatsapp" hidden><span>Modèle WhatsApp</span><select name="modele_whatsapp" data-cm-model="whatsapp"><option value="">Choisir une version</option></select></label>
+              <label class="gs-champ" data-cm-model-wrap="push" hidden><span>Modèle push</span><select name="modele_push" data-cm-model="push"><option value="">Choisir une version</option></select></label>
+            </fieldset>
+            <fieldset class="gs-communications__fieldset">
+              <legend>Segment dynamique</legend>
+              <label class="gs-champ"><span>Segment enregistré</span><select name="segment"><option value="">Définir ou choisir un segment</option></select></label>
+              <label class="gs-champ"><span>Nom du segment à enregistrer</span><input name="segment_nom" maxlength="120"></label>
+              <label class="gs-champ"><span>Combiner les critères</span><select name="mode"><option value="and">Tous (AND)</option><option value="or">Au moins un (OR)</option></select></label>
+              <label class="gs-champ"><span>Pays</span><select name="pays"><option value="">Tous</option><option value="US">États-Unis</option><option value="DO">République dominicaine</option><option value="HT">Haïti</option></select></label>
+              <label class="gs-champ"><span>Langue du client</span><select name="langue_client"><option value="">Toutes</option><option value="fr">Français</option><option value="en">English</option><option value="es">Español</option><option value="ht">Kreyòl ayisyen</option></select></label>
+              <label class="gs-champ"><span>Inscription depuis (jours)</span><input name="inscription_jours" type="number" min="0" max="3650" inputmode="numeric"></label>
+              <label class="gs-champ"><span>Opérateur d’ancienneté</span><select name="inscription_operateur"><option value="au_moins">Au moins</option><option value="au_plus">Au plus</option></select></label>
+              <label class="gs-champ"><span>A déjà reçu un colis</span><select name="a_des_colis"><option value="">Sans filtre</option><option value="true">Oui</option><option value="false">Non</option></select></label>
+              <label class="gs-champ"><span>A utilisé les pré-alertes</span><select name="a_des_prealertes"><option value="">Sans filtre</option><option value="true">Oui</option><option value="false">Non</option></select></label>
+              <label class="gs-champ"><span>Activité colis dans les jours</span><input name="activite_jours" type="number" min="1" max="3650" inputmode="numeric"></label>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-save-segment>Enregistrer le segment</button>
+            </fieldset>
+            <fieldset class="gs-communications__fieldset">
+              <legend>Budget et quotas — aucun défaut n’est appliqué</legend>
+              <label class="gs-champ"><span>Budget prévu (USD)</span><input name="budget_prevu" type="number" min="0" step="0.01" inputmode="decimal"></label>
+              <label class="gs-champ"><span>Plafond de dépenses (USD)</span><input name="plafond" type="number" min="0" step="0.01" inputmode="decimal"></label>
+              <label class="gs-champ"><span>Volume cible</span><input name="volume_cible" type="number" min="1" step="1" inputmode="numeric"></label>
+              <label class="gs-champ"><span>Coût estimé saisi (USD)</span><input name="cout_estime" type="number" min="0" step="0.0001" inputmode="decimal"></label>
+              <label class="gs-champ"><span>Quota e-mail</span><input name="quota_email" type="number" min="1" step="1" inputmode="numeric"></label>
+              <label class="gs-champ"><span>Quota WhatsApp</span><input name="quota_whatsapp" type="number" min="1" step="1" inputmode="numeric"></label>
+              <label class="gs-champ"><span>Quota push</span><input name="quota_push" type="number" min="1" step="1" inputmode="numeric"></label>
+              <p>Sans plafond et quotas explicites, les limites restent « non configurées ». C6 ne comporte aucun chemin d’envoi.</p>
+            </fieldset>
+            <fieldset class="gs-communications__fieldset">
+              <legend>Planification à préparer</legend>
+              <label class="gs-champ"><span>Date et heure locales</span><input name="planifie_local" type="datetime-local"></label>
+              <label class="gs-champ"><span>Fuseau IANA explicite</span><input name="fuseau" maxlength="80" placeholder="America/Santo_Domingo"></label>
+            </fieldset>
+            <div class="gs-communications__actions"><button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer la révision</button><button type="button" class="gs-bouton gs-bouton--contour" data-cm-preview>Prévisualiser l’audience</button></div>
+            <div class="gs-campagnes__apercu" data-cm-message-preview hidden aria-live="polite"></div>
+            <div class="gs-campagnes__apercu" data-cm-preview-output hidden aria-live="polite"></div>
+          </form>
+
+          <form class="gs-campagnes__carte gs-form" data-cm-model-form data-permission="communications.campaigns.manage" hidden>
+            <h3>Créer une version de modèle marketing</h3>
+            <p>Les versions sont immuables et exigent les quatre langues. Le contenu est statique en C6; aucun fournisseur n’est appelé.</p>
+            <label class="gs-champ"><span>Clé du modèle</span><input name="cle" maxlength="80" pattern="[a-z][a-z0-9_-]+" required></label>
+            <label class="gs-champ"><span>Canal du modèle</span><select name="canal" required><option value="">Choisir</option><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option><option value="push">Push</option></select></label>
+            <div class="gs-communications__locales">
+              <fieldset class="gs-communications__locale" data-cm-locale="fr"><legend>Français</legend><label class="gs-champ"><span>Titre</span><input name="titre_fr" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_fr" maxlength="3000" rows="3" required></textarea></label></fieldset>
+              <fieldset class="gs-communications__locale" data-cm-locale="en"><legend>English</legend><label class="gs-champ"><span>Titre</span><input name="titre_en" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_en" maxlength="3000" rows="3" required></textarea></label></fieldset>
+              <fieldset class="gs-communications__locale" data-cm-locale="es"><legend>Español</legend><label class="gs-champ"><span>Titre</span><input name="titre_es" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_es" maxlength="3000" rows="3" required></textarea></label></fieldset>
+              <fieldset class="gs-communications__locale" data-cm-locale="ht"><legend>Kreyòl ayisyen</legend><label class="gs-champ"><span>Titre</span><input name="titre_ht" maxlength="300" required></label><label class="gs-champ"><span>Message</span><textarea name="message_ht" maxlength="3000" rows="3" required></textarea></label></fieldset>
+            </div>
+            <button type="submit" class="gs-bouton gs-bouton--plein">Enregistrer une nouvelle version</button>
+          </form>
+
+          <section class="gs-campagnes__carte">
+            <h3>Approbation, planification et audit</h3>
+            <p>Choisissez une campagne dans la liste. Le Manager prépare et soumet; seul l’Admin approuve, planifie ou annule.</p>
+            <div class="gs-communications__actions" data-cm-actions hidden>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-submit data-permission="communications.campaigns.manage">Soumettre pour approbation</button>
+              <button type="button" class="gs-bouton gs-bouton--plein" data-cm-approve data-permission="communications.campaigns.approve">Approuver</button>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-reject data-permission="communications.campaigns.approve">Refuser</button>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-schedule data-permission="communications.campaigns.approve">Enregistrer la planification</button>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-cancel data-permission="communications.campaigns.approve">Annuler la campagne</button>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-duplicate data-permission="communications.campaigns.manage">Dupliquer</button>
+              <button type="button" class="gs-bouton gs-bouton--contour" data-cm-journal>Afficher l’audit</button>
+            </div>
+            <div class="gs-campagnes__journal" data-cm-journal-output hidden></div>
+          </section>
+        </div>
+      </section>
     </div>
   </section>
 </main>

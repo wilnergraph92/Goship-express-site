@@ -2181,7 +2181,10 @@
     'reports.create': 'Créer un rapport', 'reports.edit': 'Modifier un rapport',
     'reports.delete': 'Supprimer un rapport',
     'users.view': 'Voir l’équipe', 'roles.manage': 'Donner un rôle', 'settings.manage': 'Réglages du site',
-    'audit_logs.view': 'Journal d’audit'
+    'audit_logs.view': 'Journal d’audit', 'communications.view': 'Voir le Centre de communication',
+    'communications.templates.manage': 'Gérer les modèles transactionnels',
+    'communications.consents.view': 'Consulter les consentements marketing',
+    'communications.queue.retry': 'Reprendre un événement STOP sûr'
   };
 
   function chargerEquipe() {
@@ -2305,7 +2308,7 @@
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
                       scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports', programmes: 'Programmes',
-                      prealertes: 'Pré-alertes' };
+                      prealertes: 'Pré-alertes', communications: 'Centre de communication' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {

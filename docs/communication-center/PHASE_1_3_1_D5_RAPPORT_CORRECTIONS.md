@@ -333,6 +333,16 @@ Dans `communication_conclure_arret` :
 | **CEO** | Comportement de l'écran d'arrêt (deux appels, réessai automatique) ; seuil et destinataire des alertes ; décision S-1 (authentification de la fonction Edge) ; envoi des demandes de devis (D4) ; autorisation, distincte, d'exécuter les 78 essais |
 | **Nouvelle revue indépendante** | Exigée après correction. À faire par le spécialiste humain ; une revue par une session Claude distincte peut la précéder, mais ne la remplace pas. |
 
+> **Note du 23/11/2026 sur S-1.** Après ce rapport, une option S-1 a été construite **en candidate
+> locale**, hors des brouillons 40–43 : `outils/migrations-candidates/009-communication-identite-edge.sql`
+> et le client Edge. Elle crée des rôles `communication_webhook` et `communication_worker` sans
+> connexion, membres d'`authenticator` ; leurs RPC passent par le schéma `communication_edge` et
+> vérifient l'émetteur, l'audience et la durée d'un JWT ES256 signé par l'Edge. Cette option diffère
+> de la recommandation de `PHASE_1_3_FINAL_REPORT.md` §10, qui prévoyait un rôle de connexion dédié
+> avec mot de passe. Elle a passé les essais locaux (`COMMUNICATION_CENTER_C7_3_RAPPORT_LOCAL.md`).
+> **La décision S-1 de la CEO reste ouverte** : une implémentation testée localement n'est pas une
+> décision.
+
 ---
 
 ## 9. Contrôle des interdictions
