@@ -63,7 +63,10 @@ begin
         if v_code_fournisseur = 'MessageRateExceeded' then
           return jsonb_build_object('classe', 'temporaire', 'code', 'LIMITE_DEBIT');
         elsif v_code_fournisseur = 'DeviceNotRegistered' then
-          return jsonb_build_object('classe', 'definitif', 'code', 'APPAREIL_INCONNU');
+          -- Code officiel conservé : la supervision de supabase-notifications.sql
+          -- compte les « DeviceNotRegistered » des dernières 24 h, et
+          -- lire_reponse_envoi oublie l'appareil (correction du 23/11/2026).
+          return jsonb_build_object('classe', 'definitif', 'code', 'DeviceNotRegistered');
         else
           return jsonb_build_object('classe', 'refuse', 'code', 'REFUS_FOURNISSEUR');
         end if;
@@ -427,6 +430,12 @@ begin
            code_erreur = case when statut in ('livre', 'echec', 'annule') then code_erreur else v_code end,
            erreur = null, verrouille_le = null, maj_le = now()
      where id = p_envoi.id;
+    -- Comme le moteur officiel : un téléphone qu'Expo ne connaît plus est oublié,
+    -- pour ne plus lui envoyer de push. Correction du 23/11/2026 (régression
+    -- trouvée par essai-communication-non-regression.py).
+    if p_envoi.canal = 'push' and v_code = 'DeviceNotRegistered' and p_envoi.appareil_id is not null then
+      delete from public.appareils where id = p_envoi.appareil_id;
+    end if;
   end if;
 end;
 $fonction$;

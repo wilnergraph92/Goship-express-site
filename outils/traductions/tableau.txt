@@ -1763,6 +1763,8 @@ Transmissions en échec
 Transmissions envoyées
 Transmissions incertaines
 Transmissions incertaines à réconcilier
+Retours en attente depuis plus de 10 minutes
+Arrêt demandé, non confirmé depuis plus de 2 minutes
 Transmissions livrées
 Transmissions préparées
 Type de communication

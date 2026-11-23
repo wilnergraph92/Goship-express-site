@@ -257,7 +257,10 @@
     vider(alertes);
     var libellesAlertes = {
       EVENEMENTS_PRIORITAIRES_EN_ECHEC: 'Événements prioritaires en échec',
-      TRANSMISSIONS_INCERTAINES: 'Transmissions incertaines à réconcilier'
+      TRANSMISSIONS_INCERTAINES: 'Transmissions incertaines à réconcilier',
+      // Décision D du 23/11/2026 : un retour en retard peut cacher un STOP non appliqué.
+      EVENEMENTS_EN_RETARD: 'Retours en attente depuis plus de 10 minutes',
+      ARRET_NON_CONFIRME: 'Arrêt demandé, non confirmé depuis plus de 2 minutes'
     };
     modele.alertes.forEach(function (a) {
       if (!libellesAlertes[a.code]) return;

@@ -30,6 +30,9 @@ FICHIERS_CANDIDATS = (
     os.path.join(CANDIDATES, '010-communication-arret-administration.sql'),
 )
 FICHIER_CANDIDATE_S1 = os.path.join(CANDIDATES, '009-communication-identite-edge.sql')
+# Les réglages décidés s'appliquent à part : les essais de consentement vérifient
+# d'abord le refus fermé quand aucun réglage n'est fixé.
+FICHIER_CANDIDATE_REGLAGES = os.path.join(CANDIDATES, '011-communication-reglages-decides.sql')
 
 spec = importlib.util.spec_from_file_location(
     'essai_services', os.path.join(ICI, 'essai-services.py'))
@@ -876,28 +879,26 @@ def tester_permissions_et_reponse(db, numero_base):
     verifier('état d’arrêt initial explicite', donnees_admin.get('arret'), {'etat': 'actif'})
     verifier('réponse et champs limités à la liste blanche',
              set(donnees_admin), {'evenements', 'envois', 'arret', 'travailleur'})
-    verifier('envois absents signalés sans faux zéros',
-             (donnees_admin.get('envois', {}).get('disponible'),
-              donnees_admin.get('envois', {}).get('en_attente')),
-             (False, None))
+    # Décision A (23/11/2026) : la supervision lit l'outbox unique notification_envois.
+    attendus_envois = json.loads(db.sql("""
+      select json_build_object(
+        'disponible', true,
+        'en_attente', count(*) filter (where statut in ('attente', 'confirmation')),
+        'en_cours', count(*) filter (where statut = 'envoi'),
+        'envoyes', count(*) filter (where statut = 'envoye'),
+        'livres', count(*) filter (where statut = 'livre'),
+        'echecs', count(*) filter (where statut = 'echec'),
+        'incertains', count(*) filter (where statut = 'incertain'),
+        'annules', count(*) filter (where statut = 'annule'))
+      from public.notification_envois;
+    """).splitlines()[-1].strip())
+    verifier('envois lus dans l’outbox unique, statuts réels',
+             donnees_admin.get('envois'), attendus_envois)
     verifier('réponse sans identifiant ni contenu d’événement',
              SENTINEL not in json.dumps(donnees_admin, ensure_ascii=False), True)
     verifier('état pg_cron absent déclaré non mesurable',
              donnees_admin.get('travailleur', {}).get('tables_disponibles'), False)
 
-    db.sql("""
-      create table public.communication_envois (statut text not null);
-      insert into public.communication_envois (statut) values
-        ('attente'), ('nouvel_essai'), ('traitement'), ('envoye'),
-        ('livre'), ('lu'), ('echec'), ('abandon'), ('incertain');
-    """)
-    envois = S.jsonq(db, ADMIN, 'select public.sante_communications();').get('envois', {})
-    verifier('agrégats d’envois facultatifs calculés quand la table existe',
-             (envois.get('disponible'), envois.get('en_attente'), envois.get('en_cours'),
-              envois.get('envoyes'), envois.get('livres'), envois.get('echecs'),
-              envois.get('incertains')),
-             (True, 2, 1, 1, 2, 2, 1))
-    db.sql('drop table public.communication_envois;')
 
     prive = db.sql("""
       select not has_table_privilege('anon', 'public.communication_arret', 'select')
@@ -2822,6 +2823,111 @@ def tester_c10_arret_admin(db, numero_base):
     verifier('porte toujours fermée après la confirmation', porte.splitlines()[-1].strip(), 'ARRET_URGENCE')
 
 
+def tester_c9_reglages_et_alertes(db, numero_base):
+    # Lancé après C10 : l'arrêt est alors confirmé, ce qui permet de construire
+    # l'alerte « arrêt demandé mais non confirmé ».
+    print('\nC9 — réglages décidés, supervision et alertes — base neuve %d' % numero_base)
+    colonnes = ('expiration_secondes', 'maximum_tentatives', 'portee_tentatives',
+                'fenetre_tentatives_secondes', 'fenetre_demandes_secondes',
+                'maximum_demandes_compte', 'maximum_demandes_contact', 'politique_contact_partage')
+    lire = ("select concat_ws('|', %s) from public.communication_consentement_reglages "
+            "where id is true;" % ', '.join(colonnes))
+    decides = '3600|5|contact|3600|86400|3|3|bloquer'
+
+    db.sql("update public.communication_consentement_reglages set %s where id is true;"
+           % ', '.join('%s = null' % c for c in colonnes))
+    verifier('réglages remis à blanc : demande refusée fermée',
+             db.erreur(CLIENT7, "select public.communication_consentement_demander_whatsapp("
+                                "'fixture-synthetique-v1', 'fr');"), 'POLICY_UNCONFIGURED')
+    appliquer_candidate(db, FICHIER_CANDIDATE_REGLAGES)
+    verifier('réglages décidés installés (H2, H3)', db.sql(lire).splitlines()[-1].strip(), decides)
+    appliquer_candidate(db, FICHIER_CANDIDATE_REGLAGES)
+    verifier('réglages décidés rejouables sans changement', db.sql(lire).splitlines()[-1].strip(), decides)
+    db.sql("update public.communication_consentement_reglages set maximum_demandes_compte = 7, "
+           "expiration_secondes = null where id is true;")
+    appliquer_candidate(db, FICHIER_CANDIDATE_REGLAGES)
+    verifier('un réglage déjà fixé par l’Admin est conservé',
+             db.sql(lire).splitlines()[-1].strip(), '3600|5|contact|3600|86400|7|3|bloquer')
+    verifier('la politique n’est plus refusée faute de réglage',
+             db.erreur(CLIENT7, "select public.communication_consentement_demander_whatsapp("
+                                "'fixture-synthetique-v1', 'fr');") != 'POLICY_UNCONFIGURED', True)
+
+    sante = rpc_json(db.comme(ADMIN, 'select public.communication_c5_sante();'))
+    attendus = json.loads(db.sql("""
+      select json_build_object(
+        'en_cours', count(*) filter (where statut = 'envoi'),
+        'incertains', count(*) filter (where statut = 'incertain'),
+        'en_attente', count(*) filter (where statut in ('attente', 'confirmation')))
+      from public.notification_envois;
+    """).splitlines()[-1].strip())
+    envois = sante.get('envois', {})
+    verifier('supervision : transmissions en cours, incertaines et en attente exactes',
+             {k: envois.get(k) for k in attendus}, attendus)
+
+    # Alerte de retard : un retour non traité depuis plus de 10 min.
+    retards_avant = int(db.sql("select count(*) from public.communication_evenements_traitement "
+                               "where etat = 'a_traiter';").splitlines()[-1].strip())
+    if retards_avant == 0:
+        evenement = db.sql("""
+          insert into public.communication_evenements_fournisseur (fournisseur, evenement_id, type)
+          values ('meta', 'c9-retard-synthetique', 'delivered') returning id;
+        """).splitlines()[0].strip()
+        db.sql("insert into public.communication_evenements_traitement (evenement_id) values (%s);" % evenement)
+    db.sql("update public.communication_evenements_traitement set cree_le = clock_timestamp() - "
+           "interval '11 minutes' where etat = 'a_traiter';")
+    retards = int(db.sql("select count(*) from public.communication_evenements_traitement "
+                         "where etat = 'a_traiter';").splitlines()[-1].strip())
+
+    # Alerte d'arrêt non confirmé : levée, nouvelle demande, puis demande vieillie de 3 min.
+    etat = rpc_json(db.comme(ADMIN, 'select public.communication_c10_arret_etat();'))
+    if etat.get('etat') != 'actif':
+        rpc_json(db.comme(ADMIN, "select public.communication_c10_arret_lever("
+                                 "'reprise pour l’essai des alertes', %d);" % etat['version']))
+    rpc_json(db.comme(ADMIN, "select public.communication_c10_arret_demander('arrêt pour l’essai des alertes');"))
+    db.sql("update public.communication_arret set demande_le = clock_timestamp() - interval '3 minutes', "
+           "derniere_demande_le = clock_timestamp() - interval '3 minutes' where id is true;")
+
+    alertes = rpc_json(db.comme(ADMIN, 'select public.communication_c5_sante();')).get('alertes', [])
+    par_code = dict((a.get('code'), a) for a in alertes)
+    verifier('alerte de retour en attente depuis plus de 10 min',
+             par_code.get('EVENEMENTS_EN_RETARD', {}).get('compte'), retards)
+    verifier('alerte d’arrêt demandé mais non confirmé depuis plus de 2 min',
+             (par_code.get('ARRET_NON_CONFIRME', {}).get('compte'),
+              par_code.get('ARRET_NON_CONFIRME', {}).get('depuis') is not None), (1, True))
+    db.sql("update public.communication_arret set demande_le = clock_timestamp(), "
+           "derniere_demande_le = clock_timestamp() where id is true;")
+    alertes = rpc_json(db.comme(ADMIN, 'select public.communication_c5_sante();')).get('alertes', [])
+    verifier('pas d’alerte d’arrêt dans les 2 premières minutes',
+             'ARRET_NON_CONFIRME' in [a.get('code') for a in alertes], False)
+    verifier('alertes visibles au Gérant, refusées à l’Employé',
+             (isinstance(rpc_json(db.comme(MANAGER, 'select public.communication_c5_sante();'))
+                         .get('alertes'), list),
+              db.erreur(EMPLOYEE, 'select public.communication_c5_sante();')),
+             (True, 'PERMISSION_DENIED'))
+
+    # Une ligne d'un canal qu'aucun adaptateur ne sert (« sms ») ne peut pas entrer
+    # dans l'outbox pour une notification à modèle : le déclencheur de 004 la refuse.
+    # Le travailleur annule en plus une telle ligne au lieu de bloquer le lot
+    # (garde-fou pour les notifications sans modèle).
+    refus_sms = db.erreur('sql', """
+      insert into public.notification_envois (notification_id, canal, cible, statut, priorite)
+      select n.id, 'sms', 'c9-sms', 'attente', 'haute'
+        from public.notifications n where n.categorie = 'colis' order by n.id limit 1;
+    """)
+    verifier('outbox : canal sans adaptateur refusé pour une notification à modèle',
+             refus_sms, 'COMMUNICATION_TEMPLATE_CHANNEL_UNSUPPORTED')
+
+    # Correction du 23/11/2026 : texte_notification (004) lit de nouveau les modèles
+    # modifiables de l'équipe (notification_modeles), dont les anniversaires.
+    anniversaire = rpc_json(db.sql(
+        "select public.texte_notification('birthday', 'fr', '{\"prenom\":\"Fixture\"}'::jsonb);"))
+    attendu_titre = db.sql("select public.rendre_notification(titre, '{\"prenom\":\"Fixture\"}'::jsonb) "
+                           "from public.notification_modeles "
+                           "where type = 'birthday' and langue = 'fr';").splitlines()[-1].strip()
+    verifier('modèle d’anniversaire de l’équipe rendu, jamais un message vide',
+             (anniversaire.get('titre') == attendu_titre, bool(anniversaire.get('message'))), (True, True))
+
+
 def main():
     arguments = sys.argv[1:]
     if arguments not in ([], ['--s1-only']):
@@ -2869,6 +2975,7 @@ def main():
                 tester_c5_interface(db, numero, ids_transactionnels)
                 tester_c6_campagnes(db, numero)
                 tester_c10_arret_admin(db, numero)
+                tester_c9_reglages_et_alertes(db, numero)
             finally:
                 if db is not None:
                     db._psql(db.su, 'postgres',

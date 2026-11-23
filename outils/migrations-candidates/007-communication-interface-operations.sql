@@ -107,6 +107,8 @@ declare
   v_alertes jsonb := '[]'::jsonb;
   v_echecs_prioritaires bigint;
   v_incertains bigint;
+  v_retards bigint;
+  v_arret_demande_le timestamptz;
 begin
   perform public.exiger_permission('communications.view');
   v_sante := public.sante_communications();
@@ -134,6 +136,27 @@ begin
       v_alertes := v_alertes || pg_catalog.jsonb_build_array(
         pg_catalog.jsonb_build_object('code', 'TRANSMISSIONS_INCERTAINES', 'compte', v_incertains));
     end if;
+  end if;
+
+  -- Décision D du 23/11/2026. Un retour non traité depuis plus de 10 min peut
+  -- cacher un STOP non appliqué ; un arrêt demandé mais non confirmé depuis plus
+  -- de 2 min signifie que des sorties sont peut-être encore en cours.
+  select count(*) into v_retards
+    from public.communication_evenements_traitement t
+   where t.etat = 'a_traiter'
+     and t.cree_le < pg_catalog.clock_timestamp() - interval '10 minutes';
+  if v_retards > 0 then
+    v_alertes := v_alertes || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object('code', 'EVENEMENTS_EN_RETARD', 'compte', v_retards));
+  end if;
+  select a.demande_le into v_arret_demande_le
+    from public.communication_arret a
+   where a.id is true and a.etat = 'arret_demande';
+  if v_arret_demande_le is not null
+     and v_arret_demande_le < pg_catalog.clock_timestamp() - interval '2 minutes' then
+    v_alertes := v_alertes || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object('code', 'ARRET_NON_CONFIRME', 'compte', 1,
+        'depuis', v_arret_demande_le));
   end if;
 
   return v_sante || pg_catalog.jsonb_build_object(

@@ -186,8 +186,10 @@ security definer
 set search_path = ''
 as $fonction$
 declare
+  -- La langue demandée (écran ou client) prime ; celle retenue à la création ne
+  -- sert qu'à défaut (correction du 23/11/2026, comme texte_notification).
   v_langue text := public.langue_notification(coalesce(
-    nullif(p_donnees ->> '_communication_modele_langue', ''), p_langue));
+    nullif(p_langue, ''), nullif(p_donnees ->> '_communication_modele_langue', '')));
   v_version integer := coalesce(
     p_version, nullif(p_donnees ->> '_communication_modele_version', '')::integer);
   v_modele public.communication_modeles_transactionnels;
@@ -203,7 +205,16 @@ begin
   select * into v_modele
     from public.communication_modeles_transactionnels m
    where m.type = p_type and m.langue = v_langue and m.version = v_version;
-  if not found then
+  if not found and p_version is null then
+    -- La version retenue n'existe pas dans la langue demandée : dernière version
+    -- de cette langue.
+    select * into v_modele
+      from public.communication_modeles_transactionnels m
+     where m.type = p_type and m.langue = v_langue
+     order by m.version desc
+     limit 1;
+  end if;
+  if v_modele.type is null then
     return null;
   end if;
 
@@ -231,8 +242,12 @@ security definer
 set search_path = ''
 as $fonction$
 declare
+  -- La langue demandée (celle de l'écran qui affiche, ou celle du client à
+  -- l'envoi) prime ; la langue retenue à la création ne sert qu'à défaut.
+  -- Correction du 23/11/2026 : l'ordre inverse affichait toujours la langue du
+  -- compte, même dans une application réglée sur une autre langue.
   v_langue text := public.langue_notification(coalesce(
-    nullif(p_donnees ->> '_communication_modele_langue', ''), p_langue));
+    nullif(p_langue, ''), nullif(p_donnees ->> '_communication_modele_langue', '')));
   v_texte jsonb;
   v_variables jsonb := coalesce(p_donnees, '{}'::jsonb)
     || jsonb_build_object('montant', public.montant_notification(
@@ -244,9 +259,17 @@ begin
     return v_texte;
   end if;
 
-  -- Les types historiques hors règles transactionnelles (par exemple « test »)
-  -- conservent le rendu antérieur.
-  v_texte := public.notification_textes() -> p_type -> v_langue;
+  -- Les types hors règles transactionnelles conservent le rendu de la chaîne
+  -- officielle (supabase-anniversaires.sql) : d'abord les modèles modifiables
+  -- par l'équipe (notification_modeles, dont les anniversaires), puis les textes
+  -- fixes. Correction du 23/11/2026 : notification_modeles n'était plus lu, et
+  -- un message d'anniversaire serait parti vide.
+  select pg_catalog.jsonb_build_object('titre', m.titre, 'message', m.message) into v_texte
+    from public.notification_modeles m
+   where m.type = p_type and m.langue = v_langue;
+  if v_texte is null then
+    v_texte := public.notification_textes() -> p_type -> v_langue;
+  end if;
   if v_texte is null then
     v_texte := jsonb_build_object('titre', 'GoShip Express', 'message', '');
   end if;
@@ -663,14 +686,25 @@ begin
       'reponses_lues', v_lus, 'envoyes', v_partis, 'non_partis', v_rates);
   end if;
 
-  -- Le candidat est lu sans verrou. N0 est obtenu avant le verrou N4, puis la
-  -- ligne est relue avec SKIP LOCKED pour éviter les doubles transmissions.
+  -- N0 partagé d'abord (ordre V0 → V4), puis les lignes du lot verrouillées en
+  -- SKIP LOCKED : des travailleurs simultanés se partagent la file au lieu de
+  -- viser tous les mêmes lignes. Chaque ligne repasse ensuite la porte, qui relit
+  -- l'état de l'arrêt. Correction du 23/11/2026 : les lignes étaient lues sans
+  -- verrou, et quatre travailleurs simultanés ne traitaient que le quart de la file.
+  begin
+    perform public.communication_verrou_interrupteurs(false);
+  exception when lock_not_available then
+    -- Une confirmation d'arrêt détient N0 exclusif : rien ne part ce passage-ci.
+    return pg_catalog.jsonb_build_object(
+      'reponses_lues', v_lus, 'envoyes', v_partis, 'non_partis', v_rates);
+  end;
   for c in
     select q.*
       from public.notification_envois q
      where q.statut = 'attente' and q.prochain_essai_le <= pg_catalog.now()
      order by (q.priorite = 'haute') desc, q.prochain_essai_le
      limit v_lot
+     for update of q skip locked
   loop
     begin
       v_raison := public.communication_autoriser_sortie('envoi', c.canal);
@@ -678,8 +712,28 @@ begin
       v_rates := v_rates + 1;
       exit;
     end;
+    if v_raison in ('CANAL_NON_AUTORISE', 'NATURE_NON_AUTORISEE') then
+      -- Refus propre à CETTE ligne (par exemple un canal « sms », accepté par
+      -- l'outbox mais par aucun adaptateur) : elle est annulée, et le lot continue.
+      -- Correction du 23/11/2026 : la sortie de boucle laissait une telle ligne
+      -- bloquer indéfiniment toutes les suivantes. Ordre des verrous : V0 (déjà
+      -- tenu par la porte) puis V4, sans attente.
+      perform pg_catalog.set_config('goship.sortie_autorisee', '', true);
+      select * into e
+        from public.notification_envois q
+       where q.id = c.id and q.statut = 'attente'
+       for update skip locked;
+      if found then
+        update public.notification_envois
+           set statut = 'annule', code_erreur = v_raison, maj_le = pg_catalog.now()
+         where id = e.id;
+      end if;
+      v_rates := v_rates + 1;
+      continue;
+    end if;
     if v_raison is not null then
-      -- Aucun verrou d'envoi ni appel réseau n'a été pris ; la ligne reste due.
+      -- Arrêt d'urgence ou état d'arrêt illisible : aucun verrou d'envoi ni appel
+      -- réseau n'a été pris ; la ligne reste due et le lot s'interrompt.
       v_rates := v_rates + 1;
       exit;
     end if;
@@ -724,8 +778,14 @@ begin
         v_rates := v_rates + 1;
       end if;
     end;
-    -- Une autorisation P-07 couvre cette seule ligne et ce seul adaptateur.
-    exit;
+    -- Une autorisation P-07 couvre cette seule ligne et ce seul adaptateur. La
+    -- ligne suivante repasse la porte : elle relit l'état de l'arrêt (READ
+    -- COMMITTED, nouvel instantané) et le lot s'interrompt dès qu'une demande
+    -- d'arrêt est validée. Seul le travailleur rouvre ainsi la porte : un appel
+    -- d'adaptateur qui n'est pas passé par lui reste refusé dans la transaction.
+    -- Correction du 23/11/2026 : la version précédente sortait de la boucle après
+    -- une seule transmission, soit un message par minute pour toute la plateforme.
+    perform pg_catalog.set_config('goship.sortie_consommee', '', true);
   end loop;
 
   return pg_catalog.jsonb_build_object(

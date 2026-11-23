@@ -22,9 +22,11 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 | C8 — Arrêt d'urgence côté Admin, avec levée (candidate 010) | ✅ banc |
 | C8 — Permissions `communications.*` alignées entre la chaîne officielle et `api.js` | ✅ `essai-permissions.py` 114/114 |
 | C8 — Transmission de code par l'Edge soumise à l'arrêt d'urgence (009) | ✅ correction et essai ajoutés |
-| C9 — Réglages N-02 et D2 décidés, installés comme réglages par défaut (`communication_consentement_reglages`) | ⏳ |
-| C9 — Alertes D dans `communication_c5_sante` (`STOP_PENDING` > 2 min, transmission `incertain`, retour en attente > 10 min, échec prioritaire) | ⏳ |
-| C10 — Non-régression transactionnelle avec les candidates appliquées (`essai-notifications.py`, `essai-accuses.py`, `essai-suivi-courriels.py`) | ⏳ |
+| C9 — Réglages N-02 et D2 décidés, installés comme réglages par défaut (candidate 011) | ✅ banc |
+| C9 — Alertes D dans `communication_c5_sante` (arrêt non confirmé > 2 min, retour en attente > 10 min, en plus des transmissions incertaines et des échecs prioritaires) ; libellés traduits en 4 langues | ✅ banc |
+| C9 — Supervision corrigée : lecture de l'outbox unique avec ses statuts réels et de la tâche `goship-notifications` (002) | ✅ banc |
+| C10 — Non-régression transactionnelle avec les candidates appliquées : harnais `essai-communication-non-regression.py` (rejoue `essai-notifications.py`) ; 5 régressions corrigées | ✅ 78/87, les 9 écarts restants attendent la décision K |
+| C10 — Étendre le harnais à `essai-accuses.py`, `essai-suivi-courriels.py` et `essai-programmes.py` | ⏳ |
 | C10 — Plan d'essais adapté aux candidates, remplaçant les 78 essais | ⏳ |
 | C11 — Intégration des candidates dans `outils/migrations.txt`, puis rejeu complet de la chaîne sur base jetable | ⏳ |
 

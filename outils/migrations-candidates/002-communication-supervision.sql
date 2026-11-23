@@ -20,7 +20,8 @@ declare
     'envoyes', null,
     'livres', null,
     'echecs', null,
-    'incertains', null);
+    'incertains', null,
+    'annules', null);
 begin
   perform public.exiger_permission('communications.view');
 
@@ -53,28 +54,28 @@ begin
           order by r.start_time desc
           limit 1
         ))
-    $requete$ into v_travailleur using 'goship-communications';
+    -- Décision A du 23/11/2026 : le Centre n'a pas de travailleur propre. Il réutilise
+    -- la tâche officielle de outils/supabase-notifications.sql.
+    $requete$ into v_travailleur using 'goship-notifications';
   end if;
 
-  if pg_catalog.to_regclass('public.communication_envois') is not null
-     and exists (
-       select 1
-       from pg_catalog.pg_attribute a
-       where a.attrelid = pg_catalog.to_regclass('public.communication_envois')
-         and a.attname = 'statut'
-         and a.attnum > 0
-         and not a.attisdropped
-     ) then
+  -- Outbox unique (décision A) : notification_envois et ses statuts réels.
+  -- « confirmation » est l'attente d'un code WhatsApp à transmettre par l'Edge (009).
+  -- Correction du 23/11/2026 : la version précédente lisait la table
+  -- communication_envois des brouillons, qui n'existe pas, et des statuts
+  -- inexistants (« traitement », « nouvel_essai », « lu », « abandon »).
+  if pg_catalog.to_regclass('public.notification_envois') is not null then
     execute $requete$
       select jsonb_build_object(
         'disponible', true,
-        'en_attente', count(*) filter (where statut in ('attente', 'nouvel_essai')),
-        'en_cours', count(*) filter (where statut = 'traitement'),
+        'en_attente', count(*) filter (where statut in ('attente', 'confirmation')),
+        'en_cours', count(*) filter (where statut = 'envoi'),
         'envoyes', count(*) filter (where statut = 'envoye'),
-        'livres', count(*) filter (where statut in ('livre', 'lu')),
-        'echecs', count(*) filter (where statut in ('echec', 'abandon')),
-        'incertains', count(*) filter (where statut = 'incertain'))
-      from public.communication_envois
+        'livres', count(*) filter (where statut = 'livre'),
+        'echecs', count(*) filter (where statut = 'echec'),
+        'incertains', count(*) filter (where statut = 'incertain'),
+        'annules', count(*) filter (where statut = 'annule'))
+      from public.notification_envois
     $requete$ into v_envois;
   end if;
 

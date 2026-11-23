@@ -3052,6 +3052,8 @@
   "Transmissions en échec": "Transmisiones fallidas",
   "Transmissions incertaines": "Transmisiones inciertas",
   "Transmissions incertaines à réconcilier": "Transmisiones inciertas que deben conciliarse",
+  "Retours en attente depuis plus de 10 minutes": "Retornos pendientes desde hace más de 10 minutos",
+  "Arrêt demandé, non confirmé depuis plus de 2 minutes": "Parada solicitada, sin confirmar desde hace más de 2 minutos",
   "Traité": "Procesado",
   "Traité sans autre effet": "Procesado sin otro efecto",
   "Tous les canaux": "Todos los canales",

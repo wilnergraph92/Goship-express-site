@@ -3052,6 +3052,8 @@
   "Transmissions en échec": "Failed transmissions",
   "Transmissions incertaines": "Uncertain transmissions",
   "Transmissions incertaines à réconcilier": "Uncertain transmissions to reconcile",
+  "Retours en attente depuis plus de 10 minutes": "Callbacks waiting for more than 10 minutes",
+  "Arrêt demandé, non confirmé depuis plus de 2 minutes": "Stop requested, not confirmed for more than 2 minutes",
   "Traité": "Processed",
   "Traité sans autre effet": "Processed with no further effect",
   "Tous les canaux": "All channels",

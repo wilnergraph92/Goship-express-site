@@ -55,6 +55,48 @@ d'application sur une base distante.
    et s'inscrit au `journal_audit`. Les fonctions de 001 restent réservées à
    `service_role`. Le banc applique 010 après 008 et l'éprouve en dernier
    (`tester_c10_arret_admin`).
+11. `011-communication-reglages-decides.sql` — réglages décidés le 23/11/2026
+   (H2, H3) pour la candidate 003 : code valable 60 min, 5 erreurs au plus sur
+   le numéro, 3 demandes par 24 h par compte et par numéro, numéro partagé
+   bloqué. Le fichier ne remplace jamais une valeur déjà réglée. Il est appliqué
+   à part par le banc, parce que les essais de 003 vérifient d'abord le refus
+   fermé quand aucun réglage n'est fixé (`tester_c9_reglages_et_alertes`).
+
+Corrections du 23/11/2026 (C9) :
+- **002** : la supervision lit désormais l'outbox unique `notification_envois`,
+  avec ses statuts réels (`attente`, `confirmation`, `envoi`, `envoye`, `livre`,
+  `echec`, `incertain`, `annule`), et la tâche `pg_cron` officielle
+  `goship-notifications`. Avant, elle lisait la table `communication_envois` des
+  brouillons, qui n'existe pas, et des statuts inexistants : le tableau de bord
+  ne pouvait jamais afficher de transmission en cours.
+- **004, débit du travailleur** : `traiter_notifications` sortait de sa boucle
+  après **une seule** transmission par transaction. Comme `pg_cron` l'appelle une
+  fois par minute, la plateforme entière n'aurait envoyé qu'un message par minute.
+  Ce défaut a été trouvé par `essai-communication-non-regression.py`. Désormais,
+  chaque ligne repasse la porte P-07 : l'état de l'arrêt est relu et le lot
+  s'interrompt dès qu'un arrêt est demandé. Seul le travailleur rouvre la porte
+  entre deux lignes ; un appel d'adaptateur non autorisé reste refusé.
+- **004, file bloquée** : une ligne qu'aucun adaptateur ne sert (canal `sms`,
+  accepté par l'outbox) faisait sortir la boucle à chaque passage et bloquait
+  toutes les lignes suivantes. Elle est maintenant annulée
+  (`CANAL_NON_AUTORISE`), et le lot continue.
+- **004, travailleurs simultanés** : les lignes du lot sont verrouillées en
+  `SKIP LOCKED` juste après N0 partagé (ordre V0 → V4). Avant, elles étaient lues
+  sans verrou, et des travailleurs simultanés visaient les mêmes lignes.
+- **004, `texte_notification`** : la fonction lit de nouveau `notification_modeles`
+  (modèles modifiables par l'équipe, dont les anniversaires) avant les textes
+  fixes ; sans cela, un message d'anniversaire serait parti vide. La langue
+  demandée, celle de l'écran ou du client, prime sur la langue retenue à la
+  création.
+- **005, appareil Expo désinscrit** : le code `DeviceNotRegistered` est conservé
+  et l'appareil est oublié, comme dans le moteur officiel.
+- **Écart restant, en décision** (K) : les réponses 5xx, les délais dépassés et
+  les silences des fournisseurs donnent `incertain`, sans nouvel essai. Le moteur
+  officiel réessaie.
+- **007** : `communication_c5_sante` ajoute deux alertes (décision D) :
+  `EVENEMENTS_EN_RETARD`, pour un retour non traité depuis plus de 10 min, et
+  `ARRET_NON_CONFIRME`, pour un arrêt demandé mais non confirmé depuis plus de
+  2 min.
 
 Les candidates dépendent de la chaîne officielle existante, notamment des
 rôles Supabase, de `public.exiger_permission(text, uuid)` et de la permission
