@@ -1,5 +1,6 @@
 -- CANDIDATE LOCALE — consentement marketing et confirmation WhatsApp.
--- Hors de outils/migrations.txt : ne pas appliquer à une base distante.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Dépend des migrations officielles (clients, auth.uid, lire_reglage,
 -- telephone_international, pgcrypto dans extensions, Vault) et des candidates 001–002.
 -- Les choix CEO encore ouverts n'ont volontairement aucune valeur par défaut.

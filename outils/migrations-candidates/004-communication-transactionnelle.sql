@@ -1,5 +1,6 @@
 -- CANDIDATE LOCALE — intégration transactionnelle au moteur de notifications GoShip.
--- Hors de outils/migrations.txt. Ne pas appliquer à une base distante.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Dépend des 39 migrations officielles, puis des candidates 001–003 (dont P-07).
 --
 -- Cette candidate réutilise les événements colis, notifications et l'outbox

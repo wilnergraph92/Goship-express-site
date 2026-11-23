@@ -1,5 +1,9 @@
 # Centre de communication — Phase 1.3.1 : dossier pour la revue indépendante PostgreSQL (Q1–Q7)
 
+> **Remplacé le 23/11/2026** par `COMMUNICATION_CENTER_DOSSIER_REVUE_CANDIDATES.md`. Depuis la
+> décision A, la revue porte sur les **candidates** ; ce dossier, qui visait les brouillons 40–43, reste
+> une référence historique (questions d'origine, hypothèses H1–H6 et H4′).
+
 **Rédigé le 23/11/2026 par Claude Code, en lecture seule.** Ce dossier prépare le travail du
 spécialiste humain PostgreSQL exigé par D5 §8. **Il n'est pas une revue, ne donne aucune réponse aux
 questions et ne valide rien.** Aucun SQL, aucun essai et aucune base n'ont été utilisés pour l'établir.

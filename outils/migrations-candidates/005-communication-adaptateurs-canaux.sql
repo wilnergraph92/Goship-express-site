@@ -1,5 +1,6 @@
 -- CANDIDATE LOCALE — adaptateurs de réponses et retours transactionnels.
--- Hors de outils/migrations.txt : ne pas appliquer à une base distante.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Réutilise notification_envois, le sender historique, P-07 et les tables P-08.
 -- Aucun canal n'est activé et aucune fonction Edge/provider n'est appelée ici.
 

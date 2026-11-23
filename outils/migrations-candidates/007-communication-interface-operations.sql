@@ -1,5 +1,6 @@
 -- C5 — RPC d'interface opérationnelle du Communication Center.
--- Candidate locale, hors de outils/migrations.txt. Ne pas appliquer à distance.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Dépend des candidates 001–006. Les permissions d'écriture et de consentement
 -- sont ajoutées à l'Administrateur uniquement ; le Manager garde communications.view.
 

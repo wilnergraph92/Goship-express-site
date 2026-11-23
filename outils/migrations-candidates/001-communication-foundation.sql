@@ -1,5 +1,6 @@
 -- CANDIDATE LOCALE — Communication Center.
--- Hors de outils/migrations.txt. Ne pas appliquer à une base distante.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Dépend de la chaîne officielle actuelle et de ses rôles Supabase.
 -- Cette candidate isole des structures durables sans exécuter les drafts 40–43.
 

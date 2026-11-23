@@ -1,5 +1,6 @@
 -- CANDIDATE LOCALE — Communication Center, réglages décidés le 23/11/2026.
--- Hors de outils/migrations.txt. Ne pas appliquer à une base distante.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Dépend de 003-communication-consentements.sql.
 --
 -- Pourquoi un fichier séparé : la candidate 003 laisse volontairement ses seuils

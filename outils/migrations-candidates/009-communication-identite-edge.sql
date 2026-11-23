@@ -1,5 +1,6 @@
 -- Candidate uniquement : identité PostgREST limitée aux Edge Functions du Communication Center.
--- Ne pas ajouter à outils/migrations.txt sans décision et autorisation distinctes.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 begin;
 
 do $contexte_execution$

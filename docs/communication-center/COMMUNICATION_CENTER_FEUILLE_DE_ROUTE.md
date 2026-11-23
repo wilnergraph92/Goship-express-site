@@ -11,7 +11,7 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 |---|---|
 | Décisions A–J prises sur délégation | ✅ `COMMUNICATION_CENTER_DECISIONS_DELEGUEES.md` |
 | Hiérarchie des verrous des candidates | ✅ `COMMUNICATION_CENTER_VERROUS_CANDIDATES.md` |
-| Questions Q1–Q7 adaptées aux candidates, version figée par empreinte | ⏳ |
+| Questions Q1–Q7 adaptées aux candidates, version figée par empreinte | ✅ `COMMUNICATION_CENTER_DOSSIER_REVUE_CANDIDATES.md` (11 empreintes SHA-256, points R-1 à R-8 à examiner en priorité) ; commit de la version figée : voir le journal des décisions |
 | Revue indépendante humaine PostgreSQL | 🔒 la CEO envoie la demande de devis (D5 §6) |
 | Validations juridiques (D2, STOP, conservation) | 🔒 juriste |
 
@@ -27,7 +27,7 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 | C9 — Supervision corrigée : lecture de l'outbox unique avec ses statuts réels et de la tâche `goship-notifications` (002) | ✅ banc |
 | C10 — Non-régression transactionnelle avec les candidates appliquées : harnais `essai-communication-non-regression.py` (rejoue `essai-notifications.py`) ; 5 régressions corrigées | ✅ 87/87 après la décision K ; le nom `LIMITE_DEBIT` (au lieu de `HTTP_429`) y est reconnu comme écart volontaire, nommé et limité à sa valeur exacte |
 | C10 — Étendre le harnais à `essai-accuses.py`, `essai-suivi-courriels.py` et `essai-programmes.py` (candidates appliquées après le fichier dont chaque essai éprouve la mise à niveau, puis après chaque fichier rejoué) | ✅ 36/36, 49/49 et 374/374 : aucune régression |
-| C10 — Plan d'essais adapté aux candidates, remplaçant les 78 essais | ⏳ |
+| C10 — Plan d'essais adapté aux candidates, remplaçant les 78 essais | ✅ `COMMUNICATION_CENTER_PLAN_ESSAIS_CANDIDATES.md` : 18 couverts, 11 partiels, 4 à écrire, 2 hors local, 3 sans objet avant la Phase 3 ; 9 essais à écrire (E-01 à E-09) |
 | C11 — Intégration des candidates dans `outils/migrations.txt`, puis rejeu complet de la chaîne sur base jetable (autorisée par la CEO le 23/11/2026) | ✅ en local : chaîne de 50 fichiers ; garde-fou dans `appliquer-chaine.sh` (arrêt avant les candidates, refus en production), sonde et contrôle de sécurité (« réservées aux essais »), critère C14 de `go-no-go.md` ; 3 défauts corrigés ; banc 528/528, production 153/153, non-régression 36/36, 49/49 et 374/374, parcours WhatsApp 74/74, Node 9/9, 7/7 et 23/23, 30 bancs officiels sur 32 verts (analytics et mobile échouent de la même façon sans C11 sur ce Mac : temps et fuseau) |
 
 ## Phase 3 — Email + WhatsApp

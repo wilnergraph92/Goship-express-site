@@ -1,5 +1,6 @@
 -- C6 — campagnes marketing, segments, approbations et planification sans envoi.
--- Candidate locale hors de outils/migrations.txt : aucune application distante.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Les consentements WhatsApp existants sont réutilisés. Les autres canaux restent
 -- inéligibles tant qu'une source de consentement propre au canal n'existe pas.
 

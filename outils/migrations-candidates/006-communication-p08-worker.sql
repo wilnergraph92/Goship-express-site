@@ -1,6 +1,6 @@
 -- C4.1 — worker P-08, réception générique et reçus Expo.
--- Candidate locale uniquement, hors de outils/migrations.txt. Ne pas appliquer
--- sur une base distante sans revue et autorisation distinctes.
+-- En fin de outils/migrations.txt depuis le 23/11/2026 (étape C11) : essais locaux et CI
+-- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 -- Un lot est traité dans une seule transaction RPC : SKIP LOCKED protège la
 -- réservation pendant que ses effets métier et son état final sont atomiques.
 -- Aucun appel fournisseur n'est fait par ces fonctions.
