@@ -19,6 +19,8 @@ python3 outils/essais-services/essai-notifications.py # les notifications : règ
 python3 outils/essais-services/essai-accuses.py      # les accusés de réception des push : « livré », téléphones oubliés (36)
 python3 outils/essais-services/essai-suivi-courriels.py # le suivi des e-mails chez Brevo : « livré », refus en différé (49)
 python3 outils/essais-services/essai-production.py   # la mise en production : chaîne, contrôles, sauvegarde et restauration (Phase 12)
+python3 outils/essais-services/essai-communication-center.py # le Communication Center : arrêt d'urgence, consentements, outbox, rejeu de la chaîne
+python3 outils/essais-services/essai-communication-non-regression.py # accusés, suivi des e-mails et programmes rejoués avec le Communication Center
 bash outils/essais-services/essai-sauvegarde-locale.sh # la sauvegarde du code sur le Mac (outils/sauvegarde-locale), sans vraie clé ni vrai bucket
 python3 outils/essais-services/essai-rapports.py     # les rapports : permissions, périodes, chiffres, journal, suppression
 python3 outils/essais-services/essai-corrections.py  # prix fixé sans poids, envois du colis, journal des modifications, ville et adresse de livraison

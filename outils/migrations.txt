@@ -1,6 +1,11 @@
 # La chaîne officielle des migrations Supabase, dans l'ordre d'exécution.
-# Une ligne = un fichier de outils/. Relancer l'un impose de relancer tous ceux
-# qui le suivent. Tous sont rejouables sans risque.
+# Une ligne = un fichier de outils/ (chemin relatif à outils/). Relancer l'un
+# impose de relancer tous ceux qui le suivent. Tous sont rejouables sans risque.
+# Les onze fichiers migrations-candidates/ (Communication Center) ferment la
+# chaîne depuis le 23/11/2026 (étape C11, autorisée par la CEO) : rejeu local et
+# CI seulement. Ils ne s'appliquent ni en préproduction ni en production avant la
+# validation de la Phase 1.3.1, la revue humaine PostgreSQL et une autorisation
+# écrite nommée (docs/production/go-no-go.md, docs/production/deployment.md).
 # Aucun autre fichier SQL de outils/ n'est à exécuter : les anciens
 # (supabase-application, -bienvenue, -code-client, -factures, -numero-facture,
 # -securite) sont gardés pour l'historique et refusent de s'exécuter sur une
@@ -46,3 +51,14 @@ supabase-double-auth.sql
 supabase-battement.sql
 supabase-prealertes-equipe.sql
 supabase-index-cles.sql
+migrations-candidates/001-communication-foundation.sql
+migrations-candidates/002-communication-supervision.sql
+migrations-candidates/003-communication-consentements.sql
+migrations-candidates/004-communication-transactionnelle.sql
+migrations-candidates/005-communication-adaptateurs-canaux.sql
+migrations-candidates/006-communication-p08-worker.sql
+migrations-candidates/007-communication-interface-operations.sql
+migrations-candidates/008-communication-campagnes-marketing.sql
+migrations-candidates/009-communication-identite-edge.sql
+migrations-candidates/010-communication-arret-administration.sql
+migrations-candidates/011-communication-reglages-decides.sql

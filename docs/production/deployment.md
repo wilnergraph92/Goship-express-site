@@ -57,6 +57,12 @@ Pendant — deux façons, au choix :
 
 Aucun workflow ne migre la production : c'est volontaire.
 
+**Communication Center (étape C11, 23/11/2026)** : les onze fichiers
+`migrations-candidates/` ferment la chaîne, mais ne s'appliquent **ni en
+préproduction ni en production** (critère C14 de `go-no-go.md`).
+`appliquer-chaine.sh` s'arrête avant eux, et les refuse toujours sur l'adresse de
+production ; par le SQL Editor, s'arrêter après `supabase-index-cles.sql`.
+
 Après :
 
 1. `select public.sante();` → `status = ok`, `pret = true`. `notifications` vaut

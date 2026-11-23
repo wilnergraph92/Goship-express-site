@@ -344,10 +344,22 @@ $fonction$;
 revoke all on function public.communication_traiter_evenements_transactionnels(integer)
   from public, anon, authenticated, service_role;
 
+-- Le travailleur de 004 (ou de la chaîne officielle) devient la fonction intérieure, et
+-- traiter_notifications l'enveloppe pour traiter aussi les retours transactionnels.
+-- Correction du 23/11/2026 (étape C11, trouvée par le rejeu de la chaîne sur une base
+-- restaurée) : quand la chaîne est rejouée, 004 réécrit traiter_notifications ; c'est
+-- alors CETTE version, la plus récente, qui doit devenir la fonction intérieure. L'ancien
+-- code gardait la fonction intérieure du premier passage : une correction ultérieure du
+-- travailleur ne prenait jamais effet sur une base existante. L'enveloppe se reconnaît à
+-- son appel de la fonction intérieure.
 do $worker$
+declare
+  v_travailleur regprocedure := pg_catalog.to_regprocedure('public.traiter_notifications(integer)');
 begin
-  if pg_catalog.to_regprocedure('public.communication_traiter_notifications_sans_callbacks(integer)') is null
-     and pg_catalog.to_regprocedure('public.traiter_notifications(integer)') is not null then
+  if v_travailleur is not null
+     and pg_catalog.strpos((select p.prosrc from pg_catalog.pg_proc p where p.oid = v_travailleur),
+                           'communication_traiter_notifications_sans_callbacks') = 0 then
+    execute 'drop function if exists public.communication_traiter_notifications_sans_callbacks(integer)';
     execute 'alter function public.traiter_notifications(integer) '
             'rename to communication_traiter_notifications_sans_callbacks';
   elsif pg_catalog.to_regprocedure('public.communication_traiter_notifications_sans_callbacks(integer)') is null then
@@ -355,6 +367,9 @@ begin
   end if;
 end
 $worker$;
+-- Fonction intérieure : appelée seulement par l'enveloppe (security definer).
+revoke all on function public.communication_traiter_notifications_sans_callbacks(integer)
+  from public, anon, authenticated, service_role;
 
 create or replace function public.traiter_notifications(p_lot integer default null)
 returns jsonb

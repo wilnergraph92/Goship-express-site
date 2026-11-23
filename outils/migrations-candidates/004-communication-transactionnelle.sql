@@ -279,6 +279,14 @@ begin
 end;
 $fonction$;
 
+-- Correction du 23/11/2026 (étape C11, trouvée par essai-production.py) : cette version
+-- est « security definer » pour lire les modèles versionnés malgré leur RLS ; ouverte à
+-- tous comme l'était la version officielle (non privilégiée), elle aurait laissé un
+-- visiteur sans compte rendre n'importe quel modèle. Ses appelants (mes_notifications,
+-- expedier_envoi) sont eux-mêmes « security definer » : la fermer ne retire rien.
+revoke execute on function public.texte_notification(text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.texte_notification(text, text, jsonb) to service_role;
+
 create or replace function public.communication_verifier_canal_modele_transactionnel()
 returns trigger
 language plpgsql
@@ -325,10 +333,21 @@ create trigger communication_verifier_canal_modele_transactionnel
 -- Conserver son implémentation, mais lui retirer toute invocation directe : le
 -- nouveau wrapper exige l'autorisation N0 dans la transaction du travailleur.
 -- Le bloc est rejouable avec les candidates 001–004.
+-- Correction du 23/11/2026 (étape C11) : quand la chaîne est rejouée, les fichiers
+-- officiels (supabase-notifications.sql, supabase-courriel-colis.sql,
+-- supabase-lieu-reception.sql) réécrivent expedier_envoi ; c'est CETTE version, la
+-- plus récente, qui doit devenir l'adaptateur intérieur. L'ancien code gardait celui
+-- du premier passage : une évolution officielle de l'adaptateur (texte, pied de
+-- courriel, lieu de réception) ne prenait jamais effet sur une base existante. Le
+-- wrapper se reconnaît à son appel de l'adaptateur intérieur.
 do $renommage$
+declare
+  v_adaptateur regprocedure := pg_catalog.to_regprocedure('public.expedier_envoi(public.notification_envois)');
 begin
-  if pg_catalog.to_regprocedure('public.communication_expedier_envoi_sans_porte(public.notification_envois)') is null
-     and pg_catalog.to_regprocedure('public.expedier_envoi(public.notification_envois)') is not null then
+  if v_adaptateur is not null
+     and pg_catalog.strpos((select p.prosrc from pg_catalog.pg_proc p where p.oid = v_adaptateur),
+                           'communication_expedier_envoi_sans_porte') = 0 then
+    execute 'drop function if exists public.communication_expedier_envoi_sans_porte(public.notification_envois)';
     execute 'alter function public.expedier_envoi(public.notification_envois) '
             'rename to communication_expedier_envoi_sans_porte';
   elsif pg_catalog.to_regprocedure('public.communication_expedier_envoi_sans_porte(public.notification_envois)') is null then
@@ -552,11 +571,26 @@ grant execute on function public.communication_previsualiser_transactionnelle(bi
 -- réessayé comme dans le moteur officiel ; c'est la version de
 -- lire_reponse_envoi de 005 (appliquée après celle-ci) qui en décide.
 
+-- Correction du 23/11/2026 (étape C11, trouvée par le rejeu de la chaîne) : la 009 ajoute
+-- le statut « confirmation » (codes WhatsApp). Rejouée sur une base où la 009 est déjà
+-- passée, cette contrainte doit le garder, sinon elle échoue dès qu'une ligne l'a.
 alter table public.notification_envois
   drop constraint if exists notification_envois_statut_check;
-alter table public.notification_envois
-  add constraint notification_envois_statut_check
-  check (statut in ('attente', 'envoi', 'envoye', 'livre', 'echec', 'annule', 'incertain'));
+do $statuts$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'notification_envois'
+                and column_name = 'communication_confirmation_demande_id') then
+    alter table public.notification_envois
+      add constraint notification_envois_statut_check
+      check (statut in ('attente', 'envoi', 'envoye', 'livre', 'echec', 'annule', 'incertain', 'confirmation'));
+  else
+    alter table public.notification_envois
+      add constraint notification_envois_statut_check
+      check (statut in ('attente', 'envoi', 'envoye', 'livre', 'echec', 'annule', 'incertain'));
+  end if;
+end
+$statuts$;
 
 create or replace function public.lire_reponse_envoi(
   p_envoi public.notification_envois, p_code integer, p_contenu text, p_erreur text)

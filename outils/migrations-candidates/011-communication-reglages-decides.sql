@@ -51,4 +51,8 @@ update public.communication_consentement_reglages
         or fenetre_demandes_secondes is null or maximum_demandes_compte is null
         or maximum_demandes_contact is null or politique_contact_partage is null);
 
+-- Empreinte lue par outils/production/controle-securite.sql (section 12).
+comment on column public.communication_consentement_reglages.politique_contact_partage is
+  'Numéro partagé entre comptes : « bloquer » par défaut, décision D2 du 23/11/2026 (candidate 011).';
+
 commit;

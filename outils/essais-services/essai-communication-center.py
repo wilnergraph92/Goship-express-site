@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Éprouve les migrations candidates du Communication Center sur PostgreSQL jetable."""
+import hashlib
 import importlib.util
 import json
 import os
@@ -105,10 +106,13 @@ EMAILS = (
     (CLIENT13, 'client13@goship.test', 'Treizième client synthétique'),
 )
 
+# La chaîne officielle sans les candidates : depuis C11, elles la ferment, mais ce banc
+# les applique lui-même (avec des réglages d'essai intercalés avant la 004) et
+# éprouve certaines séparément (011, 010).
 CHAINE = [
     line.strip()
     for line in open(os.path.join(OUTILS, 'migrations.txt'), encoding='utf-8')
-    if line.strip() and not line.startswith('#')
+    if line.strip() and not line.startswith('#') and not line.startswith('migrations-candidates/')
 ]
 DROITS_SUPABASE = """
 grant usage on schema public to anon, authenticated, service_role;
@@ -144,8 +148,6 @@ def installer_doublures_crypto_test(db):
       returns bytea language sql immutable set search_path = '' as $$
         select decode(md5(p_cle || ':' || p_texte) || md5('fixture:' || p_cle || ':' || p_texte), 'hex')
       $$;
-      create or replace rule test_vault_secrets_delete as on delete to vault.secrets
-        do instead delete from vault.decrypted_secrets where id = old.id;
     """)
 
 
@@ -2961,6 +2963,87 @@ def tester_c9_reglages_et_alertes(db, numero_base):
              (anniversaire.get('titre') == attendu_titre, bool(anniversaire.get('message'))), (True, True))
 
 
+def tester_c11_rejeu_chaine(db, numero_base):
+    """C11 : la chaîne rejouée sur une base existante enveloppe les versions les plus récentes.
+
+    004 et 005 renomment l'adaptateur officiel (expedier_envoi) et le travailleur de 004
+    (traiter_notifications) en fonctions intérieures, puis les enveloppent. Au rejeu, les
+    fichiers officiels réécrivent ces fonctions : ce sont ces versions-là, et non celles du
+    premier passage, qui doivent devenir les fonctions intérieures.
+    """
+    print('\nC11 — rejeu de la chaîne sur une base existante (base %d)' % numero_base)
+    interieures = (
+        ('communication_expedier_envoi_sans_porte', 'public.notification_envois', 'p_envoi', 'bigint',
+         "select -1::bigint /* PERIME */"),
+        ('communication_traiter_notifications_sans_callbacks', 'integer default null', 'p_lot', 'jsonb',
+         "select '{\"perime\": true}'::jsonb /* PERIME */"),
+    )
+    empreinte = lambda nom: db.sql(
+        "select md5(prosrc) from pg_proc where proname = '%s';" % nom).splitlines()[-1].strip()
+
+    def corps_source(chemins, signature):
+        # Le corps de la dernière définition de la fonction dans ces fichiers, tel que
+        # PostgreSQL le range dans prosrc (entre les délimiteurs, sans eux).
+        for chemin in reversed(chemins):
+            texte = open(chemin, encoding='utf-8').read()
+            debut = texte.rfind('create or replace function ' + signature)
+            if debut < 0:
+                continue
+            ouverture = re.search(r'\bas (\$[a-z_]*\$)', texte[debut:])
+            delimiteur = ouverture.group(1)
+            corps_debut = debut + ouverture.end()
+            return texte[corps_debut:texte.index(delimiteur, corps_debut)]
+        raise SystemExit('définition introuvable : ' + signature)
+
+    officiels = [os.path.join(OUTILS, f) for f in CHAINE]
+    attendu = {
+        # L'adaptateur officiel le plus récent de la chaîne
+        'communication_expedier_envoi_sans_porte': hashlib.md5(corps_source(
+            officiels, 'public.expedier_envoi(').encode('utf-8')).hexdigest(),
+        # Le travailleur verrouillé de 004
+        'communication_traiter_notifications_sans_callbacks': hashlib.md5(corps_source(
+            [os.path.join(CANDIDATES, '004-communication-transactionnelle.sql')],
+            'public.traiter_notifications(').encode('utf-8')).hexdigest(),
+    }
+    avant = {nom: empreinte(nom) for nom, *_ in interieures}
+    for nom, type_arg, arg, retour, corps in interieures:
+        db.sql("create or replace function public.%s(%s %s) returns %s language sql "
+               "security definer set search_path = '' as $$ %s $$;" % (nom, arg, type_arg, retour, corps))
+    verifier('fonctions intérieures marquées périmées avant le rejeu',
+             [empreinte(nom) != avant[nom] for nom, *_ in interieures], [True, True])
+
+    depart = CHAINE.index('supabase-notifications.sql')
+    for nom in CHAINE[depart:]:
+        db.fichier(os.path.join(OUTILS, nom))
+    for chemin in FICHIERS_CANDIDATS:
+        appliquer_candidate(db, chemin)
+    appliquer_candidate(db, FICHIER_CANDIDATE_S1)
+    appliquer_candidate(db, FICHIER_CANDIDATE_REGLAGES)
+
+    verifier('rejeu : les fonctions intérieures sont exactement les versions les plus récentes '
+             '(adaptateur de supabase-lieu-reception.sql, travailleur de 004)',
+             [empreinte(nom) == attendu[nom] for nom, *_ in interieures], [True, True])
+    corps = lambda nom: db.sql("select prosrc from pg_proc where proname = '%s';" % nom)
+    verifier('rejeu : expedier_envoi reste l\'enveloppe soumise à la porte P-07',
+             ('communication_expedier_envoi_sans_porte' in corps('expedier_envoi'),
+              'communication_sortie_autorisee' in corps('expedier_envoi')), (True, True))
+    verifier('rejeu : traiter_notifications enveloppe le travailleur verrouillé de 004',
+             ('communication_traiter_notifications_sans_callbacks' in corps('traiter_notifications'),
+              'communication_verrou_interrupteurs' in corps('communication_traiter_notifications_sans_callbacks')),
+             (True, True))
+    verifier('rejeu : une seule fonction intérieure de chaque sorte',
+             db.sql("select count(*) filter (where proname = 'communication_expedier_envoi_sans_porte') || '|' || "
+                    "count(*) filter (where proname = 'communication_traiter_notifications_sans_callbacks') "
+                    "from pg_proc;").splitlines()[-1].strip(), '1|1')
+    verifier('rejeu : fonctions intérieures et texte_notification fermées aux visiteurs et aux comptes',
+             db.sql("select bool_or(has_function_privilege(r, p.oid, 'execute'))::text from pg_proc p, "
+                    "unnest(array['anon', 'authenticated']) r where p.proname in "
+                    "('communication_expedier_envoi_sans_porte', 'communication_traiter_notifications_sans_callbacks', "
+                    "'texte_notification');").splitlines()[-1].strip(), 'false')
+    service_sql(db, 'select public.traiter_notifications(1);')
+    verifier('rejeu : le travailleur tourne toujours sans erreur', True, True)
+
+
 def main():
     arguments = sys.argv[1:]
     if arguments not in ([], ['--s1-only']):
@@ -3009,6 +3092,7 @@ def main():
                 tester_c6_campagnes(db, numero)
                 tester_c10_arret_admin(db, numero)
                 tester_c9_reglages_et_alertes(db, numero)
+                tester_c11_rejeu_chaine(db, numero)
             finally:
                 if db is not None:
                     db._psql(db.su, 'postgres',

@@ -75,7 +75,8 @@ alter default privileges in schema public grant all on sequences to anon, authen
 
 def texte_migration(chemin):
     t = open(chemin, encoding='utf-8').read()
-    return t.replace('create extension if not exists pg_net with schema extensions;', '')
+    return (t.replace('create extension if not exists pg_net with schema extensions;', '')
+             .replace('create extension if not exists pgcrypto with schema extensions;', ''))
 
 
 def fichier_dans(db, base, chemin):
@@ -539,9 +540,20 @@ def main():
                                capture_output=True, text=True, check=True).stdout
     psql_dans(db, NEUVE, doublures)
     cible = 'postgresql://%s@/%s?host=%s' % (db.su, NEUVE, db.socket)
-    chaine = lambda *a, **e: subprocess.run(['bash', os.path.join(PRODUCTION, 'appliquer-chaine.sh')] + list(a),
-                                           env=dict(env_pg(cible), CIBLE_DB_URL=e.get('url', cible), SANS_PG_NET='1'),
-                                           capture_output=True, text=True)
+    # Base jetable : les fichiers du Communication Center sont demandés explicitement
+    # (APPLIQUER_CANDIDATES=oui), sauf quand l'essai éprouve justement le garde-fou.
+    def chaine(*a, **e):
+        env = dict(env_pg(cible), CIBLE_DB_URL=e.get('url', cible), SANS_PG_NET='1')
+        if e.get('candidates', True):
+            env['APPLIQUER_CANDIDATES'] = 'oui'
+        env.update(e.get('env', {}))
+        return subprocess.run(['bash', os.path.join(PRODUCTION, 'appliquer-chaine.sh')] + list(a),
+                              env=env, capture_output=True, text=True)
+    OFFICIELS = [f for f in CHAINE if not f.startswith('migrations-candidates/')]
+    r = chaine(candidates=False)
+    verifier('sans APPLIQUER_CANDIDATES : arrêt avant le Communication Center, sans erreur',
+             (r.returncode, r.stdout.count('OK     '), 'ARRÊT  avant migrations-candidates/' in r.stdout),
+             (0, len(OFFICIELS), True))
     r = chaine()
     verifier('les %d migrations passent dans l\'ordre, une par une' % len(CHAINE),
              (r.returncode, r.stdout.count('OK     ')), (0, len(CHAINE)))
@@ -554,6 +566,10 @@ def main():
     r = chaine(url='postgresql://postgres:x@db.gpfdyslysqjmojgzggib.supabase.co:5432/postgres')
     verifier('adresse de la production : refus (code 3) avant toute connexion',
              (r.returncode, 'REFUS' in r.stdout), (3, True))
+    r = chaine(url='postgresql://postgres:x@db.gpfdyslysqjmojgzggib.supabase.co:5432/postgres',
+               env={'CONFIRMER_PRODUCTION': 'gpfdyslysqjmojgzggib'})
+    verifier('production confirmée : le Communication Center reste refusé (code 3), avant toute connexion',
+             (r.returncode, 'migrations-candidates/' in r.stdout, 'OK     ' in r.stdout), (3, True, False))
     psql_dans(db, NEUVE, 'drop function public.peut(text, uuid) cascade;')
     r = chaine('supabase-evenements.sql')
     en_echec = re.search(r'ÉCHEC  (\S+)', r.stdout)

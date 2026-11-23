@@ -1,8 +1,18 @@
 # Migrations candidates — Communication Center
 
-Ces fichiers sont des candidates de construction et de vérification locales. Ils
-ne font pas partie de `outils/migrations.txt` et ne sont pas des instructions
-d'application sur une base distante.
+Ces fichiers sont des candidates de construction et de vérification locales.
+Depuis le 23/11/2026 (étape C11, autorisée par la CEO), ils **ferment la chaîne
+officielle** `outils/migrations.txt`, pour les essais locaux et la CI seulement.
+Ce ne sont pas des instructions d'application sur une base distante :
+`outils/production/appliquer-chaine.sh` s'arrête avant eux sans
+`APPLIQUER_CANDIDATES=oui` (base jetable) et les refuse toujours sur l'adresse de
+production ; la sonde de production et `controle-securite.sql` les disent
+« réservés aux essais » (critère C14 de `docs/production/go-no-go.md`).
+
+Ils sont rejouables : une chaîne rejouée sur une base existante les réapplique
+après les fichiers officiels. La 004 et la 005 enveloppent alors l'adaptateur et
+le travailleur les plus récents (corrigé le 23/11/2026, essai « C11 — rejeu de la
+chaîne » du banc).
 
 ## Séquence actuelle
 
@@ -217,7 +227,8 @@ Les reprises ne concernent que des événements entrants STOP explicitement
 éligibles ; aucun envoi de fournisseur n'est lancé par la RPC. Cette interface
 ne constitue pas une validation de la Phase 1.3.1.
 
-Ces candidates ne valident pas la Phase 1.3.1, n'autorisent pas la Phase 2 et ne
-permettent pas d'exécuter les drafts SQL 40–43. Toute intégration dans la chaîne
-officielle ou toute opération distante exige une autorisation écrite distincte
-et une revue indépendante.
+Ces candidates ne valident pas la Phase 1.3.1 et ne permettent pas d'exécuter les
+drafts SQL 40–43. Leur intégration dans la chaîne officielle (C11) a été autorisée
+par la CEO le 23/11/2026 pour les essais locaux et la CI ; toute opération distante
+(préproduction, production) exige une autorisation écrite distincte et une revue
+indépendante.

@@ -5,16 +5,19 @@ appliquées (décision A′ du 23/11/2026, étape C10 de la feuille de route).
 
 Les candidates redéfinissent des fonctions de la chaîne officielle (expedier_envoi,
 lire_reponse_envoi, texte_notification, traiter_notifications, permissions_du_role…).
-Ce harnais rejoue tels quels des essais officiels, mais sur une base où les
-candidates sont appliquées par-dessus la chaîne :
+Depuis l'étape C11 (23/11/2026), les candidates ferment la chaîne officielle
+(outils/migrations.txt) : essai-notifications.py et tous les essais qui installent
+toute la chaîne les appliquent d'eux-mêmes. Trois essais, en revanche, éprouvent
+une mise à niveau et n'installent la chaîne que jusqu'à « leur » fichier : ils ne
+verraient jamais les candidates. Ce harnais les rejoue tels quels, candidates
+appliquées par-dessus :
 
-  notifications    essai-notifications.py     après toute la chaîne
   accuses          essai-accuses.py           après supabase-accuses.sql
   suivi-courriels  essai-suivi-courriels.py   après supabase-suivi-courriels.sql
   programmes       essai-programmes.py        après le dernier fichier de sa série
 
-Ces trois derniers essais éprouvent une mise à niveau : ils installent la chaîne
-jusqu'à « leur » fichier, observent l'état d'avant, puis appliquent ce fichier.
+Ces essais installent la chaîne jusqu'à « leur » fichier, observent l'état
+d'avant, puis appliquent ce fichier.
 Les candidates sont appliquées juste après ce fichier, jamais avant : l'état
 d'avant reste celui que l'essai veut observer. Ensuite, chaque fois que l'essai
 rejoue un fichier de la chaîne officielle, les candidates sont réappliquées
@@ -39,15 +42,13 @@ import uuid
 ICI = os.path.dirname(os.path.abspath(__file__))
 OUTILS = os.path.normpath(os.path.join(ICI, '..'))
 CANDIDATES = os.path.join(OUTILS, 'migrations-candidates')
-FICHIERS_CANDIDATS = sorted(
-    os.path.join(CANDIDATES, f) for f in os.listdir(CANDIDATES)
-    if f.endswith('.sql') and f[:3].isdigit())
 CHAINE = [l.strip() for l in open(os.path.join(OUTILS, 'migrations.txt'), encoding='utf-8')
           if l.strip() and not l.startswith('#')]
+# Les candidates, dans l'ordre où la chaîne officielle les applique
+FICHIERS_CANDIDATS = [os.path.join(OUTILS, f) for f in CHAINE if f.startswith('migrations-candidates/')]
 
 # Essai officiel → fichier de la chaîne après lequel les candidates entrent en jeu.
 CIBLES = {
-    'notifications': ('essai-notifications.py', lambda m: CHAINE[-1]),
     'accuses': ('essai-accuses.py', lambda m: m.NOUVEAU),
     'suivi-courriels': ('essai-suivi-courriels.py', lambda m: m.NOUVEAU),
     'programmes': ('essai-programmes.py', lambda m: m.NOUVEAUX[-1]),
@@ -55,16 +56,9 @@ CIBLES = {
 
 # Écarts voulus par les candidates, chacun nommé, justifié et limité à la valeur exacte
 # obtenue : toute autre différence reste un échec. Essai → titre → (valeur des
-# candidates, raison).
-ECARTS_VOLONTAIRES = {
-    'notifications': {
-        '2e essai, limite de débit (429) : nouvel essai dans ~2 min': (
-            ['attente|LIMITE_DEBIT|2', True],
-            'les candidates nomment LIMITE_DEBIT toute limite de débit (HTTP 429, Expo, '
-            'WhatsApp) au lieu de HTTP_429 ; le nouvel essai a lieu au même moment '
-            '(décision K, 23/11/2026)'),
-    },
-}
+# candidates, raison). Vide depuis C11 : le seul écart connu (LIMITE_DEBIT au lieu de
+# HTTP_429) est devenu l'attente de essai-notifications.py.
+ECARTS_VOLONTAIRES = {}
 
 DOUBLURES_CRYPTO = """
   create schema if not exists extensions;
