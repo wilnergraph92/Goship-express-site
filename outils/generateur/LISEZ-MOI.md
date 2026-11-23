@@ -18,7 +18,7 @@ les trois autres langues en retard sur le français.
 | Dossier   | Ce qu'il contient |
 | --------- | ----------------- |
 | `export/` | La maquette Claude Design exportée (`*.dc.html`) et ses images. C'est d'elle que viennent l'accueil, À propos, Nos services, Contacts, le blog et les pages légales. On n'y touche pas : `build.py` la transforme. |
-| `pages/`  | Les pages écrites à la main, que la maquette ne contient pas : l'espace client (inscription, connexion, mon compte, nouveau mot de passe) et le tableau de bord (`admin.html`). |
+| `pages/`  | Les pages écrites à la main, que la maquette ne contient pas : l'espace client (inscription, connexion, mon compte, nouveau mot de passe), le tableau de bord (`admin.html`) et les pages guides (`*.guide.html` : destinations, adresse à Miami, tarifs, questions fréquentes ; liste `GUIDE_PAGES` dans `build.py`). |
 
 `build.py` lit ces deux sources, applique les corrections et les ajouts du site
 (icônes, en-têtes de sécurité, section de l'application mobile, fil en

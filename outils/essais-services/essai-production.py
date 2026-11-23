@@ -6,8 +6,10 @@
 #
 # Sur une base jetable (jamais la vraie base) :
 #   A. la chaîne officielle des migrations (outils/migrations.txt) est la même
-#      partout : README.md, CLAUDE.md, les bancs d'essai ; les anciens fichiers
-#      refusent de s'exécuter sur une base à jour ;
+#      partout : README.md (qui la cite dans l'ordre), les bancs d'essai ; les
+#      instructions des agents (CLAUDE.md renvoie à AGENTS.md, qui renvoie à
+#      migrations.txt) ne la recopient pas ; les anciens fichiers refusent de
+#      s'exécuter sur une base à jour ;
 #   B. la chaîne complète s'installe, et se rejoue (vide, puis remplie, sans rien
 #      changer aux données), sur une base qui a les droits
 #      par défaut de Supabase (tout nouvel objet du schéma public ouvert à anon et
@@ -125,11 +127,16 @@ def main():
     verifier('migrations.txt : %d fichiers, tous présents' % len(CHAINE), manquants, [])
     verifier('les bancs d\'essai suivent la même chaîne (essai-mobile.py)',
              list(M.FICHIERS), CHAINE)
-    for doc in ('README.md', 'CLAUDE.md'):
-        texte = open(os.path.join(RACINE, doc), encoding='utf-8').read()
-        # La phrase d'ordre : chaque fichier de la chaîne y apparaît, dans l'ordre
-        trouve = re.search(r'.*?'.join(re.escape(f) for f in CHAINE), texte, re.S) is not None
-        verifier('%s : les %d fichiers cités dans l\'ordre de la chaîne' % (doc, len(CHAINE)), trouve, True)
+    def lire(doc):
+        return open(os.path.join(RACINE, doc), encoding='utf-8').read()
+    # La phrase d'ordre du README : chaque fichier de la chaîne y apparaît, dans l'ordre
+    trouve = re.search(r'.*?'.join(re.escape(f) for f in CHAINE), lire('README.md'), re.S) is not None
+    verifier('README.md : les %d fichiers cités dans l\'ordre de la chaîne' % len(CHAINE), trouve, True)
+    # Les instructions des agents ne recopient pas la liste (AGENTS.md l'interdit, pour
+    # éviter une seconde source de vérité) : elles doivent seulement mener à migrations.txt.
+    verifier('CLAUDE.md renvoie à AGENTS.md', '`AGENTS.md`' in lire('CLAUDE.md'), True)
+    verifier('AGENTS.md désigne outils/migrations.txt comme la chaîne officielle',
+             'La chaîne officielle est celle de `outils/migrations.txt`' in lire('AGENTS.md'), True)
     reste = sorted(os.path.basename(f) for f in os.listdir(OUTILS)
                    if f.endswith('.sql') and f not in CHAINE)
     verifier('hors chaîne : seulement les six anciens fichiers', reste, sorted(ANCIENS))
