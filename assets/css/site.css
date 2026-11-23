@@ -423,6 +423,12 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-alerte--info{background:#eef4ff;border-color:#cfdcf7;color:#1c3a7a}
 .gs-alerte--succes{background:#ecfbf3;border-color:#bfe9d1;color:#14532d}
 .gs-alerte--erreur{background:#fff1f1;border-color:#ffd2d2;color:#8a1c16}
+/* « Toujours là ? » (Mon compte, inactivite.js) : fixé en bas de l'écran pour être vu où que
+   l'on soit dans la page, au-dessus de tout, sans cacher toute la largeur sur ordinateur */
+.gs-inactivite{position:fixed;left:16px;right:16px;bottom:16px;z-index:1000;max-width:520px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;box-shadow:0 24px 48px -20px rgba(6,26,63,.45)}
+.gs-inactivite[hidden]{display:none}
+.gs-inactivite p{flex:1 1 240px;margin-top:0}
+.gs-inactivite strong{flex-basis:100%}
 .gs-copie-ok{font-family:'IBM Plex Mono',monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#15803d}
 
 /* Mon compte */
@@ -1370,3 +1376,55 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
 .gs-campagnes__motif{padding-left:12px;color:#8b2f2f}
 @media (min-width:1100px){.gs-campagnes__grille{grid-template-columns:minmax(0,1.2fr) minmax(360px,1fr)}.gs-campagnes__carte[data-cm-model-form]{grid-column:1/-1}}
 @media (max-width:700px){.gs-campagnes__carte{padding:12px}.gs-campagnes__entete{align-items:flex-start;flex-wrap:wrap}}
+/* ==========================================================================
+   Pages guides : destinations, adresse à Miami, tarifs, questions fréquentes
+   (outils/generateur/pages/*.guide.html). Elles répondent chacune à une
+   recherche précise de nos clients ; le style reprend celui des pages
+   légales (bandeau sombre, cartes blanches sur fond clair), en classes
+   plutôt qu'en styles posés à la main, pour que les cinq restent pareilles.
+   ========================================================================== */
+.gs-guide-tete{position:relative;background:linear-gradient(160deg,var(--ink) 0%,var(--ink2) 100%);color:#fff;overflow:hidden}
+.gs-guide-tete__wrap{position:relative;max-width:1100px;margin:0 auto;padding:clamp(56px,8vw,112px) 24px clamp(48px,6vw,88px)}
+.gs-guide-tete__surtitre{display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-vif)}
+.gs-guide-tete h1{margin-top:16px;max-width:860px;font-size:clamp(34px,5vw,62px);line-height:1.04;font-weight:800}
+.gs-guide-tete__intro{margin-top:20px;max-width:720px;font-size:clamp(17px,1.5vw,19px);line-height:1.65;color:#c4d0ec}
+.gs-guide-tete__actions{margin-top:30px;display:flex;flex-wrap:wrap;gap:12px}
+.gs-guide-tete .gs-bouton--contour{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
+.gs-guide-tete .gs-bouton--contour:hover{background:rgba(255,255,255,.12);color:#fff;border-color:#fff}
+.gs-guide-fil{margin-top:22px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9fb0d6}
+.gs-guide-fil a{color:#fff}
+.gs-guide-fil a:hover{color:var(--accent-vif)}
+.gs-guide-corps{background:#f7f9fc;padding:clamp(40px,5vw,80px) 20px clamp(56px,6.5vw,96px)}
+/* minmax(0,1fr) et min-width:0 : sans eux, un contenu large (un tableau, une adresse sans
+   espace) élargit toute la colonne et les cartes sortent de l'écran du téléphone */
+.gs-guide-corps__wrap{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:clamp(22px,2.6vw,32px)}
+.gs-guide-carte{min-width:0;background:#fff;border:1px solid var(--mist);border-radius:24px;box-shadow:0 40px 80px -56px rgba(6,26,63,.45);padding:clamp(24px,3.6vw,52px)}
+.gs-guide-carte h2{font-size:clamp(24px,2.8vw,34px);line-height:1.14;font-weight:800;color:var(--ink)}
+.gs-guide-carte h3{margin-top:clamp(22px,2.6vw,30px);font-size:clamp(18px,1.9vw,22px);line-height:1.25;font-weight:800;color:var(--ink)}
+.gs-guide-carte p{margin-top:14px;font-size:16.5px;line-height:1.8;color:#4a5878}
+.gs-guide-carte strong{color:var(--ink);font-weight:700}
+.gs-guide-carte p a,.gs-guide-liste a{font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.gs-guide-liste{margin:16px 0 0;padding:clamp(18px,2.2vw,24px);list-style:none;background:#f4f6fa;border-radius:14px;display:grid;gap:12px}
+.gs-guide-liste li{position:relative;padding-left:24px;font-size:16px;line-height:1.7;color:#4a5878}
+.gs-guide-liste li::before{content:'';position:absolute;left:0;top:.62em;width:9px;height:9px;border-radius:50%;background:var(--accent)}
+ol.gs-guide-liste{counter-reset:etape}
+ol.gs-guide-liste li{padding-left:40px;counter-increment:etape}
+ol.gs-guide-liste li::before{content:counter(etape);top:.15em;width:26px;height:26px;display:grid;place-items:center;background:var(--ink);color:#fff;font-size:13px;font-weight:800}
+.gs-guide-chiffres{margin-top:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:14px}
+.gs-guide-chiffre{padding:20px 22px;border:1px solid var(--mist);border-radius:18px;background:var(--cream)}
+.gs-guide-chiffre__valeur{display:block;font-size:clamp(26px,3vw,34px);line-height:1.1;font-weight:800;color:var(--ink)}
+.gs-guide-chiffre__libelle{display:block;margin-top:8px;font-size:14.5px;line-height:1.55;color:#4a5878}
+.gs-guide-tableau{margin-top:18px;width:100%;border-collapse:collapse;font-size:15.5px}
+.gs-guide-tableau th,.gs-guide-tableau td{padding:13px 14px;border-bottom:1px solid var(--mist);text-align:left;vertical-align:top;line-height:1.55}
+.gs-guide-tableau th{color:var(--ink);font-weight:800;background:var(--cream)}
+.gs-guide-tableau td{color:#4a5878}
+.gs-guide-montant{white-space:nowrap}
+.gs-guide-defile{margin-top:4px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.gs-guide-note{margin-top:16px;padding:14px 18px;border-left:4px solid var(--accent);border-radius:0 12px 12px 0;background:#fff7f1;font-size:15px;line-height:1.7;color:#4a5878}
+.gs-guide-appel{background:var(--ink);color:#fff;border-radius:24px;padding:clamp(26px,3.6vw,48px);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:20px}
+.gs-guide-appel h2{font-size:clamp(22px,2.6vw,30px);line-height:1.15;font-weight:800}
+.gs-guide-appel p{margin-top:8px;color:#c4d0ec;line-height:1.6}
+.gs-guide-appel__boutons{display:flex;flex-wrap:wrap;gap:12px}
+.gs-guide-voir{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.gs-guide-voir a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid #d6ddec;border-radius:999px;color:var(--ink);font-weight:700;font-size:15px}
+.gs-guide-voir a:hover{border-color:var(--accent);color:var(--accent)}

@@ -31,6 +31,7 @@
 <script src="../assets/js/codes.js" defer></script>
 <script src="../assets/js/impression.js" defer></script>
 <script src="../assets/js/lieux.js" defer></script>
+<script src="../assets/js/inactivite.js" defer></script>
 <script src="../assets/js/compte.js" defer></script>
 </head>
 <body>
@@ -121,6 +122,14 @@
 
 <section class="gs-espace" data-no-reveal>
   <div class="gs-espace__wrap">
+    <!-- Une minute avant la déconnexion après inactivité (inactivite.js) : fixé en bas de
+         l'écran, visible où que l'on soit dans la page -->
+    <div class="gs-alerte gs-alerte--info gs-inactivite" data-inactivite hidden role="alertdialog" aria-labelledby="inactivite-titre" aria-describedby="inactivite-texte">
+      <strong id="inactivite-titre">Still there?</strong>
+      <p id="inactivite-texte">With no activity, you will be signed out in one minute, to protect your account.</p>
+      <button type="button" class="gs-bouton gs-bouton--plein gs-bouton--petit" data-action="rester-connecte">Stay signed in</button>
+    </div>
+
     <div class="gs-alerte gs-alerte--succes gs-espace__bienvenue" data-bienvenue hidden tabindex="-1">
       <strong>Welcome to Goship Express!</strong>
       <p>Your account is ready. Your customer code <b data-code translate="no"></b> identifies you: add it after your name in the shipping address of all your online purchases.</p>
@@ -728,7 +737,9 @@
     <div style="min-width:0">
       <h2 style="font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#fff;font-family:'IBM Plex Mono',monospace;font-weight:600">Services</h2>
       <div style="margin-top:20px;display:grid;gap:12px;font-size:14.5px">
-        <a href="index.html#adresse" class="hv-accent" style="color:#a4b3d6">US receiving address</a>
+        <a href="adresse-miami.html" class="hv-accent" style="color:#a4b3d6">US receiving address</a>
+        <a href="envoi-colis-haiti.html" class="hv-accent" style="color:#a4b3d6">Shipping to Haiti</a>
+        <a href="envoi-colis-republique-dominicaine.html" class="hv-accent" style="color:#a4b3d6">Shipping to the Dominican Republic</a>
         <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Package consolidation</a>
         <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Ocean freight</a>
         <a href="nos-services.html#services" class="hv-accent" style="color:#a4b3d6">Express air freight</a>
@@ -742,6 +753,8 @@
         <a href="a-propos.html" class="hv-accent" style="color:#a4b3d6">About</a>
         <a href="nos-services.html" class="hv-accent" style="color:#a4b3d6">Our Services</a>
         <a href="blog.html" class="hv-accent" style="color:#a4b3d6">Blog</a>
+        <a href="tarifs.html" class="hv-accent" style="color:#a4b3d6">Rates</a>
+        <a href="faq.html" class="hv-accent" style="color:#a4b3d6">Frequently asked questions</a>
         <a href="contacts.html" class="hv-accent" style="color:#a4b3d6">Contact</a>
       </div>
     </div>

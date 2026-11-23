@@ -420,6 +420,45 @@ Ces procédures ne sont pas des autorisations et plusieurs états consignés
   d’application en production ; l’ambiguïté de docs/production/deployment.md
   doit être clarifiée avant toute opération de production.
 
+### Ajouts de `main` du 17 au 23 novembre 2026 (PR 66, 69, 70 et 71)
+
+Ces faits figuraient dans le `CLAUDE.md` de `main` au moment de la fusion dans
+la branche du Communication Center (23/11/2026). Ils sont conservés ici parce
+que la branche a remplacé `CLAUDE.md` par un renvoi vers `AGENTS.md`. Comme le
+reste de l’archive, ils se vérifient dans le code avant usage.
+
+- **Déconnexion après inactivité** (`assets/js/inactivite.js`,
+  `GoshipInactivite.surveiller`) : tableau de bord (fenêtre
+  `data-dialogue="inactivite"`, `admin.js`) et « Mon compte » (bandeau
+  `[data-inactivite]`, `compte.js`, puis `connexion.html?raison=inactivite`).
+  Délais `deconnexionTableauMinutes` et `deconnexionCompteMinutes` de la
+  configuration (1 à 240 ; 10 par défaut dans le code, réglés à 5 par la
+  PR 71), avertissement une minute avant. L’heure du dernier geste est
+  partagée entre onglets (`gse-derniere-activite`) et comparée à l’horloge :
+  un ordinateur sorti de veille se déconnecte aussitôt. Protection côté page
+  seulement : le jeton Supabase garde sa durée. Banc :
+  `essai-inactivite-navigateur.mjs`.
+- **Liens propres dans la copie publiée seulement**
+  (`outils/production/liens_propres.py`, appelé par `deploy.yml` puis
+  `--verifier`, banc `essai-liens-propres.py`) : `nos-services.html` devient
+  `nos-services`, `index.html` devient `./`. Le dépôt garde ses liens en
+  `.html` pour s’ouvrir depuis le disque ; `admin.html` n’est jamais réécrit.
+- **Pages guides** (rapport SEO du 19/11/2026) : `envoi-colis-haiti`,
+  `envoi-colis-republique-dominicaine`, `adresse-miami`, `tarifs`, `faq`.
+  Sources dans `outils/generateur/pages/*.guide.html`, listées dans
+  `GUIDE_PAGES` (`build.py`, titre de 65 signes au plus), habillées par les
+  classes `gs-guide-*` de `site.css`, liées depuis le pied de page
+  (`liens_du_pied`). Un délai, un prix ou un service qui change sur le site ou
+  dans `API.tarifs` se change aussi là ; un texte ajouté reçoit ses trois
+  traductions dans `outils/traductions/*.json`.
+- **Skills de marketing dans `.claude/skills/`** (exclus de la publication) :
+  audit SEO, publicité, réponses de l’IA de Google et prospection. Aucun ne
+  modifie un compte publicitaire, le site ou la fiche Google sans accord
+  explicite ; aucune prospection n’est envoyée sans lot approuvé par le
+  propriétaire. Leurs clés vivent hors du dépôt et leurs dossiers de travail
+  (`seo-work/`, `ads-out/`, `search-work/`, `finder-out/`, `leads-out/`,
+  `queue/`) sont ignorés par Git.
+
 ## 14. Anciennes instructions écartées ou à revalider
 
 Les éléments suivants de l’ancien document ne doivent pas être repris comme

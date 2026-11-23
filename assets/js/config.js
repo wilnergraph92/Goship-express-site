@@ -48,6 +48,15 @@
                  sur l'espace client ni le tableau de bord. Après l'avoir changé,
                  relancez build.py puis traduire.py : la politique de sécurité
                  des pages doit autoriser Google.
+
+   deconnexionTableauMinutes  Déconnexion après un moment sans activité
+   deconnexionCompteMinutes   (souris, clavier, toucher, défilement), en
+                 minutes : le tableau de bord, puis « Mon compte » de l'espace
+                 client. 1 à 240 ; vide ou absent : 10. Un avertissement
+                 « Toujours là ? » paraît une minute avant. Tous les onglets
+                 du site partagent le même compteur, et un ordinateur rouvert
+                 après une longue veille se déconnecte aussitôt. Rien à
+                 relancer : la page lit le réglage à son ouverture.
    ========================================================================== */
 window.GOSHIP_CONFIG = {
   whatsapp: '18495386262',
@@ -60,5 +69,7 @@ window.GOSHIP_CONFIG = {
   appStoreLien: '',
   googlePlayLien: 'https://play.google.com/store/apps/details?id=com.goshipexpress.app',
   siteUrl: 'https://goshipexpress.net',
-  googleAnalytics: 'G-KLV2HSF91C'
+  googleAnalytics: 'G-KLV2HSF91C',
+  deconnexionTableauMinutes: 5,
+  deconnexionCompteMinutes: 5
 };
