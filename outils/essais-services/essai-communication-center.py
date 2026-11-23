@@ -1608,10 +1608,38 @@ def tester_transactionnel(db, numero_base):
     compte_apres = db.sql(
         "select count(*) from net.envois where body ->> 'notification_envoi_id' = '%d';" % incertain_id
     ).splitlines()[-1].strip()
-    verifier('absence de réponse devient incertaine et bloque la reprise automatique',
-             (db.sql("select statut || '|' || code_erreur from public.notification_envois where id = %d;"
+    # Décision K (CEO, 23/11/2026) : le silence du fournisseur d'une notification
+    # transactionnelle est un échec temporaire, réessayé comme dans le moteur officiel.
+    verifier('décision K : un silence de 10 min est réessayé (attente, RESEAU), pas avant l\'heure',
+             (db.sql("select statut || '|' || code_erreur || '|' || tentative "
+                     "from public.notification_envois where id = %d;"
                      % incertain_id).splitlines()[-1].strip(), compte_avant, compte_apres),
-             ('incertain|RESULTAT_INCERTAIN', '1', '1'))
+             ('attente|RESEAU|1', '1', '1'))
+    db.sql("update public.notification_envois set prochain_essai_le = now() where id = %d;" % incertain_id)
+    db.sql('select public.traiter_notifications(1);')
+    requete_k = db.sql("select requete from public.notification_envois where id = %d;"
+                       % incertain_id).splitlines()[-1].strip()
+    db.sql("insert into net._http_response (id, status_code, content, error_msg) "
+           "values (%s, 503, 'Service Unavailable', null);" % requete_k)
+    db.sql('select public.traiter_notifications(1);')
+    verifier('décision K : 2e essai envoyé, puis 503 reprogrammé (attente, HTTP_503)',
+             (db.sql("select statut || '|' || code_erreur || '|' || tentative "
+                     "from public.notification_envois where id = %d;"
+                     % incertain_id).splitlines()[-1].strip(),
+              db.sql("select count(*) from net.envois where body ->> 'notification_envoi_id' = '%d';"
+                     % incertain_id).splitlines()[-1].strip()),
+             ('attente|HTTP_503|2', '2'))
+    db.sql("update public.notification_envois set prochain_essai_le = now() where id = %d;" % incertain_id)
+    db.sql('select public.traiter_notifications(1);')
+    requete_k = db.sql("select requete from public.notification_envois where id = %d;"
+                       % incertain_id).splitlines()[-1].strip()
+    db.sql("insert into net._http_response (id, status_code, content, error_msg) "
+           "values (%s, null, null, 'Timeout of 5000 ms reached');" % requete_k)
+    db.sql('select public.traiter_notifications(1);')
+    verifier('décision K : au 3e essai, délai dépassé = abandon, jamais d\'essai infini',
+             db.sql("select statut || '|' || code_erreur || '|' || tentative "
+                    "from public.notification_envois where id = %d;"
+                    % incertain_id).splitlines()[-1].strip(), 'echec|ABANDON_RESEAU|3')
 
     presence_porte = db.sql(
         "select to_regprocedure('public.communication_autoriser_sortie(text,text)') is not null;"
@@ -1757,6 +1785,11 @@ def tester_p07(db, numero_base, ids):
              ('envoye', sorties_avant_reponse))
 
     incertain_id = ids['action_resolved']
+    # Depuis la décision K, un silence ou une 5xx est réessayé : la ligne a été
+    # abandonnée plus haut. On la place dans le cas qui reste incertain (réponse 2xx
+    # sans identifiant de message), fixture synthétique comme sa résolution plus bas.
+    db.sql("update public.notification_envois set statut = 'incertain', "
+           "code_erreur = 'REPONSE_INCOMPLETE', maj_le = now() where id = %d;" % incertain_id)
     attente_incertain = service_json(db, "select public.communication_confirmer_arret();")
     verifier('état incertain bloque une confirmation d’arrêt prématurée',
              (attente_incertain.get('etat'), attente_incertain.get('raison'),

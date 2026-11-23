@@ -543,10 +543,14 @@ revoke execute on function public.communication_previsualiser_transactionnelle(b
 grant execute on function public.communication_lister_outbox_transactionnel(integer) to authenticated;
 grant execute on function public.communication_previsualiser_transactionnelle(bigint, text) to authenticated;
 
--- 4. Résultat incertain : ne pas réessayer automatiquement --------------------
+-- 4. Résultat incertain ------------------------------------------------------
 -- Une absence de réponse après dépôt chez un fournisseur ne prouve pas que la
 -- requête a échoué. L'état « incertain » bloque la reprise automatique afin
 -- d'éviter un doublon ; une réconciliation explicite reste nécessaire.
+-- Décision K (CEO, 23/11/2026) : pour les notifications transactionnelles, un
+-- silence, une erreur réseau ou une réponse 408, 425 ou 5xx est au contraire
+-- réessayé comme dans le moteur officiel ; c'est la version de
+-- lire_reponse_envoi de 005 (appliquée après celle-ci) qui en décide.
 
 alter table public.notification_envois
   drop constraint if exists notification_envois_statut_check;

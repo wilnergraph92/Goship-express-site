@@ -15,7 +15,7 @@ d'application sur une base distante.
    limités au compte client ou au rôle backend.
 4. `004-communication-transactionnelle.sql` — modèles transactionnels versionnés,
    liaison aux événements et à la file `notification_envois` existante, historique
-   structuré des états, passage par P-07 et arrêt des reprises au résultat incertain.
+   structuré des états, passage par P-07 et état incertain (voir la décision K en 005).
 5. `005-communication-adaptateurs-canaux.sql` — normalisation des réponses Expo,
    Meta, Brevo et Resend vers les états communs ; raccord des retours transactionnels
    normalisés aux tables P-08 existantes et au worker transactionnel existant.
@@ -90,9 +90,11 @@ Corrections du 23/11/2026 (C9) :
   création.
 - **005, appareil Expo désinscrit** : le code `DeviceNotRegistered` est conservé
   et l'appareil est oublié, comme dans le moteur officiel.
-- **Écart restant, en décision** (K) : les réponses 5xx, les délais dépassés et
-  les silences des fournisseurs donnent `incertain`, sans nouvel essai. Le moteur
-  officiel réessaie.
+- **005, décision K** (CEO, 23/11/2026) : les réponses 408, 425 et 5xx, les
+  erreurs réseau, les délais dépassés et les silences des fournisseurs sont
+  réessayés comme dans le moteur officiel (30 s, 2 min, puis `ABANDON_…`). Seul
+  écart restant, volontaire : une limite de débit s'appelle `LIMITE_DEBIT` et non
+  `HTTP_429`.
 - **007** : `communication_c5_sante` ajoute deux alertes (décision D) :
   `EVENEMENTS_EN_RETARD`, pour un retour non traité depuis plus de 10 min, et
   `ARRET_NON_CONFIRME`, pour un arrêt demandé mais non confirmé depuis plus de
@@ -130,7 +132,8 @@ réutilise `colis_historique`, `notifications`, `notification_regles` et
 initialisés depuis `notification_textes()` ; chaque notification nouvelle
 conserve la version et la langue sélectionnées. La vue de l'outbox et le RPC de
 prévisualisation n'exposent ni destinataire ni erreur libre. Une réponse
-fournisseur absente devient `incertain` et n'est pas réessayée automatiquement.
+fournisseur absente est réessayée par la version de `lire_reponse_envoi` de 005
+(décision K).
 
 La candidate 004 ne configure ni n'active de fournisseur et ne lance pas de
 travailleur. Elle peut toutefois préparer des lignes dans la file existante à
@@ -140,9 +143,11 @@ chaque base jetable par un adaptateur local, sans appel fournisseur.
 
 La candidate 005 ne configure ni n'active de canal. Elle garde le point d'envoi
 historique derrière P-07 et distingue l'acceptation, le refus, la limite de débit,
-le rejet définitif et le résultat incertain. Seuls les refus explicites de débit
-sont automatiquement réessayés ; délai, réseau, réponse incomplète et 5xx deviennent
-incertains. L'adresse e-mail reçoit un contrôle syntaxique minimal avant l'appel
+le rejet définitif et le résultat incertain. Le classement garde « incertain » pour un délai, une erreur réseau, une 5xx ou une
+réponse incomplète ; depuis la décision K, `lire_reponse_envoi` réessaie pourtant
+les quatre premiers cas pour une notification transactionnelle, comme le moteur
+officiel. Restent incertaines, sans reprise : une réponse 2xx sans identifiant de
+message et les codes de confirmation WhatsApp. L'adresse e-mail reçoit un contrôle syntaxique minimal avant l'appel
 historique ; la validation complète reste celle du fournisseur. Les retours P-08 ne conservent pas la charge brute et ne modifient que
 le statut de la transmission déjà rapprochée par l'identifiant fournisseur. La
 progression des statuts est monotone ; un callback ne crée jamais une transmission.

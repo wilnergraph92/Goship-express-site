@@ -156,6 +156,8 @@ change pas à elle seule l'état du consentement ; un retrait exige un signal ex
 | Doublons | clé unique existante | clé `campagne:<id>:<client>:<canal>` ; audience unique (campagne, client, canal) |
 | Concurrence | `skip locked` | [Corrigé 1.3] un envoi par transaction ; ordre unique N0 interrupteurs → N1 campagne → N2 client → N3 consentement → N4 envoi → N5 compteurs (40 §3) ; arrêt d'urgence `arret_urgence` |
 
+> **Décision K (CEO, 23/11/2026).** Les notifications **transactionnelles** gardent le nouvel essai du moteur officiel (colonne de gauche) après une réponse 408, 425 ou 5xx, une erreur réseau, un délai dépassé ou un silence du fournisseur : un message reçu deux fois gêne peu, un message perdu est un défaut de service. La règle « 5xx et issue inconnue = `incertain`, jamais renvoyé seul » reste celle des **campagnes** et des codes de confirmation WhatsApp. Mise en œuvre : `lire_reponse_envoi` de la candidate 005.
+
 **Planification.** `planifiee_le` ; une campagne lancée par passage. **Heures permises** 9 h–19 h à
 l'heure du destinataire ([Corrigé 1.3] fuseau déclaré, Haïti, Santo Domingo, ou État américain à un seul fuseau
 enregistré avec preuve ; **sinon inconnu : rien ne part** — plus d'heure de l'Est par défaut) ; **fréquence** 1 par jour et

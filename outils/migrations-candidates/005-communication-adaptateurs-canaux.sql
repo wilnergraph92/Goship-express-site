@@ -400,6 +400,23 @@ begin
   v_code := coalesce(v_resultat ->> 'code', '');
   v_id := v_resultat ->> 'message_id';
 
+  -- Décision K (CEO, 23/11/2026) : une notification transactionnelle dont le
+  -- résultat est incertain parce que le fournisseur a répondu 408, 425 ou 5xx,
+  -- parce que le réseau a échoué ou parce qu'il est resté silencieux est
+  -- réessayée comme dans le moteur officiel (30 s, 2 min, puis abandon au
+  -- maximum de tentatives). Un « colis disponible » reçu deux fois gêne peu ; un
+  -- message perdu est un défaut de service. Restent « incertain », sans reprise :
+  -- une réponse 2xx sans identifiant de message (le fournisseur l'a sans doute
+  -- accepté) et les codes de confirmation WhatsApp (un second code invaliderait
+  -- le premier). Les codes reprennent ceux du moteur officiel : HTTP_<code> ou
+  -- RESEAU, puis ABANDON_<code>.
+  if v_classe = 'incertain' and v_code = 'RESULTAT_INCERTAIN'
+     and (pg_catalog.to_jsonb(p_envoi) ->> 'communication_confirmation_demande_id') is null then
+    v_classe := 'temporaire';
+    v_code := case when p_erreur is null and p_code is not null
+                   then 'HTTP_' || p_code::text else 'RESEAU' end;
+  end if;
+
   if v_classe = 'accepte' then
     update public.notification_envois
        set statut = case when statut in ('livre', 'echec', 'annule') then statut else 'envoye' end,
@@ -425,6 +442,11 @@ begin
            erreur = null, verrouille_le = null, maj_le = now()
      where id = p_envoi.id;
   else
+    -- Un échec temporaire au bout de ses tentatives est un abandon, comme dans le
+    -- moteur officiel (ABANDON_HTTP_503, ABANDON_RESEAU, ABANDON_LIMITE_DEBIT).
+    if v_classe = 'temporaire' then
+      v_code := 'ABANDON_' || v_code;
+    end if;
     update public.notification_envois
        set statut = case when statut in ('livre', 'echec', 'annule') then statut else 'echec' end,
            code_erreur = case when statut in ('livre', 'echec', 'annule') then code_erreur else v_code end,

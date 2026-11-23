@@ -184,6 +184,8 @@ Données fictives communes (jamais de vraies personnes) :
 | Retour tardif avec la référence | rapproché | — |
 | Relance par G1 | refusée | acceptée |
 | Relance par A1 sans cocher le risque | refusée `DUPLICATE_RISK` | acceptée |
+
+> **Décision K (CEO, 23/11/2026)** : ce groupe vaut pour les campagnes et les codes de confirmation WhatsApp. Pour une notification transactionnelle, un silence, une erreur réseau, un délai dépassé ou une réponse 408, 425 ou 5xx est réessayé (30 s, 2 min, puis `ABANDON_…`) ; seule une réponse 2xx sans identifiant de message reste `incertain`. Essais : « décision K » du banc `essai-communication-center.py`.
 | Relance par A1 avec le risque coché et un motif | nouvel envoi `…:relance:1`, soumis à toutes les règles ; journal | règles contournées |
 - **Preuve** : états et journal d'audit.
 
