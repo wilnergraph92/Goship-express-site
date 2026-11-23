@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -42,7 +43,8 @@ spec.loader.exec_module(S)
 
 # Chaque exécution a son propre cluster jetable ; le paquet n'a donc pas à inspecter
 # ni arrêter les autres processus PostgreSQL de la machine.
-DOSSIER_C6 = '/private/tmp/goship-c6-validation'
+# Dossier temporaire du système (pas un chemin propre au Mac : la CI tourne sous Linux)
+DOSSIER_C6 = os.path.join(tempfile.gettempdir(), 'goship-c6-validation')
 S.TRAVAIL = os.path.join(DOSSIER_C6, 'db-' + uuid.uuid4().hex)
 os.makedirs(S.TRAVAIL, exist_ok=True)
 import psutil
@@ -2064,6 +2066,65 @@ def preparer_consentements_stop(db):
     return empreinte
 
 
+def tester_p09_classification(db, numero_base):
+    print('\nP-09 — classification STOP des messages entrants — base neuve %d' % numero_base)
+    # Cas fixés par la correction P-09 (revue finale RF-03) : les formulations courtes
+    # de désinscription retirent ; une simple mention dans un message plus long, non.
+    cas = [
+        ('STOP', None, 'stop'), ('stop', None, 'stop'), ('  Stop!  ', None, 'stop'),
+        ('Stop please', None, 'stop'), ('STOP STOP', None, 'stop'),
+        ('Arrêter les promotions', None, 'stop'), ('arrêtez', None, 'stop'),
+        ('Désabonner', None, 'stop'), ('Je veux me désabonner', None, 'ambigu'),
+        ('UNSUBSCRIBE', None, 'stop'), ('Baja', None, 'stop'), ('No más', None, 'stop'),
+        ('Kanpe', None, 'stop'), ('Sispann voye mesaj', None, 'stop'),
+        ('Fin', None, 'stop'), ('Arrêt', None, 'stop'),
+        ("mon colis s'est arrêté", None, 'autre'), ('Arrêt de bus', None, 'autre'),
+        ('Cancel my order', None, 'autre'), ('Where is my package?', None, 'autre'),
+        ('Merci, bien reçu', None, 'autre'), ('', None, 'autre'), (None, None, 'autre'),
+        ('Pouvez-vous dire au livreur de ne pas stop chez le voisin ?', None, 'ambigu'),
+        (None, 'STOP', 'stop'), ('Bonjour', 'unsubscribe', 'stop'), (None, 'OTHER', 'autre'),
+    ]
+    obtenus = []
+    for texte, bouton, _ in cas:
+        litteral_texte = 'null' if texte is None else '$p09$%s$p09$' % texte
+        litteral_bouton = 'null' if bouton is None else "'%s'" % bouton
+        obtenus.append(db.sql("select public.communication_classer_entrant(%s, %s);"
+                              % (litteral_texte, litteral_bouton)).splitlines()[-1].strip())
+    for (texte, bouton, attendu), obtenu in zip(cas, obtenus):
+        verifier('P-09 classe %r / bouton %r' % (texte, bouton), obtenu, attendu)
+
+    verifier('P-09 classification interne : aucun rôle d’API ne peut l’appeler',
+             db.sql("select bool_or(has_function_privilege(r, "
+                    "'public.communication_classer_entrant(text,text)', 'execute')) "
+                    "from unnest(array['anon','authenticated','service_role']) r;")
+             .splitlines()[-1].strip(), 'f')
+
+    # Bout en bout : la classe est calculée à la réception, le texte n'est pas gardé.
+    attendus = [('meta:p09-stop-please', 'Stop please', 'stop', '1'),
+                ('meta:p09-arreter', 'Arrêter les promotions', 'stop', '1'),
+                ('meta:p09-colis', "mon colis s'est arrêté", 'autre', '2'),
+                ('meta:p09-mention', 'Le livreur a dit stop au portail hier soir', 'ambigu', '2')]
+    for identifiant, texte, classe, priorite in attendus:
+        _, reception = recevoir_p08(db, identifiant, '+17865550199', texte)
+        ligne = db.sql("select q.classe || '|' || q.priorite from public.communication_evenements_traitement q "
+                       "join public.communication_evenements_fournisseur e on e.id=q.evenement_id "
+                       "where e.evenement_id='%s';" % identifiant_evenement_p08(db, identifiant)
+                       ).splitlines()[-1].strip()
+        verifier('P-09 réception %r : classe et priorité enregistrées' % texte,
+                 (reception.get('ok'), ligne), (True, '%s|%s' % (classe, priorite)))
+    verifier('P-09 aucun texte de message conservé en base',
+             db.sql("select count(*) from public.communication_evenements_fournisseur "
+                    "where evenement_id like 'in:%' and (coalesce(message_id,'') ilike '%stop%' "
+                    "or coalesce(code,'') ilike '%arr%');").splitlines()[-1].strip(), '0')
+    # Isole les scénarios suivants : ces événements de test sont marqués traités
+    # (un événement traité ne garde ni empreinte ni code, contrainte de la table).
+    db.sql("update public.communication_evenements_traitement q set etat='traite', traite_le=now(), "
+           "cible_empreinte=null, code_confirmation=null "
+           "from public.communication_evenements_fournisseur e where e.id=q.evenement_id "
+           "and e.evenement_id in (%s);" % ','.join(
+               "'%s'" % identifiant_evenement_p08(db, i) for i, _, _, _ in attendus))
+
+
 def tester_p08_worker_et_recus(db, numero_base):
     print('\nP-08 atomique, STOP, reprise et reçus Expo — base neuve %d' % numero_base)
     db.sql('grant communication_worker to authenticator;')
@@ -3088,6 +3149,7 @@ def main():
                 tester_identite_edge(db, numero)
                 tester_consentements(db, numero)
                 tester_p08_worker_et_recus(db, numero)
+                tester_p09_classification(db, numero)
                 tester_c5_interface(db, numero, ids_transactionnels)
                 tester_c6_campagnes(db, numero)
                 tester_c10_arret_admin(db, numero)

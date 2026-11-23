@@ -175,8 +175,19 @@ La candidate 006 conserve le travail P-08 et l'effet métier dans le même appel
 et la même transaction : les lignes sont prises avec `FOR UPDATE SKIP LOCKED`, les
 verrous PostgreSQL restent tenus jusqu'au commit et une interruption annule ensemble
 les effets et l'état. Elle n'utilise donc pas de réservation multi-RPC ni de bail
-persistant. Le STOP exact crée une suppression par empreinte et retire les
-consentements ouverts de tous les comptes partageant ce contact. Les plaintes et
+persistant. Un message classé STOP crée une suppression par empreinte et retire les
+consentements ouverts de tous les comptes partageant ce contact.
+
+Correction P-09 (reportée le 23/11/2026 depuis les brouillons D5) : la classe d'un
+message entrant est calculée à la réception par `communication_classer_entrant`
+(interne, aucun rôle d'API ne peut l'appeler), sans garder le texte. Désabonnent :
+un bouton de désinscription ; un message entier de la liste fermée (« STOP »,
+« Stop please », « Arrêter », « Désabonner », « Unsubscribe », « Baja », « Kanpe »,
+« Sispann »…) ; un message de 5 mots au plus qui commence par un verbe d'arrêt sans
+ambiguïté (« Arrêter les promotions »). Un mot d'arrêt ailleurs dans un message plus
+long est classé « ambigu » et ne retire rien ; « Arrêt », « Fin », « Cancel », « End »
+et « Quit » ne comptent que seuls (« Arrêt de bus » ou « Cancel my order » ne
+désabonnent pas). Les listes restent à valider par le juriste. Les plaintes et
 désinscriptions Email restent en échec prioritaire tant que leur correspondance avec
 une identité GoShip n'est pas définie dans une candidate approuvée ; elles bloquent
 les sorties au lieu d'être acquittées comme traitées. Les reçus Expo sont enregistrés

@@ -148,6 +148,55 @@ create trigger communication_p08_lever_suppression_confirmation
 revoke all on function public.communication_p08_lever_suppression_confirmation()
   from public, anon, authenticated, service_role;
 
+-- P-09 (correction D5 approuvée par la CEO le 20/11/2026, reportée dans la candidate
+-- le 23/11/2026) : la CLASSE d'un message entrant, calculée à la réception, sans
+-- jamais garder son texte. Avant, seul le message exact « STOP » désabonnait :
+-- « Stop please » ou « Arrêter les messages » étaient ignorés (revue finale RF-03).
+-- Règles, listes À FAIRE VALIDER par le juriste :
+--   1. un bouton de désinscription (charge structurée) : toujours « stop » ;
+--   2. le message ENTIER est un mot ou une phrase d'arrêt de la liste fermée ;
+--   3. le PREMIER mot est un verbe d'arrêt sans ambiguïté et le message compte
+--      5 mots au plus (« Stop please », « Arrêter les promotions ») ;
+--   4. un mot d'arrêt ailleurs dans un message plus long : « ambigu », rien n'est
+--      retiré (une simple mention ne désabonne jamais), compté pour revue humaine.
+-- ARRET, END, FIN, CANCEL, QUIT ne comptent que SEULS : « Arrêt de bus » ou
+-- « Cancel my order » ne désabonnent pas.
+create or replace function public.communication_classer_entrant(p_texte text, p_bouton text default null)
+returns text
+language sql
+immutable
+set search_path = ''
+as $fonction$
+  with m as (
+    select pg_catalog.btrim(pg_catalog.regexp_replace(pg_catalog.regexp_replace(
+             pg_catalog.upper(pg_catalog.translate(coalesce(p_texte, ''),
+               'ÀÂÄÁÉÈÊËÎÏÍÔÖÓÙÛÜÚÇÑàâäáéèêëîïíôöóùûüúçñ',
+               'AAAAEEEEIIIOOOUUUUCNaaaaeeeeiiiooouuuucn')),
+             '[^A-Z0-9 ]', ' ', 'g'), ' +', ' ', 'g')) t,
+           pg_catalog.upper(pg_catalog.btrim(coalesce(p_bouton, ''))) b
+  ), n as (
+    select m.t, m.b, pg_catalog.string_to_array(nullif(m.t, ''), ' ') mots from m
+  )
+  select case
+    when n.b in ('STOP', 'UNSUBSCRIBE', 'OPT_OUT', 'OPTOUT', 'MARKETING_OPT_OUT') then 'stop'
+    when n.t in ('STOP', 'STOP STOP', 'STOP ALL', 'STOP PLEASE', 'PLEASE STOP', 'ARRET', 'ARRETER', 'ARRETEZ',
+                 'DESABONNER', 'DESINSCRIRE', 'UNSUBSCRIBE', 'CANCEL', 'QUIT', 'END', 'FIN', 'REVOKE',
+                 'OPT OUT', 'OPTOUT', 'BAJA', 'PARAR', 'DETENER', 'CANCELAR', 'NO MAS', 'NO MAS MENSAJES',
+                 'KANPE', 'SISPANN', 'DEZABONE') then 'stop'
+    when n.mots[1] in ('STOP', 'ARRETER', 'ARRETEZ', 'DESABONNER', 'DESABONNEZ', 'DESINSCRIRE', 'DESINSCRIVEZ',
+                       'UNSUBSCRIBE', 'OPTOUT', 'REVOKE', 'BAJA', 'DETENER', 'DESUSCRIBIR', 'KANPE', 'SISPANN',
+                       'DEZABONE')
+         and coalesce(pg_catalog.array_length(n.mots, 1), 0) <= 5 then 'stop'
+    when n.mots && array['STOP', 'ARRETER', 'ARRETEZ', 'DESABONNER', 'DESINSCRIRE', 'UNSUBSCRIBE', 'OPTOUT',
+                         'REVOKE', 'BAJA', 'KANPE', 'SISPANN', 'DEZABONE'] then 'ambigu'
+    else 'autre'
+  end
+  from n
+$fonction$;
+-- Fonction interne : seule la réception des retours (SECURITY DEFINER) l'appelle.
+revoke all on function public.communication_classer_entrant(text, text)
+  from public, anon, authenticated, service_role;
+
 -- Le webhook ne conserve jamais téléphone ou texte : seulement l'empreinte de
 -- contact nécessaire au traitement STOP et un identifiant de rejeu non réversible.
 create or replace function public.communication_recevoir_evenement(
@@ -208,9 +257,9 @@ begin
     if v_empreinte is null then
       raise exception 'COMMUNICATION_CONTACT_FINGERPRINT_UNAVAILABLE';
     end if;
-    if pg_catalog.upper(pg_catalog.btrim(coalesce(v_charge ->> 'texte', ''))) = 'STOP'
-       or pg_catalog.upper(pg_catalog.btrim(coalesce(v_charge ->> 'bouton', ''))) = 'STOP' then
-      v_classe := 'stop';
+    -- P-09 : classe calculée ici (le texte n'est jamais gardé) ; seul « stop » retire
+    v_classe := public.communication_classer_entrant(v_charge ->> 'texte', v_charge ->> 'bouton');
+    if v_classe = 'stop' then
       v_priorite := 1;
     end if;
     v_id_stocke := 'in:' || pg_catalog.encode(extensions.digest(v_id, 'sha256'), 'hex');
