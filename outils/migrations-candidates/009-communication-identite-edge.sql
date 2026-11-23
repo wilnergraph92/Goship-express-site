@@ -94,6 +94,36 @@ alter table public.communication_confirmation_code_audit enable row level securi
 revoke all on public.communication_confirmation_code_audit
   from public, anon, authenticated, service_role;
 
+-- PostgreSQL 16 et suivants : quand un rôle CREATEROLE non superutilisateur crée un
+-- rôle (postgres chez Supabase, qui applique les candidates 005 et 006), il en devient
+-- automatiquement membre, avec ADMIN OPTION et sans INHERIT ni SET. Le contrôle
+-- ci-dessous refuserait ce membership implicite et la candidate échouerait sur toute
+-- base Supabase (constaté le 23/11/2026 sur l'image Supabase PostgreSQL 17.4 ; invisible
+-- sur pgserver, où postgres est superutilisateur). La session superutilisateur retire
+-- ce seul membership implicite ; tout autre membership reste refusé plus bas.
+reset role;
+do $membership_createur$
+declare
+  v_role text;
+  v_grantor text;
+begin
+  foreach v_role in array array['communication_webhook', 'communication_worker'] loop
+    for v_grantor in
+      select g.rolname
+        from pg_catalog.pg_auth_members a
+        join pg_catalog.pg_roles r on r.oid = a.roleid
+        join pg_catalog.pg_roles m on m.oid = a.member
+        join pg_catalog.pg_roles g on g.oid = a.grantor
+       where r.rolname = v_role and m.rolname = 'postgres'
+         and a.admin_option and not a.inherit_option and not a.set_option
+    loop
+      execute pg_catalog.format('revoke %I from postgres granted by %I', v_role, v_grantor);
+    end loop;
+  end loop;
+end
+$membership_createur$;
+set role postgres;
+
 do $roles$
 declare
   v_role text;

@@ -187,7 +187,16 @@ un bouton de désinscription ; un message entier de la liste fermée (« STOP »
 ambiguïté (« Arrêter les promotions »). Un mot d'arrêt ailleurs dans un message plus
 long est classé « ambigu » et ne retire rien ; « Arrêt », « Fin », « Cancel », « End »
 et « Quit » ne comptent que seuls (« Arrêt de bus » ou « Cancel my order » ne
-désabonnent pas). Les listes restent à valider par le juriste. Les plaintes et
+désabonnent pas). Les listes restent à valider par le juriste.
+
+Correction de la candidate 009 (23/11/2026), constatée sur l'image Supabase réelle
+(`outils/essais-supabase-reel/lancer.sh`) : chez Supabase, `postgres` n'est pas
+superutilisateur. Depuis PostgreSQL 16, quand il crée `communication_webhook` (005) et
+`communication_worker` (006), il en devient automatiquement membre avec ADMIN OPTION.
+Le contrôle strict de la 009 refusait ce membership et la candidate échouait sur toute
+base Supabase ; pgserver ne le montrait pas, `postgres` y étant superutilisateur. La
+session superutilisateur de la 009 retire désormais ce seul membership implicite
+(ADMIN sans INHERIT ni SET, membre `postgres`) ; tout autre membership reste refusé. Les plaintes et
 désinscriptions Email restent en échec prioritaire tant que leur correspondance avec
 une identité GoShip n'est pas définie dans une candidate approuvée ; elles bloquent
 les sorties au lieu d'être acquittées comme traitées. Les reçus Expo sont enregistrés
