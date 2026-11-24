@@ -1349,6 +1349,16 @@ grant execute on function public.communication_campagne_segment_enregistrer(bigi
   public.communication_campagne_annuler(bigint),
   public.communication_campagne_journal(bigint,integer)
   to authenticated;
+-- Supabase accorde EXECUTE à authenticated sur chaque nouvelle fonction (privilèges par
+-- défaut) : le « revoke … from public » ci-dessus ne le retire pas. Sans cette ligne, tout
+-- client connecté pouvait appeler critere_correspond(uuid, critères) et tester les données
+-- d'un autre client (constat de la répétition générale hébergée du 24/11/2026).
+revoke all on function public.communication_campagne_immuable(),
+  public.communication_campagne_criteres_valider(jsonb),
+  public.communication_campagne_critere_correspond(uuid,jsonb),
+  public.communication_campagne_modeles_valider(text[],jsonb),
+  public.communication_campagne_calculer_audience(bigint)
+  from authenticated;
 
 do $sequences$
 declare v_nom text;

@@ -75,6 +75,19 @@ for f in ('public.communication_classer_entrant(text,text)', 'public.communicati
     verifier('%s non exécutable par anon/authenticated/service_role' % f,
              sql('postgres', "select bool_or(has_function_privilege(r, '%s', 'execute')) "
                  "from unnest(array['anon','authenticated','service_role']) r;" % f), 'f')
+# Supabase accorde EXECUTE à anon et authenticated sur chaque nouvelle fonction (privilèges par défaut) :
+# un « revoke … from public » ne suffit pas. Toute fonction SECURITY DEFINER du Centre de communication
+# ouverte à un rôle d'API doit donc contrôler la permission ou l'identité, sauf les deux ouvertes exprès.
+verifier('aucune fonction SECURITY DEFINER du Centre de communication ouverte sans contrôle',
+         sql('postgres', "select coalesce(string_agg(p.proname, ',' order by p.proname), 'aucune') "
+             "from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
+             "where n.nspname = 'public' and p.prosecdef and p.proname like 'communication%' "
+             "and p.prorettype <> 'trigger'::regtype "
+             "and (has_function_privilege('anon', p.oid, 'execute') "
+             "or has_function_privilege('authenticated', p.oid, 'execute')) "
+             "and p.prosrc !~ 'exiger_permission|est_admin\\(|peut\\(|auth\\.uid\\(\\)' "
+             "and p.proname not in ('communication_desabonner_courriel', 'communication_consentement_texte_actuel');"),
+         'aucune')
 
 print('P-09 sur PostgreSQL 17 (accents, majuscules réelles)')
 for texte, attendu in [('Stop please', 'stop'), ('Arrêter les promotions', 'stop'), ('DÉSABONNER', 'stop'),
