@@ -3453,5 +3453,11 @@
   "Vous ne recevrez plus nos offres par e-mail.": "Ou p ap resevwa òf nou yo pa imèl ankò.",
   "Vous pouvez aussi gérer vos choix dans {1}Mon compte{/1}, rubrique « Offres et nouvelles ».": "Ou ka jere chwa ou yo tou nan {1}Kont mwen{/1}, nan pati « Òf ak nouvèl ».",
   "Vous recevez nos offres par ce canal.": "Ou resevwa òf nou yo pa chanèl sa a.",
-  "Coût réel : non disponible.": "Vrè depans: pa disponib."
+  "Coût réel : non disponible.": "Vrè depans: pa disponib.",
+  "E-mails marketing au plus par 24 heures": "Maksimòm imèl maketing pou 24 èdtan",
+  "E-mails marketing au plus par 24 heures (facultatif)": "Maksimòm imèl maketing pou 24 èdtan (si ou vle)",
+  "E-mails marketing mis en file sur 24 heures": "Imèl maketing mete nan fil sou 24 èdtan",
+  "Sans plafond": "San limit",
+  "Plafond d’e-mails sur 24 heures atteint": "Limit imèl 24 èdtan an rive",
+  "Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures, plafond d’e-mails entre 1 et 100 000.": "Frekans ant 1 ak 50 mesaj, fenèt ant 1 ak 2160 èdtan, limit imèl ant 1 ak 100 000."
 }

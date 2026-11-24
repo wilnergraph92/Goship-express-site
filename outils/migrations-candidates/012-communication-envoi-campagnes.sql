@@ -22,6 +22,10 @@
 --     fenêtre glissante. N et la fenêtre sont des réglages SANS valeur par défaut : tant que
 --     l'Admin ne les a pas posés, aucune campagne ne part (elle reste planifiée) ;
 --   * quota : au plus le quota par canal de la révision approuvée ;
+--   * plafond d'e-mails marketing sur 24 heures (réglage Admin facultatif) : il garde la part
+--     du quota quotidien du fournisseur qui revient aux notifications de colis ;
+--   * e-mail : adresse postale de l'entreprise dans chaque message (réglage
+--     courriel_adresse_postale, obligatoire : loi américaine CAN-SPAM) ;
 --   * numéro partagé (D2, « bloquer ») et toutes les exclusions de l'audience (008) ;
 --   * aucun nouvel essai après un résultat incertain (5xx, silence) : un message marketing
 --     reçu deux fois est une gêne pour le client, pas un service (décision K limitée au
@@ -89,6 +93,13 @@ create table if not exists public.communication_marketing_reglages (
   maj_le                  timestamptz not null default clock_timestamp()
 );
 insert into public.communication_marketing_reglages (id) values (true) on conflict (id) do nothing;
+-- Plafond d'e-mails marketing sur 24 heures glissantes, tous clients et campagnes confondus.
+-- Le fournisseur d'e-mail partage souvent un quota quotidien entre les notifications de
+-- colis et le marketing (Brevo gratuit : 300 par jour) : ce plafond garde la place des
+-- notifications. Facultatif (null : aucun plafond en plus des quotas de campagne).
+alter table public.communication_marketing_reglages
+  add column if not exists email_max_jour integer
+  check (email_max_jour is null or email_max_jour between 1 and 100000);
 alter table public.communication_marketing_reglages enable row level security;
 revoke all on public.communication_marketing_reglages from public, anon, authenticated, service_role;
 
@@ -276,12 +287,17 @@ begin
     'frequence_max', v.frequence_max,
     'frequence_fenetre_heures', v.frequence_fenetre_heures,
     'configure', v.frequence_max is not null and v.frequence_fenetre_heures is not null,
+    'email_max_jour', v.email_max_jour,
+    'email_mis_en_file_24h', (select count(*) from public.communication_campagne_destinataires d
+                               where d.canal = 'email' and d.etat = 'en_file'
+                                 and d.cree_le > clock_timestamp() - interval '24 hours'),
     'maj_le', v.maj_le);
 end
 $fonction$;
 
+drop function if exists public.communication_marketing_reglages_definir(integer, integer);
 create or replace function public.communication_marketing_reglages_definir(
-  p_frequence_max integer, p_fenetre_heures integer)
+  p_frequence_max integer, p_fenetre_heures integer, p_email_max_jour integer default null)
 returns jsonb
 language plpgsql
 security definer
@@ -293,11 +309,13 @@ declare
 begin
   perform public.exiger_permission('settings.manage');
   if p_frequence_max is null or p_frequence_max not between 1 and 50
-     or p_fenetre_heures is null or p_fenetre_heures not between 1 and 2160 then
+     or p_fenetre_heures is null or p_fenetre_heures not between 1 and 2160
+     or (p_email_max_jour is not null and p_email_max_jour not between 1 and 100000) then
     raise exception 'COMMUNICATION_MARKETING_SETTINGS_INVALID';
   end if;
   update public.communication_marketing_reglages
      set frequence_max = p_frequence_max, frequence_fenetre_heures = p_fenetre_heures,
+         email_max_jour = p_email_max_jour,
          maj_par = v_acteur, maj_le = clock_timestamp()
    where id is true;
   return public.communication_marketing_reglages_lire();
@@ -703,6 +721,11 @@ begin
             v_motif := 'frequence';
           elsif v_quota is not null and v_en_file >= v_quota then
             v_motif := 'quota';
+          elsif v_canal = 'email' and v_reg.email_max_jour is not null
+                and (select count(*) from public.communication_campagne_destinataires d
+                      where d.canal = 'email' and d.etat = 'en_file'
+                        and d.cree_le > clock_timestamp() - interval '24 hours') >= v_reg.email_max_jour then
+            v_motif := 'plafond_journalier';
           end if;
         end if;
 
@@ -836,6 +859,7 @@ declare
   v_expediteur text;
   v_nom_expediteur text;
   v_entetes jsonb;
+  v_adresse_postale text;
 begin
   select * into v_dest from public.communication_campagne_destinataires d
    where d.id = p_envoi.communication_campagne_destinataire_id;
@@ -914,6 +938,13 @@ begin
     if v_site !~ '^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$' then
       raise exception 'NON_CONFIGURE';
     end if;
+    -- Loi américaine CAN-SPAM : une adresse postale valide dans chaque e-mail commercial.
+    -- Le gabarit commun n'en porte pas (choix du 19/10/2026 pour les e-mails de colis) : elle
+    -- vient du réglage courriel_adresse_postale ; sans lui, aucun e-mail marketing ne part.
+    v_adresse_postale := pg_catalog.btrim(coalesce(public.lire_reglage('courriel_adresse_postale'), ''));
+    if length(v_adresse_postale) < 10 then
+      raise exception 'NON_CONFIGURE';
+    end if;
     if not public.communication_adresse_courriel_valide(v_client.email) then
       raise exception 'SANS_DESTINATAIRE';
     end if;
@@ -936,10 +967,10 @@ begin
       || '<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#6b7280">'
       || public.html_echappe(v_mots ->> 'desabo') || ' <a href="' || public.html_echappe(v_lien_desabo)
       || '" style="color:#6b7280">' || public.html_echappe(v_lien_desabo) || '</a></p>',
-      '', '', '');
+      '', '', 'Goship Express · ' || v_adresse_postale);
     v_texte_brut := pg_catalog.btrim((v_mots ->> 'salut') || ' ' || v_prenom) || E',\n\n'
       || (v_texte ->> 'message') || E'\n\n' || (v_mots ->> 'desabo') || ' ' || v_lien_desabo
-      || E'\n\n— Goship Express';
+      || E'\n\n— Goship Express · ' || v_adresse_postale;
     v_cle := public.lire_reglage('email_cle_api');
     v_expediteur := public.lire_reglage('email_expediteur');
     v_nom_expediteur := coalesce(nullif(public.lire_reglage('email_nom'), ''), 'Goship Express');
@@ -1085,7 +1116,7 @@ revoke all on function public.communication_courriel_empreinte(uuid),
   public.communication_campagne_expedier_sans_porte(public.notification_envois),
   public.expedier_envoi(public.notification_envois),
   public.communication_marketing_reglages_lire(),
-  public.communication_marketing_reglages_definir(integer, integer),
+  public.communication_marketing_reglages_definir(integer, integer, integer),
   public.communication_campagne_suivi(bigint)
   from public, anon, authenticated, service_role;
 -- Le lien de désinscription marche sans connexion.
@@ -1096,7 +1127,7 @@ grant execute on function public.communication_consentement_texte_actuel(text, t
   public.communication_consentement_courriel_retirer()
   to authenticated;
 grant execute on function public.communication_marketing_reglages_lire(),
-  public.communication_marketing_reglages_definir(integer, integer),
+  public.communication_marketing_reglages_definir(integer, integer, integer),
   public.communication_campagne_suivi(bigint)
   to authenticated;
 

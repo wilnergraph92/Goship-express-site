@@ -202,7 +202,10 @@ nouvel essai après un résultat incertain. WhatsApp : modèle Meta réglé par
 `whatsapp_modele_marketing`. E-mail : consentement propre au canal donné depuis le compte
 (adresse confirmée, texte attesté), lien de désinscription sans connexion et en-tête
 `List-Unsubscribe` dans chaque message ; sans adresse officielle du site en https, aucun
-e-mail marketing ne part. L'aperçu d'audience (008) et l'envoi partagent la même règle
+e-mail marketing ne part ; sans adresse postale (réglage `courriel_adresse_postale`,
+loi CAN-SPAM), non plus. Un plafond facultatif d'e-mails marketing sur 24 heures
+(`email_max_jour`) garde la part du quota quotidien du fournisseur qui revient aux
+notifications de colis (Brevo gratuit : 300 par jour). L'aperçu d'audience (008) et l'envoi partagent la même règle
 d'éligibilité. Les tables gardent des empreintes, jamais un numéro ou une adresse.
 
 Candidate 009 applicable sans superutilisateur (23 et 24/11/2026), constaté et éprouvé sur
@@ -270,3 +273,9 @@ drafts SQL 40–43. Leur intégration dans la chaîne officielle (C11) a été a
 par la CEO le 23/11/2026 pour les essais locaux et la CI ; toute opération distante
 (préproduction, production) exige une autorisation écrite distincte et une revue
 indépendante.
+
+
+Répétition générale sur un projet Supabase d'essai hébergé (jamais la production) :
+`outils/essais-supabase-reel/repetition-generale.sh`, lancé depuis un poste avec `psql`.
+Il refuse l'adresse de la production, fait retaper la référence du projet, applique la
+chaîne deux fois par `postgres`, puis lance `verifier.py` en mode hébergé.

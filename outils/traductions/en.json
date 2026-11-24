@@ -3453,5 +3453,11 @@
   "Vous ne recevrez plus nos offres par e-mail.": "You will no longer receive our offers by email.",
   "Vous pouvez aussi gérer vos choix dans {1}Mon compte{/1}, rubrique « Offres et nouvelles ».": "You can also manage your choices in {1}My account{/1}, under “Offers and news”.",
   "Vous recevez nos offres par ce canal.": "You receive our offers this way.",
-  "Coût réel : non disponible.": "Actual cost: not available."
+  "Coût réel : non disponible.": "Actual cost: not available.",
+  "E-mails marketing au plus par 24 heures": "Marketing emails at most per 24 hours",
+  "E-mails marketing au plus par 24 heures (facultatif)": "Marketing emails at most per 24 hours (optional)",
+  "E-mails marketing mis en file sur 24 heures": "Marketing emails queued over 24 hours",
+  "Sans plafond": "No cap",
+  "Plafond d’e-mails sur 24 heures atteint": "24-hour email cap reached",
+  "Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures, plafond d’e-mails entre 1 et 100 000.": "Frequency between 1 and 50 messages, window between 1 and 2160 hours, email cap between 1 and 100,000."
 }

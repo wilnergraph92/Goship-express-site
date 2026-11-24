@@ -31,6 +31,7 @@
     suppression_active: 'STOP ou désinscription',
     doublon_contact: 'Déjà atteint par cette campagne',
     frequence: 'Limite de fréquence atteinte',
+    plafond_journalier: 'Plafond d’e-mails sur 24 heures atteint',
     quota: 'Quota du canal atteint',
     compte_inexistant: 'Compte introuvable'
   };
@@ -43,7 +44,7 @@
     approved: 'Approuvée', pending_approval: 'En attente d’approbation', draft: 'Brouillon'
   };
   var ERREURS = {
-    COMMUNICATION_MARKETING_SETTINGS_INVALID: 'Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures.',
+    COMMUNICATION_MARKETING_SETTINGS_INVALID: 'Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures, plafond d’e-mails entre 1 et 100 000.',
     'non-autorise': 'Vous n’avez pas le droit de modifier ce réglage.',
     reseau: 'Connexion impossible. Réessayez.',
     absent: 'L’envoi des campagnes n’est pas encore installé sur cette base.'
@@ -72,6 +73,10 @@
       dl.appendChild(el('dd', '', entier(r.frequence_max)));
       dl.appendChild(el('dt', '', 'Sur une fenêtre de (heures)'));
       dl.appendChild(el('dd', '', entier(r.frequence_fenetre_heures)));
+      dl.appendChild(el('dt', '', 'E-mails marketing au plus par 24 heures'));
+      dl.appendChild(el('dd', '', r.email_max_jour ? entier(r.email_max_jour) : 'Sans plafond'));
+      dl.appendChild(el('dt', '', 'E-mails marketing mis en file sur 24 heures'));
+      dl.appendChild(el('dd', '', entier(r.email_mis_en_file_24h)));
       zone.appendChild(dl);
     } else {
       zone.appendChild(el('p', 'gs-panneau__intro', 'Non réglée : aucune campagne ne part tant que l’administrateur ne l’a pas fixée.'));
@@ -79,12 +84,13 @@
     var form = el('form', 'gs-form gs-form--compact');
     form.noValidate = true;
     [['frequence_max', 'Messages au plus', 1, 50, r && r.frequence_max],
-     ['fenetre_heures', 'Sur combien d’heures', 1, 2160, r && r.frequence_fenetre_heures]].forEach(function (c) {
+     ['fenetre_heures', 'Sur combien d’heures', 1, 2160, r && r.frequence_fenetre_heures],
+     ['email_max_jour', 'E-mails marketing au plus par 24 heures (facultatif)', 1, 100000, r && r.email_max_jour]].forEach(function (c) {
       var champ = el('div', 'gs-champ');
       var label = el('label', '', c[1]);
       var input = el('input');
       input.type = 'number'; input.name = c[0]; input.min = String(c[2]); input.max = String(c[3]);
-      input.required = true; input.id = 'ce-' + c[0];
+      input.required = c[0] !== 'email_max_jour'; input.id = 'ce-' + c[0];
       if (c[4]) input.value = String(c[4]);
       label.htmlFor = input.id;
       champ.appendChild(label); champ.appendChild(input);
@@ -96,12 +102,14 @@
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
       var max = Number(form.elements.frequence_max.value), heures = Number(form.elements.fenetre_heures.value);
-      if (!(max >= 1 && max <= 50 && heures >= 1 && heures <= 2160)) {
+      var brut = String(form.elements.email_max_jour.value || '').trim(), plafond = brut ? Number(brut) : null;
+      if (!(max >= 1 && max <= 50 && heures >= 1 && heures <= 2160)
+          || (plafond !== null && !(plafond >= 1 && plafond <= 100000))) {
         message(ERREURS.COMMUNICATION_MARKETING_SETTINGS_INVALID, true);
         return;
       }
       bouton.disabled = true;
-      api().communicationMarketingReglagesDefinir(max, heures).then(function (nouveau) {
+      api().communicationMarketingReglagesDefinir(max, heures, plafond).then(function (nouveau) {
         bouton.disabled = false;
         message('Fréquence enregistrée.');
         afficherReglages(nouveau);

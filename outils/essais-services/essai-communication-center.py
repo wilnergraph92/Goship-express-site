@@ -3156,6 +3156,7 @@ def tester_c12_envoi_campagnes(db, numero_base):
     cid = int(q("select id from public.communication_campagnes_marketing where etat = 'scheduled' "
                 "order by id limit 1;"))
     rendre_echue(cid)
+    envois_courriel = lambda: int(q("select count(*) from net.envois where body::text like '%desabonnement.html%';"))
     # Seules les requêtes marketing (modèle Meta de campagne) : des notifications
     # transactionnelles d'essais précédents peuvent repartir à la levée de l'arrêt.
     envois_reseau = lambda: int(q("select count(*) from net.envois where body::text like '%goship_offre_test%';"))
@@ -3280,18 +3281,27 @@ def tester_c12_envoi_campagnes(db, numero_base):
                "and cible_empreinte ~ '@';"), '0')
     db.sql("insert into vault.decrypted_secrets (name, decrypted_secret) values ('site_url', 'https://www.goship.test') "
            "on conflict (name) do update set decrypted_secret = excluded.decrypted_secret;")
+    db.sql("delete from vault.decrypted_secrets where name = 'courriel_adresse_postale';")
     cid4 = nouvelle_campagne_echue(cid, 'email')
     lancer()
     verifier('C12 : campagne e-mail mise en file pour le seul client qui a accepté',
              suivi(cid4).get('mis_en_file'), 1)
     service_sql(db, 'select public.traiter_notifications(20);')
+    verifier('C12 : sans adresse postale réglée (CAN-SPAM), l’e-mail marketing ne part pas',
+             (suivi(cid4).get('annulations'), envois_courriel()), ({'NON_CONFIGURE': 1}, 0))
+    db.sql("insert into vault.decrypted_secrets (name, decrypted_secret) values "
+           "('courriel_adresse_postale', '8140 NW 74th Ave, Unit 3, Medley, FL 33166') "
+           "on conflict (name) do update set decrypted_secret = excluded.decrypted_secret;")
+    cid4 = nouvelle_campagne_echue(cid, 'email')
+    lancer()
+    service_sql(db, 'select public.traiter_notifications(20);')
     corps = json.loads(q("select body::text from net.envois where body::text like '%desabonnement.html%' "
                          "order by id desc limit 1;"))
     lien = re.search(r'desabonnement\.html\?d=(\d+)&j=([0-9a-f]{64})', json.dumps(corps))
-    verifier('C12 : l’e-mail porte le lien de désinscription et l’en-tête List-Unsubscribe',
+    verifier('C12 : l’e-mail porte le lien de désinscription, l’en-tête List-Unsubscribe et l’adresse postale',
              (lien is not None, 'List-Unsubscribe' in json.dumps(corps.get('headers', {})),
-              suivi(cid4).get('transmission')),
-             (True, True, {'envoi': 1}))
+              '8140 NW 74th Ave' in json.dumps(corps, ensure_ascii=False), suivi(cid4).get('transmission')),
+             (True, True, True, {'envoi': 1}))
     dest, jeton = int(lien.group(1)), lien.group(2)
     verifier('C12 : un jeton faux ne désabonne pas',
              S.jsonq(db, None, "select public.communication_desabonner_courriel(%d, '%s');" % (dest, '0' * 64)).get('ok'),
@@ -3309,6 +3319,19 @@ def tester_c12_envoi_campagnes(db, numero_base):
     lancer()
     verifier('C12 : la campagne e-mail suivante n’atteint plus le client désabonné',
              (suivi(cid5).get('mis_en_file'), suivi(cid5).get('exclus', {}).get('suppression_active')), (0, 1))
+
+    # Plafond d'e-mails marketing sur 24 heures (garde la part des notifications de colis).
+    verifier('C12 : plafond quotidien hors bornes refusé',
+             db.erreur(ADMIN, 'select public.communication_marketing_reglages_definir(5, 24, 0);'),
+             'COMMUNICATION_MARKETING_SETTINGS_INVALID')
+    plafond = S.jsonq(db, ADMIN, 'select public.communication_marketing_reglages_definir(5, 24, 2);')
+    verifier('C12 : plafond quotidien réglé, compteur sur 24 heures visible',
+             (plafond.get('email_max_jour'), plafond.get('email_mis_en_file_24h')), (2, 2))
+    S.jsonq(db, CLIENT13, "select public.communication_consentement_courriel_accorder('fixture-courriel-v1', 'es');")
+    cid6 = nouvelle_campagne_echue(cid, 'email')
+    lancer()
+    verifier('C12 : plafond atteint — l’e-mail suivant est exclu, rien ne part',
+             (suivi(cid6).get('mis_en_file'), suivi(cid6).get('exclus', {}).get('plafond_journalier')), (0, 1))
 
 def main():
     arguments = sys.argv[1:]

@@ -1972,3 +1972,9 @@ Canal non configuré
 Sans destinataire
 Mis en file
 Coût réel : non disponible.
+E-mails marketing au plus par 24 heures
+E-mails marketing au plus par 24 heures (facultatif)
+E-mails marketing mis en file sur 24 heures
+Sans plafond
+Plafond d’e-mails sur 24 heures atteint
+Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures, plafond d’e-mails entre 1 et 100 000.

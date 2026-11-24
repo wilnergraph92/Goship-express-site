@@ -3453,5 +3453,11 @@
   "Vous ne recevrez plus nos offres par e-mail.": "Ya no recibirá nuestras ofertas por correo electrónico.",
   "Vous pouvez aussi gérer vos choix dans {1}Mon compte{/1}, rubrique « Offres et nouvelles ».": "También puede gestionar sus preferencias en {1}Mi cuenta{/1}, sección «Ofertas y novedades».",
   "Vous recevez nos offres par ce canal.": "Recibe nuestras ofertas por este medio.",
-  "Coût réel : non disponible.": "Costo real: no disponible."
+  "Coût réel : non disponible.": "Costo real: no disponible.",
+  "E-mails marketing au plus par 24 heures": "Correos de marketing como máximo por 24 horas",
+  "E-mails marketing au plus par 24 heures (facultatif)": "Correos de marketing como máximo por 24 horas (opcional)",
+  "E-mails marketing mis en file sur 24 heures": "Correos de marketing en cola en 24 horas",
+  "Sans plafond": "Sin límite",
+  "Plafond d’e-mails sur 24 heures atteint": "Límite de correos de 24 horas alcanzado",
+  "Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures, plafond d’e-mails entre 1 et 100 000.": "Frecuencia entre 1 y 50 mensajes, ventana entre 1 y 2160 horas, límite de correos entre 1 y 100 000."
 }

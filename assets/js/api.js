@@ -1142,9 +1142,10 @@
       communicationMarketingReglages: function () {
         return sb().then(function (c) { return c.rpc('communication_marketing_reglages_lire'); }).then(resultat);
       },
-      communicationMarketingReglagesDefinir: function (frequenceMax, fenetreHeures) {
+      communicationMarketingReglagesDefinir: function (frequenceMax, fenetreHeures, emailMaxJour) {
         return sb().then(function (c) { return c.rpc('communication_marketing_reglages_definir', {
-          p_frequence_max: Number(frequenceMax), p_fenetre_heures: Number(fenetreHeures)
+          p_frequence_max: Number(frequenceMax), p_fenetre_heures: Number(fenetreHeures),
+          p_email_max_jour: emailMaxJour ? Number(emailMaxJour) : null
         }); }).then(resultat);
       },
       communicationCampagneSuivi: function (id) {

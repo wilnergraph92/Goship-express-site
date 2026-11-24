@@ -1,13 +1,21 @@
-# Vérifications sur la base jetable de l'image Supabase PostgreSQL 17 (extensions réelles :
-# pgcrypto, Vault, pg_net). Lancé par lancer.sh. Aucun appel réseau sortant : pg_net n'est jamais appelé.
+# Vérifications avec les extensions réelles (pgcrypto, Vault, pg_net). Deux modes :
+#  * lancer.sh : base jetable de l'image Supabase PostgreSQL 17, dans un conteneur sans réseau ;
+#  * repetition-generale.sh : un PROJET SUPABASE D'ESSAI hébergé (REPETITION_DB_URL), jamais la
+#    production. Là, tout passe par le rôle postgres, le seul que Supabase donne au client.
+# Ce script n'appelle jamais pg_net et ne pose aucune clé de fournisseur.
 import hashlib, hmac, json, subprocess, time, os
-# psql dans le conteneur jetable de lancer.sh (sans réseau), connexion locale
-CONTENEUR = os.environ['CONTENEUR_ESSAI']
+URL_DISTANTE = os.environ.get('REPETITION_DB_URL')
+CONTENEUR = None if URL_DISTANTE else os.environ['CONTENEUR_ESSAI']
 R = []
 def sql(role, texte, echec=False):
-    r = subprocess.run(['docker', 'exec', '-i', '-e', 'PGPASSWORD=essai-jetable', CONTENEUR,
-                        'psql', '-h', '127.0.0.1', '-U', role, '-d', 'postgres',
-                        '-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', texte],
+    if URL_DISTANTE:
+        # Projet hébergé : postgres pour tout (authenticator et supabase_admin n'y sont pas
+        # accessibles ; postgres prend communication_webhook par authenticator, comme PostgREST).
+        commande = ['psql', URL_DISTANTE]
+    else:
+        commande = ['docker', 'exec', '-i', '-e', 'PGPASSWORD=essai-jetable', CONTENEUR,
+                    'psql', '-h', '127.0.0.1', '-U', role, '-d', 'postgres']
+    r = subprocess.run(commande + ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', texte],
                        capture_output=True, text=True)
     if r.returncode and not echec:
         raise SystemExit('ERREUR (%s): %s\n%s' % (role, r.stderr.strip(), texte[:300]))
@@ -41,15 +49,26 @@ for role in ('communication_webhook', 'communication_worker'):
                  "from pg_roles where rolname='%s';" % role), 'f')
 
 # Un autre rôle, même CREATEROLE, ne peut pas appliquer la 009 : refus avant tout effet
-sql('supabase_admin', "do $i$ begin if not exists (select 1 from pg_roles where rolname='essai_intrus') then "
-    "create role essai_intrus login createrole password 'essai-jetable'; end if; end $i$;")
-chemin_009 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'migrations-candidates',
-                          '009-communication-identite-edge.sql')
-r = subprocess.run(['docker', 'exec', '-i', '-e', 'PGPASSWORD=essai-jetable', CONTENEUR, 'psql', '-h', '127.0.0.1',
-                    '-U', 'essai_intrus', '-d', 'postgres', '-X', '-q', '-v', 'ON_ERROR_STOP=1',
-                    '--single-transaction', '-f', '-'], stdin=open(chemin_009), capture_output=True, text=True)
-verifier('009 refusée à un rôle CREATEROLE qui n’est ni postgres ni superutilisateur',
-         (r.returncode != 0, 'COMMUNICATION_IDENTITY_REQUIRES_POSTGRES_OR_SUPERUSER_SESSION' in r.stderr), (True, True))
+# (base jetable seulement : on ne crée pas de rôle de connexion sur un projet hébergé).
+if not URL_DISTANTE:
+  sql('supabase_admin', "do $i$ begin if not exists (select 1 from pg_roles where rolname='essai_intrus') then "
+      "create role essai_intrus login createrole password 'essai-jetable'; end if; end $i$;")
+  chemin_009 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'migrations-candidates',
+                            '009-communication-identite-edge.sql')
+  r = subprocess.run(['docker', 'exec', '-i', '-e', 'PGPASSWORD=essai-jetable', CONTENEUR, 'psql', '-h', '127.0.0.1',
+                      '-U', 'essai_intrus', '-d', 'postgres', '-X', '-q', '-v', 'ON_ERROR_STOP=1',
+                      '--single-transaction', '-f', '-'], stdin=open(chemin_009), capture_output=True, text=True)
+  verifier('009 refusée à un rôle CREATEROLE qui n’est ni postgres ni superutilisateur',
+           (r.returncode != 0, 'COMMUNICATION_IDENTITY_REQUIRES_POSTGRES_OR_SUPERUSER_SESSION' in r.stderr), (True, True))
+else:
+  print('Projet hébergé')
+  verifier('ce n’est PAS la production (référence absente de l’adresse)',
+           'gpfdyslysqjmojgzggib' in URL_DISTANTE, False)
+  verifier('tâches pg_cron des notifications et des campagnes présentes',
+           sql('postgres', "select count(*) from cron.job where jobname in "
+               "('goship-notifications', 'goship-campagnes-marketing');"), '2')
+  print('       pg_net', sql('postgres', "select extversion from pg_extension where extname = 'pg_net';"),
+        '· PostgreSQL', sql('postgres', "select current_setting('server_version');"))
 
 print('Fonctions internes fermées aux rôles d’API')
 for f in ('public.communication_classer_entrant(text,text)', 'public.communication_recevoir_evenement(text,text,text)'):
@@ -116,8 +135,9 @@ verifier('aucun texte de message gardé en base',
          sql('postgres', "select count(*) from public.communication_evenements_fournisseur "
              "where coalesce(message_id,'') ilike '%stop%';"), '0')
 
-verifier('aucune réponse HTTP reçue par pg_net (conteneur sans réseau)',
-         sql('postgres', "select count(*) filter (where status_code is not null) from net._http_response;"), '0')
+if not URL_DISTANTE:
+    verifier('aucune réponse HTTP reçue par pg_net (conteneur sans réseau)',
+             sql('postgres', "select count(*) filter (where status_code is not null) from net._http_response;"), '0')
 
 print('\nRésultat : %d/%d vérifications réussies.' % (sum(R), len(R)))
 raise SystemExit(0 if all(R) else 1)
