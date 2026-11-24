@@ -157,6 +157,13 @@ quotas Brevo, fuseaux, purge, migration interrompue). Rapprochement :
 | E-08 | Réception P-08 refusée par la base | F-W08 | Déclencheur de banc qui fait échouer l'insertion ; rien ne doit rester à moitié écrit |
 | E-09 | Changement du numéro d'un compte consentant | F-C04, T-18 | Le consentement ne suit pas le nouveau numéro ; aucune demande ouverte ne survit |
 
+**Écrits le 24/11/2026** dans `outils/essais-services/essai-communication-concurrence.py`
+(sessions PostgreSQL réellement simultanées, lancé par la CI) : **E-01**, **E-03** (durées mesurées
+sous charge : demande 0,006 s, confirmation en attente 3,0 s, confirmation finale 0,008 s),
+**E-07** (le même STOP reçu deux fois, puis deux travailleurs), **E-09**, ainsi que la course entre
+une demande d'arrêt et une levée, et les demandes de code WhatsApp simultanées (Q5). 27/27, stable
+sur trois passages. Restent : E-02, E-04, E-05, E-06, E-08.
+
 Pour E-01, E-02 et E-07, la revue dira si un ordonnanceur dédié (`isolationtester`, fourni avec les
 sources de PostgreSQL) est nécessaire.
 
