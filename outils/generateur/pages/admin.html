@@ -27,6 +27,8 @@
 <script src="assets/js/admin.js" defer></script>
 <script src="assets/js/communications.js" defer></script>
 <script src="assets/js/communications-campagnes.js" defer></script>
+<script src="assets/js/communications-arret.js" defer></script>
+<script src="assets/js/communications-envoi.js" defer></script>
 <script src="assets/js/scan-parser.js" defer></script>
 <script src="assets/js/transporteur.js" defer></script>
 <script src="assets/js/scanner.js" defer></script>
@@ -1170,6 +1172,7 @@
           </tbody></table>
         </div>
         <div class="gs-communications__alerts" data-cc-alerts aria-live="polite"></div>
+        <div class="gs-communications__arret" data-cc-arret hidden></div>
       </section>
 
       <section class="gs-communications__pane" data-cc-pane="history" role="tabpanel" hidden>
@@ -1250,9 +1253,17 @@
 
       <section class="gs-communications__pane gs-campagnes" data-cc-pane="campaigns" data-permission="communications.campaigns.view" role="tabpanel" hidden>
         <div class="gs-campagnes__banniere" role="note">
-          <strong>Planification seulement — aucun message marketing ne sera envoyé pendant C6.</strong>
-          <span>Les canaux sans consentement marketing vérifiable restent exclus. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.</span>
+          <strong>Une campagne approuvée et planifiée part à son heure, sous l’arrêt d’urgence.</strong>
+          <span>Seuls les clients qui ont accepté les offres sur le canal la reçoivent. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.</span>
         </div>
+        <section class="gs-campagnes__carte gs-ce" data-ce-envoi hidden>
+          <h3>Envoi des campagnes</h3>
+          <p class="gs-communications__message" data-ce-message role="status" aria-live="polite" hidden></p>
+          <div data-ce-reglages></div>
+          <h4>Suivi d’une campagne</h4>
+          <label class="gs-champ"><span>Campagne</span><select data-ce-campagne><option value="">Choisir une campagne</option></select></label>
+          <div data-ce-suivi-resultat aria-live="polite"></div>
+        </section>
         <p class="gs-communications__message" data-cm-status role="status" aria-live="polite"></p>
         <p class="gs-form__erreur" data-cm-error role="alert" hidden></p>
         <div class="gs-campagnes__grille">

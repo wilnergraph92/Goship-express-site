@@ -74,7 +74,8 @@ test('le Dashboard fournit la gestion, les quatre langues et les limites sans d�
     assert.ok(zone.includes('data-cm-journal'));
     assert.ok(zone.includes('value="email"') && zone.includes('value="whatsapp"') && zone.includes('value="push"'));
     for (const langue of ['fr', 'en', 'es', 'ht']) assert.ok(zone.includes(`data-cm-locale="${langue}"`));
-    assert.match(zone, /aucun message marketing ne sera envoyé pendant C6/i);
+    // Depuis la candidate 012, la campagne approuvée et planifiée part, sous l'arrêt d'urgence.
+    assert.match(zone, /part à son heure, sous l’arrêt d’urgence/i);
   }
   assert.match(css, /\.gs-campagnes__grille/);
   assert.match(css, /\.gs-campagnes__apercu/);
@@ -117,12 +118,12 @@ test('les principales chaînes visibles C6 ont les traductions FR, EN, ES et HT'
     'Planification à préparer', 'Fuseau IANA explicite', 'Prévisualiser l’audience',
     'Créer une version de modèle marketing', 'Approbation, planification et audit',
     'Soumettre pour approbation', 'Approuver', 'Enregistrer la planification',
-    'Annuler la campagne', 'Planification seulement — aucun message marketing ne sera envoyé pendant C6.',
-    'Les canaux sans consentement marketing vérifiable restent exclus. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.',
+    'Annuler la campagne', 'Une campagne approuvée et planifiée part à son heure, sous l’arrêt d’urgence.',
+    'Seuls les clients qui ont accepté les offres sur le canal la reçoivent. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.',
     'Prévisualisation agrégée — aucun contact n’est affiché',
     'Clients correspondant au segment : ', 'Limites configurées.',
     'Budget et quotas : non configurés. Aucune transmission ne peut être préparée.',
-    'Coût réel : non disponible. Transmission active : non.',
+    'Coût réel : non disponible.',
     'Alertes de limites', 'Quota dépassé',
     'Coût estimé supérieur au budget prévu.',
     'Coût estimé supérieur au plafond de dépenses.'

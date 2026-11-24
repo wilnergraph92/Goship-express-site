@@ -1428,3 +1428,18 @@ ol.gs-guide-liste li::before{content:counter(etape);top:.15em;width:26px;height:
 .gs-guide-voir{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 .gs-guide-voir a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid #d6ddec;border-radius:999px;color:var(--ink);font-weight:700;font-size:15px}
 .gs-guide-voir a:hover{border-color:var(--accent);color:var(--accent)}
+/* Arrêt d’urgence et envoi des campagnes (communications-arret.js, communications-envoi.js) */
+.gs-communications__arret{margin-top:20px;padding:16px;border:1px solid #d7dce6;border-radius:12px;background:#fff}
+.gs-communications__arret-etat{font-weight:700;margin:4px 0}
+.gs-communications__arret-etat--arret_demande{color:#9a3412}
+.gs-communications__arret-etat--arret_confirme{color:#b91c1c}
+.gs-communications__arret-etat--actif{color:#166534}
+.gs-communications__arret-details{color:#5b6782;margin:0 0 12px}
+.gs-communications__arret-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.gs-ce{margin-bottom:20px}.gs-ce__liste{margin:4px 0 12px;padding-left:20px}.gs-ce__etat{font-weight:700}
+.gs-communications__arret-details,.gs-ce__reglage{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0 0 12px}
+.gs-communications__arret-details dt,.gs-ce__reglage dt{color:#5b6782}
+.gs-communications__arret-details dd,.gs-ce__reglage dd{margin:0}
+.gs-ce__liste li{display:flex;justify-content:space-between;gap:12px;max-width:420px}
+.gs-offres__canal{margin-top:20px}.gs-offres__canal h3{margin:0 0 4px}
+.gs-offres__texte{margin:8px 0 12px;padding:10px 12px;border-left:3px solid #d7dce6;background:#f8fafc;font-size:14px;line-height:1.5;text-align:left}

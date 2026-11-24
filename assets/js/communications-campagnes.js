@@ -409,7 +409,7 @@
       });
     }
     zone.appendChild(creer('p', '', res.limites_configurees ? 'Limites configurées.' : 'Budget et quotas : non configurés. Aucune transmission ne peut être préparée.'));
-    zone.appendChild(creer('p', '', 'Coût réel : non disponible. Transmission active : non.'));
+    zone.appendChild(creer('p', '', 'Coût réel : non disponible.'));
     zone.hidden = false;
   }
   function afficherJournal(res) {

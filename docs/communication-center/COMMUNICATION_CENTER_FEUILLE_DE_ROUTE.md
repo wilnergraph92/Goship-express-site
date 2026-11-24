@@ -34,24 +34,25 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 
 | Étape | État |
 |---|---|
-| Envoi marketing par l'outbox unique `notification_envois`, sous la porte P-07, avec consentement, fréquence N-01, quotas et budgets | ⏳ à construire (les brouillons 40–43 servent de référence) |
-| Consentement marketing e-mail et lien de désinscription | ⏳ |
+| Envoi marketing par l'outbox unique `notification_envois`, sous la porte P-07, avec consentement, fréquence N-01, quotas et budgets | ✅ candidate 012 (24/11/2026), banc 646/646, image Supabase réelle 33/33 ; fréquence N-01 à régler par l'Admin (aucune valeur par défaut) |
+| Consentement marketing e-mail et lien de désinscription | ✅ candidate 012 ; `desabonnement.html` (4 langues), en-tête `List-Unsubscribe` |
 | Purge et conservation | ⏳ |
+| Offres côté client : accord e-mail et WhatsApp depuis « Mon compte » | ✅ `offres.js`, panneau « Offres et nouvelles » (4 langues) |
 | Compte WhatsApp Business, modèles Meta, domaine d'envoi e-mail | 🔒 la CEO, auprès des fournisseurs |
 
 ## Phase 4 — Dashboard UI
 
 | Étape | État |
 |---|---|
-| Boutons Admin d'arrêt d'urgence et de levée, relance automatique de la confirmation, affichage de `STOP_PENDING` | ⏳ |
-| Alertes D visibles | ⏳ |
-| Suivi des campagnes envoyées | ⏳ après la Phase 3 |
+| Boutons Admin d'arrêt d'urgence et de levée, relance automatique de la confirmation, affichage de `STOP_PENDING` | ✅ `communications-arret.js` (24/11/2026) |
+| Alertes D visibles | ✅ vue générale du Centre de communication |
+| Suivi des campagnes envoyées | ✅ `communications-envoi.js` : mis en file, exclus par motif, transmissions, annulations |
 
 ## Phase 5 — Automation
 
 | Étape | État |
 |---|---|
-| Campagnes planifiées → envoi par le travailleur existant | ⏳ après la Phase 3 |
+| Campagnes planifiées → envoi par le travailleur existant | ✅ `communication_campagnes_lancer` (pg_cron chaque minute) puis `traiter_notifications` |
 
 ## Phase 6 — QA & deployment
 

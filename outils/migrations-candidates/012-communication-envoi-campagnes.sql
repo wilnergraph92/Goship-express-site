@@ -477,6 +477,24 @@ begin
 end
 $fonction$;
 
+-- Le texte d'accord en vigueur, que le client lit avant d'accepter (le plus récent attesté
+-- par le juriste pour ce canal et cette langue). Aucun texte attesté : null, et l'écran
+-- n'offre pas d'accepter.
+create or replace function public.communication_consentement_texte_actuel(p_canal text, p_langue text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $fonction$
+  select pg_catalog.jsonb_build_object('version', t.version, 'texte', t.texte, 'langue', t.langue)
+    from public.communication_consentement_textes t
+   where t.canal = p_canal and t.langue = p_langue and t.statut = 'atteste_juridique'
+     and p_canal in ('whatsapp', 'email') and p_langue in ('fr', 'en', 'es', 'ht')
+   order by t.atteste_le desc, t.version desc
+   limit 1
+$fonction$;
+
 -- 5 ter. L'aperçu d'audience (008) suit la même règle que l'envoi ----------------------
 -- Ce que l'Admin voit et approuve est exactement ce qui partira : mêmes motifs, mêmes
 -- empreintes par canal. La forme du résultat ne change pas.
@@ -1052,6 +1070,7 @@ $cron$;
 
 -- 12. Droits ------------------------------------------------------------------------
 revoke all on function public.communication_courriel_empreinte(uuid),
+  public.communication_consentement_texte_actuel(text, text),
   public.communication_campagne_empreinte(uuid, text),
   public.communication_desabonnement_jeton(bigint),
   public.communication_desabonner_courriel(bigint, text),
@@ -1071,7 +1090,8 @@ revoke all on function public.communication_courriel_empreinte(uuid),
   from public, anon, authenticated, service_role;
 -- Le lien de désinscription marche sans connexion.
 grant execute on function public.communication_desabonner_courriel(bigint, text) to anon, authenticated;
-grant execute on function public.communication_consentement_courriel_etat(),
+grant execute on function public.communication_consentement_texte_actuel(text, text),
+  public.communication_consentement_courriel_etat(),
   public.communication_consentement_courriel_accorder(text, text),
   public.communication_consentement_courriel_retirer()
   to authenticated;

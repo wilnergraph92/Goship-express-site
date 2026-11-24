@@ -33,6 +33,7 @@
 <script src="../assets/js/lieux.js" defer></script>
 <script src="../assets/js/inactivite.js" defer></script>
 <script src="../assets/js/compte.js" defer></script>
+<script src="../assets/js/offres.js" defer></script>
 </head>
 <body>
 <div class="gs-page">
@@ -305,6 +306,40 @@
           <section class="gs-avt__bloc" data-avt-parrainage aria-live="polite" hidden></section>
           <section class="gs-avt__bloc" data-avt-preferences hidden>
             <label class="gs-avt__case"><input type="checkbox" data-pref-anniversaire> <span>Recibir mi mensaje de cumpleaños</span></label>
+          </section>
+        </div>
+
+        <div class="gs-panneau" data-offres hidden>
+          <div class="gs-panneau__tete">
+            <h2>Ofertas y novedades</h2>
+          </div>
+          <p class="gs-panneau__intro">Reciba nuestras promociones si lo desea. Puede detenerlas en cualquier momento, aquí o desde cada mensaje.</p>
+          <p class="gs-form__erreur" data-offres-erreur role="alert" hidden></p>
+          <p class="gs-copie-ok" data-offres-ok role="status" hidden></p>
+          <section class="gs-offres__canal" data-offre="email" hidden>
+            <h3>Por correo electrónico</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>Acepto recibir ofertas por correo electrónico</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Dejar de recibir ofertas por correo electrónico</button>
+            </div>
+          </section>
+          <section class="gs-offres__canal" data-offre="whatsapp" hidden>
+            <h3>Por WhatsApp</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>Recibir un código por WhatsApp</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Dejar de recibir ofertas por WhatsApp</button>
+            </div>
+            <form class="gs-form gs-form--compact" data-offre-code novalidate hidden>
+              <div class="gs-champ">
+                <label for="offre-code">Código recibido por WhatsApp</label>
+                <input id="offre-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+              </div>
+              <button class="gs-bouton gs-bouton--plein" type="submit">Confirmar</button>
+            </form>
           </section>
         </div>
 
@@ -717,6 +752,21 @@
   <p data-t="erreur-PREALERT_DUPLICATE">Este número de seguimiento ya está anunciado: la compra está en su lista.</p>
   <p data-t="erreur-PREALERT_ALREADY_RECEIVED">Este paquete ya llegó a Miami: está en « Mis paquetes ».</p>
   <p data-t="erreur-TOO_MANY_PREALERTS">Ya tiene 60 compras anunciadas en espera.</p>
+  <p data-t="offres-etat-actif">Recibe nuestras ofertas por este medio.</p>
+  <p data-t="offres-etat-inactif">No recibe nuestras ofertas por este medio.</p>
+  <p data-t="offres-ok-accepte">Anotado: recibirá nuestras ofertas por este medio.</p>
+  <p data-t="offres-ok-retire">Anotado: ya no recibirá nuestras ofertas por este medio.</p>
+  <p data-t="offres-code-envoye">Le enviaremos un código de 6 dígitos por WhatsApp. Ingréselo abajo.</p>
+  <p data-t="offres-code-faux">Código incorrecto o vencido. Solicite uno nuevo si es necesario.</p>
+  <p data-t="offres-err-generique">La operación no se completó. Inténtelo de nuevo.</p>
+  <p data-t="offres-err-email">Primero confirme su correo electrónico con el enlace que recibió al registrarse.</p>
+  <p data-t="offres-err-contact">Primero agregue un número de teléfono o un correo electrónico válido en «Mis datos».</p>
+  <p data-t="offres-err-trop">Demasiadas solicitudes. Inténtelo más tarde.</p>
+  <p data-t="offres-err-partage">Este contacto se comparte con otra cuenta: no puede recibir nuestras ofertas.</p>
+  <p data-t="offres-err-indisponible">Esta opción aún no está disponible.</p>
+  <p data-t="desabo-en-cours">Dando de baja…</p>
+  <p data-t="desabo-ok">Listo: ya no recibirá nuestras ofertas por correo electrónico.</p>
+  <p data-t="desabo-invalide">Este enlace para darse de baja no es válido. También puede gestionar sus preferencias en «Mi cuenta».</p>
 </template>
 </main>
 

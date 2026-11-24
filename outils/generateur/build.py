@@ -146,6 +146,9 @@ COMPTE_PAGES = [
      "Votre espace client Goship Express : code client, adresse en Floride et suivi de vos colis.", True),
     ('nouveau-mot-de-passe.html', 'nouveau-mot-de-passe.main.html', 'Nouveau mot de passe — Goship Express',
      "Choisissez un nouveau mot de passe pour votre compte Goship Express.", True),
+    # Le lien de désinscription de chaque e-mail marketing (candidate 012) : sans connexion.
+    ('desabonnement.html', 'desabonnement.main.html', 'Se désabonner — Goship Express',
+     "Arrêter de recevoir les offres de Goship Express par e-mail.", True),
 ]
 
 # Pages guides : chacune répond à une recherche précise de nos clients (« envoi
@@ -1708,7 +1711,10 @@ def build_compte():
         # lieux.js (régions et villes) avant compte.js, qui s'en sert.
         # inactivite.js (déconnexion après un moment sans activité) seulement sur Mon compte :
         # c'est la seule page de l'espace client où une session ouverte montre quelque chose.
-        scripts = (('api', 'codes', 'impression', 'lieux', 'inactivite', 'compte') if out == 'mon-compte.html'
+        # offres.js : les offres marketing de Mon compte, et la page de désinscription, qui
+        # n'a besoin que de lui (aucune session n'y est demandée).
+        scripts = (('api', 'codes', 'impression', 'lieux', 'inactivite', 'compte', 'offres') if out == 'mon-compte.html'
+                   else ('api', 'offres') if out == 'desabonnement.html'
                    else ('api', 'lieux', 'compte'))
         # L'inscription porte mesure.js, qui n'y charge Google qu'une fois le compte
         # créé, pour compter l'inscription (voir mesure.js) ; les autres pages du compte, jamais.

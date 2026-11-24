@@ -698,6 +698,28 @@
     utiliserCodeParrainage: function (code) { return appelBase('utiliser_code_parrainage', { p_code: String(code || '') }); },
     preferencesProgrammes: function () { return appelBase('mes_preferences_programmes'); },
     reglerAnniversaire: function (actif) { return appelBase('regler_ma_preference_anniversaire', { p_actif: !!actif }); },
+    // Offres GoShip (Centre de communication, candidates 003 et 012) : le client lit le texte
+    // d'accord en vigueur, accepte ou retire, canal par canal. Les règles sont dans la base.
+    marketingTexte: function (canal, langue) {
+      return appelBase('communication_consentement_texte_actuel', { p_canal: String(canal), p_langue: String(langue) });
+    },
+    marketingWhatsapp: function () { return appelBase('communication_consentement_etat_whatsapp'); },
+    marketingWhatsappDemander: function (version, langue) {
+      return appelBase('communication_consentement_demander_whatsapp', { p_version: String(version), p_langue: String(langue) });
+    },
+    marketingWhatsappConfirmer: function (code) {
+      return appelBase('communication_consentement_confirmer_whatsapp', { p_code: String(code || '') });
+    },
+    marketingWhatsappRetirer: function () { return appelBase('communication_consentement_retirer_whatsapp'); },
+    marketingCourriel: function () { return appelBase('communication_consentement_courriel_etat'); },
+    marketingCourrielAccorder: function (version, langue) {
+      return appelBase('communication_consentement_courriel_accorder', { p_texte_version: String(version), p_langue: String(langue) });
+    },
+    marketingCourrielRetirer: function () { return appelBase('communication_consentement_courriel_retirer'); },
+    // Le lien de désinscription d'un e-mail marketing : sans connexion, jeton HMAC.
+    desabonnerCourriel: function (destinataire, jeton) {
+      return appelBase('communication_desabonner_courriel', { p_destinataire: Number(destinataire), p_jeton: String(jeton || '') });
+    },
 
     connecter: function (email, motDePasse) {
       return sb().then(function (c) {
@@ -1097,6 +1119,37 @@
       communicationCampagneJournal: function (id, limite) {
         return sb().then(function (c) { return c.rpc('communication_campagne_journal', {
           p_campagne: Number(id), p_limite: limite || 100
+        }); }).then(resultat);
+      },
+      // Arrêt d'urgence (candidate 010) : la version affichée est exigée pour lever l'arrêt.
+      communicationArretEtat: function () {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_etat'); }).then(resultat);
+      },
+      communicationArretDemander: function (motif) {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_demander', {
+          p_motif: String(motif || '')
+        }); }).then(resultat);
+      },
+      communicationArretConfirmer: function () {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_confirmer'); }).then(resultat);
+      },
+      communicationArretLever: function (motif, version) {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_lever', {
+          p_motif: String(motif || ''), p_version_attendue: Number(version)
+        }); }).then(resultat);
+      },
+      // Envoi des campagnes (candidate 012)
+      communicationMarketingReglages: function () {
+        return sb().then(function (c) { return c.rpc('communication_marketing_reglages_lire'); }).then(resultat);
+      },
+      communicationMarketingReglagesDefinir: function (frequenceMax, fenetreHeures) {
+        return sb().then(function (c) { return c.rpc('communication_marketing_reglages_definir', {
+          p_frequence_max: Number(frequenceMax), p_fenetre_heures: Number(fenetreHeures)
+        }); }).then(resultat);
+      },
+      communicationCampagneSuivi: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_suivi', {
+          p_campagne: Number(id)
         }); }).then(resultat);
       },
 
@@ -5008,6 +5061,18 @@
       });
     },
 
+    // Démonstration : aucun texte d'accord n'est attesté, l'écran des offres n'offre donc
+    // pas d'accepter ; aucun consentement n'est simulé.
+    marketingTexte: function () { return Promise.resolve(null); },
+    marketingWhatsapp: function () { return Promise.resolve({ etat: 'aucun', actif: false }); },
+    marketingWhatsappDemander: function () { return echec('absent'); },
+    marketingWhatsappConfirmer: function () { return echec('absent'); },
+    marketingWhatsappRetirer: function () { return echec('absent'); },
+    marketingCourriel: function () { return Promise.resolve({ etat: 'aucun', actif: false, adresse_valide: true }); },
+    marketingCourrielAccorder: function () { return echec('absent'); },
+    marketingCourrielRetirer: function () { return echec('absent'); },
+    desabonnerCourriel: function () { return echec('absent'); },
+
     connecter: function (email, motDePasse) {
       var compte = trouverCompte(lireDonnees(), email);
       if (!compte || compte.mdp !== empreinte(motDePasse)) return echec('identifiants');
@@ -5312,6 +5377,13 @@
       communicationCampagneApprouver: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
       communicationCampagneRefuser: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
       communicationCampagnePlanifier: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
+      communicationArretEtat: function () { return communicationDemoNonDisponible('communications.view'); },
+      communicationArretDemander: function () { return communicationDemoNonDisponible('communications.emergency_stop'); },
+      communicationArretConfirmer: function () { return communicationDemoNonDisponible('communications.emergency_stop'); },
+      communicationArretLever: function () { return communicationDemoNonDisponible('communications.emergency_stop'); },
+      communicationMarketingReglages: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
+      communicationMarketingReglagesDefinir: function () { return communicationDemoNonDisponible('settings.manage'); },
+      communicationCampagneSuivi: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
       communicationCampagneAnnuler: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
       communicationCampagneJournal: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
 
@@ -7481,6 +7553,9 @@
     inscrire: ferme, naissance: ferme, definirNaissance: ferme, portefeuille: ferme, utiliserPoints: ferme, mesAvantages: ferme,
     maBienvenue: ferme, monParrainage: ferme, noterInvitation: ferme, utiliserCodeParrainage: ferme, preferencesProgrammes: ferme,
     reglerAnniversaire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    marketingTexte: ferme, marketingWhatsapp: ferme, marketingWhatsappDemander: ferme, marketingWhatsappConfirmer: ferme,
+    marketingWhatsappRetirer: ferme, marketingCourriel: ferme, marketingCourrielAccorder: ferme, marketingCourrielRetirer: ferme,
+    desabonnerCourriel: ferme,
     doubleAuth: { etat: function () { return Promise.resolve(null); }, inscrire: ferme, confirmer: ferme, verifier: ferme,
                   equipe: function () { return Promise.resolve(null); }, regler: ferme },
     surSessionPerdue: function () { return function () {}; },

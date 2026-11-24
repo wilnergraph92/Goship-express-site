@@ -81,8 +81,8 @@ jobs:
           for f in demo scanner finances permissions tableau analytics rapports frais corrections programmes identite prealertes; do
             echo "== essai-$f.js"; node "outils/essais-services/essai-$f.js"
           done
-      - name: Centre de communication — Edge Functions, campagnes, interface (node:test, sans réseau)
-        run: node --test outils/essais-services/essai-communication-edge.mjs outils/essais-services/essai-communication-campagnes.mjs outils/essais-services/essai-communication-interface.mjs
+      - name: Centre de communication — Edge Functions, campagnes, interface, écrans (node:test, sans réseau)
+        run: node --test outils/essais-services/essai-communication-edge.mjs outils/essais-services/essai-communication-campagnes.mjs outils/essais-services/essai-communication-interface.mjs outils/essais-services/essai-communication-ecrans.mjs
       - name: E-mails et factures client (outils/essais-sql)
         run: python3 outils/essais-sql/essai-base.py
       - name: QR codes et Code128 (outils/essais-codes), comparés aux bibliothèques de référence

@@ -1904,3 +1904,71 @@ Sans activité, vous serez déconnecté dans une minute.
 Vous avez été déconnecté après un moment sans activité, pour protéger les données. Reconnectez-vous pour continuer.
 Déconnecté
 Vous avez été déconnecté après un moment sans activité.
+Une campagne approuvée et planifiée part à son heure, sous l’arrêt d’urgence.
+Seuls les clients qui ont accepté les offres sur le canal la reçoivent. Les budgets, quotas et coûts ne sont jamais estimés automatiquement.
+Envoi des campagnes
+Suivi d’une campagne
+Campagne
+Choisir une campagne
+Arrêt d’urgence
+Envois autorisés
+Arrêt demandé : confirmation en cours
+Arrêt confirmé : plus rien ne part
+Confirmation en attente : des envois sont en train de partir. Nouvelle tentative automatique.
+Confirmation en attente : des envois déjà partis attendent la réponse du fournisseur.
+Confirmation en attente : des envois au résultat incertain doivent être réconciliés.
+Confirmation en attente : nouvelle tentative automatique.
+Indiquez un motif d’au moins 10 caractères.
+L’état a changé depuis l’affichage. Vérifiez-le avant de lever l’arrêt.
+Vous n’avez pas le droit de gérer l’arrêt d’urgence.
+Connexion impossible. Réessayez.
+L’arrêt d’urgence n’est pas encore installé sur cette base.
+La confirmation attend toujours. Relancez-la quand les envois en cours sont terminés.
+Arrêt confirmé : plus aucun message ne part.
+Arrêt demandé : la demande est enregistrée. Confirmation…
+L’arrêt n’a pas été enregistré. Réessayez.
+Arrêt levé : les envois reprennent.
+Motif (au moins 10 caractères)
+Demandé le
+Confirmé le
+Dernière levée
+Seul l’administrateur peut demander ou lever l’arrêt.
+Arrêter tous les envois
+Confirmer l’arrêt maintenant
+Lever l’arrêt
+Sans accord pour ce canal
+Accord retiré
+Accord expiré
+Accord non confirmé
+Accord invalide
+Canal sans accord possible
+Contact modifié depuis l’accord
+Contact absent ou illisible
+Contact partagé entre plusieurs comptes
+STOP ou désinscription
+Déjà atteint par cette campagne
+Limite de fréquence atteinte
+Quota du canal atteint
+Compte introuvable
+Envoyés
+Incertains
+Planifiée
+Envoi en cours
+Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures.
+Vous n’avez pas le droit de modifier ce réglage.
+L’envoi des campagnes n’est pas encore installé sur cette base.
+Fréquence par client
+Messages marketing au plus, par client et par canal
+Sur une fenêtre de (heures)
+Non réglée : aucune campagne ne part tant que l’administrateur ne l’a pas fixée.
+Messages au plus
+Sur combien d’heures
+Enregistrer la fréquence
+Fréquence enregistrée.
+Aucun.
+Annulés avant de partir
+Campagne annulée
+Canal non configuré
+Sans destinataire
+Mis en file
+Coût réel : non disponible.
