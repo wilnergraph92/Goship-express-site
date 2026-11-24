@@ -29,14 +29,27 @@ verifier('pgcrypto réel : HMAC-SHA256 identique à Python',
 verifier('pg_net installé (non appelé)', sql('postgres', "select count(*) from pg_extension where extname='pg_net';"), '1')
 verifier('Vault réel installé', sql('postgres', "select count(*) from pg_extension where extname='supabase_vault';"), '1')
 
-print('Rôles dédiés (candidate 009)')
+print('Rôles dédiés (candidate 009, appliquée par postgres non superutilisateur)')
 for role in ('communication_webhook', 'communication_worker'):
-    verifier('%s : seul membership = authenticator' % role,
-             sql('supabase_admin', "select string_agg(m.rolname, ',') from pg_auth_members a join pg_roles r on r.oid=a.roleid "
-                 "join pg_roles m on m.oid=a.member where r.rolname='%s';" % role), 'authenticator')
+    verifier('%s : memberships = authenticator (SET, sans ADMIN) et postgres (ADMIN seul)' % role,
+             sql('supabase_admin', "select string_agg(m.rolname || ':' || a.admin_option || '/' || a.inherit_option "
+                 "|| '/' || a.set_option, ',' order by m.rolname) from pg_auth_members a "
+                 "join pg_roles r on r.oid=a.roleid join pg_roles m on m.oid=a.member where r.rolname='%s';" % role),
+             'authenticator:false/false/true,postgres:true/false/false')
     verifier('%s : aucun attribut élevé' % role,
              sql('supabase_admin', "select rolcanlogin or rolinherit or rolsuper or rolcreaterole or rolbypassrls "
                  "from pg_roles where rolname='%s';" % role), 'f')
+
+# Un autre rôle, même CREATEROLE, ne peut pas appliquer la 009 : refus avant tout effet
+sql('supabase_admin', "do $i$ begin if not exists (select 1 from pg_roles where rolname='essai_intrus') then "
+    "create role essai_intrus login createrole password 'essai-jetable'; end if; end $i$;")
+chemin_009 = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'migrations-candidates',
+                          '009-communication-identite-edge.sql')
+r = subprocess.run(['docker', 'exec', '-i', '-e', 'PGPASSWORD=essai-jetable', CONTENEUR, 'psql', '-h', '127.0.0.1',
+                    '-U', 'essai_intrus', '-d', 'postgres', '-X', '-q', '-v', 'ON_ERROR_STOP=1',
+                    '--single-transaction', '-f', '-'], stdin=open(chemin_009), capture_output=True, text=True)
+verifier('009 refusée à un rôle CREATEROLE qui n’est ni postgres ni superutilisateur',
+         (r.returncode != 0, 'COMMUNICATION_IDENTITY_REQUIRES_POSTGRES_OR_SUPERUSER_SESSION' in r.stderr), (True, True))
 
 print('Fonctions internes fermées aux rôles d’API')
 for f in ('public.communication_classer_entrant(text,text)', 'public.communication_recevoir_evenement(text,text,text)'):

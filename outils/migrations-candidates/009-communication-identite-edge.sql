@@ -3,13 +3,19 @@
 -- seulement. Ne pas appliquer à une base distante (critère C14 de docs/production/go-no-go.md).
 begin;
 
+-- Deux façons d'appliquer cette candidate :
+--   * par le rôle postgres lui-même (non superutilisateur, CREATEROLE) : c'est le seul
+--     possible sur Supabase hébergé, où le client n'a pas de superutilisateur ;
+--   * par une session superutilisateur (bancs locaux) : elle agit sous `set role postgres`
+--     et n'utilise ses droits que pour accorder les rôles dédiés à authenticator.
+-- Tout autre rôle est refusé.
 do $contexte_execution$
 begin
   if not exists (
     select 1 from pg_catalog.pg_roles
-     where rolname = session_user and rolsuper
+     where rolname = session_user and (rolsuper or (rolname = 'postgres' and rolcreaterole))
   ) then
-    raise exception 'COMMUNICATION_IDENTITY_REQUIRES_SUPERUSER_SESSION';
+    raise exception 'COMMUNICATION_IDENTITY_REQUIRES_POSTGRES_OR_SUPERUSER_SESSION';
   end if;
 end
 $contexte_execution$;
@@ -94,35 +100,6 @@ alter table public.communication_confirmation_code_audit enable row level securi
 revoke all on public.communication_confirmation_code_audit
   from public, anon, authenticated, service_role;
 
--- PostgreSQL 16 et suivants : quand un rôle CREATEROLE non superutilisateur crée un
--- rôle (postgres chez Supabase, qui applique les candidates 005 et 006), il en devient
--- automatiquement membre, avec ADMIN OPTION et sans INHERIT ni SET. Le contrôle
--- ci-dessous refuserait ce membership implicite et la candidate échouerait sur toute
--- base Supabase (constaté le 23/11/2026 sur l'image Supabase PostgreSQL 17.4 ; invisible
--- sur pgserver, où postgres est superutilisateur). La session superutilisateur retire
--- ce seul membership implicite ; tout autre membership reste refusé plus bas.
-reset role;
-do $membership_createur$
-declare
-  v_role text;
-  v_grantor text;
-begin
-  foreach v_role in array array['communication_webhook', 'communication_worker'] loop
-    for v_grantor in
-      select g.rolname
-        from pg_catalog.pg_auth_members a
-        join pg_catalog.pg_roles r on r.oid = a.roleid
-        join pg_catalog.pg_roles m on m.oid = a.member
-        join pg_catalog.pg_roles g on g.oid = a.grantor
-       where r.rolname = v_role and m.rolname = 'postgres'
-         and a.admin_option and not a.inherit_option and not a.set_option
-    loop
-      execute pg_catalog.format('revoke %I from postgres granted by %I', v_role, v_grantor);
-    end loop;
-  end loop;
-end
-$membership_createur$;
-set role postgres;
 
 do $roles$
 declare
@@ -143,14 +120,27 @@ begin
     end if;
 
     select oid into v_oid from pg_catalog.pg_roles where rolname = v_role;
-    -- Le seul membership entrant autorisé est celui qui permet à PostgREST de
-    -- SET ROLE. Les memberships sortants donneraient au rôle des droits hérités.
+    -- Memberships entrants autorisés, et eux seuls :
+    --   * authenticator, sans ADMIN OPTION : il permet à PostgREST de faire SET ROLE ;
+    --   * postgres avec ADMIN OPTION, sans INHERIT ni SET : c'est le membership que
+    --     PostgreSQL 16 et suivants donnent au rôle CREATEROLE non superutilisateur qui a
+    --     créé le rôle (postgres chez Supabase, candidates 005 et 006). Il ne donne aucun
+    --     droit du rôle à postgres ; il lui permet seulement d'accorder le rôle, ce qui
+    --     rend cette candidate applicable sans superutilisateur. postgres possède déjà
+    --     toutes les fonctions que ces rôles appellent : il n'en tire aucun droit nouveau.
+    --     (Chez Supabase, postgres est de toute façon membre d'authenticator, avec INHERIT
+    --     et SET : il atteint déjà ces rôles par lui, comme anon, authenticated et
+    --     service_role. Constaté sur l'image Supabase PostgreSQL 17.4 le 24/11/2026.)
+    -- Les memberships sortants donneraient au rôle des droits hérités : tous refusés.
     if exists (
       select 1 from pg_catalog.pg_auth_members
-       where member = v_oid and roleid <> v_authenticator
+       where member = v_oid
     ) or exists (
-      select 1 from pg_catalog.pg_auth_members
-       where roleid = v_oid and member <> v_authenticator
+      select 1 from pg_catalog.pg_auth_members a
+       where a.roleid = v_oid
+         and a.member <> v_authenticator
+         and not (a.member = (select oid from pg_catalog.pg_roles where rolname = 'postgres')
+                  and a.admin_option and not a.inherit_option and not a.set_option)
     ) then
       raise exception 'COMMUNICATION_ROLE_HAS_UNAPPROVED_MEMBERSHIP:%', v_role;
     end if;
@@ -1045,8 +1035,11 @@ grant execute on function communication_edge.communication_edge_worker_traiter_e
   communication_edge.communication_edge_worker_recuperer_confirmations_whatsapp(integer)
   to communication_worker;
 
--- Le compte admin local délègue les memberships nécessaires ; les objets restent
--- possédés par postgres, qui n'a pas l'ADMIN OPTION sur ces rôles.
+-- Membership de PostgREST sur les rôles dédiés. Par postgres (Supabase hébergé), grâce
+-- à l'ADMIN OPTION de créateur décrite plus haut ; par la session superutilisateur
+-- (bancs locaux) sinon. Si postgres n'a pas cette ADMIN OPTION (rôles créés par un
+-- superutilisateur) et que la session n'est pas superutilisateur, l'instruction échoue :
+-- la candidate s'arrête sans rien laisser à moitié.
 reset role;
 grant communication_webhook, communication_worker to authenticator;
 set role postgres;

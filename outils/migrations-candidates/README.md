@@ -189,14 +189,16 @@ long est classé « ambigu » et ne retire rien ; « Arrêt », « Fin », « Ca
 et « Quit » ne comptent que seuls (« Arrêt de bus » ou « Cancel my order » ne
 désabonnent pas). Les listes restent à valider par le juriste.
 
-Correction de la candidate 009 (23/11/2026), constatée sur l'image Supabase réelle
-(`outils/essais-supabase-reel/lancer.sh`) : chez Supabase, `postgres` n'est pas
-superutilisateur. Depuis PostgreSQL 16, quand il crée `communication_webhook` (005) et
-`communication_worker` (006), il en devient automatiquement membre avec ADMIN OPTION.
-Le contrôle strict de la 009 refusait ce membership et la candidate échouait sur toute
-base Supabase ; pgserver ne le montrait pas, `postgres` y étant superutilisateur. La
-session superutilisateur de la 009 retire désormais ce seul membership implicite
-(ADMIN sans INHERIT ni SET, membre `postgres`) ; tout autre membership reste refusé. Les plaintes et
+Candidate 009 applicable sans superutilisateur (23 et 24/11/2026), constaté et éprouvé sur
+l'image Supabase réelle (`outils/essais-supabase-reel/lancer.sh`, où toute la chaîne passe
+par `postgres`). Chez Supabase hébergé, `postgres` n'est pas superutilisateur et le client
+n'en a aucun. Depuis PostgreSQL 16, quand `postgres` crée `communication_webhook` (005) et
+`communication_worker` (006), il en devient membre avec ADMIN OPTION, sans INHERIT ni SET.
+La 009 accepte ce seul membership de créateur et s'en sert pour accorder les deux rôles à
+`authenticator` ; tout autre membership reste refusé. Elle s'applique par `postgres` ou par
+une session superutilisateur (bancs locaux), et refuse tout autre rôle. Chez Supabase,
+`postgres` est de toute façon membre d'`authenticator` (INHERIT et SET) : il atteint déjà ces
+rôles par lui, comme `anon`, `authenticated` et `service_role`. Les plaintes et
 désinscriptions Email restent en échec prioritaire tant que leur correspondance avec
 une identité GoShip n'est pas définie dans une candidate approuvée ; elles bloquent
 les sorties au lieu d'être acquittées comme traitées. Les reçus Expo sont enregistrés

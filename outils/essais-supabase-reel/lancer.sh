@@ -12,7 +12,8 @@
 #
 #  Ce que pgserver ne montre pas et que cet essai montre : le vrai chiffrement, le
 #  vrai Vault, et les droits d'un postgres non superutilisateur (constat du
-#  23/11/2026 : la candidate 009 échouait sur toute base Supabase).
+#  23/11/2026 : la candidate 009 échouait sur toute base Supabase, puis exigeait un
+#  superutilisateur ; depuis le 24/11/2026, toute la chaîne passe par postgres).
 #
 #  GARDE-FOUS : le conteneur tourne SANS AUCUN RÉSEAU (--network none). La chaîne
 #  programme des tâches pg_cron (notifications, accusés Expo…) qui, sur une vraie
@@ -47,10 +48,9 @@ appliquer() {
   local n=0 f r
   while read -r f; do
     case "$f" in ''|\#*) continue ;; esac
+    # Toute la chaîne passe par postgres, non superutilisateur, comme sur Supabase
+    # hébergé : aucune candidate ne doit exiger de superutilisateur.
     r=postgres
-    # 009 crée l'identité PostgREST des Edge Functions : elle exige une session
-    # superutilisateur (voir son en-tête) ; tout le reste passe par postgres.
-    case "$f" in *009-communication-identite-edge.sql) r=supabase_admin ;; esac
     if ! dpsql "$r" -X -q -v ON_ERROR_STOP=1 --single-transaction -f - < "$OUTILS/$f" > /dev/null 2> /tmp/goship-essai-reel.err; then
       echo "ÉCHEC ($1) $f"
       grep -vE 'NOTICE|already a transaction' /tmp/goship-essai-reel.err | head -8
