@@ -118,7 +118,7 @@ begin
     alter table public.communication_consentement_historique
       add constraint communication_consentement_historique_source_c41_check
       check (source in ('compte_web', 'application', 'confirmation_whatsapp',
-                        'changement_contact', 'whatsapp_stop'));
+                        'changement_contact', 'whatsapp_stop', 'desabonnement_courriel'));
   end if;
 end
 $source_check$;

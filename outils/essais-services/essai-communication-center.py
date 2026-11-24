@@ -30,6 +30,7 @@ FICHIERS_CANDIDATS = (
     os.path.join(CANDIDATES, '007-communication-interface-operations.sql'),
     os.path.join(CANDIDATES, '008-communication-campagnes-marketing.sql'),
     os.path.join(CANDIDATES, '010-communication-arret-administration.sql'),
+    os.path.join(CANDIDATES, '012-communication-envoi-campagnes.sql'),
 )
 FICHIER_CANDIDATE_S1 = os.path.join(CANDIDATES, '009-communication-identite-edge.sql')
 # Les réglages décidés s'appliquent à part : les essais de consentement vérifient
@@ -2662,8 +2663,9 @@ def tester_c6_campagnes(db, numero_base):
         (apercu.get('total_audience'), any(x in json.dumps(apercu) for x in
          (CLIENT7,CLIENT8,CLIENT9,CLIENT10,CLIENT12,CLIENT13,'7865550701','cible_empreinte','empreinte_interne'))),
         (6,False))
+    # Depuis C12, l'e-mail a son propre consentement : sans accord e-mail, motif « sans_consentement ».
     verifier('consentement propre au canal, ambiguïté partagée et STOP exclus',
-        (canal['email']['eligibles'],canal['email']['motifs_exclusion'].get('consentement_non_verifiable'),
+        (canal['email']['eligibles'],canal['email']['motifs_exclusion'].get('sans_consentement'),
          canal['whatsapp']['eligibles'],motifs.get('contact_partage_ambigu'),
          motifs.get('sans_consentement'),motifs.get('consentement_retire'),motifs.get('suppression_active')),
         (0,6,2,1,1,1,1))
@@ -2799,10 +2801,15 @@ def tester_c6_campagnes(db, numero_base):
     verifier('annulation Admin persistée',
         db.sql('select etat from public.communication_campagnes_marketing where id=%d;'%copie_id).splitlines()[-1].strip(),
         'cancelled')
-    verifier('aucun RPC worker ou expéditeur C6',
-        db.sql("select count(*) from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace "
+    # Depuis C12 (candidate 012), le seul expéditeur de campagne est l'adaptateur appelé par
+    # expedier_envoi, derrière la porte P-07 ; aucun RPC ne l'expose.
+    verifier('aucun RPC worker ou expéditeur de campagne exposé (seul l’adaptateur interne C12)',
+        db.sql("select coalesce(string_agg(p.proname, ','), '') || '|' || "
+               "coalesce(bool_or(has_function_privilege('authenticated', p.oid, 'execute') "
+               "or has_function_privilege('service_role', p.oid, 'execute')), false)::text "
+               "from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace "
                "where n.nspname='public' and p.proname ~ 'campagne.*(envoyer|expedier|worker)';").splitlines()[-1].strip(),
-        '0')
+        'communication_campagne_expedier_sans_porte|false')
     apres = tuple(db.sql(q).splitlines()[-1].strip() for q in (
         'select count(*) from public.notification_envois',
         'select count(*) from net.envois',
@@ -3105,6 +3112,204 @@ def tester_c11_rejeu_chaine(db, numero_base):
     verifier('rejeu : le travailleur tourne toujours sans erreur', True, True)
 
 
+def tester_c12_envoi_campagnes(db, numero_base):
+    """C12 (candidate 012) : la campagne planifiée part par l'outbox unique, sous la porte."""
+    print('\nC12 — envoi des campagnes marketing — base neuve %d' % numero_base)
+    q = lambda texte: db.sql(texte).splitlines()[-1].strip()
+    suivi = lambda cid: S.jsonq(db, ADMIN, 'select public.communication_campagne_suivi(%d);' % cid)
+    # Comme la tâche pg_cron, qui tourne sous le propriétaire des fonctions.
+    lancer = lambda: rpc_json(db.sql('select public.communication_campagnes_lancer(5);'))
+
+    def rendre_echue(cid):
+        db.sql("update public.communication_campagnes_marketing set planifiee_pour = now() - interval '1 minute' "
+               "where id = %d;" % cid)
+
+    def nouvelle_campagne_echue(source, canal_choisi='whatsapp'):
+        copie = S.jsonq(db, MANAGER, 'select public.communication_campagne_dupliquer(%d);' % source)['id']
+        segment, modele = q("select r.segment_id || '|' || (select x.element::text from "
+                            "jsonb_array_elements(r.modeles) x(element) where x.element ->> 'canal' = '%s') "
+                            "from public.communication_campagnes_marketing c join "
+                            "public.communication_campagne_revisions_marketing r on r.id = c.revision_approuvee_id "
+                            "where c.id = %d;" % (canal_choisi, source)).split('|', 1)
+        S.jsonq(db, MANAGER,
+            "select public.communication_campagne_enregistrer(%d,'C12 relance','','Essai local',"
+            "array['%s']::text[],'es',%s,null,'[%s]'::jsonb,100,100,'{\"%s\":2}'::jsonb,100,50,"
+            "timestamp '2030-01-15 14:00:00','America/Santo_Domingo');"
+            % (copie, canal_choisi, segment, modele.replace("'", "''"), canal_choisi))
+        S.jsonq(db, MANAGER, 'select public.communication_campagne_apercu(%d);' % copie)
+        S.jsonq(db, MANAGER, 'select public.communication_campagne_soumettre(%d);' % copie)
+        S.jsonq(db, ADMIN, 'select public.communication_campagne_approuver(%d);' % copie)
+        S.jsonq(db, ADMIN, 'select public.communication_campagne_planifier(%d);' % copie)
+        rendre_echue(copie)
+        return copie
+
+    def etat_arret_admin():
+        return S.jsonq(db, ADMIN, 'select public.communication_c10_arret_etat();')
+
+    verifier('C12 : lancement et adaptateur fermés aux comptes et au service_role',
+             q("select bool_or(has_function_privilege(r, f, 'execute'))::text from "
+               "unnest(array['anon','authenticated','service_role']) r, "
+               "unnest(array['public.communication_campagnes_lancer(integer)', "
+               "'public.communication_campagne_expedier_sans_porte(public.notification_envois)', "
+               "'public.communication_campagne_motif_exclusion(uuid,text)']) f;"), 'false')
+
+    cid = int(q("select id from public.communication_campagnes_marketing where etat = 'scheduled' "
+                "order by id limit 1;"))
+    rendre_echue(cid)
+    # Seules les requêtes marketing (modèle Meta de campagne) : des notifications
+    # transactionnelles d'essais précédents peuvent repartir à la levée de l'arrêt.
+    envois_reseau = lambda: int(q("select count(*) from net.envois where body::text like '%goship_offre_test%';"))
+    reseau_avant = envois_reseau()
+
+    db.sql("update public.communication_marketing_reglages set frequence_max = null, "
+           "frequence_fenetre_heures = null where id is true;")
+    sans_reglage = lancer()
+    verifier('C12 : sans réglage de fréquence (N-01), rien ne part et la campagne reste planifiée',
+             (sans_reglage.get('en_attente_reglage'), sans_reglage.get('mises_en_file'),
+              q('select etat from public.communication_campagnes_marketing where id = %d;' % cid)),
+             (1, 0, 'scheduled'))
+    verifier('C12 : le Gérant ne peut pas régler la fréquence',
+             db.erreur(MANAGER, 'select public.communication_marketing_reglages_definir(1, 24);'),
+             'PERMISSION_DENIED')
+    verifier('C12 : réglage hors bornes refusé',
+             db.erreur(ADMIN, 'select public.communication_marketing_reglages_definir(0, 24);'),
+             'COMMUNICATION_MARKETING_SETTINGS_INVALID')
+    reglage = S.jsonq(db, ADMIN, 'select public.communication_marketing_reglages_definir(1, 24);')
+    verifier('C12 : l’Admin règle la fréquence (au plus 1 message par 24 h)',
+             (reglage.get('frequence_max'), reglage.get('frequence_fenetre_heures'), reglage.get('configure')),
+             (1, 24, True))
+
+    lance = lancer()
+    detail = suivi(cid)
+    verifier('C12 : la campagne échue est mise en file et passe en cours d’envoi',
+             (lance.get('lancees'), detail.get('etat'), detail.get('mis_en_file')), (1, 'sending', 2))
+    verifier('C12 : chaque exclusion de l’audience est comptée par motif',
+             detail.get('exclus'),
+             # e-mail : 6 sans consentement e-mail ; WhatsApp : 1 sans consentement, et les autres motifs
+             {'sans_consentement': 7, 'contact_partage_ambigu': 1, 'consentement_retire': 1,
+              'suppression_active': 1})
+    verifier('C12 : relancer ne met rien en file une seconde fois',
+             (lancer().get('mises_en_file'),
+              q('select count(*) from public.communication_campagne_destinataires where campagne_id = %d '
+                "and etat = 'en_file';" % cid)), (0, '2'))
+    verifier('C12 : aucune coordonnée en clair côté campagne (empreinte seulement)',
+             q("select count(*) from information_schema.columns where table_schema = 'public' "
+               "and table_name = 'communication_campagne_destinataires' "
+               "and column_name ~ '(telephone|email|numero|adresse)';"), '0')
+
+    # Arrêt d'urgence : tant qu'il tient, aucune ligne marketing ne part.
+    etat = etat_arret_admin()
+    if etat.get('etat') == 'actif':
+        S.jsonq(db, ADMIN, "select public.communication_c10_arret_demander('arrêt avant envoi C12');")
+        S.jsonq(db, ADMIN, 'select public.communication_c10_arret_confirmer();')
+    service_sql(db, 'select public.traiter_notifications(20);')
+    verifier('C12 : arrêt d’urgence en place, aucune transmission marketing',
+             (envois_reseau() - reseau_avant, suivi(cid).get('transmission')), (0, {'attente': 2}))
+    etat = etat_arret_admin()
+    S.jsonq(db, ADMIN, "select public.communication_c10_arret_lever('reprise pour l’essai C12', %d);"
+            % etat['version'])
+
+    # STOP reçu entre la mise en file et la transmission : la revérification l'empêche.
+    empreinte13 = q("select public.communication_consentement_empreinte("
+                    "public.communication_consentement_cible('%s'::uuid));" % CLIENT13)
+    db.sql("insert into public.communication_contact_suppressions (canal, cible_empreinte, raison, evenement_id) "
+           "values ('whatsapp', '%s', 'stop', 999998);" % empreinte13)
+    db.sql("insert into vault.decrypted_secrets (name, decrypted_secret) values "
+           "('whatsapp_modele_marketing', 'goship_offre_test') "
+           "on conflict (name) do update set decrypted_secret = excluded.decrypted_secret;")
+    service_sql(db, 'select public.traiter_notifications(20);')
+    detail = suivi(cid)
+    verifier('C12 : une seule transmission (le contact sous STOP est annulé, rien ne part)',
+             (envois_reseau() - reseau_avant, detail.get('transmission'), detail.get('annulations')),
+             (1, {'envoi': 1, 'annule': 1}, {'MARKETING_SUPPRESSION_ACTIVE': 1}))
+    corps = json.loads(q("select body::text from net.envois where body::text like '%goship_offre_test%' "
+                         "order by id desc limit 1;"))
+    verifier('C12 : message WhatsApp par le modèle Meta réglé, texte espagnol de la campagne',
+             (corps.get('type'), corps.get('template', {}).get('name'),
+              corps.get('template', {}).get('language', {}).get('code'),
+              'Oferta GoShip actualizada' in json.dumps(corps, ensure_ascii=False)
+              or 'GoShip offer' in json.dumps(corps, ensure_ascii=False)),
+             ('template', 'goship_offre_test', 'es', True))
+
+    # 503 du fournisseur : pas de nouvel essai pour une ligne marketing.
+    requete = q("select e.requete from public.notification_envois e join public.communication_campagne_destinataires d "
+                "on d.envoi_id = e.id where d.campagne_id = %d and e.statut = 'envoi';" % cid)
+    db.sql("insert into net._http_response (id, status_code, content, error_msg) values (%s, 503, '{}', null);" % requete)
+    service_sql(db, 'select public.traiter_notifications(20);')
+    service_sql(db, 'select public.traiter_notifications(20);')
+    verifier('C12 : après une 503, la ligne marketing reste incertaine, sans second envoi',
+             (suivi(cid).get('transmission'), envois_reseau() - reseau_avant), ({'incertain': 1, 'annule': 1}, 1))
+    lancer()
+    verifier('C12 : la campagne est terminée quand plus rien n’attend', suivi(cid).get('etat'), 'completed')
+
+    # N-01 : une seconde campagne dans les 24 h n'atteint pas le même contact.
+    cid2 = nouvelle_campagne_echue(cid)
+    lancer()
+    detail2 = suivi(cid2)
+    verifier('C12 : fréquence — le contact déjà touché dans la fenêtre est exclu',
+             (detail2.get('mis_en_file'), detail2.get('exclus', {}).get('frequence'), detail2.get('etat')),
+             (0, 1, 'completed'))
+
+    # Annulation pendant l'envoi : les lignes encore en attente sont annulées.
+    S.jsonq(db, ADMIN, 'select public.communication_marketing_reglages_definir(5, 24);')
+    cid3 = nouvelle_campagne_echue(cid)
+    lancer()
+    verifier('C12 : troisième campagne en file (fréquence relevée à 5)', suivi(cid3).get('mis_en_file'), 1)
+    S.jsonq(db, ADMIN, 'select public.communication_campagne_annuler(%d);' % cid3)
+    reseau = envois_reseau()
+    service_sql(db, 'select public.traiter_notifications(20);')
+    detail3 = suivi(cid3)
+    verifier('C12 : campagne annulée en cours d’envoi — ligne annulée, aucune transmission',
+             (detail3.get('etat'), detail3.get('annulations'), envois_reseau() - reseau),
+             ('cancelled', {'MARKETING_CAMPAGNE_ANNULEE': 1}, 0))
+
+    # E-mail marketing : accord du client, envoi avec lien de désinscription, désinscription.
+    db.sql("insert into public.communication_consentement_textes "
+           "(version, canal, langue, texte, empreinte, statut, atteste_le, reference_attestation) "
+           "values ('fixture-courriel-v1', 'email', 'es', 'Texto sintético de prueba', "
+           "encode(extensions.digest('Texto sintético de prueba', 'sha256'), 'hex'), 'atteste_juridique', "
+           "clock_timestamp(), 'fixture-locale-sans-validite-juridique') on conflict do nothing;")
+    verifier('C12 : texte d’accord e-mail non attesté refusé',
+             db.erreur(CLIENT12, "select public.communication_consentement_courriel_accorder('inconnu', 'es');"),
+             'CONSENT_TEXT_NOT_APPROVED')
+    accord = S.jsonq(db, CLIENT12, "select public.communication_consentement_courriel_accorder('fixture-courriel-v1', 'es');")
+    verifier('C12 : le client accepte les offres par e-mail depuis son compte',
+             (accord.get('etat'), accord.get('actif')), ('confirme', True))
+    verifier('C12 : aucune adresse e-mail en clair dans les consentements',
+             q("select count(*) from public.communication_consentements_clients where canal = 'email' "
+               "and cible_empreinte ~ '@';"), '0')
+    db.sql("insert into vault.decrypted_secrets (name, decrypted_secret) values ('site_url', 'https://www.goship.test') "
+           "on conflict (name) do update set decrypted_secret = excluded.decrypted_secret;")
+    cid4 = nouvelle_campagne_echue(cid, 'email')
+    lancer()
+    verifier('C12 : campagne e-mail mise en file pour le seul client qui a accepté',
+             suivi(cid4).get('mis_en_file'), 1)
+    service_sql(db, 'select public.traiter_notifications(20);')
+    corps = json.loads(q("select body::text from net.envois where body::text like '%desabonnement.html%' "
+                         "order by id desc limit 1;"))
+    lien = re.search(r'desabonnement\.html\?d=(\d+)&j=([0-9a-f]{64})', json.dumps(corps))
+    verifier('C12 : l’e-mail porte le lien de désinscription et l’en-tête List-Unsubscribe',
+             (lien is not None, 'List-Unsubscribe' in json.dumps(corps.get('headers', {})),
+              suivi(cid4).get('transmission')),
+             (True, True, {'envoi': 1}))
+    dest, jeton = int(lien.group(1)), lien.group(2)
+    verifier('C12 : un jeton faux ne désabonne pas',
+             S.jsonq(db, None, "select public.communication_desabonner_courriel(%d, '%s');" % (dest, '0' * 64)).get('ok'),
+             False)
+    verifier('C12 : le lien désabonne sans connexion, et une seconde fois sans erreur',
+             (S.jsonq(db, None, "select public.communication_desabonner_courriel(%d, '%s');" % (dest, jeton)).get('ok'),
+              S.jsonq(db, None, "select public.communication_desabonner_courriel(%d, '%s');" % (dest, jeton)).get('ok')),
+             (True, True))
+    verifier('C12 : après le lien, consentement e-mail retiré et contact supprimé',
+             (S.jsonq(db, CLIENT12, 'select public.communication_consentement_courriel_etat();').get('etat'),
+              q("select count(*) from public.communication_contact_suppressions where canal = 'email' "
+                "and raison = 'desabonnement' and leve_le is null;")),
+             ('retire', '1'))
+    cid5 = nouvelle_campagne_echue(cid, 'email')
+    lancer()
+    verifier('C12 : la campagne e-mail suivante n’atteint plus le client désabonné',
+             (suivi(cid5).get('mis_en_file'), suivi(cid5).get('exclus', {}).get('suppression_active')), (0, 1))
+
 def main():
     arguments = sys.argv[1:]
     if arguments not in ([], ['--s1-only']):
@@ -3155,6 +3360,7 @@ def main():
                 tester_c10_arret_admin(db, numero)
                 tester_c9_reglages_et_alertes(db, numero)
                 tester_c11_rejeu_chaine(db, numero)
+                tester_c12_envoi_campagnes(db, numero)
             finally:
                 if db is not None:
                     db._psql(db.su, 'postgres',

@@ -189,6 +189,22 @@ long est classé « ambigu » et ne retire rien ; « Arrêt », « Fin », « Ca
 et « Quit » ne comptent que seuls (« Arrêt de bus » ou « Cancel my order » ne
 désabonnent pas). Les listes restent à valider par le juriste.
 
+Candidate 012 (24/11/2026) — **envoi des campagnes marketing**, par l'outbox unique
+`notification_envois`, le travailleur existant et la porte P-07 : l'arrêt d'urgence
+s'applique au marketing comme au transactionnel. Une campagne approuvée et planifiée est mise
+en file à son heure (`communication_campagnes_lancer`, tâche pg_cron chaque minute) ;
+chaque ligne est revérifiée au moment de transmettre (campagne non annulée, consentement,
+STOP ou désinscription, contact inchangé) et annulée avec un code `MARKETING_*` sinon.
+Règles : un message par contact, campagne et canal (P-05) ; au plus N messages par contact
+et par canal sur une fenêtre (N-01, réglage Admin **sans valeur par défaut** : tant qu'il
+manque, rien ne part) ; quota par canal ; numéro ou adresse partagé exclu (D2) ; aucun
+nouvel essai après un résultat incertain. WhatsApp : modèle Meta réglé par
+`whatsapp_modele_marketing`. E-mail : consentement propre au canal donné depuis le compte
+(adresse confirmée, texte attesté), lien de désinscription sans connexion et en-tête
+`List-Unsubscribe` dans chaque message ; sans adresse officielle du site en https, aucun
+e-mail marketing ne part. L'aperçu d'audience (008) et l'envoi partagent la même règle
+d'éligibilité. Les tables gardent des empreintes, jamais un numéro ou une adresse.
+
 Candidate 009 applicable sans superutilisateur (23 et 24/11/2026), constaté et éprouvé sur
 l'image Supabase réelle (`outils/essais-supabase-reel/lancer.sh`, où toute la chaîne passe
 par `postgres`). Chez Supabase hébergé, `postgres` n'est pas superutilisateur et le client

@@ -90,7 +90,8 @@ migrations-candidates/005-communication-adaptateurs-canaux.sql|communication_adr
 migrations-candidates/006-communication-p08-worker.sql|communication_expo_recus_a_reconcilier||non
 migrations-candidates/007-communication-interface-operations.sql|communication_c5_sante||non
 migrations-candidates/008-communication-campagnes-marketing.sql|communication_campagne_segments_lister||non
-migrations-candidates/010-communication-arret-administration.sql|communication_c10_arret_etat||non'
+migrations-candidates/010-communication-arret-administration.sql|communication_c10_arret_etat||non
+migrations-candidates/012-communication-envoi-campagnes.sql|communication_marketing_reglages_lire||non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"

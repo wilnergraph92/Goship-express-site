@@ -62,3 +62,4 @@ migrations-candidates/008-communication-campagnes-marketing.sql
 migrations-candidates/009-communication-identite-edge.sql
 migrations-candidates/010-communication-arret-administration.sql
 migrations-candidates/011-communication-reglages-decides.sql
+migrations-candidates/012-communication-envoi-campagnes.sql

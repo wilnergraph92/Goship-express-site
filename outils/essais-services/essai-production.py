@@ -183,8 +183,9 @@ def main():
                        + [('Extensions', 'pg_cron'), ('Extensions', 'pg_net')])
     verifier('seules alertes : comptes d\'essai et extensions absentes de la doublure', alertes, attendues)
     ouvertes = [o for c, v, o, _d in lignes if c == 'Ouvert aux visiteurs' and v == 'INFO' and 'privilégiées' in _d]
-    verifier('avec les droits Supabase, un visiteur n\'appelle que suivre_colis et sante', ouvertes,
-             ['sante, suivre_colis'])
+    # La désinscription par le lien des e-mails marketing (candidate 012) marche sans connexion.
+    verifier('avec les droits Supabase, un visiteur n\'appelle que suivre_colis, sante et la désinscription',
+             ouvertes, ['communication_desabonner_courriel, sante, suivre_colis'])
     migr = [v for c, v, o, _d in lignes if c == 'Migrations']
     verifier('les %d migrations sont reconnues' % len(CHAINE), migr, ['OK'] * len(CHAINE))
     # Les colonnes ajoutées par la chaîne : la liste du contrôle suit les fichiers, et une
@@ -260,7 +261,7 @@ def main():
     verifier('pas d\'autre fonction de santé ouverte (etat_*, diagnostic…)',
              un(db, """select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                        where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')
-                         and p.prosecdef and p.proname not in ('sante', 'suivre_colis');"""), '0')
+                         and p.prosecdef and p.proname not in ('sante', 'suivre_colis', 'communication_desabonner_courriel');"""), '0')
 
     print('\nE. Index des recherches fréquentes')
     index = psql_dans(db, S.BASE, r"""select tablename || '(' || substring(indexdef from ' USING [a-z]+ \(([^)]*)\)') || ')'

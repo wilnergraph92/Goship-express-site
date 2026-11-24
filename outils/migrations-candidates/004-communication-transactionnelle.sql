@@ -805,12 +805,16 @@ begin
          where id = e.id;
         v_rates := v_rates + 1;
       else
+        -- MARKETING_* (candidate 012) : la revérification au moment de transmettre a
+        -- refusé la ligne (consentement retiré, STOP, campagne annulée…) ; rien n'est parti.
         update public.notification_envois
            set statut = case when v_message in
-                  ('NON_CONFIGURE', 'SANS_DESTINATAIRE', 'APPAREIL_INCONNU') then 'annule'
+                  ('NON_CONFIGURE', 'SANS_DESTINATAIRE', 'APPAREIL_INCONNU')
+                  or v_message ~ '^MARKETING_[A-Z_]{1,60}$' then 'annule'
                             else 'echec' end,
                code_erreur = case when v_message in
-                  ('NON_CONFIGURE', 'SANS_DESTINATAIRE', 'APPAREIL_INCONNU') then v_message
+                  ('NON_CONFIGURE', 'SANS_DESTINATAIRE', 'APPAREIL_INCONNU')
+                  or v_message ~ '^MARKETING_[A-Z_]{1,60}$' then v_message
                                   else 'ERREUR_INTERNE' end,
                erreur = left(v_message, 200), maj_le = pg_catalog.now()
          where id = e.id;

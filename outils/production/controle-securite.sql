@@ -39,7 +39,9 @@ fonctions as (
 ),
 -- Les seules fonctions privilégiées qu'un visiteur sans compte peut appeler :
 -- le suivi public d'un colis et la santé du service. Toute autre est une fuite.
-ouvertes_attendues(nom) as (values ('suivre_colis'), ('sante')),
+-- communication_desabonner_courriel (candidate 012) : le lien de désinscription de chaque
+-- e-mail marketing doit marcher sans connexion ; il n'agit qu'avec un jeton HMAC valide.
+ouvertes_attendues(nom) as (values ('suivre_colis'), ('sante'), ('communication_desabonner_courriel')),
 -- Les verrous des règles métier : sans eux, une page pourrait écrire ce que seule
 -- la base doit décider (statut, rôle, montants payés, historique).
 verrous_attendus(nom, role) as (values
@@ -185,7 +187,8 @@ migrations(ordre, fichier, present) as (values
   (49, 'migrations-candidates/010-communication-arret-administration.sql', exists (select 1 from pg_proc where proname = 'communication_c10_arret_etat')),
   (50, 'migrations-candidates/011-communication-reglages-decides.sql',
        exists (select 1 from pg_description d join pg_class c on c.oid = d.objoid
-                where c.relname = 'communication_consentement_reglages' and d.description like '%(candidate 011)%'))),
+                where c.relname = 'communication_consentement_reglages' and d.description like '%(candidate 011)%')),
+  (51, 'migrations-candidates/012-communication-envoi-campagnes.sql', exists (select 1 from pg_proc where proname = 'communication_marketing_reglages_lire'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,
@@ -242,7 +245,7 @@ lignes(ordre, controle, verdict, objet, detail) as (
   union all
   -- 6. Ce qu'un visiteur sans compte peut appeler
   select 6, 'Ouvert aux visiteurs', 'ALERTE', proname || '(' || args || ')',
-         'fonction privilégiée appelable sans compte (attendues : suivre_colis, sante)'
+         'fonction privilégiée appelable sans compte (attendues : suivre_colis, sante, communication_desabonner_courriel)'
     from fonctions where prosecdef and anon and not declencheur and proname not in (select nom from ouvertes_attendues)
   union all
   select 6, 'Ouvert aux visiteurs', 'INFO', string_agg(proname || '()', ', ' order by proname),

@@ -426,8 +426,11 @@ begin
   -- accepté) et les codes de confirmation WhatsApp (un second code invaliderait
   -- le premier). Les codes reprennent ceux du moteur officiel : HTTP_<code> ou
   -- RESEAU, puis ABANDON_<code>.
+  -- Une ligne marketing (candidate 012) n'est jamais réessayée après un résultat
+  -- incertain : un message promotionnel reçu deux fois est une gêne, pas un service.
   if v_classe = 'incertain' and v_code = 'RESULTAT_INCERTAIN'
-     and (pg_catalog.to_jsonb(p_envoi) ->> 'communication_confirmation_demande_id') is null then
+     and (pg_catalog.to_jsonb(p_envoi) ->> 'communication_confirmation_demande_id') is null
+     and (pg_catalog.to_jsonb(p_envoi) ->> 'communication_campagne_destinataire_id') is null then
     v_classe := 'temporaire';
     v_code := case when p_erreur is null and p_code is not null
                    then 'HTTP_' || p_code::text else 'RESEAU' end;
