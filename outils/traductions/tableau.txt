@@ -1978,3 +1978,14 @@ E-mails marketing mis en file sur 24 heures
 Sans plafond
 Plafond d’e-mails sur 24 heures atteint
 Fréquence entre 1 et 50 messages, fenêtre entre 1 et 2160 heures, plafond d’e-mails entre 1 et 100 000.
+Offres et nouvelles
+Le client refuse les offres de vive voix ? Enregistrez-le : il ne recevra plus d’offres sur ce canal. Seul le client pourra redonner son accord, depuis son compte.
+Canaux refusés
+Demande reçue
+Par téléphone
+Au comptoir
+Autrement
+Enregistrer le refus des offres
+Choisissez au moins un canal.
+Refus enregistré : plus aucune offre sur ces canaux.
+Refus enregistré : plus aucune offre sur ce canal.

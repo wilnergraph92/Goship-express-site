@@ -36,6 +36,8 @@ en cours ou à faire, 🔒 une étape qui exige une personne ou une autorisation
 |---|---|
 | Envoi marketing par l'outbox unique `notification_envois`, sous la porte P-07, avec consentement, fréquence N-01, quotas et budgets | ✅ candidate 012 (24/11/2026), banc 646/646, image Supabase réelle 33/33 ; fréquence N-01 à régler par l'Admin (aucune valeur par défaut) |
 | Consentement marketing e-mail et lien de désinscription | ✅ candidate 012 ; `desabonnement.html` (4 langues), en-tête `List-Unsubscribe` |
+| Refus des offres reçu par l'équipe (téléphone, comptoir) | ✅ candidate 012 (25/11/2026, avis juridique) : fiche client, journal immuable, banc 670/670 |
+| Politique de confidentialité : section « Offres et nouvelles » | ✅ `confidentialite.html` (25/11/2026, 4 langues) |
 | Purge et conservation | ⏳ |
 | Offres côté client : accord e-mail et WhatsApp depuis « Mon compte » | ✅ `offres.js`, panneau « Offres et nouvelles » (4 langues) |
 | Compte WhatsApp Business, modèles Meta, domaine d'envoi e-mail | 🔒 la CEO, auprès des fournisseurs |

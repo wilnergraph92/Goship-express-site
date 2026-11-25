@@ -156,7 +156,7 @@ begin
       ('communication_contact_suppressions', 'communication_contact_suppressions_canal_check',
        'check (canal in (''whatsapp'', ''email''))'),
       ('communication_contact_suppressions', 'communication_contact_suppressions_raison_check',
-       'check (raison in (''stop'', ''desabonnement''))')) as x(tab, nom, def)
+       'check (raison in (''stop'', ''desabonnement'', ''opposition_equipe''))')) as x(tab, nom, def)
   loop
     execute pg_catalog.format('alter table public.%I drop constraint if exists %I', v.tab, v.nom);
     execute pg_catalog.format('alter table public.%I add constraint %I %s', v.tab, v.nom, v.def);
@@ -1099,7 +1099,109 @@ begin
 end
 $cron$;
 
+-- 11 bis. Opposition reçue par l'équipe (téléphone, comptoir) ----------------------
+-- Avis juridique du 25/11/2026 : une opposition exprimée hors du parcours écrit (au
+-- téléphone, au comptoir) doit être traitée de façon fiable. Un membre de l'équipe qui voit
+-- les clients l'enregistre : le contact actuel entre dans la même liste d'exclusion que les
+-- STOP et les désinscriptions, et l'accord du canal est retiré. Jamais l'inverse : seul le
+-- client peut redonner son accord (depuis son compte, ce qui lève l'exclusion comme après un
+-- STOP). Verrous : V1 (compte), puis V2 de chaque canal, dans l'ordre alphabétique.
+create table if not exists public.communication_oppositions_equipe (
+  id              bigint generated always as identity primary key,
+  client_id       uuid not null references public.clients(id) on delete cascade,
+  canal           text not null check (canal in ('email', 'whatsapp')),
+  source          text not null check (source in ('telephone', 'comptoir', 'autre')),
+  acteur          uuid not null references public.clients(id) on delete restrict,
+  cible_empreinte text check (cible_empreinte is null or cible_empreinte ~ '^[0-9a-f]{64}$'),
+  cree_le         timestamptz not null default clock_timestamp()
+);
+create index if not exists communication_oppositions_equipe_client_idx
+  on public.communication_oppositions_equipe (client_id, cree_le desc);
+alter table public.communication_oppositions_equipe enable row level security;
+revoke all on public.communication_oppositions_equipe from public, anon, authenticated, service_role;
+drop trigger if exists communication_oppositions_equipe_immuables on public.communication_oppositions_equipe;
+create trigger communication_oppositions_equipe_immuables
+  before update or delete on public.communication_oppositions_equipe
+  for each row execute function public.communication_campagne_immuable();
+
+create or replace function public.communication_opposition_enregistrer(
+  p_client uuid, p_canaux text[], p_source text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '3s'
+as $fonction$
+declare
+  v_acteur uuid := auth.uid();
+  v_canal text;
+  v_empreinte text;
+  v_opposition bigint;
+  v_consent public.communication_consentements_clients;
+  v_canaux jsonb := '[]'::jsonb;
+begin
+  perform public.exiger_permission('clients.view');
+  if v_acteur is null then
+    raise exception 'PERMISSION_DENIED';
+  end if;
+  if p_client is null or p_canaux is null or pg_catalog.cardinality(p_canaux) = 0
+     or not (p_canaux <@ array['email', 'whatsapp']::text[])
+     or p_source is null or p_source not in ('telephone', 'comptoir', 'autre') then
+    raise exception 'INVALID_INPUT';
+  end if;
+  if not exists (select 1 from public.clients c where c.id = p_client and c.role = 'client') then
+    raise exception 'CLIENT_NOT_FOUND';
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('goship:consent-account:' || p_client::text, 0));
+  for v_canal in select distinct u from pg_catalog.unnest(p_canaux) u order by 1 loop
+    v_empreinte := public.communication_campagne_empreinte(p_client, v_canal);
+    if v_empreinte is not null then
+      perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('goship:' || v_canal || ':' || v_empreinte, 0));
+    else
+      perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('goship:' || v_canal || ':client:' || p_client::text, 0));
+    end if;
+    insert into public.communication_oppositions_equipe (client_id, canal, source, acteur, cible_empreinte)
+    values (p_client, v_canal, p_source, v_acteur, v_empreinte)
+    returning id into v_opposition;
+    -- Le contact actuel est exclu (sans contact lisible, l'accord retiré suffit : sans accord,
+    -- aucune campagne ne vise ce canal).
+    if v_empreinte is not null then
+      insert into public.communication_contact_suppressions (canal, cible_empreinte, raison, evenement_id)
+      values (v_canal, v_empreinte, 'opposition_equipe', v_opposition)
+      on conflict (canal, cible_empreinte) where leve_le is null do nothing;
+    end if;
+    select * into v_consent from public.communication_consentements_clients k
+     where k.client_id = p_client and k.canal = v_canal and k.finalite = 'marketing'
+     for update;
+    if found and v_consent.etat <> 'retire' then
+      if v_canal = 'whatsapp' then
+        -- Comme un retrait par le client (003) : les codes de confirmation en attente sont détruits.
+        delete from vault.secrets
+         where id in (select code_secret_id from public.communication_confirmations_whatsapp
+                       where client_id = p_client and etat = 'en_attente' and code_secret_id is not null);
+        update public.communication_confirmations_whatsapp
+           set etat = 'annule', code_secret_id = null, termine_le = clock_timestamp()
+         where client_id = p_client and etat = 'en_attente';
+      end if;
+      update public.communication_consentements_clients
+         set etat = 'retire', retire_le = clock_timestamp(), maj_le = clock_timestamp()
+       where id = v_consent.id;
+      insert into public.communication_consentement_historique
+        (consentement_id, demande_id, client_id, canal, action, source, cible_empreinte,
+         texte_version, texte_empreinte, langue)
+      values (v_consent.id, v_consent.demande_id, p_client, v_canal, 'retrait', 'opposition_equipe',
+              v_consent.cible_empreinte, v_consent.texte_version, v_consent.texte_empreinte, v_consent.langue);
+    end if;
+    v_canaux := v_canaux || pg_catalog.jsonb_build_object('canal', v_canal, 'contact_exclu', v_empreinte is not null);
+  end loop;
+  return pg_catalog.jsonb_build_object('ok', true, 'canaux', v_canaux);
+end
+$fonction$;
+
 -- 12. Droits ------------------------------------------------------------------------
+revoke all on function public.communication_opposition_enregistrer(uuid, text[], text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.communication_opposition_enregistrer(uuid, text[], text) to authenticated;
 revoke all on function public.communication_courriel_empreinte(uuid),
   public.communication_consentement_texte_actuel(text, text),
   public.communication_campagne_empreinte(uuid, text),
@@ -1134,10 +1236,14 @@ grant execute on function public.communication_marketing_reglages_lire(),
 do $sequences$
 declare v_nom text;
 begin
-  v_nom := pg_catalog.pg_get_serial_sequence('public.communication_campagne_destinataires', 'id');
-  if v_nom is not null then
-    execute pg_catalog.format('revoke all on sequence %s from public, anon, authenticated, service_role', v_nom);
-  end if;
+  foreach v_nom in array array[
+    pg_catalog.pg_get_serial_sequence('public.communication_campagne_destinataires', 'id'),
+    pg_catalog.pg_get_serial_sequence('public.communication_oppositions_equipe', 'id')
+  ] loop
+    if v_nom is not null then
+      execute pg_catalog.format('revoke all on sequence %s from public, anon, authenticated, service_role', v_nom);
+    end if;
+  end loop;
 end
 $sequences$;
 

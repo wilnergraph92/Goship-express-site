@@ -207,6 +207,13 @@ loi CAN-SPAM), non plus. Un plafond facultatif d'e-mails marketing sur 24 heures
 (`email_max_jour`) garde la part du quota quotidien du fournisseur qui revient aux
 notifications de colis (Brevo gratuit : 300 par jour). L'aperçu d'audience (008) et l'envoi partagent la même règle
 d'éligibilité. Les tables gardent des empreintes, jamais un numéro ou une adresse.
+Depuis le 25/11/2026 (avis juridique : oppositions reçues « par d'autres voies »), un membre
+de l'équipe qui voit les clients enregistre un refus des offres donné au téléphone ou au
+comptoir (`communication_opposition_enregistrer`, fiche client du tableau de bord) : le
+contact actuel entre dans la liste d'exclusion (raison `opposition_equipe`), l'accord du
+canal est retiré (source `opposition_equipe`, ajoutée aussi à la liste de 006 pour que la
+chaîne reste rejouable) et chaque demande est gardée dans un journal immuable. Seul le
+client peut redonner son accord.
 
 Candidate 009 applicable sans superutilisateur (23 et 24/11/2026), constaté et éprouvé sur
 l'image Supabase réelle (`outils/essais-supabase-reel/lancer.sh`, où toute la chaîne passe

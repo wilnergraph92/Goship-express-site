@@ -3333,6 +3333,51 @@ def tester_c12_envoi_campagnes(db, numero_base):
     verifier('C12 : plafond atteint — l’e-mail suivant est exclu, rien ne part',
              (suivi(cid6).get('mis_en_file'), suivi(cid6).get('exclus', {}).get('plafond_journalier')), (0, 1))
 
+    # Opposition reçue par l'équipe (avis juridique du 25/11/2026) : téléphone, comptoir.
+    opposer = "select public.communication_opposition_enregistrer('%s', array[%s]::text[], '%s');"
+    verifier('C12 : un client ne peut pas enregistrer l’opposition d’un autre',
+             db.erreur(CLIENT12, opposer % (CLIENT13, "'email'", 'telephone')), 'PERMISSION_DENIED')
+    verifier('C12 : opposition — canal ou source inconnus refusés',
+             (db.erreur(EMPLOYEE, opposer % (CLIENT13, "'sms'", 'telephone')),
+              db.erreur(EMPLOYEE, opposer % (CLIENT13, "'email'", 'courrier')),
+              db.erreur(EMPLOYEE, opposer % (EMPLOYEE, "'email'", 'telephone'))),
+             ('INVALID_INPUT', 'INVALID_INPUT', 'CLIENT_NOT_FOUND'))
+    opp = S.jsonq(db, EMPLOYEE, opposer % (CLIENT13, "'email','whatsapp'", 'telephone'))
+    verifier('C12 : un employé enregistre l’opposition donnée par téléphone (e-mail et WhatsApp)',
+             (opp.get('ok'), [x.get('canal') for x in opp.get('canaux', [])]), (True, ['email', 'whatsapp']))
+    verifier('C12 : après l’opposition, accord e-mail retiré, contact exclu, historique et journal tenus',
+             (S.jsonq(db, CLIENT13, 'select public.communication_consentement_courriel_etat();').get('etat'),
+              q("select count(*) from public.communication_contact_suppressions where canal = 'email' "
+                "and raison = 'opposition_equipe' and leve_le is null;"),
+              q("select string_agg(canal, ',' order by canal) from public.communication_consentement_historique "
+                "where client_id = '%s' and source = 'opposition_equipe' and action = 'retrait';" % CLIENT13),
+              q("select string_agg(canal || ':' || source || ':' || (acteur = '%s')::text, ',' order by canal) "
+                "from public.communication_oppositions_equipe where client_id = '%s';" % (EMPLOYEE, CLIENT13))),
+             ('retire', '1', 'email,whatsapp', 'email:telephone:true,whatsapp:telephone:true'))
+    S.jsonq(db, EMPLOYEE, opposer % (CLIENT13, "'email'", 'comptoir'))
+    verifier('C12 : une seconde opposition est journalisée sans doublon d’exclusion ni de retrait',
+             (q("select count(*) from public.communication_contact_suppressions where canal = 'email' "
+                "and raison = 'opposition_equipe' and leve_le is null;"),
+              q("select count(*) from public.communication_consentement_historique where client_id = '%s' "
+                "and source = 'opposition_equipe';" % CLIENT13),
+              q("select count(*) from public.communication_oppositions_equipe where client_id = '%s';" % CLIENT13)),
+             ('1', '2', '3'))
+    verifier('C12 : le journal des oppositions est fermé aux comptes et ne se modifie pas',
+             (db.erreur(ADMIN, 'select count(*) from public.communication_oppositions_equipe;') != 'aucune',
+              db.erreur('sql', "update public.communication_oppositions_equipe set source = 'autre';")),
+             (True, 'COMMUNICATION_CAMPAIGN_HISTORY_IMMUTABLE'))
+    plafond = S.jsonq(db, ADMIN, 'select public.communication_marketing_reglages_definir(5, 24, 100);')
+    cid7 = nouvelle_campagne_echue(cid, 'email')
+    lancer()
+    verifier('C12 : la campagne suivante n’atteint pas le client opposé',
+             (suivi(cid7).get('mis_en_file'), suivi(cid7).get('exclus', {}).get('suppression_active')), (0, 2))
+    reprise = S.jsonq(db, CLIENT13, "select public.communication_consentement_courriel_accorder('fixture-courriel-v1', 'es');")
+    verifier('C12 : seul le client peut redonner son accord, ce qui lève l’exclusion',
+             (reprise.get('etat'),
+              q("select count(*) from public.communication_contact_suppressions where canal = 'email' "
+                "and raison = 'opposition_equipe' and leve_le is null;")),
+             ('confirme', '0'))
+
 def main():
     arguments = sys.argv[1:]
     if arguments not in ([], ['--s1-only']):

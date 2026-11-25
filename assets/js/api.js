@@ -1153,6 +1153,13 @@
           p_campagne: Number(id)
         }); }).then(resultat);
       },
+      // Le client refuse les offres, de vive voix (téléphone, comptoir) : l'équipe l'enregistre.
+      // Seul le client peut ensuite redonner son accord (candidate 012, avis juridique du 25/11/2026).
+      communicationOpposition: function (clientId, canaux, source) {
+        return sb().then(function (c) { return c.rpc('communication_opposition_enregistrer', {
+          p_client: clientId, p_canaux: canaux, p_source: String(source || '')
+        }); }).then(resultat);
+      },
 
       statistiques: function () {
         return sb().then(function (c) { return c.rpc('statistiques_admin'); }).then(resultat);
@@ -5385,6 +5392,7 @@
       communicationMarketingReglages: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
       communicationMarketingReglagesDefinir: function () { return communicationDemoNonDisponible('settings.manage'); },
       communicationCampagneSuivi: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
+      communicationOpposition: function () { return communicationDemoNonDisponible('clients.view'); },
       communicationCampagneAnnuler: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
       communicationCampagneJournal: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
 
