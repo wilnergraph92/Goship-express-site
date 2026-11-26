@@ -89,3 +89,5 @@ leads-out/
 #     ne partent pas non plus.
 geo-work/
 /GEO-*
+#  Leurs scripts Python laissent un cache compilé à côté d'eux en tournant.
+__pycache__/
