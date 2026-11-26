@@ -82,3 +82,10 @@ search-work/
 finder-out/
 leads-out/
 /queue/
+
+# --- GEO, visibilité dans les moteurs d'IA (skills .claude/skills/geo, geo-*) :
+#     les rapports naissent dans le dossier courant, donc à la racine du site
+#     publié. On les fait dans geo-work/, et ceux qui tomberaient à la racine
+#     ne partent pas non plus.
+geo-work/
+/GEO-*
