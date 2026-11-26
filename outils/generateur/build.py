@@ -146,6 +146,9 @@ COMPTE_PAGES = [
      "Votre espace client Goship Express : code client, adresse en Floride et suivi de vos colis.", True),
     ('nouveau-mot-de-passe.html', 'nouveau-mot-de-passe.main.html', 'Nouveau mot de passe — Goship Express',
      "Choisissez un nouveau mot de passe pour votre compte Goship Express.", True),
+    # Le lien de désinscription de chaque e-mail marketing (candidate 012) : sans connexion.
+    ('desabonnement.html', 'desabonnement.main.html', 'Se désabonner — Goship Express',
+     "Arrêter de recevoir les offres de Goship Express par e-mail.", True),
 ]
 
 # Pages guides : chacune répond à une recherche précise de nos clients (« envoi
@@ -400,6 +403,42 @@ def confidentialite_application():
                       "adresse e-mail, votre téléphone et votre adresse sont effacés, la connexion est bloquée et les "
                       "identifiants de notification sont supprimés. Les factures et l'historique des colis sont conservés "
                       "sans vos coordonnées, pour nos obligations comptables.")
+        + '      </div>\n')
+
+
+def confidentialite_offres():
+    """La section « Offres et nouvelles » : ce que fait le Centre de communication (candidates
+    003, 006 et 012) quand un client accepte des offres par e-mail ou WhatsApp. Demandée par
+    l'avis juridique du 25/11/2026 (politique de confidentialité fidèle aux traitements).
+    Chaque phrase correspond à une règle du code : accord par canal donné dans le compte,
+    retrait par le lien, STOP, le compte ou l'équipe, contact partagé exclu, empreintes."""
+    return (
+        '      <div id="offres" style="margin-top:clamp(26px,3vw,36px);padding:clamp(22px,3vw,34px);'
+        'border:1px solid #e7edf9;border-radius:20px;background:#fff;box-shadow:0 18px 40px -34px rgba(6,26,63,.4)">\n'
+        '        <h3 style="font-size:clamp(20px,2.1vw,25px);line-height:1.2;font-weight:800">'
+        'Offres et nouvelles par e-mail et WhatsApp</h3>\n'
+        + para.format("Nous ne vous envoyons d'offres ou de nouvelles que si vous l'avez accepté vous-même, canal "
+                      "par canal, dans votre compte (rubrique « Offres et nouvelles »). Créer un compte, nous donner "
+                      "votre adresse e-mail ou votre numéro, ou expédier un colis ne vaut pas accord.")
+        + '        <div style="margin-top:22px;padding:clamp(20px,2.4vw,26px);background:#f4f6fa;border-radius:14px;'
+          'display:grid;gap:14px">\n'
+        + puce('Ce que nous gardons :', "le texte accepté et sa version, la langue, la date et le canal, avec une "
+               "empreinte chiffrée de votre adresse ou de votre numéro, qui prouve votre accord sans les garder en "
+               "clair ; puis, si vous le retirez, la date et la façon dont vous l'avez fait.")
+        + puce('Retirer votre accord :', "à tout moment et sans frais : par le lien de désinscription au bas de "
+               "chaque e-mail, en répondant « STOP » à un message WhatsApp, dans votre compte, ou en le demandant à "
+               "notre équipe, par téléphone ou au comptoir. L'arrêt est immédiat pour le canal concerné.")
+        + puce('Notifications de colis :', "elles sont distinctes des offres. Retirer votre accord ne les arrête "
+               "pas, et elles ne contiennent jamais de publicité.")
+        + puce('Numéro ou adresse partagés :', "si plusieurs comptes utilisent le même numéro ou la même adresse "
+               "e-mail, nous n'y envoyons aucune offre.")
+        + puce('Prestataires :', "les e-mails partent par Brevo, les messages WhatsApp par Meta (WhatsApp "
+               "Business). Ils ne reçoivent que ce qu'il faut pour l'envoi : votre adresse ou votre numéro, votre "
+               "prénom et le message.")
+        + puce('Combien de temps :', "la preuve de votre accord est gardée tant qu'il est valable, puis cinq ans "
+               "après son retrait, pour pouvoir la présenter en cas de litige. Votre refus, réduit à une empreinte "
+               "chiffrée, est gardé tant que nous envoyons des offres, pour ne plus jamais vous en écrire.")
+        + '      </div>\n'
         + '      </div>\n')
 
 
@@ -1346,7 +1385,8 @@ def page_specific(body, src, page):
     # (Google Play, App Store) exigent qu'elle le dise : identifiant de notification,
     # appareil photo, prestataires, suppression du compte depuis l'application et le site.
     if src == 'Confidentialite.dc.html':
-        ajout = confidentialite_application() + (confidentialite_mesure() if mesure_active() else '')
+        ajout = (confidentialite_application() + confidentialite_offres()
+                 + (confidentialite_mesure() if mesure_active() else ''))
         body = replace_once(body, CONF_REPERE, ajout + CONF_REPERE, page)
 
     # Fermer un compte : la suppression depuis l'application (adresse demandée par Google Play)
@@ -1708,7 +1748,10 @@ def build_compte():
         # lieux.js (régions et villes) avant compte.js, qui s'en sert.
         # inactivite.js (déconnexion après un moment sans activité) seulement sur Mon compte :
         # c'est la seule page de l'espace client où une session ouverte montre quelque chose.
-        scripts = (('api', 'codes', 'impression', 'lieux', 'inactivite', 'compte') if out == 'mon-compte.html'
+        # offres.js : les offres marketing de Mon compte, et la page de désinscription, qui
+        # n'a besoin que de lui (aucune session n'y est demandée).
+        scripts = (('api', 'codes', 'impression', 'lieux', 'inactivite', 'compte', 'offres') if out == 'mon-compte.html'
+                   else ('api', 'offres') if out == 'desabonnement.html'
                    else ('api', 'lieux', 'compte'))
         # L'inscription porte mesure.js, qui n'y charge Google qu'une fois le compte
         # créé, pour compter l'inscription (voir mesure.js) ; les autres pages du compte, jamais.

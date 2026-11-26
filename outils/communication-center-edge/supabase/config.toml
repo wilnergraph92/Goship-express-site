@@ -1,0 +1,10 @@
+project_id = "goship-communication-center-local"
+
+[functions.communication-webhooks]
+verify_jwt = false
+
+[functions.communication-expo-receipts]
+verify_jwt = false
+
+[functions.communication-worker]
+verify_jwt = false

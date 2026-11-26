@@ -6,8 +6,10 @@
 #
 # Sur une base jetable (jamais la vraie base) :
 #   A. la chaîne officielle des migrations (outils/migrations.txt) est la même
-#      partout : README.md, CLAUDE.md, les bancs d'essai ; les anciens fichiers
-#      refusent de s'exécuter sur une base à jour ;
+#      partout : README.md (qui la cite dans l'ordre), les bancs d'essai ; les
+#      instructions des agents (CLAUDE.md renvoie à AGENTS.md, qui renvoie à
+#      migrations.txt) ne la recopient pas ; les anciens fichiers refusent de
+#      s'exécuter sur une base à jour ;
 #   B. la chaîne complète s'installe, et se rejoue (vide, puis remplie, sans rien
 #      changer aux données), sur une base qui a les droits
 #      par défaut de Supabase (tout nouvel objet du schéma public ouvert à anon et
@@ -73,7 +75,8 @@ alter default privileges in schema public grant all on sequences to anon, authen
 
 def texte_migration(chemin):
     t = open(chemin, encoding='utf-8').read()
-    return t.replace('create extension if not exists pg_net with schema extensions;', '')
+    return (t.replace('create extension if not exists pg_net with schema extensions;', '')
+             .replace('create extension if not exists pgcrypto with schema extensions;', ''))
 
 
 def fichier_dans(db, base, chemin):
@@ -125,11 +128,16 @@ def main():
     verifier('migrations.txt : %d fichiers, tous présents' % len(CHAINE), manquants, [])
     verifier('les bancs d\'essai suivent la même chaîne (essai-mobile.py)',
              list(M.FICHIERS), CHAINE)
-    for doc in ('README.md', 'CLAUDE.md'):
-        texte = open(os.path.join(RACINE, doc), encoding='utf-8').read()
-        # La phrase d'ordre : chaque fichier de la chaîne y apparaît, dans l'ordre
-        trouve = re.search(r'.*?'.join(re.escape(f) for f in CHAINE), texte, re.S) is not None
-        verifier('%s : les %d fichiers cités dans l\'ordre de la chaîne' % (doc, len(CHAINE)), trouve, True)
+    def lire(doc):
+        return open(os.path.join(RACINE, doc), encoding='utf-8').read()
+    # La phrase d'ordre du README : chaque fichier de la chaîne y apparaît, dans l'ordre
+    trouve = re.search(r'.*?'.join(re.escape(f) for f in CHAINE), lire('README.md'), re.S) is not None
+    verifier('README.md : les %d fichiers cités dans l\'ordre de la chaîne' % len(CHAINE), trouve, True)
+    # Les instructions des agents ne recopient pas la liste (AGENTS.md l'interdit, pour
+    # éviter une seconde source de vérité) : elles doivent seulement mener à migrations.txt.
+    verifier('CLAUDE.md renvoie à AGENTS.md', '`AGENTS.md`' in lire('CLAUDE.md'), True)
+    verifier('AGENTS.md désigne outils/migrations.txt comme la chaîne officielle',
+             'La chaîne officielle est celle de `outils/migrations.txt`' in lire('AGENTS.md'), True)
     reste = sorted(os.path.basename(f) for f in os.listdir(OUTILS)
                    if f.endswith('.sql') and f not in CHAINE)
     verifier('hors chaîne : seulement les six anciens fichiers', reste, sorted(ANCIENS))
@@ -175,8 +183,9 @@ def main():
                        + [('Extensions', 'pg_cron'), ('Extensions', 'pg_net')])
     verifier('seules alertes : comptes d\'essai et extensions absentes de la doublure', alertes, attendues)
     ouvertes = [o for c, v, o, _d in lignes if c == 'Ouvert aux visiteurs' and v == 'INFO' and 'privilégiées' in _d]
-    verifier('avec les droits Supabase, un visiteur n\'appelle que suivre_colis et sante', ouvertes,
-             ['sante, suivre_colis'])
+    # La désinscription par le lien des e-mails marketing (candidate 012) marche sans connexion.
+    verifier('avec les droits Supabase, un visiteur n\'appelle que suivre_colis, sante et la désinscription',
+             ouvertes, ['communication_desabonner_courriel, sante, suivre_colis'])
     migr = [v for c, v, o, _d in lignes if c == 'Migrations']
     verifier('les %d migrations sont reconnues' % len(CHAINE), migr, ['OK'] * len(CHAINE))
     # Les colonnes ajoutées par la chaîne : la liste du contrôle suit les fichiers, et une
@@ -252,7 +261,7 @@ def main():
     verifier('pas d\'autre fonction de santé ouverte (etat_*, diagnostic…)',
              un(db, """select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                        where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'execute')
-                         and p.prosecdef and p.proname not in ('sante', 'suivre_colis');"""), '0')
+                         and p.prosecdef and p.proname not in ('sante', 'suivre_colis', 'communication_desabonner_courriel');"""), '0')
 
     print('\nE. Index des recherches fréquentes')
     index = psql_dans(db, S.BASE, r"""select tablename || '(' || substring(indexdef from ' USING [a-z]+ \(([^)]*)\)') || ')'
@@ -532,9 +541,20 @@ def main():
                                capture_output=True, text=True, check=True).stdout
     psql_dans(db, NEUVE, doublures)
     cible = 'postgresql://%s@/%s?host=%s' % (db.su, NEUVE, db.socket)
-    chaine = lambda *a, **e: subprocess.run(['bash', os.path.join(PRODUCTION, 'appliquer-chaine.sh')] + list(a),
-                                           env=dict(env_pg(cible), CIBLE_DB_URL=e.get('url', cible), SANS_PG_NET='1'),
-                                           capture_output=True, text=True)
+    # Base jetable : les fichiers du Communication Center sont demandés explicitement
+    # (APPLIQUER_CANDIDATES=oui), sauf quand l'essai éprouve justement le garde-fou.
+    def chaine(*a, **e):
+        env = dict(env_pg(cible), CIBLE_DB_URL=e.get('url', cible), SANS_PG_NET='1')
+        if e.get('candidates', True):
+            env['APPLIQUER_CANDIDATES'] = 'oui'
+        env.update(e.get('env', {}))
+        return subprocess.run(['bash', os.path.join(PRODUCTION, 'appliquer-chaine.sh')] + list(a),
+                              env=env, capture_output=True, text=True)
+    OFFICIELS = [f for f in CHAINE if not f.startswith('migrations-candidates/')]
+    r = chaine(candidates=False)
+    verifier('sans APPLIQUER_CANDIDATES : arrêt avant le Communication Center, sans erreur',
+             (r.returncode, r.stdout.count('OK     '), 'ARRÊT  avant migrations-candidates/' in r.stdout),
+             (0, len(OFFICIELS), True))
     r = chaine()
     verifier('les %d migrations passent dans l\'ordre, une par une' % len(CHAINE),
              (r.returncode, r.stdout.count('OK     ')), (0, len(CHAINE)))
@@ -547,6 +567,10 @@ def main():
     r = chaine(url='postgresql://postgres:x@db.gpfdyslysqjmojgzggib.supabase.co:5432/postgres')
     verifier('adresse de la production : refus (code 3) avant toute connexion',
              (r.returncode, 'REFUS' in r.stdout), (3, True))
+    r = chaine(url='postgresql://postgres:x@db.gpfdyslysqjmojgzggib.supabase.co:5432/postgres',
+               env={'CONFIRMER_PRODUCTION': 'gpfdyslysqjmojgzggib'})
+    verifier('production confirmée : le Communication Center reste refusé (code 3), avant toute connexion',
+             (r.returncode, 'migrations-candidates/' in r.stdout, 'OK     ' in r.stdout), (3, True, False))
     psql_dans(db, NEUVE, 'drop function public.peut(text, uuid) cascade;')
     r = chaine('supabase-evenements.sql')
     en_echec = re.search(r'ÉCHEC  (\S+)', r.stdout)

@@ -83,6 +83,7 @@ passé, pas qu'il l'est **dans sa dernière version**. Seul `controler.sh`
 | C11 | HTTPS | **vérifié** | contrôle du 26/09 18:06 |
 | C12 | Mobile en test interne | **non rempli** | aucune soumission ; comptes Apple / Google non fournis |
 | C13 | Bureau signé et notarisé | **non rempli** | signature prête (`electron-builder.distribution.js`, `bureau.yml`) ; aucun certificat |
+| C14 | Communication Center (fichiers `migrations-candidates/` en fin de chaîne, étape C11 du 23/11/2026) | **NO-GO** | réservé aux essais locaux et à la CI : `appliquer-chaine.sh` s'arrête avant eux sans `APPLIQUER_CANDIDATES=oui` et les refuse toujours sur l'adresse de production ; la sonde et `controle-securite.sql` les disent « réservés », pas absents. À lever seulement après la validation de la Phase 1.3.1, la revue humaine PostgreSQL, les validations juridiques et une autorisation écrite nommée (`docs/communication-center/COMMUNICATION_CENTER_FEUILLE_DE_ROUTE.md`) |
 
 ## Bloqueurs et actions (dans l'ordre)
 

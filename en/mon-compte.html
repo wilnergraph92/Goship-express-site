@@ -33,6 +33,7 @@
 <script src="../assets/js/lieux.js" defer></script>
 <script src="../assets/js/inactivite.js" defer></script>
 <script src="../assets/js/compte.js" defer></script>
+<script src="../assets/js/offres.js" defer></script>
 </head>
 <body>
 <div class="gs-page">
@@ -305,6 +306,40 @@
           <section class="gs-avt__bloc" data-avt-parrainage aria-live="polite" hidden></section>
           <section class="gs-avt__bloc" data-avt-preferences hidden>
             <label class="gs-avt__case"><input type="checkbox" data-pref-anniversaire> <span>Receive my birthday message</span></label>
+          </section>
+        </div>
+
+        <div class="gs-panneau" data-offres hidden>
+          <div class="gs-panneau__tete">
+            <h2>Offers and news</h2>
+          </div>
+          <p class="gs-panneau__intro">Get our promotions if you wish. You can stop at any time, here or from any message.</p>
+          <p class="gs-form__erreur" data-offres-erreur role="alert" hidden></p>
+          <p class="gs-copie-ok" data-offres-ok role="status" hidden></p>
+          <section class="gs-offres__canal" data-offre="email" hidden>
+            <h3>By email</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>I agree to receive offers by email</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Stop receiving offers by email</button>
+            </div>
+          </section>
+          <section class="gs-offres__canal" data-offre="whatsapp" hidden>
+            <h3>On WhatsApp</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>Get a code on WhatsApp</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Stop receiving offers on WhatsApp</button>
+            </div>
+            <form class="gs-form gs-form--compact" data-offre-code novalidate hidden>
+              <div class="gs-champ">
+                <label for="offre-code">Code received on WhatsApp</label>
+                <input id="offre-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+              </div>
+              <button class="gs-bouton gs-bouton--plein" type="submit">Confirm</button>
+            </form>
           </section>
         </div>
 
@@ -717,6 +752,21 @@
   <p data-t="erreur-PREALERT_DUPLICATE">This tracking number is already announced: the purchase is in your list.</p>
   <p data-t="erreur-PREALERT_ALREADY_RECEIVED">This package has already reached Miami: it is in “My packages”.</p>
   <p data-t="erreur-TOO_MANY_PREALERTS">You already have 60 announced purchases pending.</p>
+  <p data-t="offres-etat-actif">You receive our offers this way.</p>
+  <p data-t="offres-etat-inactif">You do not receive our offers this way.</p>
+  <p data-t="offres-ok-accepte">Noted: you will receive our offers this way.</p>
+  <p data-t="offres-ok-retire">Noted: you will no longer receive our offers this way.</p>
+  <p data-t="offres-code-envoye">A 6-digit code will be sent to you on WhatsApp. Enter it below.</p>
+  <p data-t="offres-code-faux">Incorrect or expired code. Request a new one if needed.</p>
+  <p data-t="offres-err-generique">The operation did not go through. Please try again.</p>
+  <p data-t="offres-err-email">First confirm your email address with the link you received when you signed up.</p>
+  <p data-t="offres-err-contact">First add a valid phone number or email address in “My information”.</p>
+  <p data-t="offres-err-trop">Too many requests. Please try again later.</p>
+  <p data-t="offres-err-partage">This contact is shared with another account: it cannot receive our offers.</p>
+  <p data-t="offres-err-indisponible">This option is not available yet.</p>
+  <p data-t="desabo-en-cours">Unsubscribing…</p>
+  <p data-t="desabo-ok">Done: you will no longer receive our offers by email.</p>
+  <p data-t="desabo-invalide">This unsubscribe link is not valid. You can also manage your choices in “My account”.</p>
 </template>
 </main>
 

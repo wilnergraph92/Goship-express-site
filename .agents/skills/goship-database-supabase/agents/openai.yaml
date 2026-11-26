@@ -1,0 +1,3 @@
+interface:
+  display_name: "GoShip Database & Supabase Specialist"
+  short_description: "Schémas Supabase, migrations, RLS et intégrité"

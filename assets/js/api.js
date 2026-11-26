@@ -120,7 +120,10 @@
             'reports.view', 'reports.create', 'reports.edit', 'reports.delete',
             'users.view', 'roles.manage', 'settings.manage', 'audit_logs.view',
             'birthdays.view', 'birthdays.manage', 'programs.view', 'programs.manage', 'points.adjust',
-            'tracking.view', 'tracking.manage'],
+            'tracking.view', 'tracking.manage', 'communications.view',
+            'communications.templates.manage', 'communications.consents.view', 'communications.queue.retry',
+            'communications.campaigns.view', 'communications.campaigns.manage', 'communications.campaigns.approve',
+            'communications.emergency_stop'],
     gerant: ['clients.view', 'clients.create', 'clients.edit',
              'shipments.view', 'shipments.create', 'shipments.edit',
              'shipments.scan', 'shipments.change_status', 'shipments.correct', 'shipments.view_history',
@@ -129,7 +132,8 @@
              'reports.view', 'reports.create',
              'users.view',
              'birthdays.view', 'programs.view',
-             'tracking.view'],
+             'tracking.view', 'communications.view',
+             'communications.campaigns.view', 'communications.campaigns.manage'],
     employe: ['clients.view', 'clients.create',
               'shipments.view', 'shipments.create', 'shipments.edit',
               'shipments.scan', 'shipments.change_status', 'shipments.view_history',
@@ -694,6 +698,28 @@
     utiliserCodeParrainage: function (code) { return appelBase('utiliser_code_parrainage', { p_code: String(code || '') }); },
     preferencesProgrammes: function () { return appelBase('mes_preferences_programmes'); },
     reglerAnniversaire: function (actif) { return appelBase('regler_ma_preference_anniversaire', { p_actif: !!actif }); },
+    // Offres GoShip (Centre de communication, candidates 003 et 012) : le client lit le texte
+    // d'accord en vigueur, accepte ou retire, canal par canal. Les règles sont dans la base.
+    marketingTexte: function (canal, langue) {
+      return appelBase('communication_consentement_texte_actuel', { p_canal: String(canal), p_langue: String(langue) });
+    },
+    marketingWhatsapp: function () { return appelBase('communication_consentement_etat_whatsapp'); },
+    marketingWhatsappDemander: function (version, langue) {
+      return appelBase('communication_consentement_demander_whatsapp', { p_version: String(version), p_langue: String(langue) });
+    },
+    marketingWhatsappConfirmer: function (code) {
+      return appelBase('communication_consentement_confirmer_whatsapp', { p_code: String(code || '') });
+    },
+    marketingWhatsappRetirer: function () { return appelBase('communication_consentement_retirer_whatsapp'); },
+    marketingCourriel: function () { return appelBase('communication_consentement_courriel_etat'); },
+    marketingCourrielAccorder: function (version, langue) {
+      return appelBase('communication_consentement_courriel_accorder', { p_texte_version: String(version), p_langue: String(langue) });
+    },
+    marketingCourrielRetirer: function () { return appelBase('communication_consentement_courriel_retirer'); },
+    // Le lien de désinscription d'un e-mail marketing : sans connexion, jeton HMAC.
+    desabonnerCourriel: function (destinataire, jeton) {
+      return appelBase('communication_desabonner_courriel', { p_destinataire: Number(destinataire), p_jeton: String(jeton || '') });
+    },
 
     connecter: function (email, motDePasse) {
       return sb().then(function (c) {
@@ -962,6 +988,179 @@
     },
 
     admin: {
+      // Santé agrégée du Communication Center ; la fonction revérifie la permission en base.
+      santeCommunications: function () {
+        return sb().then(function (c) { return c.rpc('sante_communications'); }).then(resultat);
+      },
+
+      // RPC de l'interface C5 : les permissions sont revérifiées par chaque fonction serveur.
+      communicationC5Sante: function () {
+        return sb().then(function (c) { return c.rpc('communication_c5_sante'); }).then(resultat);
+      },
+      communicationHistorique: function (o) {
+        o = o || {};
+        return sb().then(function (c) { return c.rpc('communication_c5_historique', {
+          p_debut: o.debut || null, p_fin: o.fin || null, p_canal: o.canal || null,
+          p_statut: o.statut || null, p_type: o.type || null, p_recherche: o.recherche || '',
+          p_page: o.page || 0, p_par_page: o.parPage || 50
+        }); }).then(resultat);
+      },
+      communicationModeles: function () {
+        return sb().then(function (c) { return c.rpc('communication_c5_modeles_lister'); }).then(resultat);
+      },
+      communicationPrevisualiser: function (o) {
+        o = o || {};
+        return sb().then(function (c) { return c.rpc('communication_c5_previsualiser_brouillon', {
+          p_notification: Number(o.notification), p_type: o.type, p_langue: o.langue,
+          p_titre: o.titre, p_message: o.message
+        }); }).then(resultat);
+      },
+      communicationNouvelleVersion: function (o) {
+        o = o || {};
+        return sb().then(function (c) { return c.rpc('communication_c5_modele_nouvelle_version', {
+          p_type: o.type, p_traductions: o.traductions, p_variables: o.variables,
+          p_canaux: o.canaux, p_modele_whatsapp: o.modeleWhatsapp || null
+        }); }).then(resultat);
+      },
+      communicationConsentements: function (limite) {
+        return sb().then(function (c) { return c.rpc('communication_c5_consentements_lister', {
+          p_limite: limite || 200
+        }); }).then(resultat);
+      },
+      communicationFile: function (limite) {
+        return sb().then(function (c) { return c.rpc('communication_c5_file_lister', {
+          p_limite: limite || 100
+        }); }).then(resultat);
+      },
+      communicationReprendreEvenement: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_c5_evenement_reprendre', {
+          p_evenement: Number(id)
+        }); }).then(resultat);
+      },
+
+      // C6 — les RPC marketing administrent des révisions et des aperçus agrégés.
+      // Aucun de ces appels ne crée une transmission ni ne contacte un fournisseur.
+      communicationCampagnes: function (limite) {
+        return sb().then(function (c) { return c.rpc('communication_campagnes_lister', {
+          p_limite: limite || 100
+        }); }).then(resultat);
+      },
+      communicationCampagneSegments: function () {
+        return sb().then(function (c) { return c.rpc('communication_campagne_segments_lister'); }).then(resultat);
+      },
+      communicationCampagneSegmentEnregistrer: function (o) {
+        o = o || {};
+        return sb().then(function (c) { return c.rpc('communication_campagne_segment_enregistrer', {
+          p_id: o.id == null ? null : Number(o.id), p_nom: o.nom,
+          p_description: o.description || '', p_criteres: o.criteres
+        }); }).then(resultat);
+      },
+      communicationCampagneModeles: function (canal) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_modeles_lister', {
+          p_canal: canal || null
+        }); }).then(resultat);
+      },
+      communicationCampagneModeleVersion: function (o) {
+        o = o || {};
+        return sb().then(function (c) { return c.rpc('communication_campagne_modele_version_creer', {
+          p_cle: o.cle, p_canal: o.canal, p_traductions: o.traductions
+        }); }).then(resultat);
+      },
+      communicationCampagneEnregistrer: function (o) {
+        o = o || {};
+        return sb().then(function (c) { return c.rpc('communication_campagne_enregistrer', {
+          p_campagne: o.id == null ? null : Number(o.id), p_nom: o.nom,
+          p_description: o.description || '', p_objectif: o.objectif,
+          p_canaux: o.canaux || [], p_langue: o.langue, p_segment: o.segmentId == null ? null : Number(o.segmentId),
+          p_criteres: o.criteres || null, p_modeles: o.modeles || [],
+          p_budget_prevu_usd: o.budgetPrevuUsd == null || o.budgetPrevuUsd === '' ? null : Number(o.budgetPrevuUsd),
+          p_plafond_depenses_usd: o.plafondDepensesUsd == null || o.plafondDepensesUsd === '' ? null : Number(o.plafondDepensesUsd),
+          p_quotas_par_canal: o.quotasParCanal || null,
+          p_volume_cible: o.volumeCible == null || o.volumeCible === '' ? null : Number(o.volumeCible),
+          p_cout_estime_usd: o.coutEstimeUsd == null || o.coutEstimeUsd === '' ? null : Number(o.coutEstimeUsd),
+          p_planifie_local: o.planifieLocal || null, p_fuseau_horaire: o.fuseauHoraire || null
+        }); }).then(resultat);
+      },
+      communicationCampagneDupliquer: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_dupliquer', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      communicationCampagneApercu: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_apercu', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      communicationCampagneSoumettre: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_soumettre', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      communicationCampagneApprouver: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_approuver', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      communicationCampagneRefuser: function (id, motif) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_refuser', {
+          p_campagne: Number(id), p_motif: String(motif || '')
+        }); }).then(resultat);
+      },
+      communicationCampagnePlanifier: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_planifier', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      communicationCampagneAnnuler: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_annuler', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      communicationCampagneJournal: function (id, limite) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_journal', {
+          p_campagne: Number(id), p_limite: limite || 100
+        }); }).then(resultat);
+      },
+      // Arrêt d'urgence (candidate 010) : la version affichée est exigée pour lever l'arrêt.
+      communicationArretEtat: function () {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_etat'); }).then(resultat);
+      },
+      communicationArretDemander: function (motif) {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_demander', {
+          p_motif: String(motif || '')
+        }); }).then(resultat);
+      },
+      communicationArretConfirmer: function () {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_confirmer'); }).then(resultat);
+      },
+      communicationArretLever: function (motif, version) {
+        return sb().then(function (c) { return c.rpc('communication_c10_arret_lever', {
+          p_motif: String(motif || ''), p_version_attendue: Number(version)
+        }); }).then(resultat);
+      },
+      // Envoi des campagnes (candidate 012)
+      communicationMarketingReglages: function () {
+        return sb().then(function (c) { return c.rpc('communication_marketing_reglages_lire'); }).then(resultat);
+      },
+      communicationMarketingReglagesDefinir: function (frequenceMax, fenetreHeures, emailMaxJour) {
+        return sb().then(function (c) { return c.rpc('communication_marketing_reglages_definir', {
+          p_frequence_max: Number(frequenceMax), p_fenetre_heures: Number(fenetreHeures),
+          p_email_max_jour: emailMaxJour ? Number(emailMaxJour) : null
+        }); }).then(resultat);
+      },
+      communicationCampagneSuivi: function (id) {
+        return sb().then(function (c) { return c.rpc('communication_campagne_suivi', {
+          p_campagne: Number(id)
+        }); }).then(resultat);
+      },
+      // Le client refuse les offres, de vive voix (téléphone, comptoir) : l'équipe l'enregistre.
+      // Seul le client peut ensuite redonner son accord (candidate 012, avis juridique du 25/11/2026).
+      communicationOpposition: function (clientId, canaux, source) {
+        return sb().then(function (c) { return c.rpc('communication_opposition_enregistrer', {
+          p_client: clientId, p_canaux: canaux, p_source: String(source || '')
+        }); }).then(resultat);
+      },
+
       statistiques: function () {
         return sb().then(function (c) { return c.rpc('statistiques_admin'); }).then(resultat);
       },
@@ -2345,6 +2544,13 @@
     var moi = compteConnecte(d);
     if (!peutCompte(moi, action)) throw Erreur('non-autorise');
     return moi;
+  }
+
+  // Aucune file, aucun consentement et aucun modèle n'est simulé dans le mode démo.
+  function communicationDemoNonDisponible(permission) {
+    var d = lireDonnees();
+    try { exiger(d, permission); } catch (e) { return echec(e.code); }
+    return echec('absent');
   }
 
   /* ---- Les règles métier, version démonstration ---------------------------
@@ -4863,6 +5069,18 @@
       });
     },
 
+    // Démonstration : aucun texte d'accord n'est attesté, l'écran des offres n'offre donc
+    // pas d'accepter ; aucun consentement n'est simulé.
+    marketingTexte: function () { return Promise.resolve(null); },
+    marketingWhatsapp: function () { return Promise.resolve({ etat: 'aucun', actif: false }); },
+    marketingWhatsappDemander: function () { return echec('absent'); },
+    marketingWhatsappConfirmer: function () { return echec('absent'); },
+    marketingWhatsappRetirer: function () { return echec('absent'); },
+    marketingCourriel: function () { return Promise.resolve({ etat: 'aucun', actif: false, adresse_valide: true }); },
+    marketingCourrielAccorder: function () { return echec('absent'); },
+    marketingCourrielRetirer: function () { return echec('absent'); },
+    desabonnerCourriel: function () { return echec('absent'); },
+
     connecter: function (email, motDePasse) {
       var compte = trouverCompte(lireDonnees(), email);
       if (!compte || compte.mdp !== empreinte(motDePasse)) return echec('identifiants');
@@ -5137,6 +5355,47 @@
     },
 
     admin: {
+      // Le mode démo ne simule pas les événements ni les métriques du Communication Center.
+      santeCommunications: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'communications.view'); } catch (e) { return echec(e.code); }
+        return plusTard({ mode: 'demo', disponible: false });
+      },
+      communicationC5Sante: function () {
+        var d = lireDonnees();
+        try { exiger(d, 'communications.view'); } catch (e) { return echec(e.code); }
+        return plusTard({ mode: 'demo', disponible: false });
+      },
+      communicationHistorique: function () { return communicationDemoNonDisponible('communications.view'); },
+      communicationModeles: function () { return communicationDemoNonDisponible('communications.view'); },
+      communicationPrevisualiser: function () { return communicationDemoNonDisponible('communications.view'); },
+      communicationNouvelleVersion: function () { return communicationDemoNonDisponible('communications.templates.manage'); },
+      communicationConsentements: function () { return communicationDemoNonDisponible('communications.consents.view'); },
+      communicationFile: function () { return communicationDemoNonDisponible('communications.view'); },
+      communicationReprendreEvenement: function () { return communicationDemoNonDisponible('communications.queue.retry'); },
+      communicationCampagnes: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
+      communicationCampagneSegments: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneSegmentEnregistrer: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneModeles: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneModeleVersion: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneEnregistrer: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneDupliquer: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneApercu: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneSoumettre: function () { return communicationDemoNonDisponible('communications.campaigns.manage'); },
+      communicationCampagneApprouver: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
+      communicationCampagneRefuser: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
+      communicationCampagnePlanifier: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
+      communicationArretEtat: function () { return communicationDemoNonDisponible('communications.view'); },
+      communicationArretDemander: function () { return communicationDemoNonDisponible('communications.emergency_stop'); },
+      communicationArretConfirmer: function () { return communicationDemoNonDisponible('communications.emergency_stop'); },
+      communicationArretLever: function () { return communicationDemoNonDisponible('communications.emergency_stop'); },
+      communicationMarketingReglages: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
+      communicationMarketingReglagesDefinir: function () { return communicationDemoNonDisponible('settings.manage'); },
+      communicationCampagneSuivi: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
+      communicationOpposition: function () { return communicationDemoNonDisponible('clients.view'); },
+      communicationCampagneAnnuler: function () { return communicationDemoNonDisponible('communications.campaigns.approve'); },
+      communicationCampagneJournal: function () { return communicationDemoNonDisponible('communications.campaigns.view'); },
+
       statistiques: function () {
         var d = lireDonnees();
         try { exiger(d, 'shipments.view'); } catch (e) { return echec(e.code); }
@@ -7303,6 +7562,9 @@
     inscrire: ferme, naissance: ferme, definirNaissance: ferme, portefeuille: ferme, utiliserPoints: ferme, mesAvantages: ferme,
     maBienvenue: ferme, monParrainage: ferme, noterInvitation: ferme, utiliserCodeParrainage: ferme, preferencesProgrammes: ferme,
     reglerAnniversaire: ferme, connecter: ferme, deconnecter: function () { return Promise.resolve(true); },
+    marketingTexte: ferme, marketingWhatsapp: ferme, marketingWhatsappDemander: ferme, marketingWhatsappConfirmer: ferme,
+    marketingWhatsappRetirer: ferme, marketingCourriel: ferme, marketingCourrielAccorder: ferme, marketingCourrielRetirer: ferme,
+    desabonnerCourriel: ferme,
     doubleAuth: { etat: function () { return Promise.resolve(null); }, inscrire: ferme, confirmer: ferme, verifier: ferme,
                   equipe: function () { return Promise.resolve(null); }, regler: ferme },
     surSessionPerdue: function () { return function () {}; },

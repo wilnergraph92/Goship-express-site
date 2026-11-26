@@ -203,6 +203,40 @@
           </section>
         </div>
 
+        <div class="gs-panneau" data-offres hidden>
+          <div class="gs-panneau__tete">
+            <h2>Offres et nouvelles</h2>
+          </div>
+          <p class="gs-panneau__intro">Recevez nos promotions si vous le souhaitez. Vous pouvez arrêter à tout moment, ici ou depuis chaque message.</p>
+          <p class="gs-form__erreur" data-offres-erreur role="alert" hidden></p>
+          <p class="gs-copie-ok" data-offres-ok role="status" hidden></p>
+          <section class="gs-offres__canal" data-offre="email" hidden>
+            <h3>Par e-mail</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>J'accepte de recevoir les offres par e-mail</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Ne plus recevoir les offres par e-mail</button>
+            </div>
+          </section>
+          <section class="gs-offres__canal" data-offre="whatsapp" hidden>
+            <h3>Par WhatsApp</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>Recevoir un code sur WhatsApp</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Ne plus recevoir les offres par WhatsApp</button>
+            </div>
+            <form class="gs-form gs-form--compact" data-offre-code novalidate hidden>
+              <div class="gs-champ">
+                <label for="offre-code">Code reçu sur WhatsApp</label>
+                <input id="offre-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+              </div>
+              <button class="gs-bouton gs-bouton--plein" type="submit">Confirmer</button>
+            </form>
+          </section>
+        </div>
+
         <div class="gs-panneau" data-panneau-messages hidden>
           <div class="gs-panneau__tete">
             <h2>Mes messages</h2>

@@ -272,8 +272,10 @@ def main():
     repondre(db, wha, 429, 'Too Many Requests')
     travailler(db)
     delai = float(un(db, "select extract(epoch from prochain_essai_le - now()) from notification_envois where id = %s;" % wha))
+    # Depuis l'entrée du Communication Center dans la chaîne (C11, 23/11/2026), toute limite de
+    # débit (HTTP 429, Expo, WhatsApp) s'appelle LIMITE_DEBIT (migrations-candidates/005).
     verifier('2e essai, limite de débit (429) : nouvel essai dans ~2 min', [etat(wha), 100 < delai <= 121],
-             ['attente|HTTP_429|2', True])
+             ['attente|LIMITE_DEBIT|2', True])
     db.sql("update notification_envois set prochain_essai_le = now() - interval '1 second' where id = %s;" % wha)
     travailler(db)
     repondre(db, wha, None, None, 'Timeout of 5000 ms reached')

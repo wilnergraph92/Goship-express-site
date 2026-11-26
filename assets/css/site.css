@@ -755,6 +755,50 @@ a [style*="rotate(45deg)"][style*="border-right:2px"],button [style*="rotate(45d
 .gs-tableau tbody tr:last-child td{border-bottom:0}
 .gs-tableau tbody tr{transition:background-color .15s ease}
 .gs-tableau tbody tr:hover{background:#fafbfe}
+
+/* Communication Center : espaces de travail, filtres et états responsive. */
+.gs-communications{min-width:0}
+.gs-communications [hidden]{display:none!important}
+.gs-communications__tabs{display:flex;gap:8px;overflow-x:auto;padding:5px 1px 12px;margin:12px 0 18px;scrollbar-width:thin}
+.gs-communications__tabs [aria-selected="true"]{color:#fff;background:var(--ink);border-color:var(--ink)}
+.gs-communications__pane{display:grid;gap:16px;min-width:0}
+.gs-communications__pane h3,.gs-communications__pane h4{margin:0;color:var(--ink)}
+.gs-communications__pane>p{margin:0;color:#5b6782;line-height:1.55}
+.gs-communications__stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.gs-communications__stats .gs-stat{min-width:0;padding:16px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
+.gs-communications__filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:end;padding:16px;border:1px solid #e3e8f2;border-radius:16px;background:#f8fafd}
+.gs-communications__filters .gs-champ,.gs-communications__editor .gs-champ{min-width:0}
+.gs-communications__filters .gs-bouton{min-height:44px}
+.gs-communications__message,.gs-communications__empty{color:#5b6782;line-height:1.5}
+.gs-communications__alerts{display:grid;gap:8px}
+.gs-communications__alert{padding:12px 14px;border:1px solid #f3c6a8;border-radius:12px;background:#fff7ed;color:#7c2d12}
+.gs-communications__table{min-width:720px}
+.gs-communications__table td{vertical-align:top}
+.gs-communications__transitions{display:grid;gap:4px;min-width:150px;font-size:12px;color:#5b6782}
+.gs-communications__pagination,.gs-communications__actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.gs-communications__pagination{justify-content:flex-end}
+.gs-communications__editor{display:grid;gap:16px;padding:clamp(16px,2.5vw,26px);border:1px solid #dce4f1;border-radius:18px;background:#fbfcff}
+.gs-communications__editor>p{margin:0;color:#5b6782;line-height:1.5}
+.gs-communications__fieldset{display:flex;flex-wrap:wrap;gap:10px 18px;min-width:0;padding:14px 16px;border:1px solid #dce4f1;border-radius:12px;background:#fff}
+.gs-communications__fieldset legend{padding:0 6px;font-weight:700;color:var(--ink)}
+.gs-communications__fieldset label{display:inline-flex;align-items:center;gap:8px}
+.gs-fiche__section .gs-communications__fieldset label{white-space:nowrap}
+.gs-communications__locales{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.gs-communications__locale{display:grid;gap:12px;min-width:0;padding:14px;border:1px solid #e3e8f2;border-radius:14px;background:#fff}
+.gs-communications__locale legend{padding:0 6px;font-weight:800;color:var(--ink)}
+.gs-communications__locale textarea{resize:vertical}
+.gs-communications__preview{padding:16px;border:1px solid #c9d6ec;border-radius:14px;background:#f3f6fd;overflow-wrap:anywhere}
+.gs-communications__preview p{margin:8px 0 0;white-space:pre-wrap;line-height:1.55}
+@media(max-width:760px){
+  .gs-communications__filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gs-communications__locales{grid-template-columns:minmax(0,1fr)}
+  .gs-communications__stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px){
+  .gs-communications__filters{grid-template-columns:minmax(0,1fr)}
+  .gs-communications__stats{grid-template-columns:minmax(0,1fr)}
+  .gs-communications__tabs .gs-bouton{flex:none}
+}
 .gs-tableau tbody tr.is-choisi{background:#fff7ed}
 .gs-tableau tbody tr.is-nouveau{animation:gs-ligne 2.4s ease}
 @keyframes gs-ligne{from{background:#ffe8d6}}
@@ -1316,6 +1360,23 @@ button.gs-kpi:hover{transform:translateY(-2px);border-color:#cfd8e8;box-shadow:0
 .gs-avt summary{min-height:44px;display:flex;align-items:center;font-weight:700;cursor:pointer}
 @media (max-width:480px){.gs-avt__chiffres{grid-template-columns:1fr}}
 
+/* C6 — campagnes marketing : cartes et aperçus agrégés, sans liste de contacts. */
+.gs-campagnes__banniere{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border:1px solid #f0d48b;border-radius:14px;background:#fff9e8;color:#634600}
+.gs-campagnes__grille{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-top:14px}
+.gs-campagnes__carte{min-width:0;padding:16px;border:1px solid #e3e8f2;border-radius:16px;background:#fff}
+.gs-campagnes__entete{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.gs-campagnes__entete h3,.gs-campagnes__carte h3{margin-top:0}
+.gs-campagnes__carte .gs-communications__fieldset{margin:14px 0}
+.gs-campagnes__carte input[type="checkbox"]{width:20px;height:20px;vertical-align:middle}
+.gs-campagnes__apercu{margin-top:12px;padding:14px;border:1px solid #dfe7f5;border-radius:12px;background:#f8faff;overflow-wrap:anywhere}
+.gs-campagnes__apercu h4,.gs-campagnes__apercu h5{margin:0 0 8px}
+.gs-campagnes__apercu p{margin:6px 0}
+.gs-campagnes__message,.gs-campagnes__canal{padding:10px 0;border-bottom:1px solid #e5eaf3}
+.gs-campagnes__message:last-child,.gs-campagnes__canal:last-child{border-bottom:0}
+.gs-campagnes__journal{max-height:360px;margin-top:12px;padding:12px;border:1px solid #e3e8f2;border-radius:12px;overflow:auto}
+.gs-campagnes__motif{padding-left:12px;color:#8b2f2f}
+@media (min-width:1100px){.gs-campagnes__grille{grid-template-columns:minmax(0,1.2fr) minmax(360px,1fr)}.gs-campagnes__carte[data-cm-model-form]{grid-column:1/-1}}
+@media (max-width:700px){.gs-campagnes__carte{padding:12px}.gs-campagnes__entete{align-items:flex-start;flex-wrap:wrap}}
 /* ==========================================================================
    Pages guides : destinations, adresse à Miami, tarifs, questions fréquentes
    (outils/generateur/pages/*.guide.html). Elles répondent chacune à une
@@ -1368,3 +1429,18 @@ ol.gs-guide-liste li::before{content:counter(etape);top:.15em;width:26px;height:
 .gs-guide-voir{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
 .gs-guide-voir a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid #d6ddec;border-radius:999px;color:var(--ink);font-weight:700;font-size:15px}
 .gs-guide-voir a:hover{border-color:var(--accent);color:var(--accent)}
+/* Arrêt d’urgence et envoi des campagnes (communications-arret.js, communications-envoi.js) */
+.gs-communications__arret{margin-top:20px;padding:16px;border:1px solid #d7dce6;border-radius:12px;background:#fff}
+.gs-communications__arret-etat{font-weight:700;margin:4px 0}
+.gs-communications__arret-etat--arret_demande{color:#9a3412}
+.gs-communications__arret-etat--arret_confirme{color:#b91c1c}
+.gs-communications__arret-etat--actif{color:#166534}
+.gs-communications__arret-details{color:#5b6782;margin:0 0 12px}
+.gs-communications__arret-form{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.gs-ce{margin-bottom:20px}.gs-ce__liste{margin:4px 0 12px;padding-left:20px}.gs-ce__etat{font-weight:700}
+.gs-communications__arret-details,.gs-ce__reglage{display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;margin:0 0 12px}
+.gs-communications__arret-details dt,.gs-ce__reglage dt{color:#5b6782}
+.gs-communications__arret-details dd,.gs-ce__reglage dd{margin:0}
+.gs-ce__liste li{display:flex;justify-content:space-between;gap:12px;max-width:420px}
+.gs-offres__canal{margin-top:20px}.gs-offres__canal h3{margin:0 0 4px}
+.gs-offres__texte{margin:8px 0 12px;padding:10px 12px;border-left:3px solid #d7dce6;background:#f8fafc;font-size:14px;line-height:1.5;text-align:left}

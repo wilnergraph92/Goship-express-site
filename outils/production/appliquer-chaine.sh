@@ -14,8 +14,17 @@
 # Il ne se lance jamais ainsi depuis un workflow : la production se migre à la
 # main, après la préproduction et une restauration réussie (docs/production/deployment.md).
 #
+# GARDE-FOU COMMUNICATION CENTER : les fichiers migrations-candidates/ ferment la
+# chaîne depuis le 23/11/2026 (étape C11), pour les essais locaux et la CI
+# seulement. Par défaut le script S'ARRÊTE avant eux (code 0, la chaîne d'avant
+# est complète). APPLIQUER_CANDIDATES=oui les applique, sur une base jetable ;
+# sur l'adresse de production, ils sont refusés dans tous les cas (code 3), tant
+# que la Phase 1.3.1 n'est pas validée et qu'une autorisation écrite nommée n'a
+# pas levé cette garde (docs/production/go-no-go.md).
+#
 # SANS_PG_NET=1 : pour une base PostgreSQL ordinaire (essai de restauration en CI),
-# la ligne qui crée l'extension pg_net est retirée (les doublures la remplacent).
+# les lignes qui créent les extensions pg_net et pgcrypto sont retirées (les
+# doublures les remplacent).
 # =============================================================================
 set -euo pipefail
 
@@ -32,6 +41,12 @@ if [[ "$CIBLE_DB_URL" == *"$PRODUCTION_REF"* ]] && [ "${CONFIRMER_PRODUCTION:-}"
   exit 3
 fi
 
+if [[ "$CIBLE_DB_URL" == *"$PRODUCTION_REF"* ]] && [ "${APPLIQUER_CANDIDATES:-}" = oui ]; then
+  echo "REFUS : les fichiers migrations-candidates/ (Communication Center) ne s'appliquent pas"
+  echo "en production avant la validation de la Phase 1.3.1 et une autorisation écrite nommée."
+  exit 3
+fi
+
 depart="${1:-}"
 commence=$([ -z "$depart" ] && echo oui || echo non)
 travail="$(mktemp -d)"; trap 'rm -rf "$travail"' EXIT
@@ -40,10 +55,21 @@ while read -r f; do
   case "$f" in ''|\#*) continue ;; esac
   [ "$f" = "$depart" ] && commence=oui
   [ "$commence" = oui ] || continue
+  case "$f" in
+    migrations-candidates/*)
+      if [ "${APPLIQUER_CANDIDATES:-}" != oui ]; then
+        echo "ARRÊT  avant $f : les fichiers du Communication Center ne sont appliqués qu'avec"
+        echo "       APPLIQUER_CANDIDATES=oui, sur une base jetable (garde-fou de l'étape C11)."
+        break
+      fi ;;
+  esac
   source="$OUTILS/$f"
   if [ "${SANS_PG_NET:-}" = 1 ]; then
-    sed 's/^create extension if not exists pg_net with schema extensions;$//' "$source" > "$travail/$f"
-    source="$travail/$f"
+    # Nom à plat : une ligne de la chaîne peut désigner un sous-dossier (migrations-candidates/)
+    copie="$travail/$(basename "$f")"
+    sed -e 's/^create extension if not exists pg_net with schema extensions;$//' \
+        -e 's/^create extension if not exists pgcrypto with schema extensions;$//' "$source" > "$copie"
+    source="$copie"
   fi
   debut=$(date +%s)
   if ! "$PSQL" "$CIBLE_DB_URL" -X -q -v ON_ERROR_STOP=1 --single-transaction -f "$source" > "$travail/sortie" 2> "$travail/erreur"; then

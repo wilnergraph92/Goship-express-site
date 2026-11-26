@@ -33,6 +33,7 @@
 <script src="../assets/js/lieux.js" defer></script>
 <script src="../assets/js/inactivite.js" defer></script>
 <script src="../assets/js/compte.js" defer></script>
+<script src="../assets/js/offres.js" defer></script>
 </head>
 <body>
 <div class="gs-page">
@@ -305,6 +306,40 @@
           <section class="gs-avt__bloc" data-avt-parrainage aria-live="polite" hidden></section>
           <section class="gs-avt__bloc" data-avt-preferences hidden>
             <label class="gs-avt__case"><input type="checkbox" data-pref-anniversaire> <span>Resevwa mesaj fèt mwen</span></label>
+          </section>
+        </div>
+
+        <div class="gs-panneau" data-offres hidden>
+          <div class="gs-panneau__tete">
+            <h2>Òf ak nouvèl</h2>
+          </div>
+          <p class="gs-panneau__intro">Resevwa pwomosyon nou yo si ou vle. Ou ka sispann nenpòt ki lè, isit la oswa nan chak mesaj.</p>
+          <p class="gs-form__erreur" data-offres-erreur role="alert" hidden></p>
+          <p class="gs-copie-ok" data-offres-ok role="status" hidden></p>
+          <section class="gs-offres__canal" data-offre="email" hidden>
+            <h3>Pa imèl</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>Mwen dakò resevwa òf pa imèl</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Sispann resevwa òf pa imèl</button>
+            </div>
+          </section>
+          <section class="gs-offres__canal" data-offre="whatsapp" hidden>
+            <h3>Sou WhatsApp</h3>
+            <p class="gs-offres__etat" data-offre-etat></p>
+            <blockquote class="gs-offres__texte" data-offre-texte hidden></blockquote>
+            <div class="gs-form__boutons">
+              <button type="button" class="gs-bouton gs-bouton--plein" data-offre-accepter hidden>Resevwa yon kòd sou WhatsApp</button>
+              <button type="button" class="gs-lien-bouton" data-offre-retirer hidden>Sispann resevwa òf sou WhatsApp</button>
+            </div>
+            <form class="gs-form gs-form--compact" data-offre-code novalidate hidden>
+              <div class="gs-champ">
+                <label for="offre-code">Kòd ou resevwa sou WhatsApp</label>
+                <input id="offre-code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+              </div>
+              <button class="gs-bouton gs-bouton--plein" type="submit">Konfime</button>
+            </form>
           </section>
         </div>
 
@@ -717,6 +752,21 @@
   <p data-t="erreur-PREALERT_DUPLICATE">Nimewo swivi sa a deja anonse : acha a nan lis ou.</p>
   <p data-t="erreur-PREALERT_ALREADY_RECEIVED">Koli sa a deja rive Miami : li nan « Koli mwen yo ».</p>
   <p data-t="erreur-TOO_MANY_PREALERTS">Ou deja gen 60 acha anonse k ap tann.</p>
+  <p data-t="offres-etat-actif">Ou resevwa òf nou yo pa chanèl sa a.</p>
+  <p data-t="offres-etat-inactif">Ou pa resevwa òf nou yo pa chanèl sa a.</p>
+  <p data-t="offres-ok-accepte">Nou note sa: w ap resevwa òf nou yo pa chanèl sa a.</p>
+  <p data-t="offres-ok-retire">Nou note sa: ou p ap resevwa òf nou yo pa chanèl sa a ankò.</p>
+  <p data-t="offres-code-envoye">N ap voye yon kòd 6 chif ba ou sou WhatsApp. Antre l anba a.</p>
+  <p data-t="offres-code-faux">Kòd la pa bon oswa li ekspire. Mande yon lòt si sa nesesè.</p>
+  <p data-t="offres-err-generique">Operasyon an pa mache. Eseye ankò.</p>
+  <p data-t="offres-err-email">Konfime adrès imèl ou anvan ak lyen ou te resevwa lè ou te enskri a.</p>
+  <p data-t="offres-err-contact">Ajoute yon nimewo telefòn oswa yon adrès imèl ki valab nan « Enfòmasyon mwen » anvan.</p>
+  <p data-t="offres-err-trop">Twòp demann. Eseye ankò pita.</p>
+  <p data-t="offres-err-partage">Kontak sa a pataje ak yon lòt kont: li pa ka resevwa òf nou yo.</p>
+  <p data-t="offres-err-indisponible">Chwa sa a poko disponib.</p>
+  <p data-t="desabo-en-cours">N ap dezabone w…</p>
+  <p data-t="desabo-ok">Li fèt: ou p ap resevwa òf nou yo pa imèl ankò.</p>
+  <p data-t="desabo-invalide">Lyen pou dezabone sa a pa valab. Ou ka jere chwa ou yo tou nan « Kont mwen ».</p>
 </template>
 </main>
 

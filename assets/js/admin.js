@@ -2242,7 +2242,10 @@
     'reports.create': 'Créer un rapport', 'reports.edit': 'Modifier un rapport',
     'reports.delete': 'Supprimer un rapport',
     'users.view': 'Voir l’équipe', 'roles.manage': 'Donner un rôle', 'settings.manage': 'Réglages du site',
-    'audit_logs.view': 'Journal d’audit'
+    'audit_logs.view': 'Journal d’audit', 'communications.view': 'Voir le Centre de communication',
+    'communications.templates.manage': 'Gérer les modèles transactionnels',
+    'communications.consents.view': 'Consulter les consentements marketing',
+    'communications.queue.retry': 'Reprendre un événement STOP sûr'
   };
 
   function chargerEquipe() {
@@ -2366,7 +2369,7 @@
   var onglets = $$('[data-onglet-vue]');
   var TITRES_VUES = { apercu: 'Vue générale', colis: 'Colis', clients: 'Clients', factures: 'Factures',
                       scanner: 'Poste de scan', equipe: 'Équipe', analytics: 'Analytics', rapports: 'Rapports', programmes: 'Programmes',
-                      prealertes: 'Pré-alertes' };
+                      prealertes: 'Pré-alertes', communications: 'Centre de communication' };
   function choisirVue(vue) {
     var onglet = $('[data-onglet-vue="' + vue + '"]');
     if (!onglet || onglet.hasAttribute('data-interdit')) {
@@ -6645,8 +6648,67 @@
         }, 'Aucun paiement reçu pour l’instant.');
       }
     }
+    if (client.id && peut('clients.view') && API.admin.communicationOpposition) sectionOpposition(client);
     ajouterActions(actionsClient(client));
     montrerFiche();
+  }
+
+  // Le client dit, au téléphone ou au comptoir, qu'il ne veut plus d'offres : l'équipe
+  // l'enregistre (avis juridique du 25/11/2026). Seul le client peut redonner son accord.
+  function sectionOpposition(client) {
+    var s = sectionFiche('Offres et nouvelles');
+    s.appendChild(el('p', 'gs-fiche__attente',
+      'Le client refuse les offres de vive voix ? Enregistrez-le : il ne recevra plus d’offres sur ce canal. '
+      + 'Seul le client pourra redonner son accord, depuis son compte.'));
+    var form = el('form', 'gs-form gs-form--compact');
+    form.noValidate = true;
+    form.setAttribute('data-opposition', '');
+    var canaux = el('fieldset', 'gs-communications__fieldset');
+    canaux.appendChild(el('legend', '', 'Canaux refusés'));
+    [['email', 'E-mail'], ['whatsapp', 'WhatsApp']].forEach(function (c) {
+      var l = el('label');
+      var i = el('input');
+      i.type = 'checkbox'; i.name = 'canal'; i.value = c[0]; i.checked = true;
+      l.appendChild(i);
+      l.appendChild(document.createTextNode(' ' + c[1]));
+      canaux.appendChild(l);
+    });
+    form.appendChild(canaux);
+    var champ = el('div', 'gs-champ');
+    var lab = el('label', '', 'Demande reçue');
+    var select = el('select');
+    select.name = 'source'; select.id = 'opposition-source-' + client.id;
+    lab.htmlFor = select.id;
+    [['telephone', 'Par téléphone'], ['comptoir', 'Au comptoir'], ['autre', 'Autrement']].forEach(function (o) {
+      var opt = el('option', '', o[1]); opt.value = o[0]; select.appendChild(opt);
+    });
+    champ.appendChild(lab); champ.appendChild(select);
+    form.appendChild(champ);
+    var bouton = el('button', 'gs-bouton gs-bouton--contour', 'Enregistrer le refus des offres');
+    bouton.type = 'submit';
+    form.appendChild(bouton);
+    var msg = el('p', 'gs-fiche__attente');
+    msg.setAttribute('role', 'status');
+    form.appendChild(msg);
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var choisis = Array.prototype.filter.call(form.querySelectorAll('input[name="canal"]'), function (i) { return i.checked; })
+        .map(function (i) { return i.value; });
+      if (!choisis.length) { msg.textContent = 'Choisissez au moins un canal.'; return; }
+      if (!window.confirm('Enregistrer que ' + (client.nom_complet || client.code) + ' refuse les offres ('
+          + choisis.map(function (c) { return c === 'email' ? 'e-mail' : 'WhatsApp'; }).join(' et ')
+          + ') ?\nSeul le client pourra redonner son accord.')) return;
+      bouton.disabled = true;
+      msg.textContent = 'Enregistrement…';
+      API.admin.communicationOpposition(client.id, choisis, select.value).then(function () {
+        dlgFiche.removeAttribute('data-saisie');   // enregistré : rien à perdre en fermant
+        msg.textContent = 'Refus enregistré : plus aucune offre sur ' + (choisis.length > 1 ? 'ces canaux.' : 'ce canal.');
+      }, function (err) {
+        bouton.disabled = false;
+        msg.textContent = messageErreur(err);
+      });
+    });
+    s.appendChild(form);
   }
 
   /* Un paiement reçu (vue générale) : ce que la base en rend, et sa facture */

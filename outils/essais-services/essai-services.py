@@ -79,6 +79,26 @@ create function vault.create_secret(v text, n text) returns uuid language sql as
   insert into vault.decrypted_secrets (name, decrypted_secret) values (n, v) returning id $$;
 create function vault.update_secret(i uuid, v text) returns void language sql as $$
   update vault.decrypted_secrets set decrypted_secret = v where id = i $$;
+-- Chez Supabase, vault.secrets est une table : le Communication Center y efface les codes
+-- de confirmation périmés. La vue de la doublure renvoie l'effacement vers la table.
+create rule doublure_vault_secrets_delete as on delete to vault.secrets
+  do instead delete from vault.decrypted_secrets where id = old.id;
+
+-- pgserver n'embarque pas pgcrypto (Supabase l'installe dans « extensions »). Ces fonctions
+-- factices ne servent qu'à exercer le contrôle de flux, les formats et les droits du
+-- Communication Center ; elles ne testent aucune propriété cryptographique.
+create function extensions.gen_random_bytes(p_taille integer)
+returns bytea language sql volatile set search_path = '' as $$
+  select substring(decode(replace(gen_random_uuid()::text, '-', ''), 'hex') from 1 for p_taille)
+$$;
+create function extensions.digest(p_texte text, p_type text)
+returns bytea language sql immutable set search_path = '' as $$
+  select decode(md5(p_texte) || md5('fixture:' || p_texte), 'hex')
+$$;
+create function extensions.hmac(p_texte text, p_cle text, p_type text)
+returns bytea language sql immutable set search_path = '' as $$
+  select decode(md5(p_cle || ':' || p_texte) || md5('fixture:' || p_cle || ':' || p_texte), 'hex')
+$$;
 
 create table net.envois (id bigint generated always as identity primary key, url text, headers jsonb, body jsonb);
 create table net._http_response (id bigint, status_code integer, content text, error_msg text,
@@ -165,6 +185,8 @@ class Base:
         texte = open(chemin, encoding='utf-8').read()
         # pg_net n'existe pas sur un PostgreSQL ordinaire : la doublure le remplace
         texte = texte.replace('create extension if not exists pg_net with schema extensions;', '')
+        # pgcrypto non plus : les doublures d'extensions.* (DOUBLURES) le remplacent
+        texte = texte.replace('create extension if not exists pgcrypto with schema extensions;', '')
         fichier = os.path.join(TRAVAIL, os.path.basename(chemin))
         open(fichier, 'w', encoding='utf-8').write(texte)
         r = subprocess.run([str(PSQL), '-U', self.su, '-h', self.socket, '-d', BASE,

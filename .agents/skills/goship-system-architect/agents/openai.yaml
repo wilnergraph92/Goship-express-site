@@ -1,0 +1,3 @@
+interface:
+  display_name: "GoShip System Architect"
+  short_description: "Architecture technique et contrats des modules GoShip"

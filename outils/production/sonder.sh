@@ -81,7 +81,17 @@ supabase-alertes-suivi.sql|etat_alertes_suivi||non
 supabase-supervision-suivi.sql|supervision_suivi||non
 supabase-double-auth.sql|ma_double_auth||non
 supabase-battement.sql|battement||non
-supabase-prealertes-equipe.sql|supprimer_prealerte|p_prealerte=00000000-0000-0000-0000-000000000000&p_motif=sonde|non'
+supabase-prealertes-equipe.sql|supprimer_prealerte|p_prealerte=00000000-0000-0000-0000-000000000000&p_motif=sonde|non
+migrations-candidates/001-communication-foundation.sql|communication_sortie_autorisee|p_nature=envoi&p_canal=email|non
+migrations-candidates/002-communication-supervision.sql|sante_communications||non
+migrations-candidates/003-communication-consentements.sql|communication_consentement_etat_whatsapp||non
+migrations-candidates/004-communication-transactionnelle.sql|communication_lister_outbox_transactionnel||non
+migrations-candidates/005-communication-adaptateurs-canaux.sql|communication_adresse_courriel_valide|p_email=sonde|non
+migrations-candidates/006-communication-p08-worker.sql|communication_expo_recus_a_reconcilier||non
+migrations-candidates/007-communication-interface-operations.sql|communication_c5_sante||non
+migrations-candidates/008-communication-campagnes-marketing.sql|communication_campagne_segments_lister||non
+migrations-candidates/010-communication-arret-administration.sql|communication_c10_arret_etat||non
+migrations-candidates/012-communication-envoi-campagnes.sql|communication_marketing_reglages_lire||non'
 
 echo "== Base : ${URL%%.*}… (clé publique seulement, appels GET en lecture seule)"
 printf '%-30s %-26s %-6s %s\n' "MIGRATION" "FONCTION TÉMOIN" "CODE" "ÉTAT"
@@ -111,14 +121,24 @@ done <<< "$TEMOINS"
 
 echo
 echo "== Chaîne des migrations (outils/migrations.txt)"
-# Les migrations qui n'ajoutent que des index : rien n'en est visible avec la clé publique.
-# Elles sont dites « sans témoin » et comptées à part ; controle-securite.sql (section 1),
-# lu avec SUPABASE_DB_URL, les vérifie vraiment.
-SANS_TEMOIN=" supabase-index-cles.sql "
-passe=0; manque=0; invisibles=0
+# Les migrations dont rien n'est visible avec la clé publique sont dites « sans témoin » et
+# comptées à part : supabase-index-cles.sql n'ajoute que des index (controle-securite.sql,
+# section 1, lu avec SUPABASE_DB_URL, les vérifie vraiment) ; la candidate 009 place ses
+# fonctions dans le schéma communication_edge, que l'API n'expose pas ; la 011 ne pose que
+# des réglages par défaut.
+SANS_TEMOIN=" supabase-index-cles.sql migrations-candidates/009-communication-identite-edge.sql migrations-candidates/011-communication-reglages-decides.sql "
+passe=0; manque=0; invisibles=0; reservees=0
 while read -r f; do
   case "$f" in ''|\#*) continue ;; esac
-  case "$SANS_TEMOIN" in *" $f "*) echo "  sans témoin $f (index seulement : voir controle-securite.sql)"; invisibles=$((invisibles + 1)); continue ;; esac
+  case "$SANS_TEMOIN" in *" $f "*) echo "  sans témoin $f (rien de visible avec la clé publique : voir controle-securite.sql)"; invisibles=$((invisibles + 1)); continue ;; esac
+  case "$f" in
+    migrations-candidates/*)
+      # Communication Center : réservé aux essais tant que la garde de l'étape C11 tient
+      # (appliquer-chaine.sh) ; son absence n'est pas un manque.
+      if [ -n "${fichier_ko[$f]:-}" ] && [ -z "${fichier_ok[$f]:-}" ]; then
+        echo "  réservée  $f (Communication Center : essais seulement, garde C11)"; reservees=$((reservees + 1)); continue
+      fi ;;
+  esac
   if [ -n "${fichier_ko[$f]:-}" ] && [ -z "${fichier_ok[$f]:-}" ]; then echo "  ABSENTE   $f"; manque=$((manque + 1))
   elif [ -n "${fichier_ko[$f]:-}" ]; then echo "  PARTIELLE $f (une fonction témoin manque)"; manque=$((manque + 1))
   elif [ -n "${fichier_ok[$f]:-}" ]; then echo "  présente  $f"; passe=$((passe + 1))
@@ -145,7 +165,7 @@ else
 fi
 
 echo
-echo "== Résumé : $passe migration(s) présente(s), $invisibles sans témoin, $manque absente(s) ou partielle(s) ; $ouvertes fonction(s) ouverte(s) aux visiteurs sans raison ; $inattendus réponse(s) inattendue(s)"
+echo "== Résumé : $passe migration(s) présente(s), $invisibles sans témoin, $reservees réservée(s) aux essais (Communication Center), $manque absente(s) ou partielle(s) ; $ouvertes fonction(s) ouverte(s) aux visiteurs sans raison ; $inattendus réponse(s) inattendue(s)"
 # Code de sortie : 0 = chaîne complète et aucune exposition ; 1 = écart (le journal dit
 # lequel). SONDE_RAPPORT_SEUL=1 (pull request : la PR n'est pas responsable de l'état
 # de la production) : le rapport, toujours code 0.

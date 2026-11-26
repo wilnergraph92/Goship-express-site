@@ -38,7 +38,10 @@ jobs:
       matrix:
         banc: [services, evenements, scanner, finances, permissions, tableau, analytics,
                mobile, production, rapports, frais, corrections, programmes, courriel-colis, courriel-pied, lieu-reception, courriel-reseaux, identite,
-               notifications, accuses, suivi-courriels, prealertes, suivi-externe, moteur-suivi, synchro-suivi, mes-suivis, alertes-suivi, supervision-suivi, double-auth, battement, prealertes-equipe, index-cles]
+               notifications, accuses, suivi-courriels, prealertes, suivi-externe, moteur-suivi, synchro-suivi, mes-suivis, alertes-suivi, supervision-suivi, double-auth, battement, prealertes-equipe, index-cles,
+               # Communication Center (étape C11) : son banc, les essais de mise à niveau rejoués avec ses fichiers,
+               # et ses essais de concurrence (sessions simultanées)
+               communication-center, communication-non-regression, communication-concurrence]
     steps:
       # Tout l'historique : plusieurs bancs rejouent la migration depuis une
       # version publiée plus ancienne (git show <commit>:outils/…)
@@ -78,6 +81,8 @@ jobs:
           for f in demo scanner finances permissions tableau analytics rapports frais corrections programmes identite prealertes; do
             echo "== essai-$f.js"; node "outils/essais-services/essai-$f.js"
           done
+      - name: Centre de communication — Edge Functions, campagnes, interface, écrans (node:test, sans réseau)
+        run: node --test outils/essais-services/essai-communication-edge.mjs outils/essais-services/essai-communication-campagnes.mjs outils/essais-services/essai-communication-interface.mjs outils/essais-services/essai-communication-ecrans.mjs
       - name: E-mails et factures client (outils/essais-sql)
         run: python3 outils/essais-sql/essai-base.py
       - name: QR codes et Code128 (outils/essais-codes), comparés aux bibliothèques de référence
@@ -90,6 +95,18 @@ jobs:
         run: python3 outils/production/essai-versionner.py
       - name: Liens entre pages en adresse propre dans le site publié (liens_propres.py)
         run: python3 outils/production/essai-liens-propres.py
+
+  # La chaîne complète sur l'image Supabase réelle (PostgreSQL 17, pgcrypto, Vault,
+  # pg_net, pg_cron ; postgres non superutilisateur comme en production), dans un
+  # conteneur SANS RÉSEAU : ce que pgserver et ses doublures ne peuvent pas montrer
+  supabase-reel:
+    name: Base réelle — image Supabase PostgreSQL 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Chaîne appliquée deux fois, puis vérifications (outils/essais-supabase-reel)
+        run: bash outils/essais-supabase-reel/lancer.sh
 
   # Le script de sauvegarde du code tourne sur le Mac du propriétaire (launchd) : il est
   # éprouvé sur macOS, avec le bash 3.2 de /bin/bash et les outils BSD, comme là-bas

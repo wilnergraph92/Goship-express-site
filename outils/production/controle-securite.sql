@@ -39,7 +39,9 @@ fonctions as (
 ),
 -- Les seules fonctions privilégiées qu'un visiteur sans compte peut appeler :
 -- le suivi public d'un colis et la santé du service. Toute autre est une fuite.
-ouvertes_attendues(nom) as (values ('suivre_colis'), ('sante')),
+-- communication_desabonner_courriel (candidate 012) : le lien de désinscription de chaque
+-- e-mail marketing doit marcher sans connexion ; il n'agit qu'avec un jeton HMAC valide.
+ouvertes_attendues(nom) as (values ('suivre_colis'), ('sante'), ('communication_desabonner_courriel')),
 -- Les verrous des règles métier : sans eux, une page pourrait écrire ce que seule
 -- la base doit décider (statut, rôle, montants payés, historique).
 verrous_attendus(nom, role) as (values
@@ -169,7 +171,24 @@ migrations(ordre, fichier, present) as (values
   (36, 'supabase-double-auth.sql',     exists (select 1 from pg_proc where proname = 'ma_double_auth')),
   (37, 'supabase-battement.sql',       exists (select 1 from pg_proc where proname = 'battement')),
   (38, 'supabase-prealertes-equipe.sql', exists (select 1 from pg_proc where proname = 'modifier_prealerte')),
-  (39, 'supabase-index-cles.sql',      exists (select 1 from pg_indexes where indexname = 'suivis_externes_journal_suivi_idx'))),
+  (39, 'supabase-index-cles.sql',      exists (select 1 from pg_indexes where indexname = 'suivis_externes_journal_suivi_idx')),
+  -- Communication Center (étape C11, 23/11/2026) : ces onze fichiers ferment la chaîne pour
+  -- les essais et la CI. Absents de la production tant que la garde d'appliquer-chaine.sh
+  -- n'est pas levée par une autorisation écrite : leur absence y est une INFO, pas une alerte.
+  (40, 'migrations-candidates/001-communication-foundation.sql', exists (select 1 from pg_proc where proname = 'communication_sortie_autorisee')),
+  (41, 'migrations-candidates/002-communication-supervision.sql', exists (select 1 from pg_proc where proname = 'sante_communications')),
+  (42, 'migrations-candidates/003-communication-consentements.sql', exists (select 1 from pg_proc where proname = 'communication_consentement_etat_whatsapp')),
+  (43, 'migrations-candidates/004-communication-transactionnelle.sql', exists (select 1 from pg_proc where proname = 'communication_lister_outbox_transactionnel')),
+  (44, 'migrations-candidates/005-communication-adaptateurs-canaux.sql', exists (select 1 from pg_proc where proname = 'communication_adresse_courriel_valide')),
+  (45, 'migrations-candidates/006-communication-p08-worker.sql', exists (select 1 from pg_proc where proname = 'communication_expo_recus_a_reconcilier')),
+  (46, 'migrations-candidates/007-communication-interface-operations.sql', exists (select 1 from pg_proc where proname = 'communication_c5_sante')),
+  (47, 'migrations-candidates/008-communication-campagnes-marketing.sql', exists (select 1 from pg_proc where proname = 'communication_campagne_segments_lister')),
+  (48, 'migrations-candidates/009-communication-identite-edge.sql', exists (select 1 from pg_namespace where nspname = 'communication_edge')),
+  (49, 'migrations-candidates/010-communication-arret-administration.sql', exists (select 1 from pg_proc where proname = 'communication_c10_arret_etat')),
+  (50, 'migrations-candidates/011-communication-reglages-decides.sql',
+       exists (select 1 from pg_description d join pg_class c on c.oid = d.objoid
+                where c.relname = 'communication_consentement_reglages' and d.description like '%(candidate 011)%')),
+  (51, 'migrations-candidates/012-communication-envoi-campagnes.sql', exists (select 1 from pg_proc where proname = 'communication_marketing_reglages_lire'))),
 comptes as (
   select u.id, lower(coalesce(u.email, '')) as email,
          to_jsonb(u) ->> 'last_sign_in_at' as derniere_connexion,
@@ -226,7 +245,7 @@ lignes(ordre, controle, verdict, objet, detail) as (
   union all
   -- 6. Ce qu'un visiteur sans compte peut appeler
   select 6, 'Ouvert aux visiteurs', 'ALERTE', proname || '(' || args || ')',
-         'fonction privilégiée appelable sans compte (attendues : suivre_colis, sante)'
+         'fonction privilégiée appelable sans compte (attendues : suivre_colis, sante, communication_desabonner_courriel)'
     from fonctions where prosecdef and anon and not declencheur and proname not in (select nom from ouvertes_attendues)
   union all
   select 6, 'Ouvert aux visiteurs', 'INFO', string_agg(proname || '()', ', ' order by proname),
@@ -298,8 +317,12 @@ lignes(ordre, controle, verdict, objet, detail) as (
     from pg_publication_tables where pubname = 'supabase_realtime' having count(*) > 0
   union all
   -- 12. La chaîne de migrations : chaque fichier a laissé son empreinte
-  select 12, 'Migrations', case when present then 'OK' else 'ALERTE' end, lpad(ordre::text, 2, '0') || ' ' || fichier,
-         case when present then 'installée' else 'ABSENTE : exécutez ce fichier, puis tous ceux qui le suivent' end
+  select 12, 'Migrations', case when present then 'OK' when fichier like 'migrations-candidates/%' then 'INFO' else 'ALERTE' end,
+         lpad(ordre::text, 2, '0') || ' ' || fichier,
+         case when present then 'installée'
+              when fichier like 'migrations-candidates/%'
+                then 'absente : Communication Center réservé aux essais (garde de l''étape C11, docs/production/go-no-go.md)'
+              else 'ABSENTE : exécutez ce fichier, puis tous ceux qui le suivent' end
     from migrations
   union all
   -- 12 bis. Les colonnes ajoutées par la chaîne : une manquante = un fichier passé dans
